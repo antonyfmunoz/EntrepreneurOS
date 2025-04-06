@@ -373,6 +373,385 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to update task" });
     }
   });
+  
+  // Task Collaboration Endpoints
+  app.post("/api/tasks/:id/collaborators", async (req, res) => {
+    try {
+      const { agentId } = req.body;
+      if (!agentId) {
+        return res.status(400).json({ message: "Agent ID is required" });
+      }
+      
+      const agent = await storage.getAgent(agentId);
+      if (!agent) {
+        return res.status(404).json({ message: "Agent not found" });
+      }
+      
+      const updatedTask = await storage.addAgentCollaborator(req.params.id, agentId);
+      
+      // Update the agent's activity
+      await storage.updateAgentActivity(
+        agentId,
+        `Added as collaborator on task: ${updatedTask.title}`
+      );
+      
+      // If there's a primary agent assigned, notify them too
+      if (updatedTask.agentId && updatedTask.agentId !== agentId) {
+        await storage.updateAgentActivity(
+          updatedTask.agentId,
+          `${agent.name} joined as collaborator on task: ${updatedTask.title}`
+        );
+      }
+      
+      res.json(updatedTask);
+    } catch (error) {
+      console.error("Error adding collaborator:", error);
+      res.status(500).json({ 
+        message: "Failed to add collaborator",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  app.post("/api/tasks/:id/assign", async (req, res) => {
+    try {
+      const { agentId, assignedById } = req.body;
+      
+      if (!agentId) {
+        return res.status(400).json({ message: "Agent ID is required" });
+      }
+      
+      // Verify both agents exist
+      const targetAgent = await storage.getAgent(agentId);
+      if (!targetAgent) {
+        return res.status(404).json({ message: "Target agent not found" });
+      }
+      
+      let assigningAgent;
+      if (assignedById) {
+        assigningAgent = await storage.getAgent(assignedById);
+        if (!assigningAgent) {
+          return res.status(404).json({ message: "Assigning agent not found" });
+        }
+      }
+      
+      const updatedTask = await storage.assignTaskToAgent(req.params.id, agentId, assignedById);
+      
+      // Update the new agent's activity
+      await storage.updateAgentActivity(
+        agentId,
+        `Assigned task: ${updatedTask.title}`
+      );
+      
+      // If assigned by another agent, update their activity too
+      if (assigningAgent) {
+        await storage.updateAgentActivity(
+          assignedById,
+          `Delegated task "${updatedTask.title}" to ${targetAgent.name}`
+        );
+      }
+      
+      res.json(updatedTask);
+    } catch (error) {
+      console.error("Error assigning task:", error);
+      res.status(500).json({ 
+        message: "Failed to assign task",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  app.post("/api/tasks/:id/subtask", async (req, res) => {
+    try {
+      const subtaskData = insertTaskSchema.parse(req.body);
+      const parentTask = await storage.getTask(req.params.id);
+      
+      if (!parentTask) {
+        return res.status(404).json({ message: "Parent task not found" });
+      }
+      
+      const subtask = await storage.createSubtask(req.params.id, subtaskData);
+      
+      // If subtask is assigned to an agent, update the agent's tasks
+      if (subtaskData.agentId) {
+        await storage.updateAgentActivity(
+          subtaskData.agentId, 
+          `Assigned new subtask: ${subtaskData.title}`
+        );
+      }
+      
+      res.status(201).json(subtask);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid subtask data", 
+          errors: error.errors 
+        });
+      }
+      console.error("Error creating subtask:", error);
+      res.status(500).json({ 
+        message: "Failed to create subtask",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  app.get("/api/tasks/:id/subtasks", async (req, res) => {
+    try {
+      const subtasks = await storage.getSubtasks(req.params.id);
+      res.json(subtasks);
+    } catch (error) {
+      console.error("Error fetching subtasks:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch subtasks",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  app.get("/api/tasks/:id/messages", async (req, res) => {
+    try {
+      const messages = await storage.getTaskMessages(req.params.id);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching task messages:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch task messages",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  app.post("/api/tasks/:id/messages", async (req, res) => {
+    try {
+      const { agentId, content, referencedAgentIds } = req.body;
+      
+      if (!agentId || !content) {
+        return res.status(400).json({ 
+          message: "Agent ID and message content are required" 
+        });
+      }
+      
+      // Create a new collaborative message associated with this task
+      const message = await storage.addCollaborativeMessage({
+        agentId,
+        taskId: req.params.id,
+        role: "assistant",
+        content,
+        referencedAgentIds: referencedAgentIds || null,
+        timestamp: new Date().toISOString(),
+      });
+      
+      // Update the agent's activity
+      await storage.updateAgentActivity(
+        agentId,
+        `Added message to task: ${req.params.id}`
+      );
+      
+      res.status(201).json(message);
+    } catch (error) {
+      console.error("Error adding task message:", error);
+      res.status(500).json({ 
+        message: "Failed to add task message",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  app.get("/api/agents/:id/collaborative-tasks", async (req, res) => {
+    try {
+      const tasks = await storage.getCollaborativeTasks(req.params.id);
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error fetching collaborative tasks:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch collaborative tasks",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // Conversations API
+  app.get("/api/conversations/:id", async (req, res) => {
+    try {
+      const messages = await storage.getConversationMessages(req.params.id);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching conversation:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch conversation",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // Multi-agent collaboration endpoint
+  app.post("/api/ai/multi-agent", async (req, res) => {
+    try {
+      const { 
+        mainAgentId, 
+        collaboratorIds,
+        prompt,
+        taskId,
+        aiConfig
+      } = req.body;
+      
+      if (!mainAgentId || !collaboratorIds || !Array.isArray(collaboratorIds) || !prompt) {
+        return res.status(400).json({ 
+          message: "Main agent ID, collaborator IDs array, and prompt are required" 
+        });
+      }
+      
+      // Get all agent data
+      const mainAgent = await storage.getAgent(mainAgentId);
+      if (!mainAgent) {
+        return res.status(404).json({ message: "Main agent not found" });
+      }
+      
+      const collaborators = [];
+      for (const id of collaboratorIds) {
+        const agent = await storage.getAgent(id);
+        if (agent) {
+          collaborators.push(agent);
+        }
+      }
+      
+      // Create a conversation ID
+      const conversationId = `conv_${Date.now()}`;
+      
+      // Build system prompt that introduces all the agents to each other
+      let systemPrompt = `This is a collaborative discussion between the following AI agents:
+      
+      MAIN AGENT:
+      Name: ${mainAgent.name}
+      Role: ${mainAgent.role}
+      Expertise: ${mainAgent.instructions || "Not specified"}
+      
+      COLLABORATING AGENTS:`;
+      
+      for (const agent of collaborators) {
+        systemPrompt += `
+      Name: ${agent.name}
+      Role: ${agent.role}
+      Expertise: ${agent.instructions || "Not specified"}`;
+      }
+      
+      systemPrompt += `
+      
+      The agents should work together to solve the problem, each contributing their expertise.
+      Each agent should clearly identify themselves before speaking by starting their response with "I am [Agent Name]:".
+      The discussion should be constructive and focused on generating the best possible solution.`;
+      
+      // Add task context if provided
+      if (taskId) {
+        const task = await storage.getTask(taskId);
+        if (task) {
+          systemPrompt += `
+          
+          TASK DETAILS:
+          Title: ${task.title}
+          Description: ${task.description}
+          Status: ${task.status}
+          Priority: ${task.priority || "medium"}`;
+        }
+      }
+      
+      // Use AI service to generate a collaborative response
+      let collaborationMessages: AIMessage[] = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: prompt }
+      ];
+      
+      let response;
+      if (aiConfig) {
+        response = await generateAIResponse(collaborationMessages, aiConfig);
+      } else {
+        // Use the highest-capability model available
+        const availableProviders = getAvailableProviders();
+        let provider = "openai";
+        let modelName = "gpt-4o";
+        
+        if (availableProviders.includes("anthropic")) {
+          provider = "anthropic";
+          modelName = "claude-3-7-sonnet-20250219";
+        } else if (availableProviders.includes("openai")) {
+          provider = "openai";
+          modelName = "gpt-4o";
+        } else if (availableProviders.includes("xai")) {
+          provider = "xai";
+          modelName = "grok-2-1212";
+        }
+        
+        response = await generateAIResponse(collaborationMessages, { provider, modelName });
+      }
+      
+      // Save the conversation
+      await storage.addAgentMessage({
+        agentId: mainAgentId,
+        taskId: taskId || null,
+        conversationId,
+        role: "system",
+        content: systemPrompt,
+        referencedAgentIds: collaboratorIds.join(','),
+        timestamp: new Date().toISOString(),
+      });
+      
+      await storage.addAgentMessage({
+        agentId: mainAgentId,
+        taskId: taskId || null,
+        conversationId,
+        role: "user",
+        content: prompt,
+        referencedAgentIds: collaboratorIds.join(','),
+        timestamp: new Date().toISOString(),
+      });
+      
+      await storage.addAgentMessage({
+        agentId: mainAgentId,
+        taskId: taskId || null,
+        conversationId,
+        role: "assistant",
+        content: response,
+        referencedAgentIds: collaboratorIds.join(','),
+        timestamp: new Date().toISOString(),
+      });
+      
+      // Update the main agent's activity
+      await storage.updateAgentActivity(
+        mainAgentId,
+        `Initiated collaboration with ${collaborators.map(a => a.name).join(', ')}`
+      );
+      
+      // Update collaborator agents' activities
+      for (const agent of collaborators) {
+        await storage.updateAgentActivity(
+          agent.id,
+          `Participated in collaboration initiated by ${mainAgent.name}`
+        );
+      }
+      
+      res.json({ 
+        response,
+        conversationId,
+        mainAgent: {
+          id: mainAgent.id,
+          name: mainAgent.name,
+          role: mainAgent.role
+        },
+        collaboratingAgents: collaborators.map(agent => ({
+          id: agent.id,
+          name: agent.name,
+          role: agent.role
+        }))
+      });
+    } catch (error) {
+      console.error("Error in multi-agent collaboration:", error);
+      res.status(500).json({ 
+        message: "Failed to process multi-agent collaboration",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
 
   // Stats API
   app.get("/api/stats", async (_req, res) => {

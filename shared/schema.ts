@@ -43,47 +43,74 @@ export const insertAgentSchema = z.object({
   ).optional(),
 });
 
-// Tasks
+// Define Tasks table
 export const tasks = pgTable("tasks", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
   description: text("description").notNull(),
   status: text("status").default("todo"),
+  priority: text("priority").default("medium"),
   dueDate: text("due_date"),
   agentId: text("agent_id").references(() => agents.id),
+  assignedById: text("assigned_by_id").references(() => agents.id),
+  collaboratorIds: text("collaborator_ids"), // Comma-separated list of agent IDs
+  taskType: text("task_type").default("standard"), // standard, collaboration, delegated
+  parentTaskId: text("parent_task_id"), // For subtasks
+  metadata: text("metadata"), // JSON string for additional task data
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const insertTaskSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().min(1, "Description is required"),
   status: z.enum(["todo", "in-progress", "done"]).default("todo"),
+  priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
   dueDate: z.string().optional(),
   agentId: z.string().optional(),
+  assignedById: z.string().optional(),
+  collaboratorIds: z.string().optional(), // Comma-separated agent IDs
+  taskType: z.enum(["standard", "collaboration", "delegated"]).default("standard"),
+  parentTaskId: z.string().optional(),
+  metadata: z.string().optional(), // JSON string
 });
 
 export const updateTaskSchema = z.object({
   title: z.string().min(1, "Title is required").optional(),
   description: z.string().min(1, "Description is required").optional(),
   status: z.enum(["todo", "in-progress", "done"]).optional(),
+  priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
   dueDate: z.string().optional(),
   agentId: z.string().optional(),
+  assignedById: z.string().optional(),
+  collaboratorIds: z.string().optional(),
+  taskType: z.enum(["standard", "collaboration", "delegated"]).optional(),
+  parentTaskId: z.string().optional(),
+  metadata: z.string().optional(),
 });
 
 // Messages
 export const messages = pgTable("messages", {
   id: text("id").primaryKey(),
   agentId: text("agent_id").references(() => agents.id),
+  taskId: text("task_id").references(() => tasks.id),  // Optional task context
+  conversationId: text("conversation_id"),  // Group messages by conversation
   role: text("role").notNull(),
   content: text("content").notNull(),
+  metadata: text("metadata"),  // Store additional message data (e.g., attachments, citations)
+  referencedAgentIds: text("referenced_agent_ids"), // If message mentions/references other agents
   timestamp: timestamp("timestamp").defaultNow(),
 });
 
 export const insertMessageSchema = z.object({
   agentId: z.string(),
-  role: z.enum(["user", "assistant"]),
+  taskId: z.string().optional(),
+  conversationId: z.string().optional(),
+  role: z.enum(["user", "assistant", "system"]),
   content: z.string(),
-  timestamp: z.string(),
+  metadata: z.string().optional(),
+  referencedAgentIds: z.string().optional(), // Comma-separated list of agent IDs
+  timestamp: z.string().optional(),
 });
 
 // Integrations
