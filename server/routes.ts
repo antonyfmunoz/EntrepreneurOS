@@ -4,8 +4,44 @@ import { storage } from "./storage";
 import { generateAgentResponse, generateTaskSuggestion } from "./openai";
 import { z } from "zod";
 import { insertAgentSchema, insertTaskSchema, updateTaskSchema } from "@shared/schema";
+import { getModelInfo, generateAIResponse, AIMessage } from "./ai";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // AI Models API
+  app.get("/api/ai/models", (_req, res) => {
+    try {
+      const modelInfo = getModelInfo();
+      res.json(modelInfo);
+    } catch (error) {
+      console.error("Error fetching AI model info:", error);
+      res.status(500).json({ message: "Failed to fetch AI model information" });
+    }
+  });
+  
+  app.post("/api/ai/generate", async (req, res) => {
+    try {
+      const { messages, config } = req.body;
+      
+      if (!messages || !Array.isArray(messages)) {
+        return res.status(400).json({ message: "Messages array is required" });
+      }
+      
+      const aiMessages: AIMessage[] = messages.map(m => ({
+        role: m.role,
+        content: m.content
+      }));
+      
+      const response = await generateAIResponse(aiMessages, config || {});
+      res.json({ response });
+    } catch (error) {
+      console.error("AI generation error:", error);
+      res.status(500).json({ 
+        message: "Failed to generate AI response",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
   // Agents API
   app.get("/api/agents", async (_req, res) => {
     const agents = await storage.getAgents();
@@ -41,7 +77,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/agents/:id/chat", async (req, res) => {
     try {
-      const { message } = req.body;
+      const { message, aiConfig } = req.body;
       if (!message) {
         return res.status(400).json({ message: "Message is required" });
       }
@@ -51,30 +87,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Agent not found" });
       }
 
-      const messages = await storage.getAgentMessages(req.params.id);
-      const history = messages.map(msg => ({
-        role: msg.role,
-        content: msg.content,
-      }));
-
-      // Generate response using OpenAI
+      // Add user message to storage
+      await storage.addAgentMessage({
+        agentId: req.params.id,
+        role: "user",
+        content: message,
+        timestamp: new Date().toISOString(),
+      });
+      
+      // Get all messages for context
+      const dbMessages = await storage.getAgentMessages(req.params.id);
+      
+      // Setup agent brain info
       const brain = {
         instructions: agent.instructions || "",
         knowledgeBase: agent.brainContent || "",
         role: agent.role,
         name: agent.name,
       };
-
-      // Add user message to storage
-      const userMessage = await storage.addAgentMessage({
-        agentId: req.params.id,
-        role: "user",
-        content: message,
-        timestamp: new Date().toISOString(),
-      });
-
-      // Generate AI response
-      const reply = await generateAgentResponse(message, brain, history);
+      
+      let reply;
+      
+      // Try the unified AI service first if aiConfig is provided
+      if (aiConfig) {
+        try {
+          // Convert messages to AI format
+          const aiMessages: AIMessage[] = dbMessages.map(m => ({
+            role: m.role === "user" || m.role === "assistant" ? m.role : "user",
+            content: m.content
+          }));
+          
+          // Add system message with agent instructions at the beginning
+          aiMessages.unshift({
+            role: "system",
+            content: `You are ${agent.name}, ${agent.role}. ${agent.instructions || ""}
+                    ${agent.brainContent ? `\n\nReference knowledge:\n${agent.brainContent}` : ""}`
+          });
+          
+          reply = await generateAIResponse(aiMessages, aiConfig);
+        } catch (aiError) {
+          console.error("Error using unified AI service:", aiError);
+          // Fall back to OpenAI in case of error
+          const history = dbMessages.map(msg => ({
+            role: msg.role,
+            content: msg.content,
+          }));
+          reply = await generateAgentResponse(message, brain, history);
+        }
+      } else {
+        // Use the original OpenAI implementation
+        const history = dbMessages.map(msg => ({
+          role: msg.role,
+          content: msg.content,
+        }));
+        reply = await generateAgentResponse(message, brain, history);
+      }
 
       // Add AI response to storage
       const aiMessage = await storage.addAgentMessage({
@@ -90,7 +157,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ reply, messageId: aiMessage.id });
     } catch (error) {
       console.error("Error in chat:", error);
-      res.status(500).json({ message: "Failed to process message" });
+      res.status(500).json({ 
+        message: "Failed to process message",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -102,7 +172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/agents/:id/generate-response", async (req, res) => {
     try {
-      const { taskId } = req.body;
+      const { taskId, aiConfig } = req.body;
       if (!taskId) {
         return res.status(400).json({ message: "Task ID is required" });
       }
@@ -124,17 +194,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         role: agent.role,
         name: agent.name,
       };
-
-      const response = await generateAgentResponse(
-        `Please provide an update or next steps for this task: ${task.title} - ${task.description}`,
-        brain,
-        []
-      );
+      
+      let response;
+      
+      // Try the unified AI service first if aiConfig is provided
+      if (aiConfig) {
+        try {
+          // Create messages for AI
+          const messages: AIMessage[] = [
+            {
+              role: "system",
+              content: `You are ${agent.name}, ${agent.role}. ${agent.instructions || ""}
+                      ${agent.brainContent ? `\n\nReference knowledge:\n${agent.brainContent}` : ""}`
+            },
+            {
+              role: "user",
+              content: `Please provide an update or next steps for this task: ${task.title} - ${task.description}`
+            }
+          ];
+          
+          response = await generateAIResponse(messages, aiConfig);
+        } catch (aiError) {
+          console.error("Error using unified AI service for task response:", aiError);
+          // Fall back to OpenAI
+          response = await generateAgentResponse(
+            `Please provide an update or next steps for this task: ${task.title} - ${task.description}`,
+            brain,
+            []
+          );
+        }
+      } else {
+        // Use the original OpenAI implementation
+        response = await generateAgentResponse(
+          `Please provide an update or next steps for this task: ${task.title} - ${task.description}`,
+          brain,
+          []
+        );
+      }
 
       res.json({ response });
     } catch (error) {
       console.error("Error generating response:", error);
-      res.status(500).json({ message: "Failed to generate response" });
+      res.status(500).json({ 
+        message: "Failed to generate response",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
