@@ -2,9 +2,10 @@ import { OpenAIService } from "./openai-service";
 import { AnthropicService } from "./anthropic-service";
 import { PerplexityService } from "./perplexity-service";
 import { XAIService } from "./xai-service";
+import { GeminiService } from "./gemini-service";
 import { AgentBrain } from "../openai";
 
-export type AIModelProvider = "openai" | "anthropic" | "perplexity" | "xai";
+export type AIModelProvider = "openai" | "anthropic" | "perplexity" | "xai" | "gemini";
 export type AIModelName = 
   | "gpt-4o" 
   | "gpt-4-turbo" 
@@ -13,7 +14,9 @@ export type AIModelName =
   | "llama-3.1-sonar-small-128k-online"
   | "llama-3.1-sonar-large-128k-online"
   | "grok-2-1212"
-  | "grok-2-vision-1212";
+  | "grok-2-vision-1212"
+  | "gemini-2.5-pro"
+  | "gemini-2.5-pro-vision";
 
 export interface AIModelConfig {
   provider: AIModelProvider;
@@ -59,6 +62,12 @@ const defaultConfigs: Record<AIModelProvider, AIModelConfig> = {
     modelName: "grok-2-1212",
     maxTokens: 1000,
     temperature: 0.7
+  },
+  gemini: {
+    provider: "gemini",
+    modelName: "gemini-2.5-pro",
+    maxTokens: 1000,
+    temperature: 0.7
   }
 };
 
@@ -67,6 +76,7 @@ let openAIService: OpenAIService | null = null;
 let anthropicService: AnthropicService | null = null;
 let perplexityService: PerplexityService | null = null;
 let xaiService: XAIService | null = null;
+let geminiService: GeminiService | null = null;
 
 // Helper to get the appropriate service
 function getService(provider: AIModelProvider): AIServiceInterface | null {
@@ -91,6 +101,11 @@ function getService(provider: AIModelProvider): AIServiceInterface | null {
         xaiService = new XAIService();
       }
       return xaiService;
+    case "gemini":
+      if (!geminiService) {
+        geminiService = new GeminiService();
+      }
+      return geminiService;
     default:
       return null;
   }
@@ -114,6 +129,10 @@ export function getAvailableProviders(): AIModelProvider[] {
   
   if (new XAIService().isAvailable()) {
     providers.push("xai");
+  }
+  
+  if (new GeminiService().isAvailable()) {
+    providers.push("gemini");
   }
   
   return providers;
@@ -200,7 +219,8 @@ export function getModelInfo(): {
     openai: ["gpt-4o", "gpt-4-turbo"],
     anthropic: ["claude-3-7-sonnet-20250219", "claude-3-opus-20240229"],
     perplexity: ["llama-3.1-sonar-small-128k-online", "llama-3.1-sonar-large-128k-online"],
-    xai: ["grok-2-1212", "grok-2-vision-1212"]
+    xai: ["grok-2-1212", "grok-2-vision-1212"],
+    gemini: ["gemini-2.5-pro", "gemini-2.5-pro-vision"]
   };
   
   return { providers, availableModels };
