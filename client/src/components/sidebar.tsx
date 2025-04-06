@@ -1,0 +1,183 @@
+import { Link, useLocation } from "wouter";
+import { cn } from "@/lib/utils";
+import { CreateAgentModal } from "./create-agent-modal";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+
+type Agent = {
+  id: string;
+  name: string;
+  role: string;
+  icon: string;
+  activeTasks: number;
+};
+
+export function Sidebar() {
+  const [location] = useLocation();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const { data: agents = [] } = useQuery<Agent[]>({
+    queryKey: ["/api/agents"],
+  });
+
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case "marketing":
+        return "ri-megaphone-line";
+      case "support":
+        return "ri-customer-service-2-line";
+      case "content":
+        return "ri-article-line";
+      case "operations":
+        return "ri-user-settings-line";
+      default:
+        return "ri-robot-line";
+    }
+  };
+
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case "marketing":
+        return "bg-primary";
+      case "support":
+        return "bg-secondary";
+      case "content":
+        return "bg-accent";
+      case "operations":
+        return "bg-gray-500";
+      default:
+        return "bg-gray-500";
+    }
+  };
+
+  return (
+    <>
+      <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-full">
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center space-x-2">
+            <i className="ri-cpu-line text-primary text-2xl"></i>
+            <h1 className="text-xl font-bold text-gray-800">AgentOS</h1>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">AI Operating System for Business</p>
+        </div>
+
+        <div className="p-4 border-b border-gray-200">
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="w-full bg-primary hover:bg-blue-600 text-white py-2 px-4 rounded-md flex items-center justify-center space-x-2 transition-colors"
+          >
+            <i className="ri-add-line"></i>
+            <span>Create New Agent</span>
+          </button>
+        </div>
+
+        <div className="p-4 border-b border-gray-200">
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Your Agents</h2>
+          
+          <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-hide">
+            {agents.map((agent) => (
+              <Link key={agent.id} href={`/chat/${agent.id}`}>
+                <div className={cn(
+                  "flex items-center p-2 rounded-md cursor-pointer hover:bg-blue-100 transition-colors",
+                  location === `/chat/${agent.id}` ? "bg-blue-50 border border-blue-100" : "hover:bg-gray-100"
+                )}>
+                  <div className={cn(
+                    "w-8 h-8 rounded-full text-white flex items-center justify-center",
+                    getRoleColor(agent.role)
+                  )}>
+                    <i className={getRoleIcon(agent.role)}></i>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-800">{agent.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {agent.activeTasks > 0 
+                        ? `${agent.activeTasks} active task${agent.activeTasks > 1 ? 's' : ''}` 
+                        : 'No active tasks'}
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <nav className="p-4 flex-1">
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Navigation</h2>
+          <ul className="space-y-2">
+            <li>
+              <Link href="/">
+                <div className={cn(
+                  "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+                  location === "/" 
+                    ? "bg-blue-50 text-primary font-medium" 
+                    : "hover:bg-gray-100 text-gray-700"
+                )}>
+                  <i className="ri-dashboard-line"></i>
+                  <span>Dashboard</span>
+                </div>
+              </Link>
+            </li>
+            <li>
+              <Link href="/tasks">
+                <div className={cn(
+                  "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+                  location === "/tasks" 
+                    ? "bg-blue-50 text-primary font-medium" 
+                    : "hover:bg-gray-100 text-gray-700"
+                )}>
+                  <i className="ri-task-line"></i>
+                  <span>Task Board</span>
+                </div>
+              </Link>
+            </li>
+            <li>
+              <div className={cn(
+                "flex items-center space-x-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 text-gray-700",
+                location.startsWith("/chat") && "bg-blue-50 text-primary font-medium"
+              )}>
+                <i className="ri-chat-3-line"></i>
+                <span>Agent Chat</span>
+              </div>
+            </li>
+            <li>
+              <Link href="/integrations">
+                <div className={cn(
+                  "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+                  location === "/integrations" 
+                    ? "bg-blue-50 text-primary font-medium" 
+                    : "hover:bg-gray-100 text-gray-700"
+                )}>
+                  <i className="ri-link"></i>
+                  <span>Integrations</span>
+                </div>
+              </Link>
+            </li>
+            <li>
+              <div className="flex items-center space-x-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 text-gray-700">
+                <i className="ri-settings-3-line"></i>
+                <span>Settings</span>
+              </div>
+            </li>
+          </ul>
+        </nav>
+
+        <div className="p-4 border-t border-gray-200">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+              <i className="ri-user-line text-gray-600"></i>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-800">John Doe</p>
+              <p className="text-xs text-gray-500">Business Owner</p>
+            </div>
+            <button className="ml-auto text-gray-400 hover:text-gray-600">
+              <i className="ri-logout-box-line"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <CreateAgentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+    </>
+  );
+}
