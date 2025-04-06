@@ -1,5 +1,4 @@
-import { Sidebar } from "@/components/sidebar";
-import { Header } from "@/components/header";
+import { Layout } from "@/components/layout";
 import { StatsOverview } from "@/components/stats-overview";
 import { AgentCard } from "@/components/agent-card";
 import { TaskBoard } from "@/components/task-board";
@@ -25,36 +24,30 @@ export default function Dashboard() {
   });
 
   return (
-    <div className="bg-gray-50 h-screen flex overflow-hidden">
-      <Sidebar />
-      
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <Header title="Dashboard" />
+    <Layout title="Dashboard">
+      <div>
+        <StatsOverview />
         
-        <div className="flex-1 overflow-auto p-6 bg-gray-50">
-          <StatsOverview />
-          
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Your Agents</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-            {agents.map((agent) => (
-              <AgentCard
-                key={agent.id}
-                id={agent.id}
-                name={agent.name}
-                role={agent.role}
-                icon={agent.icon}
-                latestActivity={agent.latestActivity}
-                tasks={agent.tasks}
-              />
-            ))}
-          </div>
-          
-          <TaskBoard />
-          
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Integrations</h2>
-          <Integrations />
+        <h2 className="text-lg font-semibold text-gray-800 mb-4">Your Agents</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
+          {agents.map((agent) => (
+            <AgentCard
+              key={agent.id}
+              id={agent.id}
+              name={agent.name}
+              role={agent.role}
+              icon={agent.icon}
+              latestActivity={agent.latestActivity}
+              tasks={agent.tasks}
+            />
+          ))}
         </div>
+        
+        <TaskBoard />
+        
+        <h2 className="text-lg font-semibold text-gray-800 mb-4">Integrations</h2>
+        <Integrations />
       </div>
-    </div>
+    </Layout>
   );
 }
