@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { CreateAgentModal } from "./create-agent-modal";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
 
 type Agent = {
   id: string;
@@ -15,6 +16,7 @@ type Agent = {
 export function Sidebar() {
   const [location] = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { user, logoutMutation } = useAuth();
 
   const { data: agents = [] } = useQuery<Agent[]>({
     queryKey: ["/api/agents"],
@@ -167,10 +169,18 @@ export function Sidebar() {
               <i className="ri-user-line text-gray-600"></i>
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-800">John Doe</p>
-              <p className="text-xs text-gray-500">Business Owner</p>
+              <p className="text-sm font-medium text-gray-800">
+                {user ? user.fullName || user.username : "Guest"}
+              </p>
+              <p className="text-xs text-gray-500">
+                {user?.company || "Business Owner"}
+              </p>
             </div>
-            <button className="ml-auto text-gray-400 hover:text-gray-600">
+            <button 
+              className="ml-auto text-gray-400 hover:text-gray-600"
+              onClick={() => logoutMutation.mutate()}
+              disabled={logoutMutation.isPending}
+            >
               <i className="ri-logout-box-line"></i>
             </button>
           </div>
