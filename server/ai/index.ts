@@ -208,20 +208,98 @@ export async function analyzeImage(
   return await service.analyzeImage(base64Image, prompt);
 }
 
+// Model descriptions
+interface ModelInfo {
+  models: {
+    name: AIModelName;
+    description: string;
+    contextWindow: number;
+    capabilities: string[];
+  }[];
+}
+
 // Get model information
-export function getModelInfo(): {
-  providers: AIModelProvider[];
-  availableModels: Record<AIModelProvider, AIModelName[]>;
-} {
-  const providers = getAvailableProviders();
-  
-  const availableModels: Record<AIModelProvider, AIModelName[]> = {
-    openai: ["gpt-4o", "gpt-4-turbo"],
-    anthropic: ["claude-3-7-sonnet-20250219", "claude-3-opus-20240229"],
-    perplexity: ["llama-3.1-sonar-small-128k-online", "llama-3.1-sonar-large-128k-online"],
-    xai: ["grok-2-1212", "grok-2-vision-1212"],
-    gemini: ["gemini-2.5-pro", "gemini-2.5-pro-vision"]
+export function getModelInfo(): Record<AIModelProvider, ModelInfo> {
+  return {
+    openai: {
+      models: [
+        {
+          name: "gpt-4o",
+          description: "Latest multimodal model with enhanced reasoning",
+          contextWindow: 128000,
+          capabilities: ["Text generation", "Image understanding", "Advanced reasoning"],
+        },
+        {
+          name: "gpt-4-turbo",
+          description: "Fast and efficient general purpose model",
+          contextWindow: 128000,
+          capabilities: ["Text generation", "Summarization", "Content creation"],
+        }
+      ]
+    },
+    anthropic: {
+      models: [
+        {
+          name: "claude-3-7-sonnet-20250219",
+          description: "Latest balanced model for most tasks",
+          contextWindow: 200000,
+          capabilities: ["Text generation", "Complex reasoning", "Content creation"],
+        },
+        {
+          name: "claude-3-opus-20240229",
+          description: "Most powerful model for complex tasks",
+          contextWindow: 200000,
+          capabilities: ["Advanced reasoning", "Long-form content", "Code generation"],
+        }
+      ]
+    },
+    perplexity: {
+      models: [
+        {
+          name: "llama-3.1-sonar-small-128k-online",
+          description: "Efficient model with internet access",
+          contextWindow: 128000,
+          capabilities: ["Text generation", "Internet search", "Real-time information"],
+        },
+        {
+          name: "llama-3.1-sonar-large-128k-online",
+          description: "Larger model with advanced capabilities",
+          contextWindow: 128000,
+          capabilities: ["Advanced reasoning", "Internet search", "Long-form content"],
+        }
+      ]
+    },
+    xai: {
+      models: [
+        {
+          name: "grok-2-1212",
+          description: "General purpose text model",
+          contextWindow: 131072,
+          capabilities: ["Text generation", "Code generation", "Problem solving"],
+        },
+        {
+          name: "grok-2-vision-1212",
+          description: "Multimodal model for text and images",
+          contextWindow: 8192,
+          capabilities: ["Text generation", "Image understanding", "Visual reasoning"],
+        }
+      ]
+    },
+    gemini: {
+      models: [
+        {
+          name: "gemini-2.5-pro",
+          description: "Latest general purpose model",
+          contextWindow: 131072,
+          capabilities: ["Text generation", "Complex reasoning", "Creative writing"],
+        },
+        {
+          name: "gemini-2.5-pro-vision",
+          description: "Multimodal vision and language model",
+          contextWindow: 131072,
+          capabilities: ["Text generation", "Image understanding", "Visual reasoning"],
+        }
+      ]
+    }
   };
-  
-  return { providers, availableModels };
 }
