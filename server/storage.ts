@@ -1,6 +1,8 @@
 import { 
   agents as agentsTable, 
   tasks as tasksTable, 
+  messages as messagesTable,
+  integrations as integrationsTable,
   type Agent, 
   type Task, 
   type InsertAgent, 
@@ -11,6 +13,8 @@ import {
   type Integration,
   type InsertIntegration
 } from "@shared/schema";
+import { db } from './db';
+import { eq, and } from 'drizzle-orm';
 
 export interface IStorage {
   // Agent operations
@@ -35,151 +39,184 @@ export interface IStorage {
   connectIntegration(type: string): Promise<Integration>;
 }
 
-export class MemStorage implements IStorage {
-  private agents: Map<string, Agent>;
-  private tasks: Map<string, Task>;
-  private messages: Map<string, Message>;
-  private integrations: Map<string, Integration>;
-  private agentIdCounter: number;
-  private taskIdCounter: number;
-  private messageIdCounter: number;
-  private integrationIdCounter: number;
-
+export class DatabaseStorage implements IStorage {
   constructor() {
-    this.agents = new Map();
-    this.tasks = new Map();
-    this.messages = new Map();
-    this.integrations = new Map();
-    this.agentIdCounter = 1;
-    this.taskIdCounter = 1;
-    this.messageIdCounter = 1;
-    this.integrationIdCounter = 1;
-
-    // Initialize with sample data
-    this.initSampleData();
+    // Initialize with sample data if needed
+    this.initSampleData().catch(err => {
+      console.error("Error initializing sample data:", err);
+    });
   }
 
-  private initSampleData() {
-    // Sample agents
-    const marketingAgent = this.createAgent({
-      name: "Marketing Agent",
-      role: "marketing",
-      icon: "ri-megaphone-line",
-      instructions: "Help with marketing campaigns, social media, and content strategy.",
-      brainSources: [],
-    });
+  private async initSampleData(): Promise<void> {
+    const existingAgents = await this.getAgents();
+    if (existingAgents.length > 0) {
+      // Data already exists, no need to initialize
+      return;
+    }
 
-    const supportAgent = this.createAgent({
-      name: "Support Agent",
-      role: "support",
-      icon: "ri-customer-service-2-line",
-      instructions: "Assist with customer inquiries, troubleshooting, and support tickets.",
-      brainSources: [],
-    });
+    try {
+      // Sample agents with explicit IDs
+      const marketingAgent = await db.insert(agentsTable)
+        .values({
+          id: "agent_1",
+          name: "Marketing Agent",
+          role: "marketing",
+          icon: "ri-megaphone-line",
+          instructions: "Help with marketing campaigns, social media, and content strategy.",
+          latestActivity: "Created agent",
+          brainContent: "",
+        })
+        .returning()
+        .then(rows => rows[0]);
 
-    const contentAgent = this.createAgent({
-      name: "Content Agent",
-      role: "content",
-      icon: "ri-article-line",
-      instructions: "Create and optimize content for blogs, social media, and website.",
-      brainSources: [],
-    });
+      const supportAgent = await db.insert(agentsTable)
+        .values({
+          id: "agent_2",
+          name: "Support Agent",
+          role: "support",
+          icon: "ri-customer-service-2-line",
+          instructions: "Assist with customer inquiries, troubleshooting, and support tickets.",
+          latestActivity: "Created agent",
+          brainContent: "",
+        })
+        .returning()
+        .then(rows => rows[0]);
 
-    const opsAgent = this.createAgent({
-      name: "Operations Agent",
-      role: "operations",
-      icon: "ri-user-settings-line",
-      instructions: "Streamline operations, track KPIs, and generate reports.",
-      brainSources: [],
-    });
+      const contentAgent = await db.insert(agentsTable)
+        .values({
+          id: "agent_3",
+          name: "Content Agent",
+          role: "content",
+          icon: "ri-article-line",
+          instructions: "Create and optimize content for blogs, social media, and website.",
+          latestActivity: "Created agent",
+          brainContent: "",
+        })
+        .returning()
+        .then(rows => rows[0]);
 
-    // Sample tasks
-    this.createTask({
-      title: "Update website copy",
-      description: "Review and update the website copy for the new product launch.",
-      status: "todo",
-      dueDate: this.getFutureDate(2),
-      agentId: contentAgent.id,
-    });
+      const opsAgent = await db.insert(agentsTable)
+        .values({
+          id: "agent_4",
+          name: "Operations Agent",
+          role: "operations",
+          icon: "ri-user-settings-line",
+          instructions: "Streamline operations, track KPIs, and generate reports.",
+          latestActivity: "Created agent",
+          brainContent: "",
+        })
+        .returning()
+        .then(rows => rows[0]);
 
-    this.createTask({
-      title: "Create sales presentation",
-      description: "Prepare sales presentation for client meeting.",
-      status: "todo", 
-      dueDate: this.getFutureDate(1),
-      agentId: marketingAgent.id,
-    });
+      // Sample tasks
+      await db.insert(tasksTable)
+        .values([
+          {
+            id: "task_1",
+            title: "Update website copy",
+            description: "Review and update the website copy for the new product launch.",
+            status: "todo",
+            dueDate: this.getFutureDate(2),
+            agentId: contentAgent.id,
+          },
+          {
+            id: "task_2",
+            title: "Create sales presentation",
+            description: "Prepare sales presentation for client meeting.",
+            status: "todo", 
+            dueDate: this.getFutureDate(1),
+            agentId: marketingAgent.id,
+          },
+          {
+            id: "task_3",
+            title: "Schedule social media posts",
+            description: "Create and schedule posts for the week across all platforms.",
+            status: "in-progress",
+            dueDate: this.getTodayDate(),
+            agentId: marketingAgent.id,
+          },
+          {
+            id: "task_4",
+            title: "Draft weekly blog post",
+            description: "Write blog post on industry trends and updates.",
+            status: "in-progress",
+            dueDate: this.getFutureDate(3),
+            agentId: contentAgent.id,
+          },
+          {
+            id: "task_5",
+            title: "Review support tickets",
+            description: "Review and prioritize open support tickets.",
+            status: "in-progress",
+            dueDate: this.getTodayDate(),
+            agentId: supportAgent.id,
+          },
+          {
+            id: "task_6",
+            title: "Create product descriptions",
+            description: "Write compelling descriptions for new product line.",
+            status: "done",
+            dueDate: this.getPastDate(1),
+            agentId: contentAgent.id,
+          },
+          {
+            id: "task_7",
+            title: "Analyze campaign metrics",
+            description: "Review performance metrics from last campaign.",
+            status: "done",
+            dueDate: this.getPastDate(2),
+            agentId: marketingAgent.id,
+          }
+        ]);
 
-    this.createTask({
-      title: "Schedule social media posts",
-      description: "Create and schedule posts for the week across all platforms.",
-      status: "in-progress",
-      dueDate: this.getTodayDate(),
-      agentId: marketingAgent.id,
-    });
+      // Update latest activities
+      await db.update(agentsTable)
+        .set({ latestActivity: "Created social media post for product launch" })
+        .where(eq(agentsTable.id, marketingAgent.id));
+      
+      await db.update(agentsTable)
+        .set({ latestActivity: "Drafted response for customer inquiry #1293" })
+        .where(eq(agentsTable.id, supportAgent.id));
+      
+      await db.update(agentsTable)
+        .set({ latestActivity: "Outlined new blog post on industry trends" })
+        .where(eq(agentsTable.id, contentAgent.id));
+      
+      await db.update(agentsTable)
+        .set({ latestActivity: "Generated monthly operations report" })
+        .where(eq(agentsTable.id, opsAgent.id));
 
-    this.createTask({
-      title: "Draft weekly blog post",
-      description: "Write blog post on industry trends and updates.",
-      status: "in-progress",
-      dueDate: this.getFutureDate(3),
-      agentId: contentAgent.id,
-    });
-
-    this.createTask({
-      title: "Review support tickets",
-      description: "Review and prioritize open support tickets.",
-      status: "in-progress",
-      dueDate: this.getTodayDate(),
-      agentId: supportAgent.id,
-    });
-
-    this.createTask({
-      title: "Create product descriptions",
-      description: "Write compelling descriptions for new product line.",
-      status: "done",
-      dueDate: this.getPastDate(1),
-      agentId: contentAgent.id,
-    });
-
-    this.createTask({
-      title: "Analyze campaign metrics",
-      description: "Review performance metrics from last campaign.",
-      status: "done",
-      dueDate: this.getPastDate(2),
-      agentId: marketingAgent.id,
-    });
-
-    // Update latest activities
-    this.updateAgentActivity(marketingAgent.id, "Created social media post for product launch");
-    this.updateAgentActivity(supportAgent.id, "Drafted response for customer inquiry #1293");
-    this.updateAgentActivity(contentAgent.id, "Outlined new blog post on industry trends");
-    this.updateAgentActivity(opsAgent.id, "Generated monthly operations report");
-
-    // Sample integrations
-    this.createIntegration({
-      name: "Notion",
-      type: "notion",
-      status: "connected",
-      details: "3 workspaces",
-      icon: "ri-notion-line",
-    });
-
-    this.createIntegration({
-      name: "Gmail",
-      type: "gmail",
-      status: "connected",
-      details: "example@gmail.com",
-      icon: "ri-mail-line",
-    });
-
-    this.createIntegration({
-      name: "Google Sheets",
-      type: "google-sheets",
-      status: "connected",
-      details: "2 sheets",
-      icon: "ri-file-list-3-line",
-    });
+      // Sample integrations
+      await db.insert(integrationsTable)
+        .values([
+          {
+            id: "integration_1",
+            name: "Notion",
+            type: "notion",
+            status: "connected",
+            details: "3 workspaces",
+            icon: "ri-notion-line",
+          },
+          {
+            id: "integration_2",
+            name: "Gmail",
+            type: "gmail",
+            status: "connected",
+            details: "example@gmail.com",
+            icon: "ri-mail-line",
+          },
+          {
+            id: "integration_3",
+            name: "Google Sheets",
+            type: "google-sheets",
+            status: "connected",
+            details: "2 sheets",
+            icon: "ri-file-list-3-line",
+          }
+        ]);
+    } catch (error) {
+      console.error("Error initializing sample data:", error);
+    }
   }
 
   private getTodayDate(): string {
@@ -200,95 +237,129 @@ export class MemStorage implements IStorage {
 
   // Agent operations
   async getAgents(): Promise<Agent[]> {
-    return Array.from(this.agents.values());
+    return await db.select().from(agentsTable);
   }
 
   async getAgent(id: string): Promise<Agent | undefined> {
-    return this.agents.get(id);
+    const agents = await db.select().from(agentsTable).where(eq(agentsTable.id, id));
+    return agents.length > 0 ? agents[0] : undefined;
   }
 
   async createAgent(agent: InsertAgent): Promise<Agent> {
-    const id = `agent_${this.agentIdCounter++}`;
-    const newAgent: Agent = { 
-      ...agent, 
-      id, 
-      latestActivity: "Created agent",
-      brainContent: "",
-      createdAt: new Date().toISOString()
-    };
-    this.agents.set(id, newAgent);
+    // Generate a unique ID
+    const id = `agent_${Date.now()}`;
+    const now = new Date();
+    
+    // Create agent with specific field mappings
+    const [newAgent] = await db.insert(agentsTable)
+      .values({
+        id,
+        name: agent.name,
+        role: agent.role,
+        icon: agent.icon || "ri-robot-line",
+        instructions: agent.instructions || null,
+        latestActivity: "Created agent",
+        brainContent: "",
+        createdAt: now
+      })
+      .returning();
+    
     return newAgent;
   }
 
   async updateAgentActivity(id: string, activity: string): Promise<Agent | undefined> {
-    const agent = this.agents.get(id);
-    if (!agent) return undefined;
-    
-    const updatedAgent = { ...agent, latestActivity: activity };
-    this.agents.set(id, updatedAgent);
-    return updatedAgent;
+    const [agent] = await db.update(agentsTable)
+      .set({ latestActivity: activity })
+      .where(eq(agentsTable.id, id))
+      .returning();
+    return agent;
   }
 
   // Task operations
   async getTasks(): Promise<Task[]> {
-    return Array.from(this.tasks.values());
+    return await db.select().from(tasksTable);
   }
 
   async getTask(id: string): Promise<Task | undefined> {
-    return this.tasks.get(id);
+    const tasks = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
+    return tasks.length > 0 ? tasks[0] : undefined;
   }
 
   async createTask(task: InsertTask): Promise<Task> {
-    const id = `task_${this.taskIdCounter++}`;
-    const newTask: Task = { 
-      ...task, 
-      id, 
-      createdAt: new Date().toISOString() 
-    };
-    this.tasks.set(id, newTask);
+    // Generate a unique ID
+    const id = `task_${Date.now()}`;
+    const now = new Date();
+    
+    // Create task with specific field mappings
+    const [newTask] = await db.insert(tasksTable)
+      .values({
+        id,
+        title: task.title,
+        description: task.description,
+        status: task.status || "todo",
+        dueDate: task.dueDate || null,
+        agentId: task.agentId || null,
+        createdAt: now
+      })
+      .returning();
+    
     return newTask;
   }
 
   async updateTask(id: string, updates: UpdateTask): Promise<Task> {
-    const task = this.tasks.get(id);
-    if (!task) {
+    const [updatedTask] = await db.update(tasksTable)
+      .set(updates)
+      .where(eq(tasksTable.id, id))
+      .returning();
+    
+    if (!updatedTask) {
       throw new Error(`Task with id ${id} not found`);
     }
     
-    const updatedTask = { ...task, ...updates };
-    this.tasks.set(id, updatedTask);
     return updatedTask;
   }
 
   async getAgentTasks(agentId: string): Promise<Task[]> {
-    return Array.from(this.tasks.values())
-      .filter(task => task.agentId === agentId);
+    return await db.select()
+      .from(tasksTable)
+      .where(eq(tasksTable.agentId, agentId));
   }
 
   // Message operations
   async getAgentMessages(agentId: string): Promise<Message[]> {
-    return Array.from(this.messages.values())
-      .filter(message => message.agentId === agentId)
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    return await db.select()
+      .from(messagesTable)
+      .where(eq(messagesTable.agentId, agentId))
+      .orderBy(messagesTable.timestamp);
   }
 
   async addAgentMessage(message: InsertMessage): Promise<Message> {
-    const id = `msg_${this.messageIdCounter++}`;
-    const newMessage: Message = { ...message, id };
-    this.messages.set(id, newMessage);
+    // Generate a unique ID
+    const id = `msg_${Date.now()}`;
+    const now = new Date();
+    
+    // Create message with specific field mappings
+    const [newMessage] = await db.insert(messagesTable)
+      .values({
+        id,
+        role: message.role,
+        content: message.content,
+        agentId: message.agentId,
+        timestamp: message.timestamp ? new Date(message.timestamp) : now
+      })
+      .returning();
+    
     return newMessage;
   }
 
   // Integration operations
   async getIntegrations(): Promise<Integration[]> {
-    return Array.from(this.integrations.values());
+    return await db.select().from(integrationsTable);
   }
 
   async connectIntegration(type: string): Promise<Integration> {
     // In a real app, this would connect to the actual integration
     // For now, we'll just create a placeholder integration
-    const id = `integration_${this.integrationIdCounter++}`;
-    
     let name, details, icon, status;
     
     switch (type) {
@@ -323,25 +394,40 @@ export class MemStorage implements IStorage {
         status = "connected";
     }
     
-    const newIntegration: Integration = {
-      id,
-      name,
-      type: type || "other",
-      status: "connected",
-      details,
-      icon,
-    };
+    // Generate a unique ID
+    const id = `integration_${Date.now()}`;
     
-    this.integrations.set(id, newIntegration);
+    const [newIntegration] = await db.insert(integrationsTable)
+      .values({
+        id,
+        name,
+        type: type || "other",
+        status,
+        details,
+        icon,
+      })
+      .returning();
+    
     return newIntegration;
   }
 
-  private createIntegration(integration: InsertIntegration): Integration {
-    const id = `integration_${this.integrationIdCounter++}`;
-    const newIntegration: Integration = { ...integration, id };
-    this.integrations.set(id, newIntegration);
+  private async createIntegration(integration: InsertIntegration): Promise<Integration> {
+    // Generate a unique ID
+    const id = `integration_${Date.now()}`;
+    
+    const [newIntegration] = await db.insert(integrationsTable)
+      .values({
+        id,
+        name: integration.name,
+        type: integration.type,
+        status: integration.status,
+        details: integration.details || null,
+        icon: integration.icon || null
+      })
+      .returning();
+    
     return newIntegration;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
