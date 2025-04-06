@@ -6,10 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { sendMessageToAgent } from "@/lib/openai";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { AIModelSelector } from "@/components/ai-model-selector";
+import { AIModelConfig } from "@/hooks/use-ai-models";
 
 type Agent = {
   id: string;
@@ -36,6 +39,8 @@ type Task = {
 export default function AgentChat({ params }: { params: { agentId: string } }) {
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [aiModelConfig, setAIModelConfig] = useState<AIModelConfig | null>(null);
+  const [aiSelectorOpen, setAiSelectorOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -54,7 +59,7 @@ export default function AgentChat({ params }: { params: { agentId: string } }) {
   const sendMessageMutation = useMutation({
     mutationFn: async (message: string) => {
       setIsLoading(true);
-      const response = await sendMessageToAgent(params.agentId, message);
+      const response = await sendMessageToAgent(params.agentId, message, aiModelConfig);
       return response;
     },
     onSuccess: () => {
@@ -152,6 +157,58 @@ export default function AgentChat({ params }: { params: { agentId: string } }) {
                   </div>
                 ))}
                 <div ref={messagesEndRef} />
+              </div>
+              
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center">
+                  <Popover open={aiSelectorOpen} onOpenChange={setAiSelectorOpen}>
+                    <PopoverTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="gap-1 h-8 text-xs"
+                      >
+                        <i className="ri-cpu-line text-gray-600"></i>
+                        {aiModelConfig ? (
+                          <span className="font-medium">
+                            {aiModelConfig.provider === "openai" ? "OpenAI" :
+                             aiModelConfig.provider === "anthropic" ? "Claude" :
+                             aiModelConfig.provider === "perplexity" ? "Perplexity" :
+                             aiModelConfig.provider === "xai" ? "Grok" : 
+                             aiModelConfig.provider}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">Default AI</span>
+                        )}
+                        <i className="ri-arrow-down-s-line"></i>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-0" align="start">
+                      <div className="p-4">
+                        <AIModelSelector 
+                          onSelectModel={(config) => {
+                            setAIModelConfig(config);
+                            setAiSelectorOpen(false);
+                          }}
+                          defaultProvider={aiModelConfig?.provider}
+                          defaultModel={aiModelConfig?.modelName}
+                        />
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                
+                {aiModelConfig && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 px-2 text-xs" 
+                    onClick={() => setAIModelConfig(null)}
+                  >
+                    <i className="ri-close-line mr-1"></i>
+                    Reset to default
+                  </Button>
+                )}
               </div>
               
               <form onSubmit={handleSendMessage} className="flex gap-2">
