@@ -51,9 +51,9 @@ export function Layout({ children, title }: LayoutProps) {
             variant="ghost" 
             size="icon" 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="mr-2"
+            className="mr-2 hover:bg-blue-100"
           >
-            <i className="ri-menu-line text-black text-xl"></i>
+            <i className="ri-menu-line text-black text-xl hover:text-blue-600"></i>
           </Button>
         </Header>
         
