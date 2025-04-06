@@ -51,12 +51,9 @@ export function Layout({ children, title }: LayoutProps) {
             variant="ghost" 
             size="icon" 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="mr-2 border border-gray-300 bg-gray-100 hover:bg-gray-200"
+            className="mr-2"
           >
-            <i className={cn(
-              "transition-transform duration-300 text-gray-900 text-lg font-bold",
-              isSidebarOpen ? "ri-menu-fold-line" : "ri-menu-unfold-line"
-            )}></i>
+            <i className="ri-menu-line text-black text-xl"></i>
           </Button>
         </Header>
         
