@@ -6,22 +6,37 @@ import { z } from "zod";
 export const agents = pgTable("agents", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
-  role: text("role").notNull(),
+  role: text("role").notNull(),                      // Job title (e.g., "Marketing Specialist")
+  roleLevel: text("role_level").default("laborer"),  // Chief, Manager, Laborer
+  department: text("department").default("general"), // Marketing, Sales, Operations, etc.
   icon: text("icon").default("ri-robot-line"),
   instructions: text("instructions"),
   brainContent: text("brain_content"),
+  knowledgeBase: text("knowledge_base"),             // Generated or uploaded knowledge
+  kpis: text("kpis"),                                // Key Performance Indicators as JSON
+  behavioralStyle: text("behavioral_style"),         // Agent's work style/personality
   latestActivity: text("latest_activity"),
+  isActive: boolean("is_active").default(true),      // Whether agent is active or disabled
+  simulationMode: boolean("simulation_mode").default(false), // If agent is in simulation mode
+  parentAgentId: text("parent_agent_id"),            // For hierarchy, manually create relation
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const insertAgentSchema = z.object({
   name: z.string().min(1, "Name is required"),
   role: z.string().min(1, "Role is required"),
+  roleLevel: z.enum(["chief", "manager", "laborer"]).default("laborer"),
+  department: z.string().min(1, "Department is required"),
   icon: z.string().optional(),
   instructions: z.string().optional(),
+  kpis: z.array(z.string()).optional(),
+  behavioralStyle: z.string().optional(),
+  isActive: z.boolean().optional(),
+  simulationMode: z.boolean().optional(),
+  parentAgentId: z.string().optional(),
   brainSources: z.array(
     z.object({
-      type: z.string(),
+      type: z.enum(["url", "text", "file", "auto-generate"]),
       url: z.string().optional(),
       content: z.string().optional(),
     })

@@ -4,17 +4,82 @@ import { storage } from "./storage";
 import { generateAgentResponse, generateTaskSuggestion } from "./openai";
 import { z } from "zod";
 import { insertAgentSchema, insertTaskSchema, updateTaskSchema } from "@shared/schema";
-import { getModelInfo, generateAIResponse, AIMessage } from "./ai";
+import { getModelInfo, generateAIResponse, AIMessage, getAvailableProviders, AIModelProvider } from "./ai";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // AI Models API
   app.get("/api/ai/models", (_req, res) => {
     try {
       const modelInfo = getModelInfo();
-      res.json(modelInfo);
+      const availableProviders = getAvailableProviders();
+      
+      // Transform model info into the expected format for the frontend
+      const providers = Object.entries(modelInfo).map(([providerKey, info]) => {
+        const provider = providerKey as AIModelProvider;
+        return {
+          provider,
+          models: info.models,
+          isAvailable: availableProviders.includes(provider)
+        };
+      });
+      
+      res.json({ providers });
     } catch (error) {
       console.error("Error fetching AI model info:", error);
       res.status(500).json({ message: "Failed to fetch AI model information" });
+    }
+  });
+  
+  // API Key Management
+  app.get("/api/ai/provider-status", (_req, res) => {
+    try {
+      const providerStatus = {
+        openai: process.env.OPENAI_API_KEY ? true : false,
+        anthropic: process.env.ANTHROPIC_API_KEY ? true : false,
+        perplexity: process.env.PERPLEXITY_API_KEY ? true : false,
+        xai: process.env.XAI_API_KEY ? true : false,
+        gemini: process.env.GEMINI_API_KEY ? true : false
+      };
+      
+      res.json({ providerStatus });
+    } catch (error) {
+      console.error("Error checking AI provider status:", error);
+      res.status(500).json({ message: "Failed to check AI provider status" });
+    }
+  });
+  
+  // Save API Key - this only works for development purposes
+  // In production, you should use a proper secrets management system
+  app.post("/api/keys/save", (req, res) => {
+    try {
+      const { keyName, value } = req.body;
+      
+      // Validate the key name to prevent security issues
+      const allowedKeys = [
+        "OPENAI_API_KEY", 
+        "ANTHROPIC_API_KEY", 
+        "PERPLEXITY_API_KEY",
+        "XAI_API_KEY",
+        "GEMINI_API_KEY"
+      ];
+      
+      if (!allowedKeys.includes(keyName)) {
+        return res.status(400).json({ message: "Invalid API key name" });
+      }
+      
+      if (!value) {
+        return res.status(400).json({ message: "API key value is required" });
+      }
+      
+      // Set environment variable
+      process.env[keyName] = value;
+      
+      console.log(`API key ${keyName} has been updated`);
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error saving API key:", error);
+      res.status(500).json({ message: "Failed to save API key" });
     }
   });
   
