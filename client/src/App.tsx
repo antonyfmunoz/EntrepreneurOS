@@ -7,15 +7,18 @@ import Dashboard from "@/pages/dashboard";
 import TaskBoardPage from "@/pages/task-board-page";
 import AgentChat from "@/pages/agent-chat";
 import IntegrationsPage from "@/pages/integrations-page";
-import { useState } from "react";
+import AuthPage from "@/pages/auth-page";
+import { AuthProvider } from "@/hooks/use-auth";
+import { ProtectedRoute } from "@/lib/protected-route";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/tasks" component={TaskBoardPage} />
+      <ProtectedRoute path="/" component={Dashboard} />
+      <ProtectedRoute path="/tasks" component={TaskBoardPage} />
       <Route path="/chat/:agentId" component={AgentChat} />
-      <Route path="/integrations" component={IntegrationsPage} />
+      <ProtectedRoute path="/integrations" component={IntegrationsPage} />
+      <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -24,8 +27,10 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Router />
-      <Toaster />
+      <AuthProvider>
+        <Router />
+        <Toaster />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

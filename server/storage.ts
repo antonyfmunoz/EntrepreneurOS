@@ -3,6 +3,7 @@ import {
   tasks as tasksTable, 
   messages as messagesTable,
   integrations as integrationsTable,
+  users as usersTable,
   type Agent, 
   type Task, 
   type InsertAgent, 
@@ -11,12 +12,23 @@ import {
   type Message,
   type InsertMessage,
   type Integration,
-  type InsertIntegration
+  type InsertIntegration,
+  type User,
+  type InsertUser
 } from "@shared/schema";
-import { db } from './db';
+import { db, client } from './db';
 import { eq, and } from 'drizzle-orm';
+import session from 'express-session';
+import connectPg from 'connect-pg-simple';
 
 export interface IStorage {
+  // User operations
+  getUsers(): Promise<User[]>;
+  getUser(id: string): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, updates: Partial<InsertUser>): Promise<User>;
+  
   // Agent operations
   getAgents(): Promise<Agent[]>;
   getAgent(id: string): Promise<Agent | undefined>;
@@ -48,14 +60,98 @@ export interface IStorage {
   // Integration operations
   getIntegrations(): Promise<Integration[]>;
   connectIntegration(type: string): Promise<Integration>;
+  
+  // Session store
+  sessionStore: session.Store;
 }
 
 export class DatabaseStorage implements IStorage {
+  // Define the session store property
+  sessionStore: session.Store;
+  
   constructor() {
+    // Create PostgreSQL session store
+    const PostgresSessionStore = connectPg(session);
+    
+    // Initialize the session store with the PostgreSQL connection string
+    this.sessionStore = new PostgresSessionStore({
+      conObject: {
+        connectionString: process.env.DATABASE_URL
+      },
+      createTableIfMissing: true,
+      // Table configuration (optional)
+      tableName: 'session',
+      schemaName: 'public'
+    });
+    
     // Initialize with sample data if needed
     this.initSampleData().catch(err => {
       console.error("Error initializing sample data:", err);
     });
+  }
+  
+  // User operations
+  async getUsers(): Promise<User[]> {
+    return await db.select().from(usersTable);
+  }
+
+  async getUser(id: string): Promise<User | undefined> {
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, id));
+    return users.length > 0 ? users[0] : undefined;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const users = await db.select().from(usersTable).where(eq(usersTable.username, username));
+    return users.length > 0 ? users[0] : undefined;
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    // Generate a unique ID
+    const id = `user_${Date.now()}`;
+    const now = new Date();
+    
+    // Convert preferences to string if present
+    const preferences = user.preferences ? JSON.stringify(user.preferences) : null;
+    
+    // Create user with specific field mappings
+    const [newUser] = await db.insert(usersTable)
+      .values({
+        id,
+        username: user.username,
+        password: user.password,
+        email: user.email,
+        fullName: user.fullName || null,
+        avatar: user.avatar || null,
+        company: user.company || null,
+        role: user.role || "user",
+        preferences: preferences,
+        createdAt: now,
+        updatedAt: now
+      })
+      .returning();
+    
+    return newUser;
+  }
+
+  async updateUser(id: string, updates: Partial<InsertUser>): Promise<User> {
+    // Handle preferences conversion for update
+    const updateData: Record<string, any> = { ...updates, updatedAt: new Date() };
+    
+    // Convert preferences to string if present
+    if (updates.preferences) {
+      updateData.preferences = JSON.stringify(updates.preferences);
+    }
+    
+    const [updatedUser] = await db.update(usersTable)
+      .set(updateData)
+      .where(eq(usersTable.id, id))
+      .returning();
+    
+    if (!updatedUser) {
+      throw new Error(`User with id ${id} not found`);
+    }
+    
+    return updatedUser;
   }
 
   private async initSampleData(): Promise<void> {

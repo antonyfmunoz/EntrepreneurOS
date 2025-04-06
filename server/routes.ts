@@ -1,12 +1,22 @@
 import { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { setupAuth } from "./auth";
 import { generateAgentResponse, generateTaskSuggestion } from "./openai";
 import { z } from "zod";
 import { insertAgentSchema, insertTaskSchema, updateTaskSchema } from "@shared/schema";
-import { getModelInfo, generateAIResponse, AIMessage, getAvailableProviders, AIModelProvider } from "./ai";
+import { 
+  getModelInfo, 
+  generateAIResponse, 
+  AIMessage, 
+  getAvailableProviders, 
+  AIModelProvider,
+  AIModelName 
+} from "./ai";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Set up authentication routes and middleware
+  setupAuth(app);
   // AI Models API
   app.get("/api/ai/models", (_req, res) => {
     try {
@@ -668,8 +678,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         // Use the highest-capability model available
         const availableProviders = getAvailableProviders();
-        let provider = "openai";
-        let modelName = "gpt-4o";
+        let provider: AIModelProvider = "openai";
+        let modelName: AIModelName = "gpt-4o";
         
         if (availableProviders.includes("anthropic")) {
           provider = "anthropic";

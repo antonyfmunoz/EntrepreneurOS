@@ -2,6 +2,32 @@ import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Users
+export const users = pgTable("users", {
+  id: text("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(),
+  email: text("email").notNull(),
+  fullName: text("full_name"),
+  avatar: text("avatar"),
+  company: text("company"),
+  role: text("role"),
+  preferences: text("preferences"), // JSON string for user preferences
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertUserSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  email: z.string().email("Invalid email address"),
+  fullName: z.string().optional(),
+  avatar: z.string().optional(),
+  company: z.string().optional(),
+  role: z.string().optional(),
+  preferences: z.record(z.unknown()).optional(),
+});
+
 // Agents
 export const agents = pgTable("agents", {
   id: text("id").primaryKey(),
@@ -132,6 +158,9 @@ export const insertIntegrationSchema = z.object({
 });
 
 // Export types
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
+
 export type InsertAgent = z.infer<typeof insertAgentSchema>;
 export type Agent = typeof agents.$inferSelect;
 
