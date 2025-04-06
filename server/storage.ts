@@ -29,10 +29,21 @@ export interface IStorage {
   createTask(task: InsertTask): Promise<Task>;
   updateTask(id: string, updates: UpdateTask): Promise<Task>;
   getAgentTasks(agentId: string): Promise<Task[]>;
+  getCollaborativeTasks(agentId: string): Promise<Task[]>; // Tasks where agent is a collaborator
+  getTasksByType(taskType: string): Promise<Task[]>; // Get tasks by type (standard, collaboration, etc.)
+  getSubtasks(parentTaskId: string): Promise<Task[]>; // Get all subtasks for a parent task
 
   // Message operations
   getAgentMessages(agentId: string): Promise<Message[]>;
+  getTaskMessages(taskId: string): Promise<Message[]>; // Get all messages for a specific task
+  getConversationMessages(conversationId: string): Promise<Message[]>; // Get all messages for a conversation
   addAgentMessage(message: InsertMessage): Promise<Message>;
+  addCollaborativeMessage(message: InsertMessage): Promise<Message>; // Special handling for collaborative messages
+
+  // Agent collaboration operations
+  addAgentCollaborator(taskId: string, agentId: string): Promise<Task>; // Add an agent as collaborator to a task
+  assignTaskToAgent(taskId: string, agentId: string, assignedById: string): Promise<Task>; // Assign task to a different agent
+  createSubtask(parentTaskId: string, subtask: InsertTask): Promise<Task>; // Create a subtask linked to parent
 
   // Integration operations
   getIntegrations(): Promise<Integration[]>;
@@ -297,9 +308,16 @@ export class DatabaseStorage implements IStorage {
         title: task.title,
         description: task.description,
         status: task.status || "todo",
+        priority: task.priority || "medium",
         dueDate: task.dueDate || null,
         agentId: task.agentId || null,
-        createdAt: now
+        assignedById: task.assignedById || null,
+        collaboratorIds: task.collaboratorIds || null,
+        taskType: task.taskType || "standard",
+        parentTaskId: task.parentTaskId || null,
+        metadata: task.metadata || null,
+        createdAt: now,
+        updatedAt: now
       })
       .returning();
     
@@ -325,11 +343,120 @@ export class DatabaseStorage implements IStorage {
       .where(eq(tasksTable.agentId, agentId));
   }
 
+  async getCollaborativeTasks(agentId: string): Promise<Task[]> {
+    // Get tasks where agent is in the collaboratorIds list
+    const allTasks = await db.select().from(tasksTable);
+    return allTasks.filter(task => 
+      task.collaboratorIds && task.collaboratorIds.split(',').includes(agentId)
+    );
+  }
+
+  async getTasksByType(taskType: string): Promise<Task[]> {
+    return await db.select()
+      .from(tasksTable)
+      .where(eq(tasksTable.taskType, taskType));
+  }
+
+  async getSubtasks(parentTaskId: string): Promise<Task[]> {
+    return await db.select()
+      .from(tasksTable)
+      .where(eq(tasksTable.parentTaskId, parentTaskId));
+  }
+
+  async addAgentCollaborator(taskId: string, agentId: string): Promise<Task> {
+    const task = await this.getTask(taskId);
+    if (!task) {
+      throw new Error(`Task with id ${taskId} not found`);
+    }
+    
+    // Create or update the list of collaboratorIds
+    let collaborators: string[] = [];
+    if (task.collaboratorIds) {
+      collaborators = task.collaboratorIds.split(',');
+      // Only add the agent if they're not already a collaborator
+      if (!collaborators.includes(agentId)) {
+        collaborators.push(agentId);
+      }
+    } else {
+      collaborators = [agentId];
+    }
+    
+    // Update the task with the new collaborators list
+    const [updatedTask] = await db.update(tasksTable)
+      .set({ 
+        collaboratorIds: collaborators.join(','),
+        taskType: "collaboration",
+        updatedAt: new Date()
+      })
+      .where(eq(tasksTable.id, taskId))
+      .returning();
+    
+    return updatedTask;
+  }
+
+  async assignTaskToAgent(taskId: string, agentId: string, assignedById: string): Promise<Task> {
+    const [updatedTask] = await db.update(tasksTable)
+      .set({ 
+        agentId: agentId,
+        assignedById: assignedById,
+        taskType: "delegated",
+        updatedAt: new Date()
+      })
+      .where(eq(tasksTable.id, taskId))
+      .returning();
+
+    if (!updatedTask) {
+      throw new Error(`Task with id ${taskId} not found`);
+    }
+    
+    return updatedTask;
+  }
+
+  async createSubtask(parentTaskId: string, subtask: InsertTask): Promise<Task> {
+    // Generate a unique ID
+    const id = `task_${Date.now()}`;
+    const now = new Date();
+
+    // Create the subtask with the parentTaskId reference
+    const [newTask] = await db.insert(tasksTable)
+      .values({
+        id,
+        title: subtask.title,
+        description: subtask.description,
+        status: subtask.status || "todo",
+        priority: subtask.priority || "medium",
+        dueDate: subtask.dueDate || null,
+        agentId: subtask.agentId || null,
+        assignedById: subtask.assignedById || null,
+        parentTaskId: parentTaskId,
+        taskType: "subtask",
+        createdAt: now,
+        updatedAt: now
+      })
+      .returning();
+    
+    return newTask;
+  }
+
   // Message operations
   async getAgentMessages(agentId: string): Promise<Message[]> {
     return await db.select()
       .from(messagesTable)
       .where(eq(messagesTable.agentId, agentId))
+      .orderBy(messagesTable.timestamp);
+  }
+
+  async getTaskMessages(taskId: string): Promise<Message[]> {
+    return await db.select()
+      .from(messagesTable)
+      .where(eq(messagesTable.taskId, taskId))
+      .orderBy(messagesTable.timestamp);
+  }
+
+  async getConversationMessages(conversationId: string): Promise<Message[]> {
+    return await db.select()
+      .from(messagesTable)
+      .where(eq(messagesTable.conversationId, conversationId))
       .orderBy(messagesTable.timestamp);
   }
 
@@ -345,6 +472,37 @@ export class DatabaseStorage implements IStorage {
         role: message.role,
         content: message.content,
         agentId: message.agentId,
+        taskId: message.taskId || null,
+        conversationId: message.conversationId || null,
+        metadata: message.metadata || null,
+        referencedAgentIds: message.referencedAgentIds || null,
+        timestamp: message.timestamp ? new Date(message.timestamp) : now
+      })
+      .returning();
+    
+    return newMessage;
+  }
+
+  async addCollaborativeMessage(message: InsertMessage): Promise<Message> {
+    // Generate a unique ID
+    const id = `msg_${Date.now()}`;
+    const now = new Date();
+    
+    // If this is a collaborative message and no conversationId is provided,
+    // generate one to group related messages together
+    const conversationId = message.conversationId || `conv_${Date.now()}`;
+    
+    // Create collaborative message
+    const [newMessage] = await db.insert(messagesTable)
+      .values({
+        id,
+        role: message.role,
+        content: message.content,
+        agentId: message.agentId,
+        taskId: message.taskId,
+        conversationId: conversationId,
+        metadata: message.metadata || null,
+        referencedAgentIds: message.referencedAgentIds,
         timestamp: message.timestamp ? new Date(message.timestamp) : now
       })
       .returning();
