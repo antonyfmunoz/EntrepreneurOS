@@ -54,7 +54,7 @@ export function Layout({ children, title }: LayoutProps) {
             className="mr-2"
           >
             <i className={cn(
-              "transition-transform duration-300",
+              "transition-transform duration-300 text-black",
               isSidebarOpen ? "ri-menu-fold-line" : "ri-menu-unfold-line"
             )}></i>
           </Button>
