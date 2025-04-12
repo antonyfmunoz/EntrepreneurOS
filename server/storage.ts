@@ -26,6 +26,8 @@ export interface IStorage {
   getUsers(): Promise<User[]>;
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByFirebaseUid(firebaseUid: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<InsertUser>): Promise<User>;
   
@@ -105,6 +107,18 @@ export class DatabaseStorage implements IStorage {
     return users.length > 0 ? users[0] : undefined;
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const users = await db.select().from(usersTable).where(eq(usersTable.email, email));
+    return users.length > 0 ? users[0] : undefined;
+  }
+
+  async getUserByFirebaseUid(firebaseUid: string): Promise<User | undefined> {
+    if (!firebaseUid) return undefined;
+    
+    const users = await db.select().from(usersTable).where(eq(usersTable.firebaseUid, firebaseUid));
+    return users.length > 0 ? users[0] : undefined;
+  }
+
   async createUser(user: InsertUser): Promise<User> {
     // Generate a unique ID
     const id = `user_${Date.now()}`;
@@ -124,6 +138,7 @@ export class DatabaseStorage implements IStorage {
         avatar: user.avatar || null,
         company: user.company || null,
         role: user.role || "user",
+        firebaseUid: user.firebaseUid || null,
         preferences: preferences,
         createdAt: now,
         updatedAt: now

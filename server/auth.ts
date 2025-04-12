@@ -6,6 +6,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
+import * as admin from "firebase-admin";
 
 declare global {
   namespace Express {
@@ -28,7 +29,13 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
+// Initialize Firebase Admin if configuration exists
+import { initializeFirebaseAdmin, isFirebaseAdminInitialized } from './firebase';
+
 export function setupAuth(app: Express) {
+  // Try to initialize Firebase Admin
+  initializeFirebaseAdmin();
+  
   // Generate a random secret if not provided
   const sessionSecret = process.env.SESSION_SECRET || randomBytes(32).toString("hex");
   
@@ -123,5 +130,61 @@ export function setupAuth(app: Express) {
     // Return user without password
     const { password, ...userWithoutPassword } = req.user;
     res.json(userWithoutPassword);
+  });
+
+  // Google Authentication route
+  app.post("/api/auth/google", async (req, res, next) => {
+    try {
+      // Check if Firebase Admin is initialized
+      if (!isFirebaseAdminInitialized()) {
+        return res.status(503).json({
+          error: "Google authentication is not available - Firebase Admin SDK not initialized"
+        });
+      }
+
+      const { uid, email, displayName } = req.body;
+
+      if (!uid || !email) {
+        return res.status(400).json({ error: "Missing required user data" });
+      }
+
+      // Find if user already exists by Firebase UID
+      let user = await storage.getUserByFirebaseUid(uid);
+      
+      if (!user) {
+        // Check if a user with this email already exists
+        user = await storage.getUserByEmail(email);
+        
+        if (user) {
+          // Update existing user with Firebase UID
+          user = await storage.updateUser(user.id, { firebaseUid: uid });
+        } else {
+          // Create a new user 
+          const username = email.split('@')[0] + '_' + Math.floor(Math.random() * 1000);
+          // Generate a random secure password for the user
+          const password = await hashPassword(randomBytes(16).toString('hex'));
+          
+          user = await storage.createUser({
+            username,
+            email,
+            password,
+            fullName: displayName || '',
+            firebaseUid: uid
+          });
+        }
+      }
+
+      // Log the user in
+      req.login(user, (err) => {
+        if (err) return next(err);
+        
+        // Return user without password
+        const { password, ...userWithoutPassword } = user;
+        return res.status(200).json(userWithoutPassword);
+      });
+    } catch (error) {
+      console.error("Google auth error:", error);
+      next(error);
+    }
   });
 }
