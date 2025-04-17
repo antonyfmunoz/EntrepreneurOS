@@ -17,6 +17,7 @@ import { useRequestAIKeys } from "@/hooks/use-ai-api-keys";
 import { ApiKeyDialog } from "@/components/api-key-dialog";
 import { cn } from "@/lib/utils";
 import { Settings, Info, Clipboard, Bot, Sparkles } from "lucide-react";
+import { Link } from "wouter";
 
 type Agent = {
   id: string;
@@ -70,6 +71,11 @@ export default function AgentChat({ params }: AgentChatProps) {
   const { data: tasks = [] } = useQuery<Task[]>({
     queryKey: [`/api/agents/${agentId}/tasks`],
     enabled: !!agentId, // Only run query if agentId exists
+  });
+  
+  // Fetch all agents for the sidebar
+  const { data: agents = [] } = useQuery<Agent[]>({
+    queryKey: ['/api/agents'],
   });
 
   const sendMessageMutation = useMutation({
@@ -241,11 +247,11 @@ export default function AgentChat({ params }: AgentChatProps) {
         
         {/* Agent Chats List */}
         <div className="flex-1 overflow-y-auto py-2">
-          {/* History Groups - "Today", "Yesterday", etc. */}
+          {/* Current Agent Chat */}
           <div className="px-3 py-2">
-            <h3 className="text-xs font-medium text-gray-500 mb-2">TODAY</h3>
+            <h3 className="text-xs font-medium text-gray-500 mb-2">CURRENT AGENT</h3>
             <div className="space-y-1">
-              {/* Conversation items */}
+              {/* Active Conversation */}
               <div className={cn(
                 "flex items-center gap-3 p-3 rounded-md cursor-pointer",
                 "bg-primary/10 text-primary"
@@ -253,39 +259,45 @@ export default function AgentChat({ params }: AgentChatProps) {
                 <Bot size={18} />
                 <div className="flex-1 truncate">
                   <div className="text-sm font-medium">Chat with {agent?.name || "Agent"}</div>
-                  <div className="text-xs text-gray-500 truncate">Active conversation</div>
-                </div>
-              </div>
-              
-              {/* Empty placeholder chats */}
-              <div className="flex items-center gap-3 p-3 rounded-md cursor-pointer hover:bg-gray-100">
-                <Bot size={18} className="text-gray-500" />
-                <div className="flex-1 truncate">
-                  <div className="text-sm font-medium text-gray-700">Marketing strategy</div>
-                  <div className="text-xs text-gray-500 truncate">Started new campaign ideas...</div>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-3 p-3 rounded-md cursor-pointer hover:bg-gray-100">
-                <Bot size={18} className="text-gray-500" />
-                <div className="flex-1 truncate">
-                  <div className="text-sm font-medium text-gray-700">Social media planning</div>
-                  <div className="text-xs text-gray-500 truncate">Created content calendar for Q2</div>
+                  <div className="text-xs text-gray-500 truncate">
+                    {messages.length > 0 
+                      ? messages[messages.length - 1].content.slice(0, 30) + "..." 
+                      : "Start a new conversation"}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
           
+          {/* Recent Agents - Fetched from database */}
           <div className="px-3 py-2">
-            <h3 className="text-xs font-medium text-gray-500 mb-2">YESTERDAY</h3>
+            <h3 className="text-xs font-medium text-gray-500 mb-2">OTHER AGENTS</h3>
             <div className="space-y-1">
-              <div className="flex items-center gap-3 p-3 rounded-md cursor-pointer hover:bg-gray-100">
-                <Bot size={18} className="text-gray-500" />
-                <div className="flex-1 truncate">
-                  <div className="text-sm font-medium text-gray-700">Website review</div>
-                  <div className="text-xs text-gray-500 truncate">Analyzed landing page performance</div>
+              {/* We'll fetch all agents except the current one */}
+              {agents && agents
+                .filter(a => a.id !== agentId)
+                .map(a => (
+                  <Link 
+                    key={a.id} 
+                    href={`/chat/${a.id}`}
+                    className="flex items-center gap-3 p-3 rounded-md cursor-pointer hover:bg-gray-100"
+                  >
+                    <div className="w-[18px] h-[18px] flex-shrink-0 rounded-full bg-primary/10 flex items-center justify-center">
+                      <i className={`${a.icon || "ri-robot-line"} text-xs text-primary`}></i>
+                    </div>
+                    <div className="flex-1 truncate">
+                      <div className="text-sm font-medium text-gray-700">{a.name}</div>
+                      <div className="text-xs text-gray-500 truncate">{a.role}</div>
+                    </div>
+                  </Link>
+                ))
+              }
+              
+              {(!agents || agents.filter(a => a.id !== agentId).length === 0) && (
+                <div className="text-xs text-gray-500 italic p-3">
+                  No other agents available
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
