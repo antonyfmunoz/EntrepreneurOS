@@ -452,6 +452,7 @@ export default function AgentChat({ params }: AgentChatProps) {
             
             {/* Current Conversation */}
             <div className="px-3 py-2">
+              <h3 className="text-xs font-medium text-gray-500 mb-2">CURRENT CHAT</h3>
               <div className="space-y-1">
                 {/* Active Conversation */}
                 {conversations.length > 0 && (
