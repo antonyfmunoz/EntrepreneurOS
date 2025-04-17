@@ -156,11 +156,21 @@ function NotificationCard({ notification, onMarkAsRead }: NotificationCardProps)
     }
   };
 
+  // Auto-mark as read when the card is clicked
+  const handleCardClick = () => {
+    if (!notification.read) {
+      onMarkAsRead(notification.id);
+    }
+  };
+
   return (
-    <Card className={cn(
-      "transition-all duration-200",
-      !notification.read && "border-primary/50 shadow-[0_0_0_1px] shadow-primary/10"
-    )}>
+    <Card 
+      className={cn(
+        "transition-all duration-200 cursor-pointer",
+        !notification.read && "border-primary/50 shadow-[0_0_0_1px] shadow-primary/10"
+      )}
+      onClick={handleCardClick}
+    >
       <CardHeader className="p-4 pb-0">
         <div className="flex justify-between items-start">
           <div className="flex items-start gap-3">
@@ -185,7 +195,10 @@ function NotificationCard({ notification, onMarkAsRead }: NotificationCardProps)
               variant="ghost" 
               size="sm" 
               className="h-8 rounded-full"
-              onClick={() => onMarkAsRead(notification.id)}
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent the card click handler
+                onMarkAsRead(notification.id);
+              }}
             >
               <Check className="mr-1 h-3.5 w-3.5" />
               Mark as read

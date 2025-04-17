@@ -146,6 +146,15 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
     }
   };
 
+  // Handle the notification click
+  const handleNotificationClick = (e: React.MouseEvent) => {
+    if (!notification.read) {
+      // Create a button event to satisfy the type
+      const buttonEvent = e as unknown as React.MouseEvent<HTMLButtonElement>;
+      onMarkAsRead(buttonEvent, notification.id);
+    }
+  };
+
   return (
     <DropdownMenuItem
       asChild
@@ -154,7 +163,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
         !notification.read && "bg-accent/50"
       )}
     >
-      <Link href={href}>
+      <Link href={href} onClick={handleNotificationClick}>
         <div className="flex items-start gap-3 w-full">
           <div
             className={cn(
@@ -184,7 +193,11 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6 shrink-0 ml-2 -mr-1 rounded-full"
-                  onClick={(e) => onMarkAsRead(e, notification.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onMarkAsRead(e, notification.id);
+                  }}
                 >
                   <Check className="h-3 w-3" />
                   <span className="sr-only">Mark as read</span>
