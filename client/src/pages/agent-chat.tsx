@@ -239,7 +239,51 @@ export default function AgentChat({ params }: AgentChatProps) {
           {/* Sidebar Header */}
           <div className="p-4 flex justify-between items-center border-b border-gray-200">
             <div className="flex items-center w-full">
-              <Button variant="outline" size="sm" className="flex justify-start items-center gap-2 w-full">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex justify-start items-center gap-2 w-full"
+                onClick={async () => {
+                  // Set active conversation to current
+                  setActiveConversationId("current");
+                  
+                  try {
+                    // Call the API to clear messages on the server
+                    await apiRequest("POST", `/api/agents/${agentId}/clear-messages`);
+                    
+                    // Clear the messages on the UI
+                    queryClient.setQueryData([`/api/agents/${agentId}/messages`], []);
+                    
+                    // Then refetch to get fresh data
+                    refetchMessages();
+                    
+                    // Reset conversation state
+                    setConversations([{
+                      id: "current",
+                      title: `Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
+                      messages: []
+                    }]);
+                    
+                    // Clear input
+                    setMessage("");
+                    
+                    // Scroll to bottom
+                    scrollToBottom();
+                    
+                    toast({
+                      title: "New chat started",
+                      description: `Ready to chat with ${agent?.name || "Agent"}`,
+                    });
+                  } catch (error) {
+                    console.error("Error starting new chat:", error);
+                    toast({
+                      title: "Error starting new chat",
+                      description: "There was an error clearing the conversation. Please try again.",
+                      variant: "destructive"
+                    });
+                  }
+                }}
+              >
                 <Bot size={16} />
                 <span className="text-sm font-medium">New Chat</span>
               </Button>
