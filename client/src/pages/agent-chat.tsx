@@ -52,6 +52,7 @@ export default function AgentChat({ params }: AgentChatProps) {
   const [aiSelectorOpen, setAiSelectorOpen] = useState(false);
   const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
   const [requiredApiProviders, setRequiredApiProviders] = useState<AIModelProvider[]>([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { requestKeys } = useRequestAIKeys();
@@ -157,8 +158,25 @@ export default function AgentChat({ params }: AgentChatProps) {
         providers={requiredApiProviders} 
       />
       
+      {/* Toggle Sidebar Button - Only visible when sidebar is collapsed */}
+      {sidebarCollapsed && (
+        <div className="absolute top-4 left-4 z-10">
+          <Button 
+            variant="outline" 
+            size="icon" 
+            className="rounded-full shadow-md"
+            onClick={() => setSidebarCollapsed(false)}
+          >
+            <i className="ri-menu-line"></i>
+          </Button>
+        </div>
+      )}
+      
       {/* Left Sidebar - ChatGPT Style */}
-      <div className="w-64 border-r border-gray-200 flex flex-col bg-gray-50 overflow-hidden">
+      <div className={cn(
+        "border-r border-gray-200 flex flex-col bg-gray-50 overflow-hidden transition-all duration-300",
+        sidebarCollapsed ? "w-0 opacity-0" : "w-64 opacity-100"
+      )}>
         {/* Sidebar Header */}
         <div className="p-4 flex justify-between items-center border-b border-gray-200">
           <div className="flex items-center">
@@ -313,6 +331,16 @@ export default function AgentChat({ params }: AgentChatProps) {
         {/* Chat Header */}
         <div className="border-b border-gray-200 p-4 flex items-center justify-between">
           <div className="flex items-center">
+            {!sidebarCollapsed && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="mr-2"
+                onClick={() => setSidebarCollapsed(true)}
+              >
+                <i className="ri-menu-fold-line"></i>
+              </Button>
+            )}
             <h1 className="font-medium text-lg">
               {agent ? agent.name : "Agent Chat"}
             </h1>
