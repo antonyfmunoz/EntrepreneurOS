@@ -17,7 +17,7 @@ import { AIModelConfig, AIModelProvider } from "@/hooks/use-ai-models";
 import { useRequestAIKeys } from "@/hooks/use-ai-api-keys";
 import { ApiKeyDialog } from "@/components/api-key-dialog";
 import { cn } from "@/lib/utils";
-import { Settings, Info, Clipboard, Bot, Sparkles } from "lucide-react";
+import { Settings, Info, Clipboard, Bot, Sparkles, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 
 type Agent = {
@@ -500,9 +500,30 @@ export default function AgentChat({ params }: AgentChatProps) {
                           )}>
                             {conversation.title.split(' - ')[1]} {/* Just the date part */}
                           </span>
-                          <Badge variant="outline" className="px-1 py-0 h-4 text-[10px]">
-                            {conversation.messages.length} msgs
-                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-4 w-4 rounded-sm p-0"
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent opening the conversation
+                              
+                              // Remove this conversation from history
+                              const updatedConversations = conversations.filter(c => c.id !== conversation.id);
+                              setConversations(updatedConversations);
+                              
+                              // If this was the active conversation, switch to current
+                              if (activeConversationId === conversation.id) {
+                                setActiveConversationId("current");
+                              }
+                              
+                              toast({
+                                title: "Conversation deleted",
+                                description: "The conversation has been removed from history",
+                              });
+                            }}
+                          >
+                            <Trash2 size={10} className="text-gray-400 hover:text-red-500" />
+                          </Button>
                         </div>
                         <div className={cn(
                           "text-xs",
