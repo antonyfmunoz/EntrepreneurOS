@@ -170,14 +170,36 @@ export class DatabaseStorage implements IStorage {
   }
 
   private async initSampleData(): Promise<void> {
+    // Check if there are any agents first
     const existingAgents = await this.getAgents();
-    if (existingAgents.length > 0) {
-      // Data already exists, no need to initialize
+    
+    // If we already have agents, only continue if there's no executive agent
+    const hasExecutiveAgent = existingAgents.some(agent => agent.role === 'executive');
+    
+    if (existingAgents.length > 0 && hasExecutiveAgent) {
+      // Executive agent exists, no need to initialize
       return;
+    }
+    
+    // Remove any existing agents if we're reinitializing
+    if (existingAgents.length > 0) {
+      // Delete all existing agents and their associated data
+      for (const agent of existingAgents) {
+        // Delete tasks associated with this agent
+        await db.delete(tasksTable)
+          .where(eq(tasksTable.agentId, agent.id));
+          
+        // Delete messages associated with this agent  
+        await db.delete(messagesTable)
+          .where(eq(messagesTable.agentId, agent.id));
+      }
+      
+      // Now delete all the agents
+      await db.delete(agentsTable);
     }
 
     try {
-      // Only create the Executive Agent - which will manage all other agents
+      // Create only the Executive Agent - which will manage all other agents
       const executiveAgent = await db.insert(agentsTable)
         .values({
           id: "agent_executive",
