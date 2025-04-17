@@ -838,6 +838,196 @@ export async function registerRoutes(app: Express): Promise<Server> {
       },
     });
   });
+  
+  // Enhanced Analytics API
+  app.get("/api/analytics", async (req, res) => {
+    try {
+      const timeRange = req.query.timeRange || '7days';
+      const agents = await storage.getAgents();
+      const tasks = await storage.getTasks();
+      // Get all messages - we've just added this method
+      const messages = await db.select().from(messagesTable).orderBy(messagesTable.timestamp);
+      
+      // Calculate date range based on timeRange
+      const now = new Date();
+      const startDate = new Date();
+      if (timeRange === '7days') {
+        startDate.setDate(now.getDate() - 7);
+      } else if (timeRange === '30days') {
+        startDate.setDate(now.getDate() - 30);
+      } else if (timeRange === '90days') {
+        startDate.setDate(now.getDate() - 90);
+      }
+      
+      // Agent performance metrics
+      const agentPerformance = agents.map(agent => {
+        const agentTasks = tasks.filter(task => task.agentId === agent.id);
+        const completedTasks = agentTasks.filter(task => task.status === 'done');
+        const inProgressTasks = agentTasks.filter(task => task.status === 'in-progress');
+        const pendingTasks = agentTasks.filter(task => task.status === 'todo');
+        
+        // Calculate completion rate
+        const completionRate = agentTasks.length > 0 ? completedTasks.length / agentTasks.length : 0;
+        
+        // Calculate average completion time (simplified approximation)
+        // In a real system, you'd use task createdAt and updatedAt timestamps
+        const averageCompletionTime = 
+          completedTasks.length > 0 ? 
+          completedTasks.reduce((sum, task) => {
+            const createdDate = new Date(task.createdAt);
+            const updatedDate = new Date(task.updatedAt);
+            const hoursDiff = (updatedDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60);
+            return sum + hoursDiff;
+          }, 0) / completedTasks.length : 0;
+        
+        // Count tasks by priority
+        const highPriorityTasks = agentTasks.filter(task => task.priority === 'high').length;
+        const mediumPriorityTasks = agentTasks.filter(task => task.priority === 'medium').length;
+        const lowPriorityTasks = agentTasks.filter(task => task.priority === 'low').length;
+        
+        return {
+          id: agent.id,
+          name: agent.name,
+          role: agent.role,
+          icon: agent.icon,
+          tasksCompleted: completedTasks.length,
+          tasksInProgress: inProgressTasks.length,
+          tasksPending: pendingTasks.length,
+          completionRate,
+          averageCompletionTime,
+          tasksByPriority: {
+            high: highPriorityTasks,
+            medium: mediumPriorityTasks,
+            low: lowPriorityTasks
+          }
+        };
+      });
+      
+      // Generate task completion trends (fake data for now - in a real app, use actual timestamps)
+      const taskCompletionTrends = [];
+      const daysToGenerate = timeRange === '7days' ? 7 : (timeRange === '30days' ? 30 : 90);
+      
+      for (let i = 0; i < daysToGenerate; i++) {
+        const date = new Date();
+        date.setDate(date.getDate() - (daysToGenerate - i - 1));
+        const dateStr = date.toISOString().split('T')[0];
+        
+        // Filter tasks created or completed on this date
+        const tasksCreatedOnDate = tasks.filter(task => {
+          const createdDate = new Date(task.createdAt);
+          return createdDate.toISOString().split('T')[0] === dateStr;
+        }).length;
+        
+        const tasksCompletedOnDate = tasks.filter(task => {
+          if (task.status !== 'done') return false;
+          const updatedDate = new Date(task.updatedAt);
+          return updatedDate.toISOString().split('T')[0] === dateStr;
+        }).length;
+        
+        taskCompletionTrends.push({
+          date: dateStr,
+          created: tasksCreatedOnDate,
+          completed: tasksCompletedOnDate
+        });
+      }
+      
+      // Task distribution by status
+      const taskDistributionByStatus = [
+        {
+          name: "Completed",
+          value: tasks.filter(task => task.status === 'done').length,
+          color: "#22c55e" // green-500
+        },
+        {
+          name: "In Progress",
+          value: tasks.filter(task => task.status === 'in-progress').length,
+          color: "#f59e0b" // yellow-500 
+        },
+        {
+          name: "To Do",
+          value: tasks.filter(task => task.status === 'todo').length,
+          color: "#6b7280" // gray-500
+        }
+      ];
+      
+      // Task distribution by type
+      const taskDistributionByType = [
+        {
+          name: "Standard", 
+          value: tasks.filter(task => task.taskType === 'standard').length,
+          color: "#3b82f6" // blue-500
+        },
+        {
+          name: "Collaboration",
+          value: tasks.filter(task => task.taskType === 'collaboration').length,
+          color: "#8b5cf6" // violet-500
+        },
+        {
+          name: "Delegated",
+          value: tasks.filter(task => task.taskType === 'delegated').length,
+          color: "#ec4899" // pink-500
+        },
+        {
+          name: "Subtask",
+          value: tasks.filter(task => task.taskType === 'subtask').length,
+          color: "#14b8a6" // teal-500
+        }
+      ];
+      
+      // Task distribution by priority
+      const taskDistributionByPriority = [
+        {
+          name: "High",
+          value: tasks.filter(task => task.priority === 'high').length,
+          color: "#ef4444" // red-500
+        },
+        {
+          name: "Medium",
+          value: tasks.filter(task => task.priority === 'medium').length,
+          color: "#f59e0b" // yellow-500
+        },
+        {
+          name: "Low",
+          value: tasks.filter(task => task.priority === 'low').length,
+          color: "#10b981" // emerald-500
+        }
+      ];
+      
+      // Calculate overall stats
+      const totalAgents = agents.length;
+      const totalTasks = tasks.length;
+      const completionRate = totalTasks > 0 ? 
+        tasks.filter(task => task.status === 'done').length / totalTasks : 0;
+      
+      // Calculate average task age in days
+      const averageTaskAge = tasks.length > 0 ? 
+        tasks.reduce((sum, task) => {
+          const createdDate = new Date(task.createdAt);
+          const ageInDays = (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
+          return sum + ageInDays;
+        }, 0) / tasks.length : 0;
+      
+      res.json({
+        agentPerformance,
+        taskCompletionTrends,
+        taskDistributionByStatus,
+        taskDistributionByType,
+        taskDistributionByPriority,
+        overallStats: {
+          totalAgents,
+          totalTasks,
+          completionRate,
+          averageTaskAge
+        }
+      });
+    } catch (error) {
+      console.error("Error generating analytics:", error);
+      res.status(500).json({ 
+        message: "Failed to generate analytics",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
 
   // Integrations API
   app.get("/api/integrations", async (_req, res) => {
