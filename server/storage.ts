@@ -202,15 +202,20 @@ export class DatabaseStorage implements IStorage {
 
     try {
       // Create only the Executive Agent - which will manage all other agents
+      const timestamp = new Date();
       const executiveAgent = await db.insert(agentsTable)
         .values({
           id: "agent_executive",
           name: "Executive Agent",
           role: "executive",
+          roleLevel: "chief",
+          department: "Management",
           icon: "ri-user-star-line",
           instructions: "Lead and manage the team of AI agents, create and assign specialized agents for different business functions, coordinate agent collaboration, and ensure alignment with business goals and strategy.",
           latestActivity: "Created agent",
           brainContent: "",
+          createdAt: timestamp
+          // updatedAt will be added through database migration
         })
         .returning()
         .then(rows => rows[0]);
@@ -225,6 +230,10 @@ export class DatabaseStorage implements IStorage {
             status: "todo",
             dueDate: this.getFutureDate(2),
             agentId: executiveAgent.id,
+            priority: "high",
+            taskType: "standard",
+            createdAt: now,
+            updatedAt: now
           },
           {
             id: "task_2",
@@ -233,6 +242,10 @@ export class DatabaseStorage implements IStorage {
             status: "todo", 
             dueDate: this.getFutureDate(1),
             agentId: executiveAgent.id,
+            priority: "high",
+            taskType: "standard",
+            createdAt: now,
+            updatedAt: now
           },
           {
             id: "task_3",
@@ -241,6 +254,10 @@ export class DatabaseStorage implements IStorage {
             status: "in-progress",
             dueDate: this.getTodayDate(),
             agentId: executiveAgent.id,
+            priority: "medium",
+            taskType: "standard",
+            createdAt: now,
+            updatedAt: now
           },
           {
             id: "task_4",
@@ -249,6 +266,10 @@ export class DatabaseStorage implements IStorage {
             status: "in-progress",
             dueDate: this.getFutureDate(3),
             agentId: executiveAgent.id,
+            priority: "low",
+            taskType: "standard",
+            createdAt: now,
+            updatedAt: now
           }
         ]);
 
@@ -360,8 +381,7 @@ export class DatabaseStorage implements IStorage {
         updateData.latestActivity = updates.latestActivity;
       }
       
-      // Handle any complex conversions if needed
-      // For example, convert array fields to strings for storage
+      // Note: We're not updating the updatedAt field until we migrate the database
       
       // Update the agent in the database
       const [agent] = await db.update(agentsTable)
