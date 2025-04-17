@@ -245,67 +245,62 @@ export default function AgentChat({ params }: AgentChatProps) {
                 className="flex justify-start items-center gap-2 w-full"
                 onClick={async () => {
                   try {
-                    // Save the current conversation (if it has messages) to history
-                    const currentConversation = conversations.find(c => c.id === "current");
-                    let updatedConversations = [...conversations];
+                    // First, check if current conversation has messages
+                    // If it does, save it to history
+                    let updatedConversations = [];
                     
-                    // Only add current to history if it has messages
-                    if (currentConversation && messages.length > 0) {
-                      // Generate a unique ID for the conversation that was previously "current"
+                    if (messages.length > 0) {
+                      // Generate a unique ID for the current conversation that we're moving to history
                       const pastConvId = `past_${Date.now()}`;
                       
-                      // Clone the current conversation with a new ID
+                      // Create a history entry with the current messages
                       const pastConversation = {
-                        ...currentConversation,
                         id: pastConvId,
-                        messages: [...messages] // Clone the messages array
+                        title: `Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
+                        messages: [...messages] // Store a copy of the current messages
                       };
                       
-                      // Remove the old "current" conversation
-                      const nonCurrentConvs = updatedConversations.filter(c => c.id !== "current");
+                      // Add all existing conversations except current to history
+                      const existingHistory = conversations.filter(c => c.id !== "current");
                       
-                      // Add the past conversation at the beginning of the history
+                      // Create a completely new empty conversation for "current"
                       updatedConversations = [
-                        // Create a new empty "current" conversation
                         {
                           id: "current",
                           title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
-                          messages: []
+                          messages: [] // Empty message array
                         },
-                        // Add what was the current conversation as a historical item
-                        pastConversation,
-                        // Add all other existing historical conversations
-                        ...nonCurrentConvs
+                        pastConversation, // Add the conversation we just completed
+                        ...existingHistory // Add all other historical conversations
                       ];
                     } else {
-                      // If there are no messages, just reset the current conversation
+                      // If there are no messages, just create a fresh current conversation
                       updatedConversations = [
                         {
                           id: "current",
                           title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
-                          messages: []
+                          messages: [] // Empty message array
                         },
-                        ...updatedConversations.filter(c => c.id !== "current")
+                        ...conversations.filter(c => c.id !== "current") // Keep all existing history
                       ];
                     }
                     
-                    // Update conversations state
+                    // Update conversations state with our new array
                     setConversations(updatedConversations);
                     
                     // Set active conversation to the new empty one
                     setActiveConversationId("current");
                     
-                    // Call the API to clear messages on the server (for the current session)
-                    // This doesn't affect history but ensures we start fresh
+                    // Clear the server-side messages
                     await apiRequest("POST", `/api/agents/${agentId}/clear-messages`);
                     
-                    // Clear the messages on the UI
+                    // Clear the messages in the React Query cache
                     queryClient.setQueryData([`/api/agents/${agentId}/messages`], []);
                     
-                    // Then refetch to get fresh data
-                    refetchMessages();
+                    // Clear the local messages state
+                    setMessages([]);
                     
-                    // Clear input
+                    // Clear input field
                     setMessage("");
                     
                     // Scroll to bottom
