@@ -154,8 +154,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/agents/:id/clear-messages", async (req, res) => {
     try {
       const agentId = req.params.id;
-      // For now, we'll just return an empty array since clearAgentMessages is not implemented yet
-      // In a real app, you would implement storage.clearAgentMessages(agentId)
+      await storage.clearAgentMessages(agentId);
       res.json({ success: true, message: "Chat history cleared successfully" });
     } catch (error) {
       console.error("Error clearing agent messages:", error);
