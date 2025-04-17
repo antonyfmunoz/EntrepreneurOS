@@ -1051,9 +1051,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const integration = await storage.connectIntegration(type);
+      
+      // Create a notification for the user when integration is connected
+      if (req.user && integration) {
+        await storage.createNotification({
+          userId: req.user.id,
+          title: "Integration Connected",
+          content: `${integration.name} integration has been successfully connected`,
+          type: "integration-connected",
+          href: "/integrations",
+          relatedId: integration.id
+        });
+      }
+      
       res.status(201).json(integration);
     } catch (error) {
       res.status(500).json({ message: "Failed to connect integration" });
+    }
+  });
+  
+  // Notification API Routes
+  app.get("/api/notifications", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const notifications = await storage.getNotifications(req.user.id);
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+  
+  app.get("/api/notifications/count", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const count = await storage.getUnreadNotificationsCount(req.user.id);
+      res.json({ count });
+    } catch (error) {
+      console.error("Error fetching notification count:", error);
+      res.status(500).json({ message: "Failed to fetch notification count" });
+    }
+  });
+  
+  app.post("/api/notifications/:id/read", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const notification = await storage.markNotificationAsRead(req.params.id);
+      res.json(notification);
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ message: "Failed to mark notification as read" });
+    }
+  });
+  
+  app.post("/api/notifications/read-all", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      await storage.markAllNotificationsAsRead(req.user.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+      res.status(500).json({ message: "Failed to mark all notifications as read" });
     }
   });
 

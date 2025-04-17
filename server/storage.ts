@@ -742,6 +742,60 @@ export class DatabaseStorage implements IStorage {
     
     return newIntegration;
   }
+
+  // Notification operations
+  async getNotifications(userId: string): Promise<Notification[]> {
+    return await db.select()
+      .from(notificationsTable)
+      .where(eq(notificationsTable.userId, userId))
+      .orderBy(notificationsTable.createdAt, 'desc');
+  }
+
+  async getUnreadNotificationsCount(userId: string): Promise<number> {
+    const notifications = await db.select({ read: notificationsTable.read })
+      .from(notificationsTable)
+      .where(and(
+        eq(notificationsTable.userId, userId),
+        eq(notificationsTable.read, false)
+      ));
+    return notifications.length;
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const id = `notification_${Date.now()}`;
+    
+    const [newNotification] = await db.insert(notificationsTable)
+      .values({
+        id,
+        userId: notification.userId,
+        title: notification.title,
+        content: notification.content,
+        type: notification.type,
+        read: notification.read || false,
+        href: notification.href || null,
+        relatedId: notification.relatedId || null,
+        metadata: notification.metadata || null,
+        createdAt: new Date()
+      })
+      .returning();
+    
+    return newNotification;
+  }
+
+  async markNotificationAsRead(id: string): Promise<Notification | undefined> {
+    const [notification] = await db.update(notificationsTable)
+      .set({ read: true })
+      .where(eq(notificationsTable.id, id))
+      .returning();
+    
+    return notification;
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<void> {
+    await db.update(notificationsTable)
+      .set({ read: true })
+      .where(eq(notificationsTable.userId, userId));
+  }
 }
 
 export const storage = new DatabaseStorage();
