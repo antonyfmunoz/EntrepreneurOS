@@ -421,16 +421,18 @@ export default function AgentChat({ params }: AgentChatProps) {
                             </div>
                             
                             <div className="flex justify-end">
-                              <Button
-                                variant="default"
-                                className="gap-2"
-                                onClick={() => {
-                                  window.location.href = `/agent/${agentItem.id}/program`;
-                                }}
-                              >
-                                <Settings size={16} />
-                                Program Agent
-                              </Button>
+                              <Link href={`/agent/${agentItem.id}/program`}>
+                                <Button
+                                  variant="default"
+                                  className="gap-2"
+                                  onClick={(e) => {
+                                    // Dialog will automatically close on navigation
+                                  }}
+                                >
+                                  <Settings size={16} />
+                                  Program Agent
+                                </Button>
+                              </Link>
                             </div>
                           </DialogContent>
                         </Dialog>
