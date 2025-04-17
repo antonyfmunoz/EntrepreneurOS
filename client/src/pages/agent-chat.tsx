@@ -11,7 +11,9 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { AIModelSelector } from "@/components/ai-model-selector";
-import { AIModelConfig } from "@/hooks/use-ai-models";
+import { AIModelConfig, AIModelProvider } from "@/hooks/use-ai-models";
+import { useRequestAIKeys } from "@/hooks/use-ai-api-keys";
+import { ApiKeyDialog } from "@/components/api-key-dialog";
 
 type Agent = {
   id: string;
@@ -35,30 +37,41 @@ type Task = {
   status: "todo" | "in-progress" | "done";
 };
 
-export default function AgentChat({ params }: { params: { agentId: string } }) {
+type AgentChatProps = {
+  params?: { agentId: string }
+};
+
+export default function AgentChat({ params }: AgentChatProps) {
+  const agentId = params?.agentId || "";
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [aiModelConfig, setAIModelConfig] = useState<AIModelConfig | null>(null);
   const [aiSelectorOpen, setAiSelectorOpen] = useState(false);
+  const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
+  const [requiredApiProviders, setRequiredApiProviders] = useState<AIModelProvider[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { requestKeys } = useRequestAIKeys();
 
   const { data: agent } = useQuery<Agent>({
-    queryKey: [`/api/agents/${params.agentId}`],
+    queryKey: [`/api/agents/${agentId}`],
+    enabled: !!agentId, // Only run query if agentId exists
   });
 
   const { data: messages = [], refetch: refetchMessages } = useQuery<Message[]>({
-    queryKey: [`/api/agents/${params.agentId}/messages`],
+    queryKey: [`/api/agents/${agentId}/messages`],
+    enabled: !!agentId, // Only run query if agentId exists
   });
 
   const { data: tasks = [] } = useQuery<Task[]>({
-    queryKey: [`/api/agents/${params.agentId}/tasks`],
+    queryKey: [`/api/agents/${agentId}/tasks`],
+    enabled: !!agentId, // Only run query if agentId exists
   });
 
   const sendMessageMutation = useMutation({
     mutationFn: async (message: string) => {
       setIsLoading(true);
-      const response = await sendMessageToAgent(params.agentId, message, aiModelConfig);
+      const response = await sendMessageToAgent(agentId, message, aiModelConfig);
       return response;
     },
     onSuccess: () => {
@@ -80,12 +93,12 @@ export default function AgentChat({ params }: { params: { agentId: string } }) {
     mutationFn: async (taskData: { title: string; description: string }) => {
       const res = await apiRequest("POST", "/api/tasks", {
         ...taskData,
-        agentId: params.agentId,
+        agentId,
       });
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/agents/${params.agentId}/tasks`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/agents/${agentId}/tasks`] });
       toast({
         title: "Task created",
         description: "New task has been created successfully",
@@ -101,10 +114,24 @@ export default function AgentChat({ params }: { params: { agentId: string } }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) return;
     
+    // If no custom AI model is selected, we'll use the default (likely OpenAI)
+    const providers: AIModelProvider[] = aiModelConfig ? [aiModelConfig.provider] : ["openai"];
+    
+    // Check if we have the required API keys
+    const hasKeys = await requestKeys(providers);
+    
+    if (!hasKeys) {
+      // Set required providers and open the API key dialog
+      setRequiredApiProviders(providers);
+      setApiKeyDialogOpen(true);
+      return;
+    }
+    
+    // If we have the keys, send the message
     sendMessageMutation.mutate(message);
   };
 
@@ -115,6 +142,19 @@ export default function AgentChat({ params }: { params: { agentId: string } }) {
 
   return (
     <Layout title={agent ? `Chat with ${agent.name}` : "Agent Chat"}>
+      {/* API Key Dialog */}
+      <ApiKeyDialog 
+        isOpen={apiKeyDialogOpen} 
+        onClose={() => {
+          setApiKeyDialogOpen(false);
+          // Try sending the message again if keys are added
+          if (message.trim()) {
+            sendMessageMutation.mutate(message);
+          }
+        }}
+        providers={requiredApiProviders} 
+      />
+      
       <div className="flex gap-6">
         {/* Chat Area */}
         <div className="flex-1 flex flex-col h-full">

@@ -16,7 +16,9 @@ function Router() {
     <Switch>
       <ProtectedRoute path="/" component={Dashboard} />
       <ProtectedRoute path="/tasks" component={TaskBoardPage} />
-      <ProtectedRoute path="/chat/:agentId" component={AgentChat} />
+      <Route path="/chat/:agentId">
+        {(params) => <AgentChat params={params} />}
+      </Route>
       <ProtectedRoute path="/integrations" component={IntegrationsPage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
