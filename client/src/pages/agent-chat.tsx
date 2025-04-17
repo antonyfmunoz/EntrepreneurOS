@@ -133,7 +133,7 @@ export default function AgentChat({ params }: AgentChatProps) {
       // In a real app, these would be grouped by conversation ID from the server
       const currentConversation = {
         id: "current",
-        title: `Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
+        title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
         messages: messages
       };
       
@@ -260,7 +260,7 @@ export default function AgentChat({ params }: AgentChatProps) {
                     // Reset conversation state
                     setConversations([{
                       id: "current",
-                      title: `Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
+                      title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
                       messages: []
                     }]);
                     
@@ -420,9 +420,9 @@ export default function AgentChat({ params }: AgentChatProps) {
               </div>
             </div>
             
-            {/* Current Chat */}
+            {/* Today's Chats */}
             <div className="px-3 py-2">
-              <h3 className="text-xs font-medium text-gray-500 mb-2">CURRENT CHAT</h3>
+              <h3 className="text-xs font-medium text-gray-500 mb-2">TODAY'S CHATS</h3>
               <div className="space-y-1">
                 {/* Active Conversation */}
                 {conversations.length > 0 && (
@@ -435,7 +435,7 @@ export default function AgentChat({ params }: AgentChatProps) {
                   >
                     <Bot size={18} />
                     <div className="flex-1 truncate">
-                      <div className="text-sm font-medium">Chat with {agent?.name || "Agent"}</div>
+                      <div className="text-sm font-medium">Today's Chat with {agent?.name || "Agent"}</div>
                       <div className="text-xs text-gray-500 truncate">
                         {messages.length > 0 
                           ? messages[messages.length - 1].content.slice(0, 30) + "..." 
@@ -557,7 +557,7 @@ export default function AgentChat({ params }: AgentChatProps) {
                       className="h-auto p-0 text-xs text-primary" 
                       onClick={() => handleOpenConversation("current")}
                     >
-                      Return to current
+                      Return to today's chat
                     </Button>
                   </div>
                 )}
@@ -664,7 +664,7 @@ export default function AgentChat({ params }: AgentChatProps) {
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       placeholder={activeConversationId !== "current" 
-                        ? "Viewing past conversation... Return to current chat to send messages" 
+                        ? "Viewing past conversation... Return to today's chat to send messages" 
                         : `Message ${agent?.name || "your agent"}...`}
                       disabled={isLoading || activeConversationId !== "current"}
                       className="border-0 rounded-none shadow-none focus-visible:ring-0 text-base py-6 min-h-[60px] max-h-[200px] resize-none"
