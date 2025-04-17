@@ -35,6 +35,7 @@ export interface IStorage {
   getAgents(): Promise<Agent[]>;
   getAgent(id: string): Promise<Agent | undefined>;
   createAgent(agent: InsertAgent): Promise<Agent>;
+  updateAgent(id: string, updates: Partial<InsertAgent>): Promise<Agent | undefined>;
   updateAgentActivity(id: string, activity: string): Promise<Agent | undefined>;
 
   // Task operations
@@ -335,6 +336,17 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return newAgent;
+  }
+
+  async updateAgent(id: string, updates: Partial<InsertAgent>): Promise<Agent | undefined> {
+    const [agent] = await db.update(agentsTable)
+      .set({
+        ...updates,
+        updatedAt: new Date()
+      })
+      .where(eq(agentsTable.id, id))
+      .returning();
+    return agent;
   }
 
   async updateAgentActivity(id: string, activity: string): Promise<Agent | undefined> {
