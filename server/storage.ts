@@ -201,8 +201,10 @@ export class DatabaseStorage implements IStorage {
     }
 
     try {
-      // Create only the Executive Agent - which will manage all other agents
+      // Use a single timestamp for all items
       const timestamp = new Date();
+      
+      // Create only the Executive Agent - which will manage all other agents
       const executiveAgent = await db.insert(agentsTable)
         .values({
           id: "agent_executive",
@@ -214,8 +216,8 @@ export class DatabaseStorage implements IStorage {
           instructions: "Lead and manage the team of AI agents, create and assign specialized agents for different business functions, coordinate agent collaboration, and ensure alignment with business goals and strategy.",
           latestActivity: "Created agent",
           brainContent: "",
-          createdAt: timestamp
-          // updatedAt will be added through database migration
+          createdAt: timestamp,
+          updatedAt: timestamp
         })
         .returning()
         .then(rows => rows[0]);
@@ -232,8 +234,8 @@ export class DatabaseStorage implements IStorage {
             agentId: executiveAgent.id,
             priority: "high",
             taskType: "standard",
-            createdAt: now,
-            updatedAt: now
+            createdAt: timestamp,
+            updatedAt: timestamp
           },
           {
             id: "task_2",
@@ -244,8 +246,8 @@ export class DatabaseStorage implements IStorage {
             agentId: executiveAgent.id,
             priority: "high",
             taskType: "standard",
-            createdAt: now,
-            updatedAt: now
+            createdAt: timestamp,
+            updatedAt: timestamp
           },
           {
             id: "task_3",
@@ -256,8 +258,8 @@ export class DatabaseStorage implements IStorage {
             agentId: executiveAgent.id,
             priority: "medium",
             taskType: "standard",
-            createdAt: now,
-            updatedAt: now
+            createdAt: timestamp,
+            updatedAt: timestamp
           },
           {
             id: "task_4",
@@ -268,14 +270,17 @@ export class DatabaseStorage implements IStorage {
             agentId: executiveAgent.id,
             priority: "low",
             taskType: "standard",
-            createdAt: now,
-            updatedAt: now
+            createdAt: timestamp,
+            updatedAt: timestamp
           }
         ]);
 
       // Update latest activity for Executive Agent
       await db.update(agentsTable)
-        .set({ latestActivity: "Established business goals and agent delegation strategy" })
+        .set({ 
+          latestActivity: "Established business goals and agent delegation strategy",
+          updatedAt: timestamp
+        })
         .where(eq(agentsTable.id, executiveAgent.id));
 
       // Sample integrations
