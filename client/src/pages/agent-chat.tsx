@@ -421,7 +421,7 @@ export default function AgentChat({ params }: AgentChatProps) {
                             </div>
                             
                             <div className="flex justify-end">
-                              <Link href={`/agent/${agentItem.id}/program`}>
+                              <Link href={`/agent-programming?id=${agentItem.id}`}>
                                 <Button
                                   variant="default"
                                   className="gap-2"

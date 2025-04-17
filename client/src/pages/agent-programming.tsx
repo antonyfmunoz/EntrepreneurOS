@@ -25,10 +25,15 @@ type AgentProgrammingProps = {
 }
 
 export default function AgentProgramming(props: AgentProgrammingProps) {
-  const [_, navigate] = useLocation();
+  const [locationPath, locationQuery] = useLocation();
   const params = useParams();
   const { toast } = useToast();
-  const agentId = props.agentId || params?.agentId || "";
+  
+  // Get agent ID from props, params, or URL query parameters
+  const searchParams = new URLSearchParams(locationQuery.split('?')[1] || '');
+  const queryAgentId = searchParams.get('id');
+  
+  const agentId = props.agentId || params?.agentId || queryAgentId || "";
   
   const [instructions, setInstructions] = useState("");
   const [name, setName] = useState("");
