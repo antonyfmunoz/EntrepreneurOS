@@ -228,21 +228,9 @@ export class DatabaseStorage implements IStorage {
         .values([
           {
             id: "task_1",
-            title: "Create Marketing Agent",
-            description: "Configure and deploy a specialized marketing agent to handle content strategy and social media management.",
+            title: "Create a Business Plan",
+            description: "Develop a comprehensive business plan for the executive AI that outlines the strategy, goals, and execution plan for all users.",
             status: "todo",
-            dueDate: this.getFutureDate(2),
-            agentId: executiveAgent.id,
-            priority: "high",
-            taskType: "standard",
-            createdAt: timestamp,
-            updatedAt: timestamp
-          },
-          {
-            id: "task_2",
-            title: "Create Content Agent",
-            description: "Configure and deploy a specialized content agent to handle blog posts, website copy, and product descriptions.",
-            status: "todo", 
             dueDate: this.getFutureDate(1),
             agentId: executiveAgent.id,
             priority: "high",
@@ -251,7 +239,31 @@ export class DatabaseStorage implements IStorage {
             updatedAt: timestamp
           },
           {
+            id: "task_2",
+            title: "Create Marketing Agent",
+            description: "Configure and deploy a specialized marketing agent to handle content strategy and social media management.",
+            status: "todo",
+            dueDate: this.getFutureDate(3),
+            agentId: executiveAgent.id,
+            priority: "high",
+            taskType: "standard",
+            createdAt: timestamp,
+            updatedAt: timestamp
+          },
+          {
             id: "task_3",
+            title: "Create Content Agent",
+            description: "Configure and deploy a specialized content agent to handle blog posts, website copy, and product descriptions.",
+            status: "todo", 
+            dueDate: this.getFutureDate(4),
+            agentId: executiveAgent.id,
+            priority: "medium",
+            taskType: "standard",
+            createdAt: timestamp,
+            updatedAt: timestamp
+          },
+          {
+            id: "task_4",
             title: "Develop Business Strategy",
             description: "Analyze market trends and develop a comprehensive business strategy for Q2.",
             status: "in-progress",
@@ -263,11 +275,11 @@ export class DatabaseStorage implements IStorage {
             updatedAt: timestamp
           },
           {
-            id: "task_4",
+            id: "task_5",
             title: "Configure Agent Collaboration",
             description: "Set up collaboration protocols between specialized agents to ensure coordinated actions.",
             status: "in-progress",
-            dueDate: this.getFutureDate(3),
+            dueDate: this.getFutureDate(5),
             agentId: executiveAgent.id,
             priority: "low",
             taskType: "standard",
