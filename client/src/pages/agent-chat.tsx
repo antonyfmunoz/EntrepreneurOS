@@ -281,10 +281,17 @@ export default function AgentChat({ params }: AgentChatProps) {
               <h3 className="text-xs font-medium text-gray-500 mb-2">CURRENT CHAT</h3>
               <div className="space-y-1">
                 {/* Active Conversation */}
-                <div className={cn(
-                  "flex items-center gap-3 p-3 rounded-md cursor-pointer",
-                  "bg-primary/10 text-primary"
-                )}>
+                <div 
+                  className={cn(
+                    "flex items-center gap-3 p-3 rounded-md cursor-pointer",
+                    "bg-primary/10 text-primary"
+                  )}
+                  onClick={() => {
+                    // This would typically load the conversation
+                    // For now it just scrolls to the messages container
+                    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                >
                   <Bot size={18} />
                   <div className="flex-1 truncate">
                     <div className="text-sm font-medium">Chat with {agent?.name || "Agent"}</div>
@@ -303,7 +310,14 @@ export default function AgentChat({ params }: AgentChatProps) {
               <h3 className="text-xs font-medium text-gray-500 mb-2">CONVERSATION HISTORY</h3>
               <div className="space-y-1">
                 {messages.length > 0 ? (
-                  <div className="text-xs text-gray-500 p-3">
+                  <div 
+                    className="text-xs p-3 rounded-md cursor-pointer hover:bg-gray-100 transition-colors"
+                    onClick={() => {
+                      // This would typically load the conversation
+                      // For now it just scrolls to the messages container
+                      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                    }}
+                  >
                     <div className="flex flex-col gap-2 mt-1">
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-gray-500">{new Date().toLocaleDateString()}</span>
@@ -311,8 +325,8 @@ export default function AgentChat({ params }: AgentChatProps) {
                           {messages.length} messages
                         </Badge>
                       </div>
-                      <div className="text-xs text-gray-600 italic">
-                        Current conversation
+                      <div className="text-xs text-gray-600">
+                        {messages[0].content.substring(0, 40)}...
                       </div>
                     </div>
                   </div>
