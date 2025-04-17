@@ -158,16 +158,16 @@ export default function AgentChat({ params }: AgentChatProps) {
         providers={requiredApiProviders} 
       />
       
-      {/* Toggle Sidebar Button - Only visible when sidebar is collapsed */}
+      {/* Toggle Sidebar Button - Only visible when sidebar is collapsed, positioned at the edge */}
       {sidebarCollapsed && (
-        <div className="absolute top-4 left-4 z-10">
+        <div className="h-screen w-10 border-r border-gray-200 flex flex-col items-center py-4 bg-gray-50">
           <Button 
-            variant="outline" 
+            variant="ghost" 
             size="icon" 
-            className="rounded-full shadow-md"
+            className="rounded-md mt-2"
             onClick={() => setSidebarCollapsed(false)}
           >
-            <i className="ri-menu-line"></i>
+            <i className="ri-menu-unfold-line"></i>
           </Button>
         </div>
       )}
