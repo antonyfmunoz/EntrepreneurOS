@@ -65,6 +65,25 @@ export function Sidebar() {
 
         <nav className="p-4 flex-1">
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Navigation</h2>
+          
+          {/* Executive Agent Settings Button */}
+          {agents.find(a => a.id === "agent_executive") && (
+            <div className="mb-3 bg-gray-100 p-2 rounded-md flex items-center">
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center mr-2">
+                <i className="ri-robot-line text-primary"></i>
+              </div>
+              <div className="flex-1">
+                <div className="text-xs text-gray-600">Executive Agent</div>
+                <div className="text-sm font-medium">Agent Settings</div>
+              </div>
+              <Link href={`/agent-programming?id=agent_executive`}>
+                <div className="p-2 rounded-md hover:bg-gray-200 text-primary">
+                  <i className="ri-settings-4-line text-lg"></i>
+                </div>
+              </Link>
+            </div>
+          )}
+          
           <ul className="space-y-2">
             <li>
               <Link href="/">
