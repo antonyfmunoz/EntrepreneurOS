@@ -133,58 +133,39 @@ export default function AgentChat({ params }: AgentChatProps) {
     scrollToBottom();
   }, [messages]);
 
-  // Group messages into conversations
+  // Initialize and group messages into conversations
   useEffect(() => {
     if (agent) {
-      let updatedConversations = [];
+      // Always have a current conversation
+      const currentConversation = {
+        id: "current",
+        title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
+        messages: messages || []
+      };
       
-      if (messages.length > 0) {
-        // For now, we'll create a simple structure with one conversation containing all messages
-        // In a real app, these would be grouped by conversation ID from the server
-        const currentConversation = {
-          id: "current",
-          title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
-          messages: messages
-        };
-        
-        // For demonstration, create some "past" conversations by splitting messages
-        // In a real app, these would come from the server
-        const pastConversations = [];
-        
-        if (messages.length >= 4) {
-          // Split into multiple conversations for demo purposes
-          const firstConversation = {
-            id: "past1",
-            title: `Previous chat - ${new Date(Date.now() - 86400000).toLocaleDateString()}`,  // yesterday
-            messages: messages.slice(0, 2)
-          };
-          pastConversations.push(firstConversation);
-        }
-        
-        if (messages.length >= 8) {
-          const secondConversation = {
-            id: "past2",
-            title: `Earlier chat - ${new Date(Date.now() - 172800000).toLocaleDateString()}`, // 2 days ago
-            messages: messages.slice(0, 4)
-          };
-          pastConversations.push(secondConversation);
-        }
-        
-        updatedConversations = [currentConversation, ...pastConversations];
-      } else {
-        // If there are no messages, create an empty current conversation
-        const emptyCurrentConversation = {
-          id: "current",
-          title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
-          messages: []
-        };
-        
-        // Only include past conversations if we have any messages at all
-        updatedConversations = [emptyCurrentConversation];
+      // If this is a first load and we have no conversations yet, just set the current one
+      if (conversations.length === 0) {
+        setConversations([currentConversation]);
+        setActiveConversationId("current");
+        return;
+      }
+      
+      // Update the current conversation with latest messages
+      const updatedConversations = conversations.map(conv => 
+        conv.id === "current" ? currentConversation : conv
+      );
+      
+      // If the current conversation doesn't exist yet, add it
+      if (!updatedConversations.some(conv => conv.id === "current")) {
+        updatedConversations.unshift(currentConversation);
       }
       
       setConversations(updatedConversations);
-      setActiveConversationId("current");
+      
+      // If no active conversation is selected, default to current
+      if (!activeConversationId) {
+        setActiveConversationId("current");
+      }
     }
   }, [messages, agent]);
 
@@ -267,73 +248,60 @@ export default function AgentChat({ params }: AgentChatProps) {
                 size="sm" 
                 className="flex justify-start items-center gap-2 w-full"
                 onClick={async () => {
-                  // First, update the UI immediately for a snappy experience
-                  let updatedConversations = [];
-                  
-                  if (messages.length > 0) {
-                    // Generate a unique ID for the current conversation moving to history
-                    const pastConvId = `past_${Date.now()}`;
-                    
-                    // Create a history entry with the current messages
-                    const pastConversation = {
-                      id: pastConvId,
-                      title: `Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
-                      messages: [...messages] // Store a copy of the current messages
-                    };
-                    
-                    // Add all existing conversations except current to history
-                    const existingHistory = conversations.filter(c => c.id !== "current");
-                    
-                    // Create a completely new empty conversation for "current"
-                    updatedConversations = [
-                      {
-                        id: "current",
-                        title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
-                        messages: [] // Empty message array
-                      },
-                      pastConversation, // Add the conversation we just completed
-                      ...existingHistory // Add all other historical conversations
-                    ];
-                  } else {
-                    // If there are no messages, just create a fresh current conversation
-                    updatedConversations = [
-                      {
-                        id: "current",
-                        title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
-                        messages: [] // Empty message array
-                      },
-                      ...conversations.filter(c => c.id !== "current") // Keep all existing history
-                    ];
-                  }
-                  
-                  // Update conversations state with our new array
-                  setConversations(updatedConversations);
-                  
-                  // Set active conversation to the new empty one
-                  setActiveConversationId("current");
-                  
-                  // Clear input field
-                  setMessage("");
-                  
-                  // Don't show toast for new chat operations
-                  // Silently start a new conversation
-                  
-                  // Scroll to bottom
-                  scrollToBottom();
-                  
-                  // Then handle the server communication silently in the background
                   try {
+                    // First, create a history entry from current conversation if it has messages
+                    if (messages.length > 0) {
+                      // Generate a unique ID for the current conversation moving to history
+                      const pastConvId = `past_${Date.now()}`;
+                      
+                      // Create a history entry with the current messages
+                      const pastConversation = {
+                        id: pastConvId,
+                        title: `Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
+                        messages: [...messages] // Store a copy of the current messages
+                      };
+                      
+                      // Add the past conversation to history
+                      const currentConversations = [...conversations];
+                      
+                      // Remove current conversation if it exists
+                      const existingHistory = currentConversations.filter(c => c.id !== "current");
+                      
+                      // Create new empty current conversation
+                      const newCurrentConversation = {
+                        id: "current",
+                        title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
+                        messages: [] // Empty message array
+                      };
+                      
+                      // Update with new order: current first, then new archive, then existing history
+                      setConversations([
+                        newCurrentConversation, 
+                        pastConversation, 
+                        ...existingHistory
+                      ]);
+                    }
+                    
+                    // Set active conversation to the new empty one
+                    setActiveConversationId("current");
+                    
+                    // Clear input field
+                    setMessage("");
+                    
+                    // Scroll to bottom
+                    scrollToBottom();
+                    
                     // Clear the server-side messages
                     await apiRequest("POST", `/api/agents/${agentId}/clear-messages`);
                     
-                    // Clear the messages in the React Query cache
+                    // Clear the messages in the React Query cache so it won't be reloaded
                     queryClient.setQueryData([`/api/agents/${agentId}/messages`], []);
                     
-                    // Refetch messages to ensure UI and database are in sync
+                    // Refetch to refresh any state
                     refetchMessages();
+                    
                   } catch (error) {
-                    // Just log the error but don't show a toast - the UI is already updated
-                    console.log("Background operation failed, but UI is already updated");
+                    console.error("Error creating new chat:", error);
                   }
                 }}
               >
@@ -549,7 +517,9 @@ export default function AgentChat({ params }: AgentChatProps) {
                           "text-xs",
                           activeConversationId === conversation.id ? "text-primary/80" : "text-gray-600"
                         )}>
-                          {conversation.messages[0].content.substring(0, 40)}...
+                          {conversation.messages && conversation.messages.length > 0 
+                            ? conversation.messages[0].content.substring(0, 40) + "..."
+                            : "Empty conversation"}
                         </div>
                       </div>
                     </div>
