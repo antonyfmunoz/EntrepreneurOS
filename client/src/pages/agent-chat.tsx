@@ -125,11 +125,7 @@ export default function AgentChat({ params }: AgentChatProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/agents/${agentId}/tasks`] });
-      // Keep this toast since it's a user-initiated task creation, not AI-related
-      toast({
-        title: "Task created",
-        description: "New task has been created successfully",
-      });
+      // No toast for task creation
     },
   });
 
@@ -524,10 +520,7 @@ export default function AgentChat({ params }: AgentChatProps) {
                                 setActiveConversationId("current");
                               }
                               
-                              toast({
-                                title: "Conversation deleted",
-                                description: "The conversation has been removed from history",
-                              });
+                              // No toast for conversation deletion
                             }}
                           >
                             <Trash2 size={10} className="text-gray-400 hover:text-red-500" />
