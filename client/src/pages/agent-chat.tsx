@@ -383,59 +383,18 @@ export default function AgentChat({ params }: AgentChatProps) {
                         </div>
                       </div>
                       {agentItem.id === "agent_executive" && (
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-6 w-6 rounded-full ml-1"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                              }}
-                            >
-                              <Info size={14} />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="sm:max-w-md">
-                            <DialogTitle>Executive Agent</DialogTitle>
-                            <DialogDescription>
-                              Your Executive Agent leads and coordinates your AI teams.
-                            </DialogDescription>
-                            
-                            <div className="flex items-center mb-4 mt-2">
-                              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mr-4">
-                                <i className={`${agentItem.icon || "ri-robot-line"} text-primary text-xl`}></i>
-                              </div>
-                              <div>
-                                <h3 className="font-semibold text-base">{agentItem.name}</h3>
-                                <Badge variant="outline">{agentItem.role}</Badge>
-                              </div>
-                            </div>
-                            
-                            <div className="border rounded-md p-4 mb-4">
-                              <h4 className="text-sm font-medium mb-2">Agent Description</h4>
-                              <p className="text-sm text-gray-600">
-                                {agentItem.instructions || "This agent will help you build and manage your AI team. It can create agents, assign tasks, and coordinate between different agents."}
-                              </p>
-                            </div>
-                            
-                            <div className="flex justify-end">
-                              <Link href={`/agent-programming?id=${agentItem.id}`}>
-                                <Button
-                                  variant="default"
-                                  className="gap-2"
-                                  onClick={(e) => {
-                                    // Dialog will automatically close on navigation
-                                  }}
-                                >
-                                  <Settings size={16} />
-                                  Program Agent
-                                </Button>
-                              </Link>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-6 w-6 rounded-full ml-1"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            window.location.href = `/agent-programming?id=${agentItem.id}`;
+                          }}
+                        >
+                          <Info size={14} />
+                        </Button>
                       )}
                     </div>
                   </Link>
