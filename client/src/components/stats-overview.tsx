@@ -1,96 +1,62 @@
-import { useQuery } from "@tanstack/react-query";
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 
-type StatCard = {
+type StatsOverviewProps = {
   title: string;
-  value: number;
-  change: number;
-  changeText: string;
-  icon: string;
-  iconBgColor: string;
-  iconColor: string;
+  value: number | string;
+  description: string;
+  trend?: {
+    value: number;
+    isUpward: boolean;
+    label: string;
+  };
+  icon?: string;
+  className?: string;
 };
 
-export function StatsOverview() {
-  const { data: stats } = useQuery<{
-    activeAgents: StatCard;
-    tasksCompleted: StatCard;
-    activeTasks: StatCard;
-  }>({
-    queryKey: ["/api/stats"],
-  });
-
-  if (!stats) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="bg-white rounded-lg shadow p-4 border border-gray-200 animate-pulse">
-            <div className="h-16"></div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
+export function StatsOverview({
+  title,
+  value,
+  description,
+  trend,
+  icon,
+  className,
+}: StatsOverviewProps) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-      <StatCard 
-        title="Active Agents"
-        value={stats.activeAgents.value}
-        change={stats.activeAgents.change}
-        changeText={stats.activeAgents.changeText}
-        icon="ri-robot-line"
-        iconBgColor="bg-blue-100"
-        iconColor="text-primary"
-      />
-      
-      <StatCard 
-        title="Tasks Completed"
-        value={stats.tasksCompleted.value}
-        change={stats.tasksCompleted.change}
-        changeText={stats.tasksCompleted.changeText}
-        icon="ri-check-double-line"
-        iconBgColor="bg-green-100"
-        iconColor="text-success"
-      />
-      
-      <StatCard 
-        title="Active Tasks"
-        value={stats.activeTasks.value}
-        change={stats.activeTasks.change}
-        changeText={stats.activeTasks.changeText}
-        icon="ri-time-line"
-        iconBgColor="bg-indigo-100"
-        iconColor="text-secondary"
-      />
-    </div>
-  );
-}
-
-function StatCard({ 
-  title, 
-  value, 
-  change, 
-  changeText, 
-  icon, 
-  iconBgColor, 
-  iconColor 
-}: StatCard) {
-  return (
-    <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-500">{title}</p>
-          <p className="text-2xl font-bold text-gray-800">{value}</p>
+    <Card className={cn("overflow-hidden", className)}>
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-gray-500">{title}</h3>
+          {icon && <i className={`${icon} text-xl text-gray-400`}></i>}
         </div>
-        <div className={`w-12 h-12 rounded-full ${iconBgColor} flex items-center justify-center ${iconColor}`}>
-          <i className={`${icon} text-xl`}></i>
+        <div className="mt-2 flex items-baseline">
+          <p className="text-2xl font-semibold">{value}</p>
+          
+          {trend && (
+            <div className="ml-2 flex items-baseline text-sm font-medium">
+              <span 
+                className={cn(
+                  "flex items-center",
+                  trend.isUpward ? "text-green-600" : "text-red-600"
+                )}
+              >
+                {trend.isUpward ? (
+                  <ArrowUpIcon className="h-3 w-3 mr-0.5" />
+                ) : (
+                  <ArrowDownIcon className="h-3 w-3 mr-0.5" />
+                )}
+                {trend.value > 0 ? `${trend.value}%` : null}
+              </span>
+              
+              <span className="text-gray-500 ml-1">
+                {trend.label}
+              </span>
+            </div>
+          )}
         </div>
-      </div>
-      <div className="mt-2 text-xs text-gray-500">
-        <span className={change >= 0 ? "text-green-500 font-medium" : "text-red-500 font-medium"}>
-          {change >= 0 ? "↑" : "↓"} {changeText}
-        </span> from last week
-      </div>
-    </div>
+        <p className="mt-1 text-sm text-gray-500">{description}</p>
+      </CardContent>
+    </Card>
   );
 }
