@@ -1,37 +1,32 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getQueryFn } from "@/lib/queryClient";
 import { AIModelProvider } from "./use-ai-models";
 
-// Type definition for API key status response
-export interface AIProviderKeyStatus {
-  providerStatus: Record<AIModelProvider, boolean>;
-}
-
-// Custom hook to get AI provider API key status
+// Hook to check which AI providers have API keys configured
 export function useAIApiKeyStatus() {
-  const { data, isLoading, error, refetch } = useQuery<AIProviderKeyStatus>({
+  const { data, isLoading, error, refetch } = useQuery<Record<AIModelProvider, boolean>>({
     queryKey: ["/api/ai/provider-status"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
-    retry: 1,
-    refetchInterval: 60000, // Refetch every minute to check for newly added keys
-  });
-  
-  return {
-    providerStatus: data?.providerStatus || {
-      openai: false,
-      anthropic: false,
-      perplexity: false,
-      xai: false,
-      gemini: false
+    queryFn: async () => {
+      const response = await fetch("/api/ai/provider-status");
+      if (!response.ok) {
+        throw new Error("Failed to fetch API key status");
+      }
+      const data = await response.json();
+      return data.providerStatus;
     },
+    // Don't refetch on window focus to avoid unnecessary API calls
+    refetchOnWindowFocus: false,
+  });
+
+  return {
+    providerStatus: data || {} as Record<AIModelProvider, boolean>,
     isLoading,
     error,
-    refetch
+    refetch,
   };
 }
 
-// Request various AI provider API keys from the user
+// Hook for requesting API keys when needed
 export function useRequestAIKeys() {
   const { providerStatus, refetch } = useAIApiKeyStatus();
   const [requiredKeys, setRequiredKeys] = useState<AIModelProvider[]>([]);
@@ -39,7 +34,9 @@ export function useRequestAIKeys() {
   // Function to request missing API keys for specific providers
   const requestKeys = async (providers: AIModelProvider[]) => {
     // Filter out providers that already have keys
-    const missingProviders = providers.filter(provider => !providerStatus[provider]);
+    const missingProviders = providers.filter(provider => {
+      return !providerStatus || !providerStatus[provider];
+    });
     
     if (missingProviders.length === 0) {
       return true;

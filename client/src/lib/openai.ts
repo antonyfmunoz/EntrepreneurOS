@@ -1,44 +1,38 @@
+import { AIModelConfig } from "@/hooks/use-ai-models";
 import { apiRequest } from "./queryClient";
-import type { AIModelConfig } from "@/hooks/use-ai-models";
 
-// the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+export type ChatMessage = {
+  role: "user" | "assistant" | "system";
+  content: string;
+};
 
 export async function sendMessageToAgent(
   agentId: string,
   message: string,
-  aiConfig?: AIModelConfig | null
+  aiConfig: AIModelConfig | null = null
 ): Promise<string> {
   try {
     const response = await apiRequest("POST", `/api/agents/${agentId}/chat`, {
       message,
       aiConfig
     });
+    
     const data = await response.json();
     return data.reply;
   } catch (error) {
     console.error("Error sending message to agent:", error);
-    throw error;
+    throw new Error(error instanceof Error ? error.message : "Failed to send message");
   }
 }
 
-export async function generateAgentResponse(
-  agentId: string,
-  taskId: string,
-  aiConfig?: AIModelConfig | null
-): Promise<string> {
+export async function saveApiKey(keyName: string, value: string): Promise<void> {
   try {
-    const response = await apiRequest(
-      "POST",
-      `/api/agents/${agentId}/generate-response`,
-      { 
-        taskId,
-        aiConfig
-      }
-    );
-    const data = await response.json();
-    return data.response;
+    await apiRequest("POST", "/api/keys/save", {
+      keyName,
+      value
+    });
   } catch (error) {
-    console.error("Error generating agent response:", error);
-    throw error;
+    console.error("Error saving API key:", error);
+    throw new Error(error instanceof Error ? error.message : "Failed to save API key");
   }
 }
