@@ -177,136 +177,61 @@ export class DatabaseStorage implements IStorage {
     }
 
     try {
-      // Sample agents with explicit IDs
-      const marketingAgent = await db.insert(agentsTable)
+      // Only create the Executive Agent - which will manage all other agents
+      const executiveAgent = await db.insert(agentsTable)
         .values({
-          id: "agent_1",
-          name: "Marketing Agent",
-          role: "marketing",
-          icon: "ri-megaphone-line",
-          instructions: "Help with marketing campaigns, social media, and content strategy.",
+          id: "agent_executive",
+          name: "Executive Agent",
+          role: "executive",
+          icon: "ri-user-star-line",
+          instructions: "Lead and manage the team of AI agents, create and assign specialized agents for different business functions, coordinate agent collaboration, and ensure alignment with business goals and strategy.",
           latestActivity: "Created agent",
           brainContent: "",
         })
         .returning()
         .then(rows => rows[0]);
 
-      const supportAgent = await db.insert(agentsTable)
-        .values({
-          id: "agent_2",
-          name: "Support Agent",
-          role: "support",
-          icon: "ri-customer-service-2-line",
-          instructions: "Assist with customer inquiries, troubleshooting, and support tickets.",
-          latestActivity: "Created agent",
-          brainContent: "",
-        })
-        .returning()
-        .then(rows => rows[0]);
-
-      const contentAgent = await db.insert(agentsTable)
-        .values({
-          id: "agent_3",
-          name: "Content Agent",
-          role: "content",
-          icon: "ri-article-line",
-          instructions: "Create and optimize content for blogs, social media, and website.",
-          latestActivity: "Created agent",
-          brainContent: "",
-        })
-        .returning()
-        .then(rows => rows[0]);
-
-      const opsAgent = await db.insert(agentsTable)
-        .values({
-          id: "agent_4",
-          name: "Operations Agent",
-          role: "operations",
-          icon: "ri-user-settings-line",
-          instructions: "Streamline operations, track KPIs, and generate reports.",
-          latestActivity: "Created agent",
-          brainContent: "",
-        })
-        .returning()
-        .then(rows => rows[0]);
-
-      // Sample tasks
+      // Sample tasks for the Executive Agent
       await db.insert(tasksTable)
         .values([
           {
             id: "task_1",
-            title: "Update website copy",
-            description: "Review and update the website copy for the new product launch.",
+            title: "Create Marketing Agent",
+            description: "Configure and deploy a specialized marketing agent to handle content strategy and social media management.",
             status: "todo",
             dueDate: this.getFutureDate(2),
-            agentId: contentAgent.id,
+            agentId: executiveAgent.id,
           },
           {
             id: "task_2",
-            title: "Create sales presentation",
-            description: "Prepare sales presentation for client meeting.",
+            title: "Create Content Agent",
+            description: "Configure and deploy a specialized content agent to handle blog posts, website copy, and product descriptions.",
             status: "todo", 
             dueDate: this.getFutureDate(1),
-            agentId: marketingAgent.id,
+            agentId: executiveAgent.id,
           },
           {
             id: "task_3",
-            title: "Schedule social media posts",
-            description: "Create and schedule posts for the week across all platforms.",
+            title: "Develop Business Strategy",
+            description: "Analyze market trends and develop a comprehensive business strategy for Q2.",
             status: "in-progress",
             dueDate: this.getTodayDate(),
-            agentId: marketingAgent.id,
+            agentId: executiveAgent.id,
           },
           {
             id: "task_4",
-            title: "Draft weekly blog post",
-            description: "Write blog post on industry trends and updates.",
+            title: "Configure Agent Collaboration",
+            description: "Set up collaboration protocols between specialized agents to ensure coordinated actions.",
             status: "in-progress",
             dueDate: this.getFutureDate(3),
-            agentId: contentAgent.id,
-          },
-          {
-            id: "task_5",
-            title: "Review support tickets",
-            description: "Review and prioritize open support tickets.",
-            status: "in-progress",
-            dueDate: this.getTodayDate(),
-            agentId: supportAgent.id,
-          },
-          {
-            id: "task_6",
-            title: "Create product descriptions",
-            description: "Write compelling descriptions for new product line.",
-            status: "done",
-            dueDate: this.getPastDate(1),
-            agentId: contentAgent.id,
-          },
-          {
-            id: "task_7",
-            title: "Analyze campaign metrics",
-            description: "Review performance metrics from last campaign.",
-            status: "done",
-            dueDate: this.getPastDate(2),
-            agentId: marketingAgent.id,
+            agentId: executiveAgent.id,
           }
         ]);
 
-      // Update latest activities
+      // Update latest activity for Executive Agent
       await db.update(agentsTable)
-        .set({ latestActivity: "Created social media post for product launch" })
-        .where(eq(agentsTable.id, marketingAgent.id));
-      
-      await db.update(agentsTable)
-        .set({ latestActivity: "Drafted response for customer inquiry #1293" })
-        .where(eq(agentsTable.id, supportAgent.id));
-      
-      await db.update(agentsTable)
-        .set({ latestActivity: "Outlined new blog post on industry trends" })
-        .where(eq(agentsTable.id, contentAgent.id));
-      
-      await db.update(agentsTable)
-        .set({ latestActivity: "Generated monthly operations report" })
-        .where(eq(agentsTable.id, opsAgent.id));
+        .set({ latestActivity: "Established business goals and agent delegation strategy" })
+        .where(eq(agentsTable.id, executiveAgent.id));
 
       // Sample integrations
       await db.insert(integrationsTable)
