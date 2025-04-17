@@ -538,6 +538,18 @@ export default function AgentChat({ params }: AgentChatProps) {
           {/* Settings Footer */}
           <div className="border-t border-gray-200 p-3">
             <div className="flex flex-col space-y-1">
+              <Link href="/tasks">
+                <Button variant="ghost" size="sm" className="justify-start gap-2 w-full">
+                  <i className="ri-task-line text-gray-600"></i>
+                  <span>View All Tasks</span>
+                </Button>
+              </Link>
+              
+              <Button variant="ghost" size="sm" className="justify-start gap-2">
+                <i className="ri-organization-chart-line text-gray-600"></i>
+                <span>Agent Organization</span>
+              </Button>
+              
               <Popover open={aiSelectorOpen} onOpenChange={setAiSelectorOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="ghost" size="sm" className="justify-start gap-2">
@@ -557,16 +569,6 @@ export default function AgentChat({ params }: AgentChatProps) {
                   />
                 </PopoverContent>
               </Popover>
-              
-              <Button variant="ghost" size="sm" className="justify-start gap-2">
-                <i className="ri-organization-chart-line text-gray-600"></i>
-                <span>Agent Organization</span>
-              </Button>
-              
-              <Button variant="ghost" size="sm" className="justify-start gap-2">
-                <i className="ri-task-line text-gray-600"></i>
-                <span>View All Tasks</span>
-              </Button>
             </div>
           </div>
         </div>
