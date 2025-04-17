@@ -4,7 +4,12 @@ import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { generateAgentResponse, generateTaskSuggestion } from "./openai";
 import { z } from "zod";
-import { insertAgentSchema, insertTaskSchema, updateTaskSchema } from "@shared/schema";
+import { 
+  insertAgentSchema, 
+  insertTaskSchema, 
+  updateTaskSchema,
+  messages as messagesTable
+} from "@shared/schema";
 import { 
   getModelInfo, 
   generateAIResponse, 
@@ -13,6 +18,7 @@ import {
   AIModelProvider,
   AIModelName 
 } from "./ai";
+import { db } from "./db";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication routes and middleware
@@ -845,7 +851,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const timeRange = req.query.timeRange || '7days';
       const agents = await storage.getAgents();
       const tasks = await storage.getTasks();
-      // Get all messages - we've just added this method
+      // Get all messages
       const messages = await db.select().from(messagesTable).orderBy(messagesTable.timestamp);
       
       // Calculate date range based on timeRange
@@ -870,12 +876,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const completionRate = agentTasks.length > 0 ? completedTasks.length / agentTasks.length : 0;
         
         // Calculate average completion time (simplified approximation)
-        // In a real system, you'd use task createdAt and updatedAt timestamps
         const averageCompletionTime = 
           completedTasks.length > 0 ? 
           completedTasks.reduce((sum, task) => {
-            const createdDate = new Date(task.createdAt);
-            const updatedDate = new Date(task.updatedAt);
+            // Safely parse dates with fallbacks
+            const createdDate = typeof task.createdAt === 'string' ? new Date(task.createdAt) : new Date();
+            const updatedDate = typeof task.updatedAt === 'string' ? new Date(task.updatedAt) : new Date();
             const hoursDiff = (updatedDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60);
             return sum + hoursDiff;
           }, 0) / completedTasks.length : 0;
@@ -903,7 +909,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       });
       
-      // Generate task completion trends (fake data for now - in a real app, use actual timestamps)
+      // Generate task completion trends
       const taskCompletionTrends = [];
       const daysToGenerate = timeRange === '7days' ? 7 : (timeRange === '30days' ? 30 : 90);
       
@@ -914,12 +920,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Filter tasks created or completed on this date
         const tasksCreatedOnDate = tasks.filter(task => {
+          if (!task.createdAt) return false;
           const createdDate = new Date(task.createdAt);
           return createdDate.toISOString().split('T')[0] === dateStr;
         }).length;
         
         const tasksCompletedOnDate = tasks.filter(task => {
-          if (task.status !== 'done') return false;
+          if (task.status !== 'done' || !task.updatedAt) return false;
           const updatedDate = new Date(task.updatedAt);
           return updatedDate.toISOString().split('T')[0] === dateStr;
         }).length;
@@ -1002,6 +1009,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate average task age in days
       const averageTaskAge = tasks.length > 0 ? 
         tasks.reduce((sum, task) => {
+          if (!task.createdAt) return sum;
           const createdDate = new Date(task.createdAt);
           const ageInDays = (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
           return sum + ageInDays;
