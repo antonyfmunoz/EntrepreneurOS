@@ -56,11 +56,13 @@ export function Sidebar() {
     <>
       <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-full">
         <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center space-x-2">
-            <i className="ri-cpu-line text-primary text-2xl"></i>
-            <h1 className="text-xl font-bold text-gray-800">AgentOS</h1>
-          </div>
-          <p className="text-xs text-gray-500 mt-1">AI Operating System for Business</p>
+          <Link href="/">
+            <div className="flex items-center space-x-2 cursor-pointer hover:text-primary transition-colors">
+              <i className="ri-cpu-line text-primary text-2xl"></i>
+              <h1 className="text-xl font-bold text-gray-800 hover:text-primary">AgentOS</h1>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">AI Operating System for Business</p>
+          </Link>
         </div>
 
         <nav className="p-4 flex-1">
@@ -145,10 +147,17 @@ export function Sidebar() {
               </Link>
             </li>
             <li>
-              <div className="flex items-center space-x-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 text-gray-700">
-                <i className="ri-settings-3-line"></i>
-                <span>Settings</span>
-              </div>
+              <Link href="/settings">
+                <div className={cn(
+                  "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+                  location === "/settings" 
+                    ? "bg-blue-50 text-primary font-medium" 
+                    : "hover:bg-gray-100 text-gray-700"
+                )}>
+                  <i className="ri-settings-3-line"></i>
+                  <span>Settings</span>
+                </div>
+              </Link>
             </li>
           </ul>
         </nav>
