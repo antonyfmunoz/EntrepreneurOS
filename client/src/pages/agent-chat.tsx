@@ -90,7 +90,13 @@ export default function AgentChat({ params }: AgentChatProps) {
       const response = await sendMessageToAgent(agentId, message, aiModelConfig);
       return response;
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
+      // Show toast notification when AI response is complete
+      toast({
+        title: `${agent?.name || "Agent"} responded`,
+        description: response.substring(0, 60) + (response.length > 60 ? "..." : ""),
+      });
+      
       setMessage("");
       refetchMessages();
       setIsLoading(false);
