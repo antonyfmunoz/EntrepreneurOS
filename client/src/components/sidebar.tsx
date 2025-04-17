@@ -133,13 +133,25 @@ export function Sidebar() {
               </Link>
             </li>
             <li>
-              <div className={cn(
-                "flex items-center space-x-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 text-gray-700",
-                location.startsWith("/chat") && "bg-blue-50 text-primary font-medium"
-              )}>
-                <i className="ri-chat-3-line"></i>
-                <span>Agent Chat</span>
-              </div>
+              {agents.length > 0 ? (
+                <Link href={`/chat/${agents[0].id}`}>
+                  <div className={cn(
+                    "flex items-center space-x-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 text-gray-700",
+                    location.startsWith("/chat") && "bg-blue-50 text-primary font-medium"
+                  )}>
+                    <i className="ri-chat-3-line"></i>
+                    <span>Agent Chat</span>
+                  </div>
+                </Link>
+              ) : (
+                <div 
+                  className="flex items-center space-x-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 text-gray-500"
+                  onClick={() => setIsModalOpen(true)}
+                >
+                  <i className="ri-chat-3-line"></i>
+                  <span>Agent Chat</span>
+                </div>
+              )}
             </li>
             <li>
               <Link href="/integrations">
