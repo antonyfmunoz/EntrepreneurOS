@@ -135,40 +135,55 @@ export default function AgentChat({ params }: AgentChatProps) {
 
   // Group messages into conversations
   useEffect(() => {
-    if (messages.length > 0) {
-      // For now, we'll create a simple structure with one conversation containing all messages
-      // In a real app, these would be grouped by conversation ID from the server
-      const currentConversation = {
-        id: "current",
-        title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
-        messages: messages
-      };
-      
-      // For demonstration, create some "past" conversations by splitting messages
-      // In a real app, these would come from the server
-      const pastConversations = [];
-      
-      if (messages.length >= 4) {
-        // Split into multiple conversations for demo purposes
-        const firstConversation = {
-          id: "past1",
-          title: `Previous chat - ${new Date(Date.now() - 86400000).toLocaleDateString()}`,  // yesterday
-          messages: messages.slice(0, 2)
+    if (agent) {
+      if (messages.length > 0) {
+        // For now, we'll create a simple structure with one conversation containing all messages
+        // In a real app, these would be grouped by conversation ID from the server
+        const currentConversation = {
+          id: "current",
+          title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
+          messages: messages
         };
-        pastConversations.push(firstConversation);
-      }
-      
-      if (messages.length >= 8) {
-        const secondConversation = {
-          id: "past2",
-          title: `Earlier chat - ${new Date(Date.now() - 172800000).toLocaleDateString()}`, // 2 days ago
-          messages: messages.slice(0, 4)
+        
+        // For demonstration, create some "past" conversations by splitting messages
+        // In a real app, these would come from the server
+        const pastConversations = [];
+        
+        if (messages.length >= 4) {
+          // Split into multiple conversations for demo purposes
+          const firstConversation = {
+            id: "past1",
+            title: `Previous chat - ${new Date(Date.now() - 86400000).toLocaleDateString()}`,  // yesterday
+            messages: messages.slice(0, 2)
+          };
+          pastConversations.push(firstConversation);
+        }
+        
+        if (messages.length >= 8) {
+          const secondConversation = {
+            id: "past2",
+            title: `Earlier chat - ${new Date(Date.now() - 172800000).toLocaleDateString()}`, // 2 days ago
+            messages: messages.slice(0, 4)
+          };
+          pastConversations.push(secondConversation);
+        }
+        
+        setConversations([currentConversation, ...pastConversations]);
+        setActiveConversationId("current");
+      } else {
+        // If there are no messages, create an empty current conversation
+        const emptyCurrentConversation = {
+          id: "current",
+          title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
+          messages: []
         };
-        pastConversations.push(secondConversation);
+        
+        // Preserve existing conversations
+        const pastConversations = conversations.filter(c => c.id !== "current");
+        
+        setConversations([emptyCurrentConversation, ...pastConversations]);
+        setActiveConversationId("current");
       }
-      
-      setConversations([currentConversation, ...pastConversations]);
-      setActiveConversationId("current");
     }
   }, [messages, agent]);
 
@@ -312,6 +327,9 @@ export default function AgentChat({ params }: AgentChatProps) {
                     
                     // Clear the messages in the React Query cache
                     queryClient.setQueryData([`/api/agents/${agentId}/messages`], []);
+                    
+                    // Refetch messages to ensure UI and database are in sync
+                    refetchMessages();
                   } catch (error) {
                     // Just log the error but don't show a toast - the UI is already updated
                     console.log("Background operation failed, but UI is already updated");
