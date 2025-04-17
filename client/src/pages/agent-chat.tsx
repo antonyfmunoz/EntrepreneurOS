@@ -244,11 +244,59 @@ export default function AgentChat({ params }: AgentChatProps) {
                 size="sm" 
                 className="flex justify-start items-center gap-2 w-full"
                 onClick={async () => {
-                  // Set active conversation to current
-                  setActiveConversationId("current");
-                  
                   try {
-                    // Call the API to clear messages on the server
+                    // Save the current conversation (if it has messages) to history
+                    const currentConversation = conversations.find(c => c.id === "current");
+                    let updatedConversations = [...conversations];
+                    
+                    // Only add current to history if it has messages
+                    if (currentConversation && messages.length > 0) {
+                      // Generate a unique ID for the conversation that was previously "current"
+                      const pastConvId = `past_${Date.now()}`;
+                      
+                      // Clone the current conversation with a new ID
+                      const pastConversation = {
+                        ...currentConversation,
+                        id: pastConvId,
+                        messages: [...messages] // Clone the messages array
+                      };
+                      
+                      // Remove the old "current" conversation
+                      const nonCurrentConvs = updatedConversations.filter(c => c.id !== "current");
+                      
+                      // Add the past conversation at the beginning of the history
+                      updatedConversations = [
+                        // Create a new empty "current" conversation
+                        {
+                          id: "current",
+                          title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
+                          messages: []
+                        },
+                        // Add what was the current conversation as a historical item
+                        pastConversation,
+                        // Add all other existing historical conversations
+                        ...nonCurrentConvs
+                      ];
+                    } else {
+                      // If there are no messages, just reset the current conversation
+                      updatedConversations = [
+                        {
+                          id: "current",
+                          title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
+                          messages: []
+                        },
+                        ...updatedConversations.filter(c => c.id !== "current")
+                      ];
+                    }
+                    
+                    // Update conversations state
+                    setConversations(updatedConversations);
+                    
+                    // Set active conversation to the new empty one
+                    setActiveConversationId("current");
+                    
+                    // Call the API to clear messages on the server (for the current session)
+                    // This doesn't affect history but ensures we start fresh
                     await apiRequest("POST", `/api/agents/${agentId}/clear-messages`);
                     
                     // Clear the messages on the UI
@@ -256,13 +304,6 @@ export default function AgentChat({ params }: AgentChatProps) {
                     
                     // Then refetch to get fresh data
                     refetchMessages();
-                    
-                    // Reset conversation state
-                    setConversations([{
-                      id: "current",
-                      title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
-                      messages: []
-                    }]);
                     
                     // Clear input
                     setMessage("");
