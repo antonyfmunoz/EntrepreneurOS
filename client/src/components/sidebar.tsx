@@ -94,15 +94,26 @@ export function Sidebar() {
             </li>
             <li>
               {agents.length > 0 ? (
-                <Link href={`/chat/${agents[0].id}`}>
-                  <div className={cn(
-                    "flex items-center space-x-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 text-gray-700",
-                    location.startsWith("/chat") && "bg-blue-50 text-primary font-medium"
-                  )}>
-                    <i className="ri-chat-3-line"></i>
-                    <span>Agent Chat</span>
-                  </div>
-                </Link>
+                <div className="flex items-center">
+                  <Link href={`/chat/${agents[0].id}`}>
+                    <div className={cn(
+                      "flex items-center space-x-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 text-gray-700",
+                      location.startsWith("/chat") && "bg-blue-50 text-primary font-medium",
+                      "flex-grow"
+                    )}>
+                      <i className="ri-chat-3-line"></i>
+                      <span>Agent Chat</span>
+                    </div>
+                  </Link>
+                  {/* Executive Agent Info Button */}
+                  {agents.find(a => a.id === "agent_executive") && (
+                    <Link href={`/agent-programming?id=agent_executive`}>
+                      <div className="p-1 w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-500">
+                        <i className="ri-information-line text-sm"></i>
+                      </div>
+                    </Link>
+                  )}
+                </div>
               ) : (
                 <div 
                   className="flex items-center space-x-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 text-gray-500"
