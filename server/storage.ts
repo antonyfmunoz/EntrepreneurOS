@@ -4,6 +4,7 @@ import {
   messages as messagesTable,
   integrations as integrationsTable,
   users as usersTable,
+  notifications as notificationsTable,
   type Agent, 
   type Task, 
   type InsertAgent, 
@@ -14,7 +15,9 @@ import {
   type Integration,
   type InsertIntegration,
   type User,
-  type InsertUser
+  type InsertUser,
+  type Notification,
+  type InsertNotification
 } from "@shared/schema";
 import { db, client } from './db';
 import { eq, and } from 'drizzle-orm';
@@ -65,6 +68,13 @@ export interface IStorage {
   // Integration operations
   getIntegrations(): Promise<Integration[]>;
   connectIntegration(type: string): Promise<Integration>;
+  
+  // Notification operations
+  getNotifications(userId: string): Promise<Notification[]>;
+  getUnreadNotificationsCount(userId: string): Promise<number>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  markNotificationAsRead(id: string): Promise<Notification | undefined>;
+  markAllNotificationsAsRead(userId: string): Promise<void>;
   
   // Session store
   sessionStore: session.Store;
