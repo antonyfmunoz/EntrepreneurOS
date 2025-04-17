@@ -344,7 +344,6 @@ export default function AgentChat({ params }: AgentChatProps) {
             <h1 className="font-medium text-lg">
               {agent ? agent.name : "Agent Chat"}
             </h1>
-            {agent && <Badge variant="outline" className="ml-2">{agent.role}</Badge>}
           </div>
           
           <div className="flex items-center gap-2">
