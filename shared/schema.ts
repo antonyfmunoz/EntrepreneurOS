@@ -48,6 +48,7 @@ export const agents = pgTable("agents", {
   simulationMode: boolean("simulation_mode").default(false), // If agent is in simulation mode
   parentAgentId: text("parent_agent_id"),            // For hierarchy, manually create relation
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const insertAgentSchema = z.object({

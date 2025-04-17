@@ -130,6 +130,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     res.json(agent);
   });
+  
+  // Update an agent
+  app.patch("/api/agents/:id", async (req, res) => {
+    try {
+      const agentId = req.params.id;
+      
+      // Verify the agent exists
+      const existingAgent = await storage.getAgent(agentId);
+      if (!existingAgent) {
+        return res.status(404).json({ message: "Agent not found" });
+      }
+      
+      // Update the agent with the provided fields
+      const updatedAgent = await storage.updateAgent(agentId, req.body);
+      
+      res.json(updatedAgent);
+    } catch (error) {
+      console.error("Error updating agent:", error);
+      res.status(500).json({ 
+        message: "Failed to update agent",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
 
   app.post("/api/agents", async (req, res) => {
     try {
