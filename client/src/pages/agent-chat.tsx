@@ -189,7 +189,7 @@ export default function AgentChat({ params }: AgentChatProps) {
         )}>
           {/* Sidebar Header */}
           <div className="p-4 flex justify-between items-center border-b border-gray-200">
-            <div className="flex items-center">
+            <div className="flex items-center w-full">
               <Button variant="outline" size="sm" className="flex justify-start items-center gap-2 w-full">
                 <Bot size={16} />
                 <span className="text-sm font-medium">New Chat</span>
@@ -197,9 +197,7 @@ export default function AgentChat({ params }: AgentChatProps) {
             </div>
             <Drawer>
               <DrawerTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-md">
-                  <i className="ri-add-fill"></i>
-                </Button>
+                <span className="hidden">Hidden Trigger</span>
               </DrawerTrigger>
               <DrawerContent className="p-4 max-w-sm mx-auto">
                 <div className="space-y-4">
@@ -270,6 +268,39 @@ export default function AgentChat({ params }: AgentChatProps) {
                           {agentItem.role}
                         </div>
                       </div>
+                      {agentItem.id === "agent_executive" && (
+                        <Drawer>
+                          <DrawerTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full ml-1">
+                              <Info size={14} />
+                            </Button>
+                          </DrawerTrigger>
+                          <DrawerContent className="p-4 max-w-sm mx-auto">
+                            <div className="space-y-4">
+                              <div className="flex items-center">
+                                <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center mr-4">
+                                  <i className={`${agentItem.icon || "ri-robot-line"} text-xl`}></i>
+                                </div>
+                                <div>
+                                  <h3 className="font-semibold text-lg">{agentItem.name}</h3>
+                                  <Badge variant="outline">{agentItem.role}</Badge>
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <h4 className="text-sm font-medium mb-2">Agent Instructions</h4>
+                                <p className="text-sm text-gray-600 border border-gray-200 rounded-md p-3 bg-gray-50">
+                                  {agentItem.instructions || "This agent will help you with tasks and answer questions."}
+                                </p>
+                              </div>
+
+                              <DrawerClose asChild>
+                                <Button className="w-full">Close</Button>
+                              </DrawerClose>
+                            </div>
+                          </DrawerContent>
+                        </Drawer>
+                      )}
                     </div>
                   </Link>
                 ))}
