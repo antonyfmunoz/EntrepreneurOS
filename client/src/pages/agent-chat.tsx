@@ -273,7 +273,32 @@ export default function AgentChat({ params }: AgentChatProps) {
               </div>
             </div>
             
-            {/* Previous conversations */}
+            {/* All Agents */}
+            <div className="px-3 py-2">
+              <h3 className="text-xs font-medium text-gray-500 mb-2">YOUR AGENTS</h3>
+              <div className="space-y-1">
+                {agents.map((agentItem) => (
+                  <Link key={agentItem.id} href={`/chat/${agentItem.id}`}>
+                    <div className={cn(
+                      "flex items-center gap-3 p-3 rounded-md cursor-pointer",
+                      agentId === agentItem.id ? "bg-primary/10 text-primary" : "hover:bg-gray-100 text-gray-700"
+                    )}>
+                      <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                        <i className={agentItem.icon || "ri-robot-line"}></i>
+                      </div>
+                      <div className="flex-1 truncate">
+                        <div className="text-sm font-medium">{agentItem.name}</div>
+                        <div className="text-xs text-gray-500 truncate">
+                          {agentItem.role}
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+            
+          {/* Previous conversations */}
             <div className="px-3 py-2">
               <h3 className="text-xs font-medium text-gray-500 mb-2">CONVERSATION HISTORY</h3>
               <div className="space-y-1">
