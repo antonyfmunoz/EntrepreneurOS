@@ -136,6 +136,8 @@ export default function AgentChat({ params }: AgentChatProps) {
   // Group messages into conversations
   useEffect(() => {
     if (agent) {
+      let updatedConversations = [];
+      
       if (messages.length > 0) {
         // For now, we'll create a simple structure with one conversation containing all messages
         // In a real app, these would be grouped by conversation ID from the server
@@ -168,8 +170,7 @@ export default function AgentChat({ params }: AgentChatProps) {
           pastConversations.push(secondConversation);
         }
         
-        setConversations([currentConversation, ...pastConversations]);
-        setActiveConversationId("current");
+        updatedConversations = [currentConversation, ...pastConversations];
       } else {
         // If there are no messages, create an empty current conversation
         const emptyCurrentConversation = {
@@ -178,12 +179,12 @@ export default function AgentChat({ params }: AgentChatProps) {
           messages: []
         };
         
-        // Preserve existing conversations
-        const pastConversations = conversations.filter(c => c.id !== "current");
-        
-        setConversations([emptyCurrentConversation, ...pastConversations]);
-        setActiveConversationId("current");
+        // Only include past conversations if we have any messages at all
+        updatedConversations = [emptyCurrentConversation];
       }
+      
+      setConversations(updatedConversations);
+      setActiveConversationId("current");
     }
   }, [messages, agent]);
 
