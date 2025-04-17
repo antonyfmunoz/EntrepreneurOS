@@ -167,7 +167,7 @@ export default function AgentChat({ params }: AgentChatProps) {
             className="rounded-md mt-2"
             onClick={() => setSidebarCollapsed(false)}
           >
-            <i className="ri-menu-unfold-line"></i>
+            <i className="ri-menu-line"></i>
           </Button>
         </div>
       )}
@@ -338,7 +338,7 @@ export default function AgentChat({ params }: AgentChatProps) {
                 className="mr-2"
                 onClick={() => setSidebarCollapsed(true)}
               >
-                <i className="ri-menu-fold-line"></i>
+                <i className="ri-menu-line"></i>
               </Button>
             )}
             <h1 className="font-medium text-lg">
