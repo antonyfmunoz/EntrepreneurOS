@@ -20,7 +20,7 @@ import {
   type InsertNotification
 } from "@shared/schema";
 import { db, client } from './db';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import session from 'express-session';
 import connectPg from 'connect-pg-simple';
 
@@ -748,7 +748,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select()
       .from(notificationsTable)
       .where(eq(notificationsTable.userId, userId))
-      .orderBy(notificationsTable.createdAt, 'desc');
+      .orderBy(desc(notificationsTable.createdAt));
   }
 
   async getUnreadNotificationsCount(userId: string): Promise<number> {
