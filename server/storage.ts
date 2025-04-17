@@ -338,7 +338,7 @@ export class DatabaseStorage implements IStorage {
     return newAgent;
   }
 
-  async updateAgent(id: string, updates: Partial<InsertAgent>): Promise<Agent | undefined> {
+  async updateAgent(id: string, updates: Partial<InsertAgent> & { latestActivity?: string }): Promise<Agent | undefined> {
     try {
       // Get the current agent to make sure it exists
       const existingAgent = await this.getAgent(id);
@@ -354,7 +354,11 @@ export class DatabaseStorage implements IStorage {
       if (updates.role) updateData.role = updates.role;
       if (updates.icon) updateData.icon = updates.icon;
       if (updates.instructions) updateData.instructions = updates.instructions;
-      if (updates.latestActivity) updateData.latestActivity = updates.latestActivity;
+      
+      // Handle latestActivity which is in the table schema but not in InsertAgent type
+      if ('latestActivity' in updates) {
+        updateData.latestActivity = updates.latestActivity;
+      }
       
       // Handle any complex conversions if needed
       // For example, convert array fields to strings for storage
