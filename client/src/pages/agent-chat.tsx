@@ -157,17 +157,20 @@ export default function AgentChat({ params }: AgentChatProps) {
         providers={requiredApiProviders} 
       />
       
-      {/* Left Sidebar - Agent Info Collapsed */}
-      <div className="w-16 border-r border-gray-200 flex flex-col items-center py-4 bg-gray-50">
-        <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center mb-6">
-          <Bot size={20} />
-        </div>
-        
-        <div className="flex flex-col items-center space-y-6 mt-6">
+      {/* Left Sidebar - ChatGPT Style */}
+      <div className="w-64 border-r border-gray-200 flex flex-col bg-gray-50 overflow-hidden">
+        {/* Sidebar Header */}
+        <div className="p-4 flex justify-between items-center border-b border-gray-200">
+          <div className="flex items-center">
+            <Button variant="outline" size="sm" className="flex justify-start items-center gap-2 w-full">
+              <Bot size={16} />
+              <span className="text-sm font-medium">New Chat</span>
+            </Button>
+          </div>
           <Drawer>
             <DrawerTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <Info size={20} />
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-md">
+                <i className="ri-add-fill"></i>
               </Button>
             </DrawerTrigger>
             <DrawerContent className="p-4 max-w-sm mx-auto">
@@ -216,25 +219,92 @@ export default function AgentChat({ params }: AgentChatProps) {
               </div>
             </DrawerContent>
           </Drawer>
+        </div>
+        
+        {/* Agent Chats List */}
+        <div className="flex-1 overflow-y-auto py-2">
+          {/* History Groups - "Today", "Yesterday", etc. */}
+          <div className="px-3 py-2">
+            <h3 className="text-xs font-medium text-gray-500 mb-2">TODAY</h3>
+            <div className="space-y-1">
+              {/* Conversation items */}
+              <div className={cn(
+                "flex items-center gap-3 p-3 rounded-md cursor-pointer",
+                "bg-primary/10 text-primary"
+              )}>
+                <Bot size={18} />
+                <div className="flex-1 truncate">
+                  <div className="text-sm font-medium">Chat with {agent?.name || "Agent"}</div>
+                  <div className="text-xs text-gray-500 truncate">Active conversation</div>
+                </div>
+              </div>
+              
+              {/* Empty placeholder chats */}
+              <div className="flex items-center gap-3 p-3 rounded-md cursor-pointer hover:bg-gray-100">
+                <Bot size={18} className="text-gray-500" />
+                <div className="flex-1 truncate">
+                  <div className="text-sm font-medium text-gray-700">Marketing strategy</div>
+                  <div className="text-xs text-gray-500 truncate">Started new campaign ideas...</div>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3 p-3 rounded-md cursor-pointer hover:bg-gray-100">
+                <Bot size={18} className="text-gray-500" />
+                <div className="flex-1 truncate">
+                  <div className="text-sm font-medium text-gray-700">Social media planning</div>
+                  <div className="text-xs text-gray-500 truncate">Created content calendar for Q2</div>
+                </div>
+              </div>
+            </div>
+          </div>
           
-          <Popover open={aiSelectorOpen} onOpenChange={setAiSelectorOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <Settings size={20} />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80 p-4" align="start">
-              <h3 className="text-sm font-medium mb-2">AI Model Settings</h3>
-              <AIModelSelector 
-                onSelectModel={(config) => {
-                  setAIModelConfig(config);
-                  setAiSelectorOpen(false);
-                }}
-                defaultProvider={aiModelConfig?.provider}
-                defaultModel={aiModelConfig?.modelName}
-              />
-            </PopoverContent>
-          </Popover>
+          <div className="px-3 py-2">
+            <h3 className="text-xs font-medium text-gray-500 mb-2">YESTERDAY</h3>
+            <div className="space-y-1">
+              <div className="flex items-center gap-3 p-3 rounded-md cursor-pointer hover:bg-gray-100">
+                <Bot size={18} className="text-gray-500" />
+                <div className="flex-1 truncate">
+                  <div className="text-sm font-medium text-gray-700">Website review</div>
+                  <div className="text-xs text-gray-500 truncate">Analyzed landing page performance</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Settings Footer */}
+        <div className="border-t border-gray-200 p-3">
+          <div className="flex flex-col space-y-1">
+            <Popover open={aiSelectorOpen} onOpenChange={setAiSelectorOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm" className="justify-start gap-2">
+                  <Settings size={16} />
+                  <span>AI Model Settings</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-4" align="start">
+                <h3 className="text-sm font-medium mb-2">AI Model Settings</h3>
+                <AIModelSelector 
+                  onSelectModel={(config) => {
+                    setAIModelConfig(config);
+                    setAiSelectorOpen(false);
+                  }}
+                  defaultProvider={aiModelConfig?.provider}
+                  defaultModel={aiModelConfig?.modelName}
+                />
+              </PopoverContent>
+            </Popover>
+            
+            <Button variant="ghost" size="sm" className="justify-start gap-2">
+              <i className="ri-organization-chart-line text-gray-600"></i>
+              <span>Agent Organization</span>
+            </Button>
+            
+            <Button variant="ghost" size="sm" className="justify-start gap-2">
+              <i className="ri-task-line text-gray-600"></i>
+              <span>View All Tasks</span>
+            </Button>
+          </div>
         </div>
       </div>
       
@@ -277,7 +347,7 @@ export default function AgentChat({ params }: AgentChatProps) {
         </div>
         
         {/* Messages Container */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 md:px-8 space-y-8">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
               <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
@@ -295,44 +365,40 @@ export default function AgentChat({ params }: AgentChatProps) {
               <div 
                 key={message.id} 
                 className={cn(
-                  "flex",
-                  message.role === "user" ? "justify-end" : "justify-start"
+                  "relative group max-w-3xl mx-auto",
+                  message.role === "user" ? "text-right" : "border-l-4 border-l-primary/20 pl-4"
                 )}
               >
-                <div className={cn(
-                  "flex gap-3 max-w-3xl",
-                  message.role === "user" && "flex-row-reverse"
-                )}>
-                  <div className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-                    message.role === "user" 
-                      ? "bg-blue-600 text-white" 
-                      : "bg-gray-200 text-gray-700"
-                  )}>
-                    {message.role === "user" 
-                      ? <i className="ri-user-line"></i> 
-                      : <i className={agent?.icon || "ri-robot-line"}></i>}
-                  </div>
+                <div className="flex items-start">
+                  {message.role !== "user" && (
+                    <div className="w-9 h-9 flex-shrink-0 rounded-full bg-primary/20 mr-4 flex items-center justify-center">
+                      <i className={cn(`${agent?.icon || "ri-robot-line"} text-primary`)}></i>
+                    </div>
+                  )}
                   
-                  <div className={cn(
-                    "p-4 rounded-lg",
-                    message.role === "user" 
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-100 text-gray-800"
-                  )}>
-                    <div className="prose prose-sm max-w-none">
-                      {message.content}
+                  <div className="flex-1">
+                    <div className="mb-1 text-xs font-medium text-gray-500">
+                      {message.role === "user" ? "You" : agent?.name || "Assistant"}
                     </div>
                     <div className={cn(
-                      "text-xs mt-2 flex justify-between items-center",
-                      message.role === "user" ? "text-blue-200" : "text-gray-500"
+                      "prose prose-sm max-w-none",
+                      message.role === "user" ? "text-left" : ""
                     )}>
-                      <span>
-                        {message.role === "user" ? "You" : agent?.name || "Assistant"}
-                      </span>
-                      <span>{formatTime(message.timestamp)}</span>
+                      {message.content}
                     </div>
                   </div>
+                  
+                  {message.role === "user" && (
+                    <div className="w-9 h-9 flex-shrink-0 rounded-full bg-primary/20 ml-4 flex items-center justify-center">
+                      <i className="ri-user-line text-primary"></i>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute right-0 top-0 flex items-center space-x-2">
+                  <Button variant="ghost" size="icon" className="w-7 h-7">
+                    <Clipboard size={14} />
+                  </Button>
                 </div>
               </div>
             ))
@@ -340,36 +406,40 @@ export default function AgentChat({ params }: AgentChatProps) {
           <div ref={messagesEndRef} />
         </div>
         
-        {/* Input Area */}
-        <div className="border-t border-gray-200 p-4">
-          <form onSubmit={handleSendMessage} className="mx-auto max-w-4xl">
-            <div className="flex relative">
-              <Input
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder={`Message ${agent?.name || "your agent"}...`}
-                disabled={isLoading}
-                className="pr-20 py-6 text-base"
-              />
-              <Button 
-                type="submit" 
-                disabled={isLoading || !message.trim()}
-                className="absolute right-1 top-1 bottom-1 bg-primary hover:bg-blue-600"
-                size="icon"
-              >
-                {isLoading ? (
-                  <i className="ri-loader-4-line animate-spin"></i>
-                ) : (
-                  <i className="ri-send-plane-fill"></i>
-                )}
-              </Button>
-            </div>
-            <div className="flex justify-center mt-2">
-              <p className="text-xs text-gray-500">
-                {agent?.name || "The agent"} helps with {agent?.role || "tasks"} based on current knowledge
-              </p>
-            </div>
-          </form>
+        {/* Input Area - ChatGPT style */}
+        <div className="p-4 pb-8">
+          <div className="mx-auto max-w-3xl">
+            <form onSubmit={handleSendMessage} className="relative">
+              <div className="border border-gray-300 rounded-xl overflow-hidden shadow-sm focus-within:ring-2 focus-within:ring-primary focus-within:border-primary">
+                <div className="flex">
+                  <Textarea
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder={`Message ${agent?.name || "your agent"}...`}
+                    disabled={isLoading}
+                    className="border-0 rounded-none shadow-none focus-visible:ring-0 text-base py-6 min-h-[60px] max-h-[200px] resize-none"
+                  />
+                  <Button 
+                    type="submit" 
+                    disabled={isLoading || !message.trim()}
+                    className="rounded-none bg-transparent hover:bg-transparent mr-2 self-end mb-2"
+                    size="icon"
+                  >
+                    {isLoading ? (
+                      <i className="ri-loader-4-line animate-spin text-primary"></i>
+                    ) : (
+                      <i className="ri-send-plane-fill text-primary hover:text-primary/80"></i>
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <div className="flex justify-center mt-2">
+                <p className="text-xs text-gray-500">
+                  {agent?.name || "The agent"} helps with {agent?.role || "tasks"} based on current knowledge
+                </p>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     </div>
