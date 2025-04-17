@@ -269,37 +269,18 @@ export default function AgentChat({ params }: AgentChatProps) {
                         </div>
                       </div>
                       {agentItem.id === "agent_executive" && (
-                        <Drawer>
-                          <DrawerTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full ml-1">
-                              <Info size={14} />
-                            </Button>
-                          </DrawerTrigger>
-                          <DrawerContent className="p-4 max-w-sm mx-auto">
-                            <div className="space-y-4">
-                              <div className="flex items-center">
-                                <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center mr-4">
-                                  <i className={`${agentItem.icon || "ri-robot-line"} text-xl`}></i>
-                                </div>
-                                <div>
-                                  <h3 className="font-semibold text-lg">{agentItem.name}</h3>
-                                  <Badge variant="outline">{agentItem.role}</Badge>
-                                </div>
-                              </div>
-                              
-                              <div>
-                                <h4 className="text-sm font-medium mb-2">Agent Instructions</h4>
-                                <p className="text-sm text-gray-600 border border-gray-200 rounded-md p-3 bg-gray-50">
-                                  {agentItem.instructions || "This agent will help you with tasks and answer questions."}
-                                </p>
-                              </div>
-
-                              <DrawerClose asChild>
-                                <Button className="w-full">Close</Button>
-                              </DrawerClose>
-                            </div>
-                          </DrawerContent>
-                        </Drawer>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-6 w-6 rounded-full ml-1"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            window.location.href = `/agent/${agentItem.id}/program`;
+                          }}
+                        >
+                          <Info size={14} />
+                        </Button>
                       )}
                     </div>
                   </Link>
