@@ -244,79 +244,73 @@ export default function AgentChat({ params }: AgentChatProps) {
                 size="sm" 
                 className="flex justify-start items-center gap-2 w-full"
                 onClick={async () => {
+                  // First, update the UI immediately for a snappy experience
+                  let updatedConversations = [];
+                  
+                  if (messages.length > 0) {
+                    // Generate a unique ID for the current conversation moving to history
+                    const pastConvId = `past_${Date.now()}`;
+                    
+                    // Create a history entry with the current messages
+                    const pastConversation = {
+                      id: pastConvId,
+                      title: `Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
+                      messages: [...messages] // Store a copy of the current messages
+                    };
+                    
+                    // Add all existing conversations except current to history
+                    const existingHistory = conversations.filter(c => c.id !== "current");
+                    
+                    // Create a completely new empty conversation for "current"
+                    updatedConversations = [
+                      {
+                        id: "current",
+                        title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
+                        messages: [] // Empty message array
+                      },
+                      pastConversation, // Add the conversation we just completed
+                      ...existingHistory // Add all other historical conversations
+                    ];
+                  } else {
+                    // If there are no messages, just create a fresh current conversation
+                    updatedConversations = [
+                      {
+                        id: "current",
+                        title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
+                        messages: [] // Empty message array
+                      },
+                      ...conversations.filter(c => c.id !== "current") // Keep all existing history
+                    ];
+                  }
+                  
+                  // Update conversations state with our new array
+                  setConversations(updatedConversations);
+                  
+                  // Set active conversation to the new empty one
+                  setActiveConversationId("current");
+                  
+                  // Clear input field
+                  setMessage("");
+                  
+                  // Show toast immediately
+                  toast({
+                    title: "New chat started",
+                    description: `Ready to chat with ${agent?.name || "Agent"}`,
+                  });
+                  
+                  // Scroll to bottom
+                  scrollToBottom();
+                  
+                  // Then handle the server communication silently in the background
                   try {
-                    // First, check if current conversation has messages
-                    // If it does, save it to history
-                    let updatedConversations = [];
-                    
-                    if (messages.length > 0) {
-                      // Generate a unique ID for the current conversation that we're moving to history
-                      const pastConvId = `past_${Date.now()}`;
-                      
-                      // Create a history entry with the current messages
-                      const pastConversation = {
-                        id: pastConvId,
-                        title: `Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
-                        messages: [...messages] // Store a copy of the current messages
-                      };
-                      
-                      // Add all existing conversations except current to history
-                      const existingHistory = conversations.filter(c => c.id !== "current");
-                      
-                      // Create a completely new empty conversation for "current"
-                      updatedConversations = [
-                        {
-                          id: "current",
-                          title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
-                          messages: [] // Empty message array
-                        },
-                        pastConversation, // Add the conversation we just completed
-                        ...existingHistory // Add all other historical conversations
-                      ];
-                    } else {
-                      // If there are no messages, just create a fresh current conversation
-                      updatedConversations = [
-                        {
-                          id: "current",
-                          title: `Today's Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
-                          messages: [] // Empty message array
-                        },
-                        ...conversations.filter(c => c.id !== "current") // Keep all existing history
-                      ];
-                    }
-                    
-                    // Update conversations state with our new array
-                    setConversations(updatedConversations);
-                    
-                    // Set active conversation to the new empty one
-                    setActiveConversationId("current");
-                    
                     // Clear the server-side messages
                     await apiRequest("POST", `/api/agents/${agentId}/clear-messages`);
                     
                     // Clear the messages in the React Query cache
                     queryClient.setQueryData([`/api/agents/${agentId}/messages`], []);
-                    
-                    // Clear the local messages state
-                    setMessages([]);
-                    
-                    // Clear input field
-                    setMessage("");
-                    
-                    // Scroll to bottom
-                    scrollToBottom();
-                    
-                    toast({
-                      title: "New chat started",
-                      description: `Ready to chat with ${agent?.name || "Agent"}`,
-                    });
                   } catch (error) {
-                    console.error("Error starting new chat:", error);
-                    toast({
-                      title: "Error starting new chat",
-                      description: "There was an error clearing the conversation. Please try again.",
-                      variant: "destructive"
-                    });
+                    // Just log the error but don't show a toast - the UI is already updated
+                    console.log("Background operation failed, but UI is already updated");
                   }
                 }}
               >
