@@ -146,7 +146,7 @@ export default function AgentProgramming(props: AgentProgrammingProps) {
     },
   });
   
-  const handleSave = (values: AgentFormValues) => {
+  const onSubmit = (values: AgentFormValues) => {
     // Merge the knowledge source with the form values
     let knowledgeBase = values.knowledgeBase || "";
     
@@ -193,6 +193,10 @@ export default function AgentProgramming(props: AgentProgrammingProps) {
     }, 2000);
   };
   
+  const handleSaveClick = () => {
+    form.handleSubmit(onSubmit)();
+  };
+  
   return (
     <Layout title={`Programming ${agent?.name || "Agent"}`}>
       <div className="flex items-center mb-8">
@@ -214,7 +218,7 @@ export default function AgentProgramming(props: AgentProgrammingProps) {
         </div>
       ) : (
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSave)}>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2">
                 <Tabs 
@@ -244,7 +248,8 @@ export default function AgentProgramming(props: AgentProgrammingProps) {
                           Test
                         </Button>
                         <Button 
-                          type="submit" 
+                          type="button"
+                          onClick={handleSaveClick}
                           disabled={updateAgentMutation.isPending || !form.formState.isDirty}
                           className="gap-1"
                         >
@@ -310,7 +315,8 @@ export default function AgentProgramming(props: AgentProgrammingProps) {
                     <div className="flex justify-between items-center">
                       <h2 className="text-lg font-semibold">Agent Knowledge</h2>
                       <Button 
-                        type="submit" 
+                        type="button"
+                        onClick={handleSaveClick}
                         disabled={updateAgentMutation.isPending || !form.formState.isDirty}
                         className="gap-1"
                       >
@@ -364,7 +370,10 @@ export default function AgentProgramming(props: AgentProgrammingProps) {
                             <label className="block text-sm font-medium">Knowledge Text</label>
                             <Textarea
                               value={knowledgeText}
-                              onChange={(e) => setKnowledgeText(e.target.value)}
+                              onChange={(e) => {
+                                setKnowledgeText(e.target.value);
+                                form.setValue("knowledgeBase", e.target.value, { shouldDirty: true });
+                              }}
                               placeholder="Enter knowledge that the agent should know (product data, company policies, etc.)"
                               className="min-h-[200px]"
                             />
@@ -402,6 +411,7 @@ export default function AgentProgramming(props: AgentProgrammingProps) {
                                     if (fileInputRef.current) {
                                       fileInputRef.current.value = "";
                                     }
+                                    form.setValue("knowledgeBase", "", { shouldDirty: true });
                                   }}
                                 >
                                   <i className="ri-close-line"></i>
@@ -417,7 +427,10 @@ export default function AgentProgramming(props: AgentProgrammingProps) {
                             <div className="flex gap-2">
                               <Input
                                 value={knowledgeUrl}
-                                onChange={(e) => setKnowledgeUrl(e.target.value)}
+                                onChange={(e) => {
+                                  setKnowledgeUrl(e.target.value);
+                                  form.setValue("knowledgeBase", `URL: ${e.target.value}`, { shouldDirty: true });
+                                }}
                                 placeholder="https://docs.example.com/knowledge-base"
                               />
                               <Button
@@ -447,7 +460,8 @@ export default function AgentProgramming(props: AgentProgrammingProps) {
                     <div className="flex justify-between items-center">
                       <h2 className="text-lg font-semibold">Agent Settings</h2>
                       <Button 
-                        type="submit" 
+                        type="button"
+                        onClick={handleSaveClick}
                         disabled={updateAgentMutation.isPending || !form.formState.isDirty}
                         className="gap-1"
                       >
