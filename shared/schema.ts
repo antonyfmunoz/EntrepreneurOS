@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -176,3 +176,31 @@ export type Message = typeof messages.$inferSelect;
 
 export type InsertIntegration = z.infer<typeof insertIntegrationSchema>;
 export type Integration = typeof integrations.$inferSelect;
+
+// Notifications
+export const notifications = pgTable("notifications", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").references(() => users.id),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  type: text("type").notNull(), // task-assigned, agent-created, integration-connected, etc.
+  read: boolean("read").default(false),
+  href: text("href"), // URL path for navigation when clicking the notification
+  relatedId: text("related_id"), // ID of the related entity (task, agent, integration)
+  metadata: jsonb("metadata"), // Additional data as JSON
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertNotificationSchema = z.object({
+  userId: z.string(),
+  title: z.string().min(1, "Title is required"),
+  content: z.string().min(1, "Content is required"),
+  type: z.string().min(1, "Type is required"),
+  read: z.boolean().optional(),
+  href: z.string().optional(),
+  relatedId: z.string().optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Notification = typeof notifications.$inferSelect;
