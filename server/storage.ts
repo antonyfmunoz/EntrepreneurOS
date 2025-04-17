@@ -52,6 +52,7 @@ export interface IStorage {
   getAgentMessages(agentId: string): Promise<Message[]>;
   getTaskMessages(taskId: string): Promise<Message[]>; // Get all messages for a specific task
   getConversationMessages(conversationId: string): Promise<Message[]>; // Get all messages for a conversation
+  getAllMessages(): Promise<Message[]>; // Get all messages in the system
   clearAgentMessages(agentId: string): Promise<void>; // Clear all messages for an agent (New Chat functionality)
   addAgentMessage(message: InsertMessage): Promise<Message>;
   addCollaborativeMessage(message: InsertMessage): Promise<Message>; // Special handling for collaborative messages
@@ -581,6 +582,10 @@ export class DatabaseStorage implements IStorage {
       .from(messagesTable)
       .where(eq(messagesTable.conversationId, conversationId))
       .orderBy(messagesTable.timestamp);
+  }
+  
+  async getAllMessages(): Promise<Message[]> {
+    return await db.select().from(messagesTable).orderBy(messagesTable.timestamp);
   }
 
   async clearAgentMessages(agentId: string): Promise<void> {
