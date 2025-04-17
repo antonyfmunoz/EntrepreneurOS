@@ -81,17 +81,32 @@ export const NotificationDropdown = () => {
               <span className="text-sm opacity-70">
                 We'll notify you when something happens
               </span>
+              <Button 
+                variant="link" 
+                size="sm" 
+                asChild 
+                className="mt-2"
+              >
+                <Link href="/notifications">View notification center</Link>
+              </Button>
             </div>
           ) : (
-            <DropdownMenuGroup>
-              {notifications.map((notification) => (
+            <div className="py-1">
+              {notifications.slice(0, 5).map((notification) => (
                 <NotificationItem
                   key={notification.id}
                   notification={notification}
                   onMarkAsRead={handleMarkAsRead}
                 />
               ))}
-            </DropdownMenuGroup>
+              {notifications.length > 5 && (
+                <DropdownMenuItem asChild className="justify-center text-primary font-medium">
+                  <Link href="/notifications">
+                    View all {notifications.length} notifications
+                  </Link>
+                </DropdownMenuItem>
+              )}
+            </div>
           )}
         </ScrollArea>
       </DropdownMenuContent>
@@ -176,7 +191,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
                 </Button>
               )}
             </div>
-            <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">
+            <p className="text-sm text-muted-foreground mt-0.5">
               {notification.content}
             </p>
             <span className="text-xs text-muted-foreground mt-1 block">
