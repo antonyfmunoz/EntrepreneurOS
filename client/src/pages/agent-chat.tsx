@@ -248,9 +248,9 @@ export default function AgentChat({ params }: AgentChatProps) {
           
           {/* Agent Chats List */}
           <div className="flex-1 overflow-y-auto py-2">
-            {/* Current Agent Chat */}
+            {/* Current Chat */}
             <div className="px-3 py-2">
-              <h3 className="text-xs font-medium text-gray-500 mb-2">CURRENT AGENT</h3>
+              <h3 className="text-xs font-medium text-gray-500 mb-2">CURRENT CHAT</h3>
               <div className="space-y-1">
                 {/* Active Conversation */}
                 <div className={cn(
@@ -270,33 +270,27 @@ export default function AgentChat({ params }: AgentChatProps) {
               </div>
             </div>
             
-            {/* Recent Agents - Fetched from database */}
+            {/* Previous conversations */}
             <div className="px-3 py-2">
-              <h3 className="text-xs font-medium text-gray-500 mb-2">OTHER AGENTS</h3>
+              <h3 className="text-xs font-medium text-gray-500 mb-2">CONVERSATION HISTORY</h3>
               <div className="space-y-1">
-                {/* We'll fetch all agents except the current one */}
-                {agents && agents
-                  .filter(a => a.id !== agentId)
-                  .map(a => (
-                    <Link 
-                      key={a.id} 
-                      href={`/chat/${a.id}`}
-                      className="flex items-center gap-3 p-3 rounded-md cursor-pointer hover:bg-gray-100"
-                    >
-                      <div className="w-[18px] h-[18px] flex-shrink-0 rounded-full bg-primary/10 flex items-center justify-center">
-                        <i className={`${a.icon || "ri-robot-line"} text-xs text-primary`}></i>
+                {messages.length > 0 ? (
+                  <div className="text-xs text-gray-500 p-3">
+                    <div className="flex flex-col gap-2 mt-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-500">{new Date().toLocaleDateString()}</span>
+                        <Badge variant="outline" className="text-xs">
+                          {messages.length} messages
+                        </Badge>
                       </div>
-                      <div className="flex-1 truncate">
-                        <div className="text-sm font-medium text-gray-700">{a.name}</div>
-                        <div className="text-xs text-gray-500 truncate">{a.role}</div>
+                      <div className="text-xs text-gray-600 italic">
+                        Current conversation
                       </div>
-                    </Link>
-                  ))
-                }
-                
-                {(!agents || agents.filter(a => a.id !== agentId).length === 0) && (
+                    </div>
+                  </div>
+                ) : (
                   <div className="text-xs text-gray-500 italic p-3">
-                    No other agents available
+                    No conversation history yet
                   </div>
                 )}
               </div>
