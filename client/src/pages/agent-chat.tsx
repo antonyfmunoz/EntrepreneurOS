@@ -319,11 +319,8 @@ export default function AgentChat({ params }: AgentChatProps) {
                     }}
                   >
                     <div className="flex flex-col gap-2 mt-1">
-                      <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center text-xs">
                         <span className="text-gray-500">{new Date().toLocaleDateString()}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {messages.length} messages
-                        </Badge>
                       </div>
                       <div className="text-xs text-gray-600">
                         {messages[0].content.substring(0, 40)}...
