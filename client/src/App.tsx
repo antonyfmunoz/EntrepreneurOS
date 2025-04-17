@@ -6,6 +6,7 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import TaskBoardPage from "@/pages/task-board-page";
 import AgentChat from "@/pages/agent-chat";
+import AgentProgramming from "@/pages/agent-programming";
 import IntegrationsPage from "@/pages/integrations-page";
 import AuthPage from "@/pages/auth-page";
 import { AuthProvider } from "@/hooks/use-auth";
@@ -19,6 +20,9 @@ function Router() {
       <ProtectedRoute path="/chat/:agentId">
         {(params) => <AgentChat params={params as {agentId: string}} />}
       </ProtectedRoute>
+      <Route path="/agent/:agentId/program">
+        {(params) => <AgentProgramming agentId={params.agentId} />}
+      </Route>
       <ProtectedRoute path="/integrations" component={IntegrationsPage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
