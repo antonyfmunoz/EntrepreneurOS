@@ -64,16 +64,6 @@ export function Sidebar() {
         </div>
 
         <div className="p-4 border-b border-gray-200">
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="w-full bg-primary hover:bg-blue-600 text-white py-2 px-4 rounded-md flex items-center justify-center space-x-2 transition-colors"
-          >
-            <i className="ri-add-line"></i>
-            <span>Create New Agent</span>
-          </button>
-        </div>
-
-        <div className="p-4 border-b border-gray-200">
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Your Agents</h2>
           
           <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-hide">
