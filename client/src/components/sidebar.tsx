@@ -63,36 +63,6 @@ export function Sidebar() {
           <p className="text-xs text-gray-500 mt-1">AI Operating System for Business</p>
         </div>
 
-        <div className="p-4 border-b border-gray-200">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Your Agents</h2>
-          
-          <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-hide">
-            {agents.map((agent) => (
-              <Link key={agent.id} href={`/chat/${agent.id}`}>
-                <div className={cn(
-                  "flex items-center p-2 rounded-md cursor-pointer hover:bg-blue-100 transition-colors",
-                  location === `/chat/${agent.id}` ? "bg-blue-50 border border-blue-100" : "hover:bg-gray-100"
-                )}>
-                  <div className={cn(
-                    "w-8 h-8 rounded-full text-white flex items-center justify-center",
-                    getRoleColor(agent.role)
-                  )}>
-                    <i className={getRoleIcon(agent.role)}></i>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-800">{agent.name}</p>
-                    <p className="text-xs text-gray-500">
-                      {agent.activeTasks > 0 
-                        ? `${agent.activeTasks} active task${agent.activeTasks > 1 ? 's' : ''}` 
-                        : 'No active tasks'}
-                    </p>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-
         <nav className="p-4 flex-1">
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Navigation</h2>
           <ul className="space-y-2">
