@@ -73,9 +73,10 @@ export default function AgentChat({ params }: AgentChatProps) {
     enabled: !!agentId, // Only run query if agentId exists
   });
   
-  // Fetch all agents for the sidebar
-  const { data: agents = [] } = useQuery<Agent[]>({
+  // We only need to fetch the Executive Agent
+  const { data: executiveAgent } = useQuery<Agent>({
     queryKey: ['/api/agents'],
+    select: (agents) => agents.find(a => a.role === 'executive') || agents[0],
   });
 
   const sendMessageMutation = useMutation({
