@@ -1077,6 +1077,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Not authenticated" });
       }
       
+      // Check if there are any notifications for this user
+      const existingNotifications = await storage.getNotifications(req.user.id);
+      
+      // If no notifications exist, create a test one
+      if (existingNotifications.length === 0) {
+        await storage.createNotification({
+          userId: req.user.id,
+          title: "Welcome to AgentOS",
+          content: "Your notification system is now active. You'll receive updates here as agents complete tasks and integrations are connected.",
+          type: "system",
+          read: false
+        });
+      }
+      
       const notifications = await storage.getNotifications(req.user.id);
       res.json(notifications);
     } catch (error) {
