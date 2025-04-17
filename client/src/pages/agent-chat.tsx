@@ -450,9 +450,8 @@ export default function AgentChat({ params }: AgentChatProps) {
               </div>
             </div>
             
-            {/* Today's Chats */}
+            {/* Current Conversation */}
             <div className="px-3 py-2">
-              <h3 className="text-xs font-medium text-gray-500 mb-2">TODAY'S CHATS</h3>
               <div className="space-y-1">
                 {/* Active Conversation */}
                 {conversations.length > 0 && (
@@ -465,7 +464,7 @@ export default function AgentChat({ params }: AgentChatProps) {
                   >
                     <Bot size={18} />
                     <div className="flex-1 truncate">
-                      <div className="text-sm font-medium">Today's Chat with {agent?.name || "Agent"}</div>
+                      <div className="text-sm font-medium">Current Chat</div>
                       <div className="text-xs text-gray-500 truncate">
                         {messages.length > 0 
                           ? messages[messages.length - 1].content.slice(0, 30) + "..." 
@@ -608,7 +607,7 @@ export default function AgentChat({ params }: AgentChatProps) {
                       className="h-auto p-0 text-xs text-primary" 
                       onClick={() => handleOpenConversation("current")}
                     >
-                      Return to today's chat
+                      Return to current chat
                     </Button>
                   </div>
                 )}
@@ -715,7 +714,7 @@ export default function AgentChat({ params }: AgentChatProps) {
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       placeholder={activeConversationId !== "current" 
-                        ? "Viewing past conversation... Return to today's chat to send messages" 
+                        ? "Viewing past conversation... Return to current chat to send messages" 
                         : `Message ${agent?.name || "your agent"}...`}
                       disabled={isLoading || activeConversationId !== "current"}
                       className="border-0 rounded-none shadow-none focus-visible:ring-0 text-base py-6 min-h-[60px] max-h-[200px] resize-none"
