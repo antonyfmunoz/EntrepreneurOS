@@ -106,14 +106,7 @@ export function Sidebar() {
                       <span>Agent Chat</span>
                     </div>
                   </Link>
-                  {/* Executive Agent Info Button */}
-                  {agents.find(a => a.id === "agent_executive") && (
-                    <Link href={`/agent-programming?id=agent_executive`}>
-                      <div className="p-1 w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-500">
-                        <i className="ri-information-line text-sm"></i>
-                      </div>
-                    </Link>
-                  )}
+
                 </div>
               ) : (
                 <div 
