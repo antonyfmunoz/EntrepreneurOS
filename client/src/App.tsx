@@ -8,6 +8,7 @@ import TaskBoardPage from "@/pages/task-board-page";
 import AgentChat from "@/pages/agent-chat";
 import AgentProgramming from "@/pages/agent-programming";
 import IntegrationsPage from "@/pages/integrations-page";
+import AnalyticsPage from "@/pages/analytics-page";
 import AuthPage from "@/pages/auth-page";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
@@ -24,6 +25,7 @@ function Router() {
         {(params) => <AgentProgramming agentId={params.agentId} />}
       </Route>
       <ProtectedRoute path="/integrations" component={IntegrationsPage} />
+      <ProtectedRoute path="/analytics" component={AnalyticsPage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>
