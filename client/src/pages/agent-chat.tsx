@@ -55,6 +55,8 @@ export default function AgentChat({ params }: AgentChatProps) {
   const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
   const [requiredApiProviders, setRequiredApiProviders] = useState<AIModelProvider[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [conversations, setConversations] = useState<{ id: string, title: string, messages: Message[] }[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { requestKeys } = useRequestAIKeys();
@@ -124,7 +126,53 @@ export default function AgentChat({ params }: AgentChatProps) {
     scrollToBottom();
   }, [messages]);
 
+  // Group messages into conversations
+  useEffect(() => {
+    if (messages.length > 0) {
+      // For now, we'll create a simple structure with one conversation containing all messages
+      // In a real app, these would be grouped by conversation ID from the server
+      const currentConversation = {
+        id: "current",
+        title: `Chat with ${agent?.name || "Agent"} - ${new Date().toLocaleDateString()}`,
+        messages: messages
+      };
+      
+      // For demonstration, create some "past" conversations by splitting messages
+      // In a real app, these would come from the server
+      const pastConversations = [];
+      
+      if (messages.length >= 4) {
+        // Split into multiple conversations for demo purposes
+        const firstConversation = {
+          id: "past1",
+          title: `Previous chat - ${new Date(Date.now() - 86400000).toLocaleDateString()}`,  // yesterday
+          messages: messages.slice(0, 2)
+        };
+        pastConversations.push(firstConversation);
+      }
+      
+      if (messages.length >= 8) {
+        const secondConversation = {
+          id: "past2",
+          title: `Earlier chat - ${new Date(Date.now() - 172800000).toLocaleDateString()}`, // 2 days ago
+          messages: messages.slice(0, 4)
+        };
+        pastConversations.push(secondConversation);
+      }
+      
+      setConversations([currentConversation, ...pastConversations]);
+      setActiveConversationId("current");
+    }
+  }, [messages, agent]);
+
   const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+  
+  // Handle opening a conversation
+  const handleOpenConversation = (conversationId: string) => {
+    setActiveConversationId(conversationId);
+    // In a real app, you would fetch the conversation's messages from the server here
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
@@ -333,27 +381,25 @@ export default function AgentChat({ params }: AgentChatProps) {
               <h3 className="text-xs font-medium text-gray-500 mb-2">CURRENT CHAT</h3>
               <div className="space-y-1">
                 {/* Active Conversation */}
-                <div 
-                  className={cn(
-                    "flex items-center gap-3 p-3 rounded-md cursor-pointer",
-                    "bg-primary/10 text-primary"
-                  )}
-                  onClick={() => {
-                    // This would typically load the conversation
-                    // For now it just scrolls to the messages container
-                    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-                  }}
-                >
-                  <Bot size={18} />
-                  <div className="flex-1 truncate">
-                    <div className="text-sm font-medium">Chat with {agent?.name || "Agent"}</div>
-                    <div className="text-xs text-gray-500 truncate">
-                      {messages.length > 0 
-                        ? messages[messages.length - 1].content.slice(0, 30) + "..." 
-                        : "Start a new conversation"}
+                {conversations.length > 0 && (
+                  <div 
+                    className={cn(
+                      "flex items-center gap-3 p-3 rounded-md cursor-pointer",
+                      activeConversationId === "current" ? "bg-primary/10 text-primary" : "hover:bg-gray-100 text-gray-700"
+                    )}
+                    onClick={() => handleOpenConversation("current")}
+                  >
+                    <Bot size={18} />
+                    <div className="flex-1 truncate">
+                      <div className="text-sm font-medium">Chat with {agent?.name || "Agent"}</div>
+                      <div className="text-xs text-gray-500 truncate">
+                        {messages.length > 0 
+                          ? messages[messages.length - 1].content.slice(0, 30) + "..." 
+                          : "Start a new conversation"}
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
             
@@ -361,24 +407,38 @@ export default function AgentChat({ params }: AgentChatProps) {
             <div className="px-3 py-2">
               <h3 className="text-xs font-medium text-gray-500 mb-2">CONVERSATION HISTORY</h3>
               <div className="space-y-1">
-                {messages.length > 0 ? (
-                  <div 
-                    className="text-xs p-3 rounded-md cursor-pointer hover:bg-gray-100 transition-colors"
-                    onClick={() => {
-                      // This would typically load the conversation
-                      // For now it just scrolls to the messages container
-                      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-                    }}
-                  >
-                    <div className="flex flex-col gap-2 mt-1">
-                      <div className="flex items-center text-xs">
-                        <span className="text-gray-500">{new Date().toLocaleDateString()}</span>
-                      </div>
-                      <div className="text-xs text-gray-600">
-                        {messages[0].content.substring(0, 40)}...
+                {conversations.length > 1 ? (
+                  // Show past conversations (skip the current one, which is at index 0)
+                  conversations.slice(1).map((conversation) => (
+                    <div 
+                      key={conversation.id}
+                      className={cn(
+                        "text-xs p-3 rounded-md cursor-pointer transition-colors",
+                        activeConversationId === conversation.id ? "bg-primary/10 text-primary" : "hover:bg-gray-100 text-gray-700"
+                      )}
+                      onClick={() => handleOpenConversation(conversation.id)}
+                    >
+                      <div className="flex flex-col gap-2 mt-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className={cn(
+                            "text-gray-500",
+                            activeConversationId === conversation.id ? "text-primary/80" : ""
+                          )}>
+                            {conversation.title.split(' - ')[1]} {/* Just the date part */}
+                          </span>
+                          <Badge variant="outline" className="px-1 py-0 h-4 text-[10px]">
+                            {conversation.messages.length} msgs
+                          </Badge>
+                        </div>
+                        <div className={cn(
+                          "text-xs",
+                          activeConversationId === conversation.id ? "text-primary/80" : "text-gray-600"
+                        )}>
+                          {conversation.messages[0].content.substring(0, 40)}...
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ))
                 ) : (
                   <div className="text-xs text-gray-500 italic p-3">
                     No conversation history yet
@@ -439,9 +499,25 @@ export default function AgentChat({ params }: AgentChatProps) {
                   <i className="ri-menu-line"></i>
                 </Button>
               )}
-              <h1 className="font-medium text-lg">
-                {agent ? agent.name : "Agent Chat"}
-              </h1>
+              <div>
+                <h1 className="font-medium text-lg">
+                  {agent ? agent.name : "Agent Chat"}
+                </h1>
+                {activeConversationId !== "current" && conversations.find(c => c.id === activeConversationId) && (
+                  <div className="text-xs text-gray-500 flex items-center gap-1">
+                    <i className="ri-history-line"></i>
+                    Viewing: {conversations.find(c => c.id === activeConversationId)?.title || "Past Conversation"}
+                    <Button 
+                      variant="link" 
+                      size="sm" 
+                      className="h-auto p-0 text-xs text-primary" 
+                      onClick={() => handleOpenConversation("current")}
+                    >
+                      Return to current
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
             
             <div className="flex items-center gap-2">
@@ -486,7 +562,10 @@ export default function AgentChat({ params }: AgentChatProps) {
                 </p>
               </div>
             ) : (
-              messages.map((message) => (
+              // Show messages from the active conversation
+              (activeConversationId === "current" ? messages : 
+                conversations.find(c => c.id === activeConversationId)?.messages || messages)
+                .map((message) => (
                 <div 
                   key={message.id} 
                   className={cn(
@@ -540,13 +619,15 @@ export default function AgentChat({ params }: AgentChatProps) {
                     <Textarea
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
-                      placeholder={`Message ${agent?.name || "your agent"}...`}
-                      disabled={isLoading}
+                      placeholder={activeConversationId !== "current" 
+                        ? "Viewing past conversation... Return to current chat to send messages" 
+                        : `Message ${agent?.name || "your agent"}...`}
+                      disabled={isLoading || activeConversationId !== "current"}
                       className="border-0 rounded-none shadow-none focus-visible:ring-0 text-base py-6 min-h-[60px] max-h-[200px] resize-none"
                     />
                     <Button 
                       type="submit" 
-                      disabled={isLoading || !message.trim()}
+                      disabled={isLoading || !message.trim() || activeConversationId !== "current"}
                       className="rounded-none bg-transparent hover:bg-transparent mr-2 self-end mb-2"
                       size="icon"
                     >
