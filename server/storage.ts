@@ -339,14 +339,37 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateAgent(id: string, updates: Partial<InsertAgent>): Promise<Agent | undefined> {
-    const [agent] = await db.update(agentsTable)
-      .set({
-        ...updates,
-        updatedAt: new Date()
-      })
-      .where(eq(agentsTable.id, id))
-      .returning();
-    return agent;
+    try {
+      // Get the current agent to make sure it exists
+      const existingAgent = await this.getAgent(id);
+      if (!existingAgent) {
+        return undefined;
+      }
+      
+      // Create update object with only the valid fields for the agents table
+      const updateData: Record<string, any> = {};
+      
+      // Map scalar fields directly
+      if (updates.name) updateData.name = updates.name;
+      if (updates.role) updateData.role = updates.role;
+      if (updates.icon) updateData.icon = updates.icon;
+      if (updates.instructions) updateData.instructions = updates.instructions;
+      if (updates.latestActivity) updateData.latestActivity = updates.latestActivity;
+      
+      // Handle any complex conversions if needed
+      // For example, convert array fields to strings for storage
+      
+      // Update the agent in the database
+      const [agent] = await db.update(agentsTable)
+        .set(updateData)
+        .where(eq(agentsTable.id, id))
+        .returning();
+      
+      return agent;
+    } catch (error) {
+      console.error("Error updating agent:", error);
+      return undefined;
+    }
   }
 
   async updateAgentActivity(id: string, activity: string): Promise<Agent | undefined> {
