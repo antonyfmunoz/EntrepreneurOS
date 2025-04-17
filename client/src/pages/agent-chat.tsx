@@ -96,11 +96,15 @@ export default function AgentChat({ params }: AgentChatProps) {
       setIsLoading(false);
     },
     onError: (error) => {
-      toast({
-        title: "Error sending message",
-        description: error.message,
-        variant: "destructive",
-      });
+      // Only show toast for critical errors, not AI-related ones
+      if (!error.message.includes("API") && !error.message.includes("AI")) {
+        toast({
+          title: "Error sending message",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+      console.error("Message error:", error);
       setIsLoading(false);
     },
   });
@@ -115,6 +119,7 @@ export default function AgentChat({ params }: AgentChatProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/agents/${agentId}/tasks`] });
+      // Keep this toast since it's a user-initiated task creation, not AI-related
       toast({
         title: "Task created",
         description: "New task has been created successfully",
@@ -292,11 +297,8 @@ export default function AgentChat({ params }: AgentChatProps) {
                   // Clear input field
                   setMessage("");
                   
-                  // Show toast immediately
-                  toast({
-                    title: "New chat started",
-                    description: `Ready to chat with ${agent?.name || "Agent"}`,
-                  });
+                  // Don't show toast for new chat operations
+                  // Silently start a new conversation
                   
                   // Scroll to bottom
                   scrollToBottom();
