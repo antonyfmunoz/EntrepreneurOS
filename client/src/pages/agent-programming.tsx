@@ -35,6 +35,13 @@ export default function AgentProgramming(props: AgentProgrammingProps) {
   
   const agentId = props.agentId || params?.agentId || queryAgentId || "";
   
+  console.log("Agent Programming Page:", { 
+    propsAgentId: props.agentId,
+    paramsAgentId: params?.agentId,
+    queryAgentId,
+    finalAgentId: agentId
+  });
+  
   const [instructions, setInstructions] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState("");

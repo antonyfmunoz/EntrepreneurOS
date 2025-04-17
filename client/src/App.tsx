@@ -21,9 +21,14 @@ function Router() {
       <ProtectedRoute path="/chat/:agentId">
         {(params) => <AgentChat params={params as {agentId: string}} />}
       </ProtectedRoute>
+      {/* Legacy route kept for compatibility */}
       <Route path="/agent/:agentId/program">
         {(params) => <AgentProgramming agentId={params.agentId} />}
       </Route>
+      {/* New route with query parameter */}
+      <ProtectedRoute path="/agent-programming">
+        {() => <AgentProgramming />}
+      </ProtectedRoute>
       <ProtectedRoute path="/integrations" component={IntegrationsPage} />
       <ProtectedRoute path="/analytics" component={AnalyticsPage} />
       <Route path="/auth" component={AuthPage} />
