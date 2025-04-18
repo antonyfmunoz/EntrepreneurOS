@@ -249,18 +249,18 @@ export default function AgentChat({ params }: AgentChatProps) {
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="flex justify-start items-center gap-2 w-1/2"
+                className="flex justify-start items-center gap-1 w-1/2 py-1 h-8"
                 onClick={() => setIsModalOpen(true)}
               >
-                <Bot size={16} />
-                <span className="text-sm font-medium">New Agent</span>
+                <Bot size={14} />
+                <span className="text-xs font-medium">New Agent</span>
               </Button>
 
               {/* New Chat Button */}
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="flex justify-start items-center gap-2 w-1/2"
+                className="flex justify-start items-center gap-1 w-1/2 py-1 h-8"
                 onClick={async () => {
                   try {
                     // First, create a history entry from current conversation if it has messages
@@ -319,8 +319,8 @@ export default function AgentChat({ params }: AgentChatProps) {
                   }
                 }}
               >
-                <i className="ri-add-line" />
-                <span className="text-sm font-medium">New Chat</span>
+                <i className="ri-add-line text-sm" />
+                <span className="text-xs font-medium">New Chat</span>
               </Button>
             </div>
             <Drawer>
