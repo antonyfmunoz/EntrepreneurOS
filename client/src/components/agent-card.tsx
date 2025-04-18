@@ -26,6 +26,10 @@ export function AgentCard({ id, name, role, icon, latestActivity, tasks }: Agent
         return "bg-accent";
       case "operations":
         return "bg-gray-600";
+      case "executive":
+        return "bg-blue-600";
+      case "assistant":
+        return "bg-indigo-600";
       default:
         return "bg-gray-600";
     }
@@ -112,6 +116,8 @@ export function AgentCard({ id, name, role, icon, latestActivity, tasks }: Agent
               "text-primary": role === "marketing",
               "text-secondary": role === "support",
               "text-accent": role === "content",
+              "text-blue-600": role === "executive",
+              "text-indigo-600": role === "assistant",
               "text-gray-600": role === "operations" || !role,
             })}>
               View Details →
