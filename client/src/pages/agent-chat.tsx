@@ -375,53 +375,8 @@ export default function AgentChat({ params }: AgentChatProps) {
             </Drawer>
           </div>
           
-          {/* Agent Chats List */}
+          {/* Chat List */}
           <div className="flex-1 overflow-y-auto py-2">
-            {/* All Agents */}
-            <div className="px-3 py-2">
-              <h3 className="text-xs font-medium text-gray-500 mb-2">YOUR AGENTS</h3>
-              <div className="space-y-1">
-                {agents.map((agentItem) => (
-                  <Link key={agentItem.id} href={`/chat/${agentItem.id}`}>
-                    <div className={cn(
-                      "flex items-center gap-3 p-3 rounded-md cursor-pointer",
-                      agentId === agentItem.id ? "bg-primary/10 text-primary" : "hover:bg-gray-100 text-gray-700"
-                    )}>
-                      <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                        <i className={agentItem.icon || "ri-robot-line"}></i>
-                      </div>
-                      <div className="flex-1 truncate">
-                        <div className="text-sm font-medium">{agentItem.name}</div>
-                        <div className="text-xs text-gray-500 truncate">
-                          {agentItem.role === "executive" ? "Chief Executive Officer" : 
-                           agentItem.role === "assistant" ? "Executive Assistant" : 
-                           agentItem.role === "marketing" ? "Marketing Director" :
-                           agentItem.role === "operations" ? "Operations Manager" :
-                           agentItem.role === "content" ? "Content Strategist" :
-                           agentItem.role === "support" ? "Support Specialist" :
-                           agentItem.role}
-                        </div>
-                      </div>
-                      {(agentItem.id === "agent_executive" || agentItem.role === "assistant") && (
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-6 w-6 rounded-full ml-1"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            window.location.href = `/agent-programming/${agentItem.id}`;
-                          }}
-                        >
-                          <Info size={14} />
-                        </Button>
-                      )}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-            
             {/* Current Conversation */}
             <div className="px-3 py-2">
               <h3 className="text-xs font-medium text-gray-500 mb-2">CURRENT CHAT</h3>
