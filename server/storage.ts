@@ -76,6 +76,11 @@ export interface IStorage {
   markNotificationAsRead(id: string): Promise<Notification | undefined>;
   markAllNotificationsAsRead(userId: string): Promise<void>;
   
+  // AI Assistant operations
+  getAiMessages(userId: string): Promise<AiMessage[]>;
+  addAiMessage(message: InsertAiMessage): Promise<AiMessage>;
+  clearAiMessages(userId: string): Promise<void>;
+  
   // Session store
   sessionStore: session.Store;
 }
