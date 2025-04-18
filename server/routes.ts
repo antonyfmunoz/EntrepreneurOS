@@ -125,16 +125,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Agents API
   app.get("/api/agents", async (_req, res) => {
-    const agents = await storage.getAgents();
-    res.json(agents);
+    try {
+      const agents = await storage.getAgents();
+      
+      // For each agent, fetch their tasks
+      const agentsWithTasks = await Promise.all(
+        agents.map(async (agent) => {
+          const tasks = await storage.getAgentTasks(agent.id);
+          return {
+            ...agent,
+            tasks: tasks.map(task => ({
+              id: task.id,
+              title: task.title,
+              status: task.status
+            }))
+          };
+        })
+      );
+      
+      res.json(agentsWithTasks);
+    } catch (error) {
+      console.error("Error fetching agents with tasks:", error);
+      res.status(500).json({ message: "Failed to fetch agents" });
+    }
   });
 
   app.get("/api/agents/:id", async (req, res) => {
-    const agent = await storage.getAgent(req.params.id);
-    if (!agent) {
-      return res.status(404).json({ message: "Agent not found" });
+    try {
+      const agent = await storage.getAgent(req.params.id);
+      if (!agent) {
+        return res.status(404).json({ message: "Agent not found" });
+      }
+      
+      // Get the agent's tasks
+      const tasks = await storage.getAgentTasks(req.params.id);
+      
+      // Return agent with tasks
+      res.json({
+        ...agent,
+        tasks: tasks.map(task => ({
+          id: task.id,
+          title: task.title,
+          status: task.status
+        }))
+      });
+    } catch (error) {
+      console.error("Error fetching agent:", error);
+      res.status(500).json({ message: "Failed to fetch agent" });
     }
-    res.json(agent);
   });
   
   // Update an agent
