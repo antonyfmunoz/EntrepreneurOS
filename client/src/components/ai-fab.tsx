@@ -4,16 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Sparkles, Send, X, Loader2 } from "lucide-react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, UseQueryOptions } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
+import { AiMessage as Message } from "@shared/schema";
 
-type Message = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: string;
-};
+// Use this type if the schema import doesn't work
+// type Message = {
+//   id: string;
+//   role: "user" | "assistant";
+//   content: string;
+//   timestamp: string;
+// };
 
 export function AiFab() {
   const [isOpen, setIsOpen] = useState(false);
@@ -27,10 +29,7 @@ export function AiFab() {
     enabled: isOpen,
     staleTime: 10000,
     refetchOnWindowFocus: false,
-    retry: false,
-    onError: () => {
-      // Handle silently for now
-    }
+    retry: false
   });
 
   // Send message mutation
