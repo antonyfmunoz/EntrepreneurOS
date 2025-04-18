@@ -82,7 +82,7 @@ export function AiFab() {
       {/* Floating Button */}
       <Button
         className={cn(
-          "fixed bottom-6 left-6 rounded-full w-12 h-12 shadow-lg z-50",
+          "fixed bottom-6 right-6 rounded-full w-12 h-12 shadow-lg z-50",
           "flex items-center justify-center",
           isOpen ? "bg-red-500 hover:bg-red-600" : "bg-primary hover:bg-primary/90"
         )}
@@ -94,7 +94,7 @@ export function AiFab() {
 
       {/* AI Assistant Panel */}
       {isOpen && (
-        <Card className="fixed bottom-20 left-6 w-80 lg:w-96 shadow-lg z-40 border-primary/20">
+        <Card className="fixed bottom-20 right-6 w-80 lg:w-96 shadow-lg z-40 border-primary/20">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <Sparkles size={16} className="text-primary" />
