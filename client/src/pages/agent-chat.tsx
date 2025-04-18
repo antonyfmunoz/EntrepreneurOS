@@ -245,15 +245,15 @@ export default function AgentChat({ params }: AgentChatProps) {
           {/* Sidebar Header */}
           <div className="p-4 flex justify-between items-center border-b border-gray-200">
             <div className="flex items-center w-full gap-2">
-              {/* Create Agent Button */}
+              {/* New Agent Button */}
               <Button 
                 variant="outline" 
                 size="sm" 
                 className="flex justify-start items-center gap-2 w-1/2"
                 onClick={() => setIsModalOpen(true)}
               >
-                <i className="ri-add-line" />
-                <span className="text-sm font-medium">Create Agent</span>
+                <Bot size={16} />
+                <span className="text-sm font-medium">New Agent</span>
               </Button>
 
               {/* New Chat Button */}
@@ -319,7 +319,7 @@ export default function AgentChat({ params }: AgentChatProps) {
                   }
                 }}
               >
-                <Bot size={16} />
+                <i className="ri-add-line" />
                 <span className="text-sm font-medium">New Chat</span>
               </Button>
             </div>
