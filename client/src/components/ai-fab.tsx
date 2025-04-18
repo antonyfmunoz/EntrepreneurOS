@@ -46,14 +46,15 @@ export function AiFab() {
     onError: (error) => {
       console.error("Error sending message:", error);
       // Add a simulated response if the API isn't implemented yet
-      const simulatedResponse: Message = {
+      const simulatedResponse: Partial<Message> = {
         id: `msg_${Date.now()}`,
         role: "assistant",
         content: "The AI assistant is not fully implemented yet. Please check back later!",
-        timestamp: new Date().toISOString(),
+        // Convert string to Date for schema compatibility
+        timestamp: new Date(),
       };
       queryClient.setQueryData(["/api/ai-assistant/messages"], 
-        (oldData: Message[] = []) => [...oldData, simulatedResponse]);
+        (oldData: Message[] = []) => [...oldData, simulatedResponse as Message]);
     }
   });
 
@@ -63,15 +64,15 @@ export function AiFab() {
     if (!inputValue.trim()) return;
     
     // Add optimistic update
-    const optimisticMessage: Message = {
+    const optimisticMessage: Partial<Message> = {
       id: `temp_${Date.now()}`,
       role: "user",
       content: inputValue,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date(),
     };
     
     queryClient.setQueryData(["/api/ai-assistant/messages"], 
-      (oldData: Message[] = []) => [...oldData, optimisticMessage]);
+      (oldData: Message[] = []) => [...oldData, optimisticMessage as Message]);
     
     sendMessageMutation.mutate(inputValue);
   };

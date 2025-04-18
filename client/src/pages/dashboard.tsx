@@ -1,6 +1,7 @@
 import { Layout } from "@/components/layout";
 import { AgentCard } from "@/components/agent-card";
 import { TaskBoard } from "@/components/task-board";
+import { AiFab } from "@/components/ai-fab"; 
 import { useQuery } from "@tanstack/react-query";
 
 type Agent = {
@@ -40,6 +41,9 @@ export default function Dashboard() {
         </div>
         
         <TaskBoard />
+        
+        {/* AI Assistant Floating Action Button */}
+        <AiFab />
       </div>
     </Layout>
   );
