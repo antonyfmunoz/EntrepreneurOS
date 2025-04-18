@@ -382,7 +382,7 @@ export default function AgentChat({ params }: AgentChatProps) {
                           {agentItem.role}
                         </div>
                       </div>
-                      {agentItem.id === "agent_executive" && (
+                      {(agentItem.id === "agent_executive" || agentItem.role === "assistant") && (
                         <Button 
                           variant="ghost" 
                           size="icon" 
@@ -390,7 +390,7 @@ export default function AgentChat({ params }: AgentChatProps) {
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            window.location.href = `/agent-programming?id=${agentItem.id}`;
+                            window.location.href = `/agent-programming/${agentItem.id}`;
                           }}
                         >
                           <Info size={14} />
