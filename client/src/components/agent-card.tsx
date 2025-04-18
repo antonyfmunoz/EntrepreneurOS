@@ -71,14 +71,16 @@ export function AgentCard({ id, name, role, icon, latestActivity, tasks }: Agent
           <h3 className="font-semibold">{name}</h3>
         </div>
         <div className="flex space-x-1">
-          <Link href={`/chat/${id}`}>
+          <Link href={`/agent-chat/${id}`}>
             <button className="p-1 hover:bg-white/20 rounded" title="Chat with agent">
               <i className="ri-chat-1-line"></i>
             </button>
           </Link>
-          <button className="p-1 hover:bg-white/20 rounded" title="Edit agent">
-            <i className="ri-edit-line"></i>
-          </button>
+          <Link href={`/agent-programming/${id}`}>
+            <button className="p-1 hover:bg-white/20 rounded" title="Edit agent">
+              <i className="ri-information-line"></i>
+            </button>
+          </Link>
         </div>
       </div>
       
@@ -105,7 +107,7 @@ export function AgentCard({ id, name, role, icon, latestActivity, tasks }: Agent
         </div>
         
         <div className="text-right">
-          <Link href={`/chat/${id}`}>
+          <Link href={`/agent-chat/${id}`}>
             <button className={cn("text-sm font-medium hover:text-blue-700", {
               "text-primary": role === "marketing",
               "text-secondary": role === "support",
