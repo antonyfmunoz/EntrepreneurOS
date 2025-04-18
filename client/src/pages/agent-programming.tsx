@@ -204,7 +204,7 @@ export default function AgentProgramming(props: AgentProgrammingProps) {
           variant="ghost" 
           size="icon" 
           className="mr-2"
-          onClick={() => navigate(`/chat/${agentId}`)}
+          onClick={() => navigate(`/agent-chat/${agentId}`)}
         >
           <ArrowLeft size={18} />
         </Button>

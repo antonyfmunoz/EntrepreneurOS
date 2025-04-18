@@ -23,11 +23,18 @@ function Router() {
       <ProtectedRoute path="/chat/:agentId">
         {(params) => <AgentChat params={params as {agentId: string}} />}
       </ProtectedRoute>
+      <ProtectedRoute path="/agent-chat/:agentId">
+        {(params) => <AgentChat params={params as {agentId: string}} />}
+      </ProtectedRoute>
       {/* Legacy route kept for compatibility */}
       <Route path="/agent/:agentId/program">
         {(params) => <AgentProgramming agentId={params.agentId} />}
       </Route>
-      {/* New route with query parameter */}
+      {/* New agent programming route with agentId parameter */}
+      <ProtectedRoute path="/agent-programming/:agentId">
+        {(params) => <AgentProgramming agentId={params.agentId} />}
+      </ProtectedRoute>
+      {/* Generic agent programming route */}
       <ProtectedRoute path="/agent-programming">
         {() => <AgentProgramming />}
       </ProtectedRoute>
