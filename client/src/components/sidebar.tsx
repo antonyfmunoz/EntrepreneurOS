@@ -190,7 +190,15 @@ export function Sidebar() {
                           </div>
                           <div className="flex-grow min-w-0">
                             <p className="text-sm font-medium truncate">{agent.name}</p>
-                            <p className="text-xs text-gray-500 truncate">{agent.role}</p>
+                            <p className="text-xs text-gray-500 truncate">
+                              {agent.role === "executive" ? "CEO" : 
+                               agent.role === "assistant" ? "Executive Assistant" : 
+                               agent.role === "marketing" ? "Marketing Director" :
+                               agent.role === "operations" ? "Operations Manager" :
+                               agent.role === "content" ? "Content Strategist" :
+                               agent.role === "support" ? "Support Specialist" :
+                               agent.role}
+                            </p>
                           </div>
                           {agent.activeTasks > 0 && (
                             <span className="w-5 h-5 bg-primary/10 text-primary text-xs flex items-center justify-center rounded-full">
