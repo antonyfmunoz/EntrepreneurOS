@@ -16,6 +16,7 @@ import { AIModelSelector } from "@/components/ai-model-selector";
 import { AIModelConfig, AIModelProvider } from "@/hooks/use-ai-models";
 import { useRequestAIKeys } from "@/hooks/use-ai-api-keys";
 import { ApiKeyDialog } from "@/components/api-key-dialog";
+import { CreateAgentModal } from "@/components/create-agent-modal";
 import { cn } from "@/lib/utils";
 import { Settings, Info, Clipboard, Bot, Sparkles, Trash2 } from "lucide-react";
 import { Link } from "wouter";
@@ -57,6 +58,7 @@ export default function AgentChat({ params }: AgentChatProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [conversations, setConversations] = useState<{ id: string, title: string, messages: Message[] }[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { requestKeys } = useRequestAIKeys();
@@ -242,11 +244,23 @@ export default function AgentChat({ params }: AgentChatProps) {
         )}>
           {/* Sidebar Header */}
           <div className="p-4 flex justify-between items-center border-b border-gray-200">
-            <div className="flex items-center w-full">
+            <div className="flex items-center w-full gap-2">
+              {/* Create Agent Button */}
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="flex justify-start items-center gap-2 w-full"
+                className="flex justify-start items-center gap-2 w-1/2"
+                onClick={() => setIsModalOpen(true)}
+              >
+                <i className="ri-add-line" />
+                <span className="text-sm font-medium">Create Agent</span>
+              </Button>
+
+              {/* New Chat Button */}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex justify-start items-center gap-2 w-1/2"
                 onClick={async () => {
                   try {
                     // First, create a history entry from current conversation if it has messages
@@ -703,6 +717,9 @@ export default function AgentChat({ params }: AgentChatProps) {
           </div>
         </div>
       </div>
+      
+      {/* Create Agent Modal */}
+      <CreateAgentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </Layout>
   );
 }
