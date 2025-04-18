@@ -199,10 +199,10 @@ export function Sidebar() {
                           )}
                         </div>
                       </Link>
-                      <div className="absolute right-5 top-1/2 -translate-y-1/2 hidden group-hover:flex">
-                        <Link href={`/agent-programming?id=${agent.id}`}>
+                      <div className="absolute right-5 top-1/2 -translate-y-1/2 flex">
+                        <Link href={`/agent-programming/${agent.id}`}>
                           <button className="text-gray-400 hover:text-primary p-1">
-                            <i className="ri-settings-line text-sm"></i>
+                            <i className="ri-information-line text-sm"></i>
                           </button>
                         </Link>
                       </div>
