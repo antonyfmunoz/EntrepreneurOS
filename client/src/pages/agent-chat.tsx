@@ -379,7 +379,7 @@ export default function AgentChat({ params }: AgentChatProps) {
                       <div className="flex-1 truncate">
                         <div className="text-sm font-medium">{agentItem.name}</div>
                         <div className="text-xs text-gray-500 truncate">
-                          {agentItem.role === "executive" ? "CEO" : 
+                          {agentItem.role === "executive" ? "Chief Executive Officer" : 
                            agentItem.role === "assistant" ? "Executive Assistant" : 
                            agentItem.role === "marketing" ? "Marketing Director" :
                            agentItem.role === "operations" ? "Operations Manager" :

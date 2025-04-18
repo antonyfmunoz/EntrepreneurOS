@@ -191,7 +191,7 @@ export function Sidebar() {
                           <div className="flex-grow min-w-0">
                             <p className="text-sm font-medium truncate">{agent.name}</p>
                             <p className="text-xs text-gray-500 truncate">
-                              {agent.role === "executive" ? "CEO" : 
+                              {agent.role === "executive" ? "Chief Executive Officer" : 
                                agent.role === "assistant" ? "Executive Assistant" : 
                                agent.role === "marketing" ? "Marketing Director" :
                                agent.role === "operations" ? "Operations Manager" :
