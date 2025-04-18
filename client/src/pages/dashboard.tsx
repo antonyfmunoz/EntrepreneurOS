@@ -1,7 +1,6 @@
 import { Layout } from "@/components/layout";
 import { AgentCard } from "@/components/agent-card";
 import { TaskBoard } from "@/components/task-board";
-import { Integrations } from "@/components/integrations";
 import { useQuery } from "@tanstack/react-query";
 
 type Agent = {
@@ -41,9 +40,6 @@ export default function Dashboard() {
         </div>
         
         <TaskBoard />
-        
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">Integrations</h2>
-        <Integrations />
       </div>
     </Layout>
   );

@@ -10,6 +10,7 @@ import AgentProgramming from "@/pages/agent-programming";
 import IntegrationsPage from "@/pages/integrations-page";
 import AnalyticsPage from "@/pages/analytics-page";
 import NotificationsPage from "@/pages/notifications-page";
+import SettingsPage from "@/pages/settings-page";
 import AuthPage from "@/pages/auth-page";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
@@ -32,7 +33,7 @@ function Router() {
       </ProtectedRoute>
       <ProtectedRoute path="/integrations" component={IntegrationsPage} />
       <ProtectedRoute path="/analytics" component={AnalyticsPage} />
-      <ProtectedRoute path="/settings" component={() => <div className="p-8"><h1 className="text-2xl font-bold mb-4">Settings</h1><p>Settings page is under construction.</p></div>} />
+      <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/notifications" component={NotificationsPage} />
       <ProtectedRoute path="/support" component={() => <div className="p-8"><h1 className="text-2xl font-bold mb-4">Support</h1><p>Support page is under construction.</p></div>} />
       <ProtectedRoute path="/tutorials" component={() => <div className="p-8"><h1 className="text-2xl font-bold mb-4">Tutorials</h1><p>Tutorials page is under construction.</p></div>} />
