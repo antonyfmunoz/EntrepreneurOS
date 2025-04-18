@@ -1140,6 +1140,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to mark all notifications as read" });
     }
   });
+  
+  // AI Assistant API Routes
+  app.get("/api/ai-assistant/messages", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const messages = await storage.getAiMessages(req.user.id);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching AI assistant messages:", error);
+      res.status(500).json({ message: "Failed to fetch AI assistant messages" });
+    }
+  });
+  
+  app.post("/api/ai-assistant/messages", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      // Create user message
+      const userMessage = await storage.addAiMessage({
+        role: "user",
+        content: req.body.content,
+        userId: req.user.id
+      });
+      
+      // Generate assistant response
+      // Usually this would involve an actual AI service call
+      const assistantMessage = await storage.addAiMessage({
+        role: "assistant",
+        content: "I'm your AI assistant. I can help answer questions about the AgentOS platform and your agents. How can I assist you today?",
+        userId: req.user.id
+      });
+      
+      res.json(assistantMessage);
+    } catch (error) {
+      console.error("Error sending message to AI assistant:", error);
+      res.status(500).json({ message: "Failed to send message to AI assistant" });
+    }
+  });
+  
+  app.delete("/api/ai-assistant/messages", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      await storage.clearAiMessages(req.user.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error clearing AI assistant messages:", error);
+      res.status(500).json({ message: "Failed to clear AI assistant messages" });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;

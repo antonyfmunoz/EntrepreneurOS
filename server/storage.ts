@@ -5,6 +5,7 @@ import {
   integrations as integrationsTable,
   users as usersTable,
   notifications as notificationsTable,
+  aiMessages,
   type Agent, 
   type Task, 
   type InsertAgent, 
@@ -17,10 +18,12 @@ import {
   type User,
   type InsertUser,
   type Notification,
-  type InsertNotification
+  type InsertNotification,
+  type AiMessage,
+  type InsertAiMessage
 } from "@shared/schema";
 import { db, client } from './db';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, asc } from 'drizzle-orm';
 import session from 'express-session';
 import connectPg from 'connect-pg-simple';
 
@@ -800,6 +803,35 @@ export class DatabaseStorage implements IStorage {
     await db.update(notificationsTable)
       .set({ read: true })
       .where(eq(notificationsTable.userId, userId));
+  }
+
+  // AI Assistant operations
+  async getAiMessages(userId: string): Promise<AiMessage[]> {
+    return await db.select().from(aiMessages)
+      .where(eq(aiMessages.userId, userId))
+      .orderBy(asc(aiMessages.timestamp));
+  }
+
+  async addAiMessage(message: InsertAiMessage): Promise<AiMessage> {
+    const id = message.id || `ai_msg_${Date.now()}`;
+    const timestamp = message.timestamp || new Date();
+    
+    const [newMessage] = await db.insert(aiMessages)
+      .values({
+        id,
+        role: message.role,
+        content: message.content,
+        userId: message.userId,
+        timestamp
+      })
+      .returning();
+    
+    return newMessage;
+  }
+
+  async clearAiMessages(userId: string): Promise<void> {
+    await db.delete(aiMessages)
+      .where(eq(aiMessages.userId, userId));
   }
 }
 
