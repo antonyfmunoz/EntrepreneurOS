@@ -75,14 +75,17 @@ export function AgentCard({ id, name, role, icon, latestActivity, tasks }: Agent
           <h3 className="font-semibold">{name}</h3>
         </div>
         <div className="flex space-x-1">
+          {/* Chat button */}
           <Link href={`/agent-chat/${id}`}>
             <button className="p-1 hover:bg-white/20 rounded" title="Chat with agent">
               <i className="ri-chat-1-line"></i>
             </button>
           </Link>
+          
+          {/* Info button - forcing visibility for all agents */}
           <Link href={`/agent-programming/${id}`}>
-            <button className="p-1 hover:bg-white/20 rounded" title="Edit agent">
-              <i className="ri-information-line"></i>
+            <button className="p-1 hover:bg-white/20 rounded" title="View agent information">
+              <i className="ri-information-line text-white"></i>
             </button>
           </Link>
         </div>
