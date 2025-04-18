@@ -204,3 +204,23 @@ export const insertNotificationSchema = z.object({
 
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
+
+// AI Assistant Messages
+export const aiMessages = pgTable("ai_messages", {
+  id: text("id").primaryKey().notNull(),
+  role: text("role").notNull(), // "user" or "assistant"
+  content: text("content").notNull(),
+  userId: text("user_id").references(() => users.id).notNull(),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
+export const insertAiMessageSchema = z.object({
+  id: z.string().optional(),
+  role: z.enum(["user", "assistant"]),
+  content: z.string(),
+  userId: z.string(),
+  timestamp: z.date().optional(),
+});
+
+export type InsertAiMessage = z.infer<typeof insertAiMessageSchema>;
+export type AiMessage = typeof aiMessages.$inferSelect;
