@@ -9,6 +9,7 @@ import {
   crmContacts as crmContactsTable,
   crmDeals as crmDealsTable,
   crmActivities as crmActivitiesTable,
+  documents as documentsTable,
   type Agent, 
   type Task, 
   type InsertAgent, 
@@ -29,7 +30,9 @@ import {
   type CrmDeal,
   type InsertCrmDeal,
   type CrmActivity,
-  type InsertCrmActivity
+  type InsertCrmActivity,
+  type Document,
+  type InsertDocument
 } from "@shared/schema";
 import { db, client } from './db';
 import { eq, and, desc, asc } from 'drizzle-orm';
@@ -1044,9 +1047,9 @@ export class DatabaseStorage implements IStorage {
   async getDocuments(userId: string): Promise<Document[]> {
     try {
       return await db.select()
-        .from(documents)
-        .where(eq(documents.userId, userId))
-        .orderBy(desc(documents.updatedAt));
+        .from(documentsTable)
+        .where(eq(documentsTable.userId, userId))
+        .orderBy(desc(documentsTable.updatedAt));
     } catch (error) {
       console.error('Error fetching documents:', error);
       return [];
@@ -1056,8 +1059,8 @@ export class DatabaseStorage implements IStorage {
   async getDocument(id: string): Promise<Document | undefined> {
     try {
       const docs = await db.select()
-        .from(documents)
-        .where(eq(documents.id, id));
+        .from(documentsTable)
+        .where(eq(documentsTable.id, id));
       return docs.length > 0 ? docs[0] : undefined;
     } catch (error) {
       console.error(`Error fetching document ${id}:`, error);
@@ -1070,7 +1073,7 @@ export class DatabaseStorage implements IStorage {
       const id = `doc_${Date.now()}`;
       const now = new Date();
       
-      const [newDocument] = await db.insert(documents)
+      const [newDocument] = await db.insert(documentsTable)
         .values({
           id,
           title: document.title,
@@ -1093,9 +1096,9 @@ export class DatabaseStorage implements IStorage {
     try {
       const updateData = { ...updates, updatedAt: new Date() };
       
-      const [updatedDocument] = await db.update(documents)
+      const [updatedDocument] = await db.update(documentsTable)
         .set(updateData)
-        .where(eq(documents.id, id))
+        .where(eq(documentsTable.id, id))
         .returning();
         
       return updatedDocument;
@@ -1107,8 +1110,8 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDocument(id: string): Promise<void> {
     try {
-      await db.delete(documents)
-        .where(eq(documents.id, id));
+      await db.delete(documentsTable)
+        .where(eq(documentsTable.id, id));
     } catch (error) {
       console.error(`Error deleting document ${id}:`, error);
       throw error;

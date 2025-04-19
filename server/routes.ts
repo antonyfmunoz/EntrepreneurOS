@@ -11,7 +11,8 @@ import {
   messages as messagesTable,
   insertCrmContactSchema,
   insertCrmDealSchema,
-  insertCrmActivitySchema
+  insertCrmActivitySchema,
+  insertDocumentSchema
 } from "@shared/schema";
 import { 
   getModelInfo, 
@@ -1689,6 +1690,115 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating CRM activity:", error);
       res.status(500).json({ message: "Failed to update CRM activity" });
+    }
+  });
+
+  // Documents API
+  app.get("/api/documents", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const documents = await storage.getDocuments(req.user.id);
+      res.json(documents);
+    } catch (error) {
+      console.error("Error fetching documents:", error);
+      res.status(500).json({ message: "Failed to fetch documents" });
+    }
+  });
+
+  app.get("/api/documents/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const document = await storage.getDocument(req.params.id);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      
+      // Ensure the document belongs to the authenticated user
+      if (document.userId !== req.user.id) {
+        return res.status(403).json({ message: "Unauthorized access to document" });
+      }
+      
+      res.json(document);
+    } catch (error) {
+      console.error("Error fetching document:", error);
+      res.status(500).json({ message: "Failed to fetch document" });
+    }
+  });
+
+  app.post("/api/documents", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      // Validate document data
+      const documentData = insertDocumentSchema.parse({
+        ...req.body,
+        userId: req.user.id
+      });
+      
+      const document = await storage.createDocument(documentData);
+      res.status(201).json(document);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid document data", errors: error.errors });
+      }
+      console.error("Error creating document:", error);
+      res.status(500).json({ message: "Failed to create document" });
+    }
+  });
+
+  app.patch("/api/documents/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const document = await storage.getDocument(req.params.id);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      
+      // Ensure the document belongs to the authenticated user
+      if (document.userId !== req.user.id) {
+        return res.status(403).json({ message: "Unauthorized access to document" });
+      }
+      
+      const updatedDocument = await storage.updateDocument(req.params.id, req.body);
+      res.json(updatedDocument);
+    } catch (error) {
+      console.error("Error updating document:", error);
+      res.status(500).json({ message: "Failed to update document" });
+    }
+  });
+
+  app.delete("/api/documents/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const document = await storage.getDocument(req.params.id);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      
+      // Ensure the document belongs to the authenticated user
+      if (document.userId !== req.user.id) {
+        return res.status(403).json({ message: "Unauthorized access to document" });
+      }
+      
+      await storage.deleteDocument(req.params.id);
+      res.status(204).end();
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      res.status(500).json({ message: "Failed to delete document" });
     }
   });
 
