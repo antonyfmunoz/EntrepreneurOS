@@ -6,6 +6,9 @@ import {
   users as usersTable,
   notifications as notificationsTable,
   aiMessages,
+  crmContacts as crmContactsTable,
+  crmDeals as crmDealsTable,
+  crmActivities as crmActivitiesTable,
   type Agent, 
   type Task, 
   type InsertAgent, 
@@ -20,7 +23,13 @@ import {
   type Notification,
   type InsertNotification,
   type AiMessage,
-  type InsertAiMessage
+  type InsertAiMessage,
+  type CrmContact,
+  type InsertCrmContact,
+  type CrmDeal,
+  type InsertCrmDeal,
+  type CrmActivity,
+  type InsertCrmActivity
 } from "@shared/schema";
 import { db, client } from './db';
 import { eq, and, desc, asc } from 'drizzle-orm';
@@ -874,6 +883,149 @@ export class DatabaseStorage implements IStorage {
   async clearAiMessages(userId: string): Promise<void> {
     await db.delete(aiMessages)
       .where(eq(aiMessages.userId, userId));
+  }
+  
+  // CRM Contact operations
+  async getCrmContacts(userId: string): Promise<CrmContact[]> {
+    return await db.select().from(crmContactsTable)
+      .where(eq(crmContactsTable.userId, userId))
+      .orderBy(desc(crmContactsTable.createdAt));
+  }
+
+  async getCrmContact(id: string): Promise<CrmContact | undefined> {
+    const contacts = await db.select().from(crmContactsTable).where(eq(crmContactsTable.id, id));
+    return contacts.length > 0 ? contacts[0] : undefined;
+  }
+
+  async createCrmContact(contact: InsertCrmContact): Promise<CrmContact> {
+    const id = `contact_${Date.now()}`;
+    const now = new Date();
+    
+    const [newContact] = await db.insert(crmContactsTable)
+      .values({
+        id,
+        name: contact.name,
+        email: contact.email,
+        phone: contact.phone || null,
+        company: contact.company || null,
+        title: contact.title || null,
+        status: contact.status || "lead",
+        lastContact: contact.lastContact || null,
+        notes: contact.notes || null,
+        avatar: contact.avatar || null,
+        userId: contact.userId,
+        createdAt: now,
+        updatedAt: now
+      })
+      .returning();
+    
+    return newContact;
+  }
+
+  async updateCrmContact(id: string, updates: Partial<InsertCrmContact>): Promise<CrmContact | undefined> {
+    const updateData: Record<string, any> = { ...updates, updatedAt: new Date() };
+    
+    const [updatedContact] = await db.update(crmContactsTable)
+      .set(updateData)
+      .where(eq(crmContactsTable.id, id))
+      .returning();
+    
+    return updatedContact;
+  }
+
+  // CRM Deal operations
+  async getCrmDeals(userId: string): Promise<CrmDeal[]> {
+    return await db.select().from(crmDealsTable)
+      .where(eq(crmDealsTable.userId, userId))
+      .orderBy(desc(crmDealsTable.createdAt));
+  }
+
+  async getCrmDeal(id: string): Promise<CrmDeal | undefined> {
+    const deals = await db.select().from(crmDealsTable).where(eq(crmDealsTable.id, id));
+    return deals.length > 0 ? deals[0] : undefined;
+  }
+
+  async createCrmDeal(deal: InsertCrmDeal): Promise<CrmDeal> {
+    const id = `deal_${Date.now()}`;
+    const now = new Date();
+    
+    const [newDeal] = await db.insert(crmDealsTable)
+      .values({
+        id,
+        title: deal.title,
+        company: deal.company,
+        value: deal.value,
+        stage: deal.stage || "discovery",
+        probability: deal.probability || 50,
+        expectedCloseDate: deal.expectedCloseDate || null,
+        contactId: deal.contactId,
+        assignedAgentId: deal.assignedAgentId || null,
+        notes: deal.notes || null,
+        userId: deal.userId,
+        createdAt: now,
+        updatedAt: now
+      })
+      .returning();
+    
+    return newDeal;
+  }
+
+  async updateCrmDeal(id: string, updates: Partial<InsertCrmDeal>): Promise<CrmDeal | undefined> {
+    const updateData: Record<string, any> = { ...updates, updatedAt: new Date() };
+    
+    const [updatedDeal] = await db.update(crmDealsTable)
+      .set(updateData)
+      .where(eq(crmDealsTable.id, id))
+      .returning();
+    
+    return updatedDeal;
+  }
+
+  // CRM Activity operations
+  async getCrmActivities(userId: string): Promise<CrmActivity[]> {
+    return await db.select().from(crmActivitiesTable)
+      .where(eq(crmActivitiesTable.userId, userId))
+      .orderBy(desc(crmActivitiesTable.date));
+  }
+
+  async getCrmActivity(id: string): Promise<CrmActivity | undefined> {
+    const activities = await db.select().from(crmActivitiesTable).where(eq(crmActivitiesTable.id, id));
+    return activities.length > 0 ? activities[0] : undefined;
+  }
+
+  async createCrmActivity(activity: InsertCrmActivity): Promise<CrmActivity> {
+    const id = `activity_${Date.now()}`;
+    const now = new Date();
+    
+    const [newActivity] = await db.insert(crmActivitiesTable)
+      .values({
+        id,
+        type: activity.type,
+        subject: activity.subject,
+        date: activity.date,
+        relatedToType: activity.relatedToType,
+        relatedToId: activity.relatedToId,
+        completed: activity.completed || false,
+        notes: activity.notes || null,
+        createdByAgentId: activity.createdByAgentId || null,
+        userId: activity.userId,
+        createdAt: now,
+        updatedAt: now
+      })
+      .returning();
+    
+    return newActivity;
+  }
+
+  async updateCrmActivity(id: string, updates: Partial<InsertCrmActivity>): Promise<CrmActivity | undefined> {
+    const updateData: Record<string, any> = { ...updates, updatedAt: new Date() };
+    
+    const [updatedActivity] = await db.update(crmActivitiesTable)
+      .set(updateData)
+      .where(eq(crmActivitiesTable.id, id))
+      .returning();
+    
+    return updatedActivity;
   }
 }
 
