@@ -12,7 +12,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, CheckCircle2, Mail, MessageSquare, Phone } from "lucide-react";
+import { Loader2, CheckCircle2, Mail, MessageSquare, Phone, ArrowLeft } from "lucide-react";
+import { Link } from "wouter";
 
 export default function SupportPage() {
   const { toast } = useToast();
@@ -39,6 +40,15 @@ export default function SupportPage() {
       <Header title="Contact Support" />
       <div className="p-6 flex-1 overflow-auto">
         <div className="max-w-4xl mx-auto">
+          <div className="flex items-center mb-6">
+            <Button variant="ghost" size="sm" asChild className="mr-2 -ml-2">
+              <Link href="/">
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Back to Dashboard
+              </Link>
+            </Button>
+          </div>
+          
           <h1 className="text-2xl font-bold mb-2">Contact Support</h1>
           <p className="text-muted-foreground mb-6">
             Get help with AgentOS or provide feedback. Our team is ready to assist you.

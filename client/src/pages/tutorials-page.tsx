@@ -2,7 +2,8 @@ import { Header } from "@/components/header";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlayCircle, FileText, Bookmark, Code } from "lucide-react";
+import { PlayCircle, FileText, Bookmark, Code, ArrowLeft } from "lucide-react";
+import { Link } from "wouter";
 
 export default function TutorialsPage() {
   return (
@@ -10,6 +11,15 @@ export default function TutorialsPage() {
       <Header title="Tutorials" />
       <div className="p-6 flex-1 overflow-auto">
         <div className="max-w-5xl mx-auto">
+          <div className="flex items-center mb-6">
+            <Button variant="ghost" size="sm" asChild className="mr-2 -ml-2">
+              <Link href="/">
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Back to Dashboard
+              </Link>
+            </Button>
+          </div>
+          
           <h1 className="text-2xl font-bold mb-2">Tutorials & Learning Resources</h1>
           <p className="text-muted-foreground mb-6">
             Learn how to get the most out of AgentOS with these helpful resources.
