@@ -1,54 +1,54 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import React, { useState } from "react";
+import { Layout } from "@/components/layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { 
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Users, 
-  Building2, 
-  MoreHorizontal, 
-  Star, 
-  Phone, 
-  Mail, 
-  Search, 
-  Plus,
-  FileText,
-  BarChart,
-  Clock,
-  CheckCircle2,
-  Calendar,
-  PieChart,
-  MessageSquare
-} from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
+import { Loader2, Plus, Search, User, Building, DollarSign, PhoneCall, Calendar, Mail, Check, X } from "lucide-react";
 
-// Types for CRM data
+// Type definitions for CRM entities
 type Contact = {
   id: string;
   name: string;
@@ -60,19 +60,25 @@ type Contact = {
   lastContact: string;
   notes: string;
   avatar?: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type Deal = {
   id: string;
   title: string;
   company: string;
-  value: number;
+  value: string;
   stage: "discovery" | "proposal" | "negotiation" | "closed-won" | "closed-lost";
   probability: number;
   expectedCloseDate: string;
   contactId: string;
   assignedAgentId: string;
   notes: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type Activity = {
@@ -80,695 +86,1098 @@ type Activity = {
   type: "email" | "call" | "meeting" | "task" | "note";
   subject: string;
   date: string;
-  relatedTo: {
-    type: "contact" | "deal";
-    id: string;
-    name: string;
-  };
+  relatedToType: "contact" | "deal";
+  relatedToId: string;
   completed: boolean;
   notes: string;
   createdByAgentId: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
-// Mock data for development
-const mockContacts: Contact[] = [
-  {
-    id: "contact_1",
-    name: "Jane Cooper",
-    email: "jane.cooper@example.com",
-    phone: "(555) 123-4567",
-    company: "Acme Inc",
-    title: "CEO",
-    status: "customer",
-    lastContact: "2025-04-15",
-    notes: "Key decision maker, prefers email communication"
-  },
-  {
-    id: "contact_2",
-    name: "Alex Rodriguez",
-    email: "alex.rodriguez@techlabs.com",
-    phone: "(555) 234-5678",
-    company: "TechLabs",
-    title: "CTO",
-    status: "lead",
-    lastContact: "2025-04-10",
-    notes: "Interested in AI solutions"
-  },
-  {
-    id: "contact_3",
-    name: "Emily Johnson",
-    email: "emily@innovatech.co",
-    phone: "(555) 345-6789",
-    company: "InnovaTech",
-    title: "Marketing Director",
-    status: "prospect",
-    lastContact: "2025-04-05",
-    notes: "Follow up about marketing automation"
-  },
-  {
-    id: "contact_4",
-    name: "Michael Chen",
-    email: "michael@globalfirm.com",
-    phone: "(555) 456-7890",
-    company: "Global Firm",
-    title: "Operations Manager",
-    status: "customer",
-    lastContact: "2025-04-12",
-    notes: "Renewal coming up in 2 months"
-  },
-  {
-    id: "contact_5",
-    name: "Sarah Williams",
-    email: "sarah@startupnow.io",
-    phone: "(555) 567-8901",
-    company: "StartupNow",
-    title: "Founder",
-    status: "prospect",
-    lastContact: "2025-04-08",
-    notes: "Discussing enterprise plan options"
-  }
-];
+// Contact form schema
+const contactFormSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Valid email is required"),
+  phone: z.string().optional(),
+  company: z.string().optional(),
+  title: z.string().optional(),
+  status: z.enum(["lead", "prospect", "customer", "churned"]).default("lead"),
+  notes: z.string().optional(),
+});
 
-const mockDeals: Deal[] = [
-  {
-    id: "deal_1",
-    title: "Enterprise AI Implementation",
-    company: "Acme Inc",
-    value: 75000,
-    stage: "proposal",
-    probability: 60,
-    expectedCloseDate: "2025-05-30",
-    contactId: "contact_1",
-    assignedAgentId: "agent_executive",
-    notes: "Proposal sent, waiting for feedback"
-  },
-  {
-    id: "deal_2",
-    title: "Marketing Automation Suite",
-    company: "InnovaTech",
-    value: 45000,
-    stage: "discovery",
-    probability: 30,
-    expectedCloseDate: "2025-06-15",
-    contactId: "contact_3",
-    assignedAgentId: "agent_sales",
-    notes: "Initial discovery call completed"
-  },
-  {
-    id: "deal_3",
-    title: "AI Developer Tools Package",
-    company: "TechLabs",
-    value: 25000,
-    stage: "negotiation",
-    probability: 80,
-    expectedCloseDate: "2025-05-15",
-    contactId: "contact_2",
-    assignedAgentId: "agent_sales",
-    notes: "Discussing final terms"
-  },
-  {
-    id: "deal_4",
-    title: "Operations Analytics Platform",
-    company: "Global Firm",
-    value: 60000,
-    stage: "closed-won",
-    probability: 100,
-    expectedCloseDate: "2025-04-10",
-    contactId: "contact_4",
-    assignedAgentId: "agent_executive",
-    notes: "Contract signed, implementation begins next week"
-  },
-  {
-    id: "deal_5",
-    title: "Startup Growth Package",
-    company: "StartupNow",
-    value: 15000,
-    stage: "negotiation",
-    probability: 70,
-    expectedCloseDate: "2025-05-10",
-    contactId: "contact_5",
-    assignedAgentId: "agent_sales",
-    notes: "Discussing payment terms"
-  }
-];
+// Deal form schema
+const dealFormSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  company: z.string().min(1, "Company is required"),
+  value: z.string().min(1, "Value is required").transform(val => parseFloat(val)),
+  stage: z.enum(["discovery", "proposal", "negotiation", "closed-won", "closed-lost"]).default("discovery"),
+  probability: z.string().transform(val => parseInt(val, 10)),
+  expectedCloseDate: z.string().optional(),
+  contactId: z.string(),
+  notes: z.string().optional(),
+});
 
-const mockActivities: Activity[] = [
-  {
-    id: "activity_1",
-    type: "call",
-    subject: "Initial discovery call",
-    date: "2025-04-15",
-    relatedTo: {
-      type: "contact",
-      id: "contact_2",
-      name: "Alex Rodriguez"
-    },
-    completed: true,
-    notes: "Discussed AI integration needs",
-    createdByAgentId: "agent_sales"
-  },
-  {
-    id: "activity_2",
-    type: "email",
-    subject: "Proposal follow-up",
-    date: "2025-04-16",
-    relatedTo: {
-      type: "deal",
-      id: "deal_1",
-      name: "Enterprise AI Implementation"
-    },
-    completed: true,
-    notes: "Sent additional information about implementation timeline",
-    createdByAgentId: "agent_executive"
-  },
-  {
-    id: "activity_3",
-    type: "meeting",
-    subject: "Contract negotiation",
-    date: "2025-04-20",
-    relatedTo: {
-      type: "deal",
-      id: "deal_3",
-      name: "AI Developer Tools Package"
-    },
-    completed: false,
-    notes: "Prepare pricing adjustments",
-    createdByAgentId: "agent_sales"
-  },
-  {
-    id: "activity_4",
-    type: "task",
-    subject: "Prepare demo environment",
-    date: "2025-04-18",
-    relatedTo: {
-      type: "deal",
-      id: "deal_2",
-      name: "Marketing Automation Suite"
-    },
-    completed: false,
-    notes: "Set up custom demo with sample data",
-    createdByAgentId: "agent_executive"
-  },
-  {
-    id: "activity_5",
-    type: "note",
-    subject: "Customer feedback",
-    date: "2025-04-14",
-    relatedTo: {
-      type: "contact",
-      id: "contact_4",
-      name: "Michael Chen"
-    },
-    completed: true,
-    notes: "Very satisfied with initial setup, interested in expanding",
-    createdByAgentId: "agent_sales"
-  }
-];
+// Activity form schema
+const activityFormSchema = z.object({
+  type: z.enum(["email", "call", "meeting", "task", "note"]),
+  subject: z.string().min(1, "Subject is required"),
+  date: z.string(),
+  relatedToType: z.enum(["contact", "deal"]),
+  relatedToId: z.string(),
+  completed: z.boolean().default(false),
+  notes: z.string().optional(),
+});
 
-// Helper function to get status badge color
 function getStatusBadge(status: Contact["status"]) {
-  switch (status) {
-    case "lead":
-      return <Badge variant="outline" className="bg-blue-50 text-blue-700 hover:bg-blue-50">Lead</Badge>;
-    case "prospect":
-      return <Badge variant="outline" className="bg-purple-50 text-purple-700 hover:bg-purple-50">Prospect</Badge>;
-    case "customer":
-      return <Badge variant="outline" className="bg-green-50 text-green-700 hover:bg-green-50">Customer</Badge>;
-    case "churned":
-      return <Badge variant="outline" className="bg-red-50 text-red-700 hover:bg-red-50">Churned</Badge>;
-    default:
-      return <Badge variant="outline">Unknown</Badge>;
-  }
+  const colors = {
+    lead: "bg-blue-100 text-blue-800",
+    prospect: "bg-yellow-100 text-yellow-800",
+    customer: "bg-green-100 text-green-800",
+    churned: "bg-red-100 text-red-800",
+  };
+  
+  return (
+    <Badge className={`${colors[status]} font-medium`}>
+      {status.charAt(0).toUpperCase() + status.slice(1)}
+    </Badge>
+  );
 }
 
-// Helper function to get deal stage badge
 function getDealStageBadge(stage: Deal["stage"]) {
-  switch (stage) {
-    case "discovery":
-      return <Badge variant="outline" className="bg-blue-50 text-blue-700 hover:bg-blue-50">Discovery</Badge>;
-    case "proposal":
-      return <Badge variant="outline" className="bg-purple-50 text-purple-700 hover:bg-purple-50">Proposal</Badge>;
-    case "negotiation":
-      return <Badge variant="outline" className="bg-amber-50 text-amber-700 hover:bg-amber-50">Negotiation</Badge>;
-    case "closed-won":
-      return <Badge variant="outline" className="bg-green-50 text-green-700 hover:bg-green-50">Closed Won</Badge>;
-    case "closed-lost":
-      return <Badge variant="outline" className="bg-red-50 text-red-700 hover:bg-red-50">Closed Lost</Badge>;
-    default:
-      return <Badge variant="outline">Unknown</Badge>;
-  }
+  const colors = {
+    discovery: "bg-blue-100 text-blue-800",
+    proposal: "bg-purple-100 text-purple-800",
+    negotiation: "bg-yellow-100 text-yellow-800",
+    "closed-won": "bg-green-100 text-green-800",
+    "closed-lost": "bg-red-100 text-red-800",
+  };
+  
+  const labels = {
+    discovery: "Discovery",
+    proposal: "Proposal",
+    negotiation: "Negotiation",
+    "closed-won": "Closed (Won)",
+    "closed-lost": "Closed (Lost)",
+  };
+  
+  return (
+    <Badge className={`${colors[stage]} font-medium`}>
+      {labels[stage]}
+    </Badge>
+  );
 }
 
-// Helper function to get activity type icon
 function getActivityTypeIcon(type: Activity["type"]) {
   switch (type) {
-    case "call":
-      return <Phone className="h-4 w-4 text-blue-500" />;
     case "email":
-      return <Mail className="h-4 w-4 text-purple-500" />;
+      return <Mail className="w-4 h-4 mr-1" />;
+    case "call":
+      return <PhoneCall className="w-4 h-4 mr-1" />;
     case "meeting":
-      return <Calendar className="h-4 w-4 text-green-500" />;
+      return <Calendar className="w-4 h-4 mr-1" />;
     case "task":
-      return <CheckCircle2 className="h-4 w-4 text-amber-500" />;
+      return <Check className="w-4 h-4 mr-1" />;
     case "note":
-      return <FileText className="h-4 w-4 text-gray-500" />;
+      return <Textarea className="w-4 h-4 mr-1" />;
     default:
-      return <MessageSquare className="h-4 w-4" />;
+      return null;
   }
 }
 
 export default function CRMPage() {
-  const [selectedTab, setSelectedTab] = useState("contacts");
-  const [searchQuery, setSearchQuery] = useState("");
-  
-  // In a real app, these would be React Query hooks fetching from your backend
-  const { data: contacts, isLoading: contactsLoading } = useQuery({
+  const [activeTab, setActiveTab] = useState("contacts");
+  const [isContactDialogOpen, setIsContactDialogOpen] = useState(false);
+  const [isDealDialogOpen, setIsDealDialogOpen] = useState(false);
+  const [isActivityDialogOpen, setIsActivityDialogOpen] = useState(false);
+  const { toast } = useToast();
+
+  // Get contacts
+  const { 
+    data: contacts = [], 
+    isLoading: isLoadingContacts,
+    error: contactsError
+  } = useQuery<Contact[]>({
     queryKey: ["/api/crm/contacts"],
-    queryFn: async () => {
-      // In a real app, this would be a fetch call to your API
-      // For now, we'll just return the mock data
-      return new Promise<Contact[]>((resolve) => {
-        setTimeout(() => resolve(mockContacts), 500);
-      });
-    },
   });
-  
-  const { data: deals, isLoading: dealsLoading } = useQuery({
+
+  // Get deals
+  const { 
+    data: deals = [], 
+    isLoading: isLoadingDeals,
+    error: dealsError
+  } = useQuery<Deal[]>({
     queryKey: ["/api/crm/deals"],
-    queryFn: async () => {
-      return new Promise<Deal[]>((resolve) => {
-        setTimeout(() => resolve(mockDeals), 500);
-      });
-    },
   });
-  
-  const { data: activities, isLoading: activitiesLoading } = useQuery({
+
+  // Get activities
+  const { 
+    data: activities = [], 
+    isLoading: isLoadingActivities,
+    error: activitiesError
+  } = useQuery<Activity[]>({
     queryKey: ["/api/crm/activities"],
-    queryFn: async () => {
-      return new Promise<Activity[]>((resolve) => {
-        setTimeout(() => resolve(mockActivities), 600);
+  });
+
+  // Create contact mutation
+  const createContactMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof contactFormSchema>) => {
+      const response = await apiRequest("POST", "/api/crm/contacts", data);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to create contact");
+      }
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/contacts"] });
+      setIsContactDialogOpen(false);
+      toast({
+        title: "Contact created",
+        description: "New contact has been added successfully",
       });
     },
+    onError: (error) => {
+      toast({
+        title: "Error creating contact",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   });
-  
-  // Filter contacts based on search query
-  const filteredContacts = contacts?.filter(contact => 
-    contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    contact.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    contact.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-  
-  // Filter deals based on search query
-  const filteredDeals = deals?.filter(deal => 
-    deal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    deal.company.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+
+  // Create deal mutation
+  const createDealMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof dealFormSchema>) => {
+      const response = await apiRequest("POST", "/api/crm/deals", data);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to create deal");
+      }
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/deals"] });
+      setIsDealDialogOpen(false);
+      toast({
+        title: "Deal created",
+        description: "New deal has been added successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error creating deal",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Create activity mutation
+  const createActivityMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof activityFormSchema>) => {
+      const response = await apiRequest("POST", "/api/crm/activities", data);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to create activity");
+      }
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/activities"] });
+      setIsActivityDialogOpen(false);
+      toast({
+        title: "Activity created",
+        description: "New activity has been added successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error creating activity",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Contact form
+  const contactForm = useForm<z.infer<typeof contactFormSchema>>({
+    resolver: zodResolver(contactFormSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      phone: "",
+      company: "",
+      title: "",
+      status: "lead",
+      notes: "",
+    },
+  });
+
+  // Deal form
+  const dealForm = useForm<z.infer<typeof dealFormSchema>>({
+    resolver: zodResolver(dealFormSchema),
+    defaultValues: {
+      title: "",
+      company: "",
+      value: "",
+      stage: "discovery",
+      probability: "50",
+      expectedCloseDate: "",
+      contactId: "",
+      notes: "",
+    },
+  });
+
+  // Activity form
+  const activityForm = useForm<z.infer<typeof activityFormSchema>>({
+    resolver: zodResolver(activityFormSchema),
+    defaultValues: {
+      type: "email",
+      subject: "",
+      date: new Date().toISOString().split('T')[0],
+      relatedToType: "contact",
+      relatedToId: "",
+      completed: false,
+      notes: "",
+    },
+  });
+
+  const onContactSubmit = (data: z.infer<typeof contactFormSchema>) => {
+    createContactMutation.mutate(data);
+  };
+
+  const onDealSubmit = (data: z.infer<typeof dealFormSchema>) => {
+    createDealMutation.mutate(data);
+  };
+
+  const onActivitySubmit = (data: z.infer<typeof activityFormSchema>) => {
+    createActivityMutation.mutate(data);
+  };
+
+  const renderContactCards = () => {
+    if (isLoadingContacts) {
+      return (
+        <div className="flex justify-center items-center h-32">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      );
+    }
+
+    if (contactsError) {
+      return (
+        <div className="text-center text-red-500 p-4">
+          Error loading contacts. Please try again.
+        </div>
+      );
+    }
+
+    if (contacts.length === 0) {
+      return (
+        <div className="text-center p-6 bg-gray-50 rounded-lg">
+          <User className="w-10 h-10 mx-auto text-gray-400 mb-2" />
+          <h3 className="text-lg font-medium text-gray-700">No contacts yet</h3>
+          <p className="text-gray-500 mb-4">Add your first contact to get started</p>
+          <Button onClick={() => setIsContactDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" /> Add Contact
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {contacts.map((contact) => (
+          <Card key={contact.id} className="h-full">
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <CardTitle className="text-lg">{contact.name}</CardTitle>
+                  <CardDescription>
+                    {contact.title ? `${contact.title}, ` : ""}
+                    {contact.company || "No company"}
+                  </CardDescription>
+                </div>
+                {getStatusBadge(contact.status)}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="flex items-center text-sm">
+                <Mail className="w-4 h-4 mr-2 text-gray-500" />
+                <span className="text-gray-700">{contact.email}</span>
+              </div>
+              {contact.phone && (
+                <div className="flex items-center text-sm">
+                  <PhoneCall className="w-4 h-4 mr-2 text-gray-500" />
+                  <span className="text-gray-700">{contact.phone}</span>
+                </div>
+              )}
+              {contact.lastContact && (
+                <div className="flex items-center text-sm">
+                  <Calendar className="w-4 h-4 mr-2 text-gray-500" />
+                  <span className="text-gray-700">
+                    Last contact: {new Date(contact.lastContact).toLocaleDateString()}
+                  </span>
+                </div>
+              )}
+              {contact.notes && (
+                <p className="text-sm text-gray-600 mt-2 border-t pt-2">
+                  {contact.notes.length > 100
+                    ? contact.notes.slice(0, 100) + "..."
+                    : contact.notes}
+                </p>
+              )}
+            </CardContent>
+            <CardFooter className="pt-0">
+              <div className="flex justify-between items-center w-full">
+                <Button variant="outline" size="sm">
+                  View Details
+                </Button>
+                <span className="text-xs text-gray-500">
+                  Added {new Date(contact.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+            </CardFooter>
+          </Card>
+        ))}
+      </div>
+    );
+  };
+
+  const renderDealCards = () => {
+    if (isLoadingDeals) {
+      return (
+        <div className="flex justify-center items-center h-32">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      );
+    }
+
+    if (dealsError) {
+      return (
+        <div className="text-center text-red-500 p-4">
+          Error loading deals. Please try again.
+        </div>
+      );
+    }
+
+    if (deals.length === 0) {
+      return (
+        <div className="text-center p-6 bg-gray-50 rounded-lg">
+          <DollarSign className="w-10 h-10 mx-auto text-gray-400 mb-2" />
+          <h3 className="text-lg font-medium text-gray-700">No deals yet</h3>
+          <p className="text-gray-500 mb-4">Add your first deal to get started</p>
+          <Button onClick={() => setIsDealDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" /> Add Deal
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {deals.map((deal) => (
+          <Card key={deal.id} className="h-full">
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-start">
+                <CardTitle className="text-lg">{deal.title}</CardTitle>
+                {getDealStageBadge(deal.stage)}
+              </div>
+              <CardDescription>{deal.company}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="flex items-center text-sm font-medium">
+                <DollarSign className="w-4 h-4 mr-2 text-green-600" />
+                <span className="text-green-700">
+                  ${parseFloat(deal.value).toLocaleString()}
+                </span>
+                <Badge className="ml-2 bg-gray-100 text-gray-800">
+                  {deal.probability}% probability
+                </Badge>
+              </div>
+              {deal.expectedCloseDate && (
+                <div className="flex items-center text-sm">
+                  <Calendar className="w-4 h-4 mr-2 text-gray-500" />
+                  <span className="text-gray-700">
+                    Expected close: {new Date(deal.expectedCloseDate).toLocaleDateString()}
+                  </span>
+                </div>
+              )}
+              {deal.notes && (
+                <p className="text-sm text-gray-600 mt-2 border-t pt-2">
+                  {deal.notes.length > 100
+                    ? deal.notes.slice(0, 100) + "..."
+                    : deal.notes}
+                </p>
+              )}
+            </CardContent>
+            <CardFooter className="pt-0">
+              <div className="flex justify-between items-center w-full">
+                <Button variant="outline" size="sm">
+                  View Details
+                </Button>
+                <span className="text-xs text-gray-500">
+                  Added {new Date(deal.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+            </CardFooter>
+          </Card>
+        ))}
+      </div>
+    );
+  };
+
+  const renderActivities = () => {
+    if (isLoadingActivities) {
+      return (
+        <div className="flex justify-center items-center h-32">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      );
+    }
+
+    if (activitiesError) {
+      return (
+        <div className="text-center text-red-500 p-4">
+          Error loading activities. Please try again.
+        </div>
+      );
+    }
+
+    if (activities.length === 0) {
+      return (
+        <div className="text-center p-6 bg-gray-50 rounded-lg">
+          <Calendar className="w-10 h-10 mx-auto text-gray-400 mb-2" />
+          <h3 className="text-lg font-medium text-gray-700">No activities yet</h3>
+          <p className="text-gray-500 mb-4">Log your first activity to get started</p>
+          <Button onClick={() => setIsActivityDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" /> Add Activity
+          </Button>
+        </div>
+      );
+    }
+
+    const sortedActivities = [...activities].sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+
+    return (
+      <div className="space-y-4">
+        {sortedActivities.map((activity) => {
+          // Find related contact or deal
+          const relatedEntity = activity.relatedToType === "contact"
+            ? contacts.find(c => c.id === activity.relatedToId)
+            : deals.find(d => d.id === activity.relatedToId);
+          
+          const relatedName = relatedEntity
+            ? activity.relatedToType === "contact"
+              ? (relatedEntity as Contact).name
+              : (relatedEntity as Deal).title
+            : "Unknown";
+
+          return (
+            <Card key={activity.id} className="border-l-4 border-l-primary">
+              <CardHeader className="pb-2">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center">
+                    {getActivityTypeIcon(activity.type)}
+                    <CardTitle className="text-lg ml-1">
+                      {activity.subject}
+                    </CardTitle>
+                  </div>
+                  <Badge className={activity.completed ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}>
+                    {activity.completed ? "Completed" : "Pending"}
+                  </Badge>
+                </div>
+                <CardDescription>
+                  Related to{" "}
+                  <span className="font-medium">
+                    {relatedName} ({activity.relatedToType})
+                  </span>
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 pb-2">
+                <div className="flex items-center text-sm">
+                  <Calendar className="w-4 h-4 mr-2 text-gray-500" />
+                  <span className="text-gray-700">
+                    {new Date(activity.date).toLocaleDateString()}
+                  </span>
+                </div>
+                {activity.notes && (
+                  <p className="text-sm text-gray-600 mt-1">
+                    {activity.notes}
+                  </p>
+                )}
+              </CardContent>
+              <CardFooter className="pt-0">
+                <div className="flex justify-between items-center w-full">
+                  {!activity.completed && (
+                    <Button variant="outline" size="sm">
+                      Mark as Complete
+                    </Button>
+                  )}
+                  <span className="text-xs text-gray-500">
+                    Added {new Date(activity.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+              </CardFooter>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
-    <div className="space-y-6 p-1 md:p-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Customer Relationship Management</h1>
-        <div className="flex items-center space-x-2">
-          <div className="relative w-64">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search..."
-              className="pl-8"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+    <Layout>
+      <div className="container mx-auto py-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Customer Relationship Management</h1>
+          <div className="flex space-x-2">
+            <Button onClick={() => setIsContactDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" /> Contact
+            </Button>
+            <Button onClick={() => setIsDealDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" /> Deal
+            </Button>
+            <Button onClick={() => setIsActivityDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" /> Activity
+            </Button>
           </div>
         </div>
+
+        <Tabs defaultValue="contacts" value={activeTab} onValueChange={setActiveTab}>
+          <div className="border-b border-gray-200 mb-4">
+            <TabsList className="bg-transparent border-b-0">
+              <TabsTrigger value="contacts" className="px-6 py-2">Contacts</TabsTrigger>
+              <TabsTrigger value="deals" className="px-6 py-2">Deals</TabsTrigger>
+              <TabsTrigger value="activities" className="px-6 py-2">Activities</TabsTrigger>
+            </TabsList>
+          </div>
+          <TabsContent value="contacts" className="mt-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Contacts</h2>
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search contacts..."
+                  className="pl-8 w-64"
+                />
+              </div>
+            </div>
+            {renderContactCards()}
+          </TabsContent>
+          
+          <TabsContent value="deals" className="mt-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Deals</h2>
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search deals..."
+                  className="pl-8 w-64"
+                />
+              </div>
+            </div>
+            {renderDealCards()}
+          </TabsContent>
+          
+          <TabsContent value="activities" className="mt-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Activities</h2>
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search activities..."
+                  className="pl-8 w-64"
+                />
+              </div>
+            </div>
+            {renderActivities()}
+          </TabsContent>
+        </Tabs>
       </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Contacts</p>
-                <h3 className="text-2xl font-bold">{contacts?.length || 0}</h3>
-              </div>
-              <div className="p-2 bg-blue-100 rounded-full">
-                <Users className="h-5 w-5 text-blue-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-sm text-muted-foreground">Active Deals</p>
-                <h3 className="text-2xl font-bold">
-                  {deals?.filter(deal => 
-                    deal.stage !== "closed-won" && deal.stage !== "closed-lost"
-                  ).length || 0}
-                </h3>
-              </div>
-              <div className="p-2 bg-purple-100 rounded-full">
-                <BarChart className="h-5 w-5 text-purple-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-sm text-muted-foreground">Pipeline Value</p>
-                <h3 className="text-2xl font-bold">
-                  ${deals?.reduce((sum, deal) => 
-                    deal.stage !== "closed-lost" ? sum + deal.value : sum, 0
-                  ).toLocaleString() || 0}
-                </h3>
-              </div>
-              <div className="p-2 bg-green-100 rounded-full">
-                <PieChart className="h-5 w-5 text-green-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      
-      <Tabs defaultValue="contacts" value={selectedTab} onValueChange={setSelectedTab}>
-        <TabsList className="grid grid-cols-3 w-full max-w-md">
-          <TabsTrigger value="contacts" className="flex items-center">
-            <Users className="mr-2 h-4 w-4" />
-            <span>Contacts</span>
-          </TabsTrigger>
-          <TabsTrigger value="deals" className="flex items-center">
-            <Building2 className="mr-2 h-4 w-4" />
-            <span>Deals</span>
-          </TabsTrigger>
-          <TabsTrigger value="activities" className="flex items-center">
-            <Clock className="mr-2 h-4 w-4" />
-            <span>Activities</span>
-          </TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="contacts" className="mt-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <div>
-                <CardTitle>Contacts</CardTitle>
-                <CardDescription>
-                  Manage your business contacts
-                </CardDescription>
-              </div>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Contact
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Add New Contact</DialogTitle>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    {/* This would be a form in the real app */}
-                    <p className="text-sm text-muted-foreground">Contact creation form would go here</p>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Company</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Last Contact</TableHead>
-                      <TableHead></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {contactsLoading ? (
-                      Array(5).fill(0).map((_, i) => (
-                        <TableRow key={i}>
-                          <TableCell><Skeleton className="h-6 w-32" /></TableCell>
-                          <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                          <TableCell><Skeleton className="h-6 w-20" /></TableCell>
-                          <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                          <TableCell><Skeleton className="h-6 w-8" /></TableCell>
-                        </TableRow>
-                      ))
-                    ) : filteredContacts?.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
-                          No contacts found
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredContacts?.map(contact => (
-                        <TableRow key={contact.id}>
-                          <TableCell>
-                            <div className="flex items-center space-x-3">
-                              <Avatar>
-                                <AvatarFallback>{contact.name.substring(0, 2).toUpperCase()}</AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <div className="font-medium">{contact.name}</div>
-                                <div className="text-sm text-muted-foreground">{contact.email}</div>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>{contact.company}</TableCell>
-                          <TableCell>{getStatusBadge(contact.status)}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center">
-                              <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
-                              <span>{new Date(contact.lastContact).toLocaleDateString()}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                  <span className="sr-only">Open menu</span>
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem>View Details</DropdownMenuItem>
-                                <DropdownMenuItem>Add Task</DropdownMenuItem>
-                                <DropdownMenuItem>Edit</DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="deals" className="mt-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <div>
-                <CardTitle>Deals</CardTitle>
-                <CardDescription>
-                  Track your sales pipeline
-                </CardDescription>
-              </div>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Deal
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Add New Deal</DialogTitle>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    {/* This would be a form in the real app */}
-                    <p className="text-sm text-muted-foreground">Deal creation form would go here</p>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Deal</TableHead>
-                      <TableHead>Stage</TableHead>
-                      <TableHead>Value</TableHead>
-                      <TableHead>Close Date</TableHead>
-                      <TableHead>Probability</TableHead>
-                      <TableHead></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {dealsLoading ? (
-                      Array(5).fill(0).map((_, i) => (
-                        <TableRow key={i}>
-                          <TableCell><Skeleton className="h-6 w-32" /></TableCell>
-                          <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                          <TableCell><Skeleton className="h-6 w-20" /></TableCell>
-                          <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                          <TableCell><Skeleton className="h-6 w-20" /></TableCell>
-                          <TableCell><Skeleton className="h-6 w-8" /></TableCell>
-                        </TableRow>
-                      ))
-                    ) : filteredDeals?.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
-                          No deals found
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredDeals?.map(deal => (
-                        <TableRow key={deal.id}>
-                          <TableCell>
-                            <div>
-                              <div className="font-medium">{deal.title}</div>
-                              <div className="text-sm text-muted-foreground">{deal.company}</div>
-                            </div>
-                          </TableCell>
-                          <TableCell>{getDealStageBadge(deal.stage)}</TableCell>
-                          <TableCell>${deal.value.toLocaleString()}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center">
-                              <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
-                              <span>{new Date(deal.expectedCloseDate).toLocaleDateString()}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center space-x-2">
-                              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                <div 
-                                  className={`h-2.5 rounded-full ${
-                                    deal.probability >= 70 ? 'bg-green-500' : 
-                                    deal.probability >= 40 ? 'bg-amber-500' : 'bg-blue-500'
-                                  }`}
-                                  style={{ width: `${deal.probability}%` }}
-                                ></div>
-                              </div>
-                              <span className="text-sm">{deal.probability}%</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                  <span className="sr-only">Open menu</span>
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem>View Details</DropdownMenuItem>
-                                <DropdownMenuItem>Update Stage</DropdownMenuItem>
-                                <DropdownMenuItem>Edit</DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="activities" className="mt-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <div>
-                <CardTitle>Activities</CardTitle>
-                <CardDescription>
-                  Recent and upcoming activities
-                </CardDescription>
-              </div>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Activity
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Schedule New Activity</DialogTitle>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    {/* This would be a form in the real app */}
-                    <p className="text-sm text-muted-foreground">Activity creation form would go here</p>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[500px] pr-4">
-                <div className="space-y-4">
-                  {activitiesLoading ? (
-                    Array(5).fill(0).map((_, i) => (
-                      <div key={i} className="flex items-start space-x-4">
-                        <Skeleton className="h-10 w-10 rounded-full" />
-                        <div className="space-y-2 w-full">
-                          <Skeleton className="h-5 w-1/3" />
-                          <Skeleton className="h-4 w-1/2" />
-                          <Skeleton className="h-4 w-full" />
-                        </div>
-                      </div>
-                    ))
-                  ) : activities?.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      No activities found
-                    </div>
-                  ) : (
-                    activities?.map(activity => (
-                      <div key={activity.id} className="flex items-start space-x-4 p-4 border rounded-lg">
-                        <div className={`p-2 rounded-full ${
-                          activity.completed 
-                            ? 'bg-green-100' 
-                            : new Date(activity.date) < new Date() 
-                              ? 'bg-red-100' 
-                              : 'bg-blue-100'
-                        }`}>
-                          {getActivityTypeIcon(activity.type)}
-                        </div>
-                        <div className="space-y-1 w-full">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-medium">{activity.subject}</h4>
-                            <Badge variant={activity.completed ? "outline" : "secondary"}>
-                              {activity.completed ? "Completed" : "Pending"}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center text-sm text-muted-foreground">
-                            <Calendar className="mr-1 h-3.5 w-3.5" />
-                            <span>{new Date(activity.date).toLocaleDateString()}</span>
-                            <span className="mx-2">•</span>
-                            <span>Related to: {activity.relatedTo.name}</span>
-                          </div>
-                          {activity.notes && (
-                            <p className="text-sm mt-2">{activity.notes}</p>
-                          )}
-                        </div>
-                      </div>
-                    ))
+
+      {/* Contact Dialog */}
+      <Dialog open={isContactDialogOpen} onOpenChange={setIsContactDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add New Contact</DialogTitle>
+            <DialogDescription>
+              Enter the contact details below to add a new contact to your CRM.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...contactForm}>
+            <form onSubmit={contactForm.handleSubmit(onContactSubmit)} className="space-y-4">
+              <FormField
+                control={contactForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="John Doe" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={contactForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input placeholder="john@example.com" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={contactForm.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone</FormLabel>
+                      <FormControl>
+                        <Input placeholder="+1 (555) 123-4567" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+                />
+                <FormField
+                  control={contactForm.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Status</FormLabel>
+                      <Select
+                        defaultValue={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select status" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="lead">Lead</SelectItem>
+                          <SelectItem value="prospect">Prospect</SelectItem>
+                          <SelectItem value="customer">Customer</SelectItem>
+                          <SelectItem value="churned">Churned</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={contactForm.control}
+                  name="company"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Acme Inc." {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={contactForm.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Job Title</FormLabel>
+                      <FormControl>
+                        <Input placeholder="CEO" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={contactForm.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Additional information about this contact..."
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="submit" disabled={createContactMutation.isPending}>
+                  {createContactMutation.isPending && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Add Contact
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Deal Dialog */}
+      <Dialog open={isDealDialogOpen} onOpenChange={setIsDealDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add New Deal</DialogTitle>
+            <DialogDescription>
+              Enter the deal details below to add a new opportunity to your CRM.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...dealForm}>
+            <form onSubmit={dealForm.handleSubmit(onDealSubmit)} className="space-y-4">
+              <FormField
+                control={dealForm.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Deal Title</FormLabel>
+                    <FormControl>
+                      <Input placeholder="New software license" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={dealForm.control}
+                name="company"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Company</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Acme Inc." {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={dealForm.control}
+                  name="value"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Value ($)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="10000" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={dealForm.control}
+                  name="stage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Stage</FormLabel>
+                      <Select
+                        defaultValue={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select stage" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="discovery">Discovery</SelectItem>
+                          <SelectItem value="proposal">Proposal</SelectItem>
+                          <SelectItem value="negotiation">Negotiation</SelectItem>
+                          <SelectItem value="closed-won">Closed (Won)</SelectItem>
+                          <SelectItem value="closed-lost">Closed (Lost)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={dealForm.control}
+                  name="probability"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Probability (%)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="50" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={dealForm.control}
+                  name="expectedCloseDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Expected Close Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={dealForm.control}
+                name="contactId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Related Contact</FormLabel>
+                    <Select
+                      defaultValue={field.value}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select contact" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {contacts.map((contact) => (
+                          <SelectItem key={contact.id} value={contact.id}>
+                            {contact.name} - {contact.company || "No company"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={dealForm.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Additional information about this deal..."
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="submit" disabled={createDealMutation.isPending}>
+                  {createDealMutation.isPending && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Add Deal
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Activity Dialog */}
+      <Dialog open={isActivityDialogOpen} onOpenChange={setIsActivityDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add New Activity</DialogTitle>
+            <DialogDescription>
+              Log a new activity related to a contact or deal.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...activityForm}>
+            <form onSubmit={activityForm.handleSubmit(onActivitySubmit)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={activityForm.control}
+                  name="type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Activity Type</FormLabel>
+                      <Select
+                        defaultValue={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="email">Email</SelectItem>
+                          <SelectItem value="call">Call</SelectItem>
+                          <SelectItem value="meeting">Meeting</SelectItem>
+                          <SelectItem value="task">Task</SelectItem>
+                          <SelectItem value="note">Note</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={activityForm.control}
+                  name="date"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={activityForm.control}
+                name="subject"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Subject</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Initial discovery call" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={activityForm.control}
+                  name="relatedToType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Related To</FormLabel>
+                      <Select
+                        defaultValue={field.value}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          // Reset the relatedToId when type changes
+                          activityForm.setValue("relatedToId", "");
+                        }}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="contact">Contact</SelectItem>
+                          <SelectItem value="deal">Deal</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={activityForm.control}
+                  name="relatedToId"
+                  render={({ field }) => {
+                    const relatedToType = activityForm.watch("relatedToType");
+                    const options = relatedToType === "contact" ? contacts : deals;
+                    
+                    return (
+                      <FormItem>
+                        <FormLabel>Select {relatedToType === "contact" ? "Contact" : "Deal"}</FormLabel>
+                        <Select
+                          defaultValue={field.value}
+                          onValueChange={field.onChange}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder={`Select ${relatedToType}`} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {options.map((option) => (
+                              <SelectItem key={option.id} value={option.id}>
+                                {relatedToType === "contact" 
+                                  ? (option as Contact).name 
+                                  : (option as Deal).title
+                                }
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
+                />
+              </div>
+              <FormField
+                control={activityForm.control}
+                name="completed"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                    <FormControl>
+                      <input
+                        type="checkbox"
+                        checked={field.value}
+                        onChange={field.onChange}
+                        className="h-4 w-4 mt-1"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>Mark as Completed</FormLabel>
+                      <FormDescription>
+                        Toggle if this activity has already been completed
+                      </FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={activityForm.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Details about this activity..."
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="submit" disabled={createActivityMutation.isPending}>
+                  {createActivityMutation.isPending && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Add Activity
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+    </Layout>
   );
 }

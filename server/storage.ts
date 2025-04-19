@@ -954,7 +954,7 @@ export class DatabaseStorage implements IStorage {
         id,
         title: deal.title,
         company: deal.company,
-        value: deal.value,
+        value: String(deal.value), // Convert number to string for decimal column
         stage: deal.stage || "discovery",
         probability: deal.probability || 50,
         expectedCloseDate: deal.expectedCloseDate || null,
@@ -972,6 +972,11 @@ export class DatabaseStorage implements IStorage {
 
   async updateCrmDeal(id: string, updates: Partial<InsertCrmDeal>): Promise<CrmDeal | undefined> {
     const updateData: Record<string, any> = { ...updates, updatedAt: new Date() };
+    
+    // Convert value to string if present in updates
+    if (typeof updates.value === 'number') {
+      updateData.value = String(updates.value);
+    }
     
     const [updatedDeal] = await db.update(crmDealsTable)
       .set(updateData)
