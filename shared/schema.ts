@@ -323,11 +323,31 @@ export type CrmDeal = typeof crmDeals.$inferSelect;
 export type InsertCrmActivity = z.infer<typeof insertCrmActivitySchema>;
 export type CrmActivity = typeof crmActivities.$inferSelect;
 
+// Folders table
+export const folders = pgTable("folders", {
+  id: text("id").primaryKey().notNull(),
+  name: text("name").notNull(),
+  parentId: text("parent_id").references((): any => folders.id),
+  userId: text("user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertFolderSchema = z.object({
+  name: z.string().min(1, "Folder name is required"),
+  parentId: z.string().optional(),
+  userId: z.string(),
+});
+
+export type InsertFolder = z.infer<typeof insertFolderSchema>;
+export type Folder = typeof folders.$inferSelect;
+
 // Documents table
 export const documents = pgTable("documents", {
   id: text("id").primaryKey().notNull(),
   title: text("title").notNull(),
   content: text("content").notNull(),
+  folderId: text("folder_id").references(() => folders.id),
   tags: text("tags").array(),
   userId: text("user_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
@@ -337,6 +357,7 @@ export const documents = pgTable("documents", {
 export const insertDocumentSchema = z.object({
   title: z.string().min(1, "Title is required"),
   content: z.string(),
+  folderId: z.string().optional(),
   tags: z.array(z.string()).optional(),
   userId: z.string(),
 });
