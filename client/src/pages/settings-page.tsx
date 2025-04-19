@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Link } from "wouter";
+import { ExternalLink } from "lucide-react";
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -16,7 +18,6 @@ export default function SettingsPage() {
         <Tabs defaultValue="general" className="w-full">
           <TabsList className="mb-4">
             <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="integrations">Integrations</TabsTrigger>
             <TabsTrigger value="account">Account</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
           </TabsList>
@@ -44,18 +45,29 @@ export default function SettingsPage() {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="integrations" className="space-y-4">
+            
             <Card>
               <CardHeader>
-                <CardTitle>Connected Services</CardTitle>
+                <CardTitle>Integrations</CardTitle>
               </CardHeader>
               <CardContent>
-                <Integrations />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-medium">External Services</h3>
+                    <p className="text-sm text-muted-foreground">Connect your agents to external tools and services</p>
+                  </div>
+                  <Button variant="outline" asChild>
+                    <Link href="/integrations">
+                      Manage Integrations
+                      <ExternalLink className="h-4 w-4 ml-2" />
+                    </Link>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
+
+
 
           <TabsContent value="account" className="space-y-4">
             <Card>
