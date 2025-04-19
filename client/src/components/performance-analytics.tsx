@@ -78,6 +78,28 @@ type AnalyticsData = {
     averageTaskAge: number;
     taskGrowthRate: number;
   };
+  // Optional fields for comparison data
+  previousPeriod?: {
+    timeLabel: string;
+    startDate: string;
+    endDate: string;
+    taskCount: number;
+    completedTasksCount: number;
+    messageCount: number;
+    completionRate: number;
+    taskDistributionByStatus: Array<{
+      name: string;
+      value: number;
+      color: string;
+    }>;
+  };
+  comparisons?: {
+    taskCountChange: number;
+    taskCountChangePercent: number;
+    completedTasksChange: number;
+    completionRateChange: number;
+    messageCountChange: number;
+  };
 };
 
 export function PerformanceAnalytics() {
@@ -179,9 +201,11 @@ export function PerformanceAnalytics() {
           value={data.overallStats.totalTasks}
           description={`${data.overallStats.completedTasks} completed`}
           trend={{
-            value: Math.abs(data.overallStats.taskGrowthRate * 100),
-            isUpward: data.overallStats.taskGrowthRate >= 0,
-            label: `${data.overallStats.taskGrowthRate >= 0 ? 'growth' : 'decrease'} from last period`
+            value: data.comparisons ? Math.abs(data.comparisons.taskCountChangePercent) : Math.abs(data.overallStats.taskGrowthRate * 100),
+            isUpward: data.comparisons ? data.comparisons.taskCountChange >= 0 : data.overallStats.taskGrowthRate >= 0,
+            label: data.comparisons 
+              ? `${data.comparisons.taskCountChange >= 0 ? '+' : ''}${data.comparisons.taskCountChange} tasks vs previous` 
+              : `${data.overallStats.taskGrowthRate >= 0 ? 'growth' : 'decrease'} from last period`
           }}
           icon="ri-task-line"
         />
@@ -191,9 +215,11 @@ export function PerformanceAnalytics() {
           value={`${Math.round(data.overallStats.completionRate * 100)}%`}
           description={`${data.overallStats.completedTasks} of ${data.overallStats.totalTasks} tasks`}
           trend={{
-            value: data.overallStats.tasksPerDay,
-            isUpward: true,
-            label: `${data.overallStats.tasksPerDay.toFixed(1)} tasks/day`
+            value: data.comparisons ? Math.abs(data.comparisons.completionRateChange * 100) : data.overallStats.tasksPerDay,
+            isUpward: data.comparisons ? data.comparisons.completionRateChange >= 0 : true,
+            label: data.comparisons 
+              ? `${data.comparisons.completionRateChange >= 0 ? '+' : ''}${(data.comparisons.completionRateChange * 100).toFixed(1)}% vs previous` 
+              : `${data.overallStats.tasksPerDay.toFixed(1)} tasks/day`
           }}
           icon="ri-check-double-line"
         />
@@ -203,9 +229,11 @@ export function PerformanceAnalytics() {
           value={data.overallStats.totalMessages}
           description="Total messages"
           trend={{
-            value: data.overallStats.messagesPerDay,
-            isUpward: true,
-            label: `${data.overallStats.messagesPerDay.toFixed(1)} msgs/day`
+            value: data.comparisons ? Math.abs(data.comparisons.messageCountChange) : data.overallStats.messagesPerDay,
+            isUpward: data.comparisons ? data.comparisons.messageCountChange >= 0 : true,
+            label: data.comparisons 
+              ? `${data.comparisons.messageCountChange >= 0 ? '+' : ''}${data.comparisons.messageCountChange} msgs vs previous` 
+              : `${data.overallStats.messagesPerDay.toFixed(1)} msgs/day`
           }}
           icon="ri-message-3-line"
         />
@@ -383,29 +411,86 @@ export function PerformanceAnalytics() {
             )}
           </CardHeader>
           <CardContent>
-            <div className="w-full h-64 flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={data.taskDistributionByStatus}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                    nameKey="name"
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {data.taskDistributionByStatus.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => [value, "Tasks"]} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+            {showComparison && data.previousPeriod ? (
+              <div className="w-full">
+                <div className="mb-2 flex justify-between items-center">
+                  <span className="text-sm font-medium">Current Period</span>
+                  <span className="text-sm font-medium">Previous Period</span>
+                </div>
+                <div className="w-full grid grid-cols-2 gap-4">
+                  <div className="h-64 flex items-center justify-center">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={data.taskDistributionByStatus}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          outerRadius={70}
+                          fill="#8884d8"
+                          dataKey="value"
+                          nameKey="name"
+                          label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                        >
+                          {data.taskDistributionByStatus.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value) => [value, "Tasks"]} />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="h-64 flex items-center justify-center">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={data.previousPeriod.taskDistributionByStatus}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          outerRadius={70}
+                          fill="#8884d8"
+                          dataKey="value"
+                          nameKey="name"
+                          label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                        >
+                          {data.previousPeriod.taskDistributionByStatus.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value) => [value, "Tasks"]} />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="w-full h-64 flex items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={data.taskDistributionByStatus}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                      nameKey="name"
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    >
+                      {data.taskDistributionByStatus.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => [value, "Tasks"]} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </CardContent>
         </Card>
         

@@ -1119,23 +1119,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const messagesPerDay = daysToGenerate > 0 ? messagesInRange.length / daysToGenerate : 0;
       const tasksPerDay = daysToGenerate > 0 ? tasksInRange.length / daysToGenerate : 0;
       
-      // Enhanced KPIs with value trends
+      // Previous period data calculation
       const previousPeriodTasks = tasks.filter(task => {
         if (!task.createdAt) return false;
         const createdDate = new Date(task.createdAt);
-        
-        // Calculate previous period start date
-        const previousPeriodStart = new Date(startDate);
-        previousPeriodStart.setDate(previousPeriodStart.getDate() - daysToGenerate);
-        
-        return createdDate >= previousPeriodStart && createdDate < startDate;
-      }).length;
+        return createdDate >= previousPeriodStart && createdDate <= previousPeriodEnd;
+      });
+      
+      const previousPeriodMessages = allMessages.filter(message => {
+        if (!message.timestamp) return false;
+        const timestamp = new Date(message.timestamp);
+        return timestamp >= previousPeriodStart && timestamp <= previousPeriodEnd;
+      });
       
       // Calculate task growth rate
-      const taskGrowthRate = previousPeriodTasks > 0 ? 
-        ((tasksInRange.length - previousPeriodTasks) / previousPeriodTasks) : 0;
+      const taskGrowthRate = previousPeriodTasks.length > 0 ? 
+        ((tasksInRange.length - previousPeriodTasks.length) / previousPeriodTasks.length) : 0;
+        
+      // Calculate completion rate change (if comparison is active)
+      const previousPeriodCompletedTasks = previousPeriodTasks.filter(task => task.status === 'done').length;
+      const previousCompletionRate = previousPeriodTasks.length > 0 ? 
+        previousPeriodCompletedTasks / previousPeriodTasks.length : 0;
+      const completionRateChange = completionRate - previousCompletionRate;
       
-      res.json({
+      // Only include previous period data if comparison is enabled
+      const responseData: any = {
         agentPerformance,
         taskCompletionTrends,
         taskDistributionByStatus,
@@ -1153,7 +1161,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
           averageTaskAge: parseFloat(averageTaskAge.toFixed(1)),
           taskGrowthRate: parseFloat(taskGrowthRate.toFixed(2))
         }
-      });
+      };
+      
+      // Include comparison data if requested
+      if (showComparison) {
+        // Previous period task distributions
+        const prevPeriodTodoCount = previousPeriodTasks.filter(task => task.status === 'todo').length;
+        const prevPeriodInProgressCount = previousPeriodTasks.filter(task => task.status === 'in-progress').length;
+        const prevPeriodDoneCount = previousPeriodTasks.filter(task => task.status === 'done').length;
+        
+        const prevTaskDistributionByStatus = [
+          {
+            name: "Completed",
+            value: prevPeriodDoneCount,
+            color: "#22c55e" // green-500
+          },
+          {
+            name: "In Progress",
+            value: prevPeriodInProgressCount,
+            color: "#f59e0b" // yellow-500 
+          },
+          {
+            name: "To Do",
+            value: prevPeriodTodoCount,
+            color: "#6b7280" // gray-500
+          }
+        ].filter(item => item.value > 0);
+        
+        // Add previous period data to response
+        responseData.previousPeriod = {
+          timeLabel: comparisonLabel,
+          startDate: previousPeriodStart.toISOString(),
+          endDate: previousPeriodEnd.toISOString(),
+          taskCount: previousPeriodTasks.length,
+          completedTasksCount: previousPeriodCompletedTasks,
+          messageCount: previousPeriodMessages.length,
+          completionRate: parseFloat(previousCompletionRate.toFixed(2)),
+          taskDistributionByStatus: prevTaskDistributionByStatus
+        };
+        
+        responseData.comparisons = {
+          taskCountChange: tasksInRange.length - previousPeriodTasks.length,
+          taskCountChangePercent: previousPeriodTasks.length > 0 ? 
+            parseFloat(((tasksInRange.length - previousPeriodTasks.length) / previousPeriodTasks.length * 100).toFixed(1)) : 0,
+          completedTasksChange: completedTasksCount - previousPeriodCompletedTasks,
+          completionRateChange: parseFloat(completionRateChange.toFixed(2)),
+          messageCountChange: messagesInRange.length - previousPeriodMessages.length
+        };
+      }
+      
+      res.json(responseData);
     } catch (error) {
       console.error("Error generating analytics:", error);
       res.status(500).json({ 
