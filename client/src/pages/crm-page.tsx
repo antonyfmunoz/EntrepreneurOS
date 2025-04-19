@@ -630,7 +630,7 @@ export default function CRMPage() {
   };
 
   return (
-    <Layout>
+    <Layout title="Customer Relationship Management">
       <div className="container mx-auto py-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Customer Relationship Management</h1>
