@@ -2,7 +2,19 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Plus, FileText, Edit2, Trash2 } from "lucide-react";
+import { 
+  Loader2, 
+  Plus, 
+  FileText, 
+  Edit2, 
+  Trash2, 
+  Folder, 
+  FolderPlus, 
+  ChevronRight, 
+  Home,
+  FolderEdit,
+  ArrowLeft
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -27,22 +39,50 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchXIcon } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+
+// Define folder type
+type Folder = {
+  id: string;
+  name: string;
+  parentId: string | null;
+  userId: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 // Define document type based on our schema
 type Document = {
   id: string;
   title: string;
   content: string;
+  folderId: string | null;
   tags: string[];
   userId: string;
   createdAt: Date;
   updatedAt: Date;
 };
 
+// Folder form schema
+const folderFormSchema = z.object({
+  name: z.string().min(1, "Folder name is required"),
+  parentId: z.string().optional().nullable(),
+});
+
+type FolderFormData = z.infer<typeof folderFormSchema>;
+
 // Document form schema (derived from insertDocumentSchema)
 const documentFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
   content: z.string(),
+  folderId: z.string().optional().nullable(),
   tags: z.string().optional().transform(tags => 
     tags 
       ? tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0) 
@@ -57,27 +97,59 @@ export default function DocumentsPage() {
   const { toast } = useToast();
   
   const [showDocumentDialog, setShowDocumentDialog] = useState(false);
+  const [showFolderDialog, setShowFolderDialog] = useState(false);
   const [editingDocument, setEditingDocument] = useState<Document | null>(null);
+  const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [folderPath, setFolderPath] = useState<Folder[]>([]);
   
-  // Initialize form with useForm hook
+  // Initialize document form with useForm hook
   const form = useForm<DocumentFormData>({
     resolver: zodResolver(documentFormSchema),
     defaultValues: {
       title: "",
       content: "",
+      folderId: null,
       tags: "" as any,
+    },
+  });
+  
+  // Initialize folder form with useForm hook
+  const folderForm = useForm<FolderFormData>({
+    resolver: zodResolver(folderFormSchema),
+    defaultValues: {
+      name: "",
+      parentId: null,
     },
   });
 
   // Query for fetching documents
   const { 
     data: documents, 
-    isLoading, 
-    isError,
-    error 
+    isLoading: documentsLoading, 
+    isError: documentsError,
+    error: documentsErrorData
   } = useQuery<Document[]>({
-    queryKey: ["/api/documents"],
+    queryKey: ["/api/documents", currentFolderId],
+    queryFn: async () => {
+      const url = currentFolderId 
+        ? `/api/documents?folderId=${currentFolderId}` 
+        : '/api/documents';
+      const res = await apiRequest("GET", url);
+      return await res.json();
+    },
+    enabled: !!user,
+  });
+  
+  // Query for fetching folders
+  const {
+    data: folders,
+    isLoading: foldersLoading,
+    isError: foldersError,
+    error: foldersErrorData
+  } = useQuery<Folder[]>({
+    queryKey: ["/api/folders"],
     enabled: !!user,
   });
 
@@ -150,6 +222,91 @@ export default function DocumentsPage() {
       });
     },
   });
+  
+  // Create folder mutation
+  const createFolderMutation = useMutation({
+    mutationFn: async (folder: FolderFormData) => {
+      // Add current folder as parent if we're inside a folder
+      const folderData = {
+        ...folder,
+        parentId: folder.parentId || currentFolderId
+      };
+      const res = await apiRequest("POST", "/api/folders", folderData);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/folders"] });
+      toast({
+        title: "Folder created",
+        description: "Your folder has been created successfully.",
+      });
+      setShowFolderDialog(false);
+      folderForm.reset();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to create folder",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Update folder mutation
+  const updateFolderMutation = useMutation({
+    mutationFn: async ({ id, folder }: { id: string; folder: FolderFormData }) => {
+      const res = await apiRequest("PATCH", `/api/folders/${id}`, folder);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/folders"] });
+      toast({
+        title: "Folder updated",
+        description: "Your folder has been updated successfully.",
+      });
+      setShowFolderDialog(false);
+      setEditingFolder(null);
+      folderForm.reset();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to update folder",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Delete folder mutation
+  const deleteFolderMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/folders/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/folders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      
+      // If we deleted the current folder, go back to parent
+      if (currentFolderId) {
+        const currentFolder = folders?.find(f => f.id === currentFolderId);
+        if (currentFolder) {
+          setCurrentFolderId(currentFolder.parentId);
+        }
+      }
+      
+      toast({
+        title: "Folder deleted",
+        description: "The folder and its contents have been deleted.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to delete folder",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   // Handle form submission
   const onSubmit = (data: DocumentFormData) => {
@@ -195,7 +352,71 @@ export default function DocumentsPage() {
     }).format(date);
   };
 
-  if (isLoading) {
+  // Helper function to build breadcrumb path
+  const updateFolderPath = (folderId: string | null) => {
+    if (folderId === null) {
+      setFolderPath([]);
+      return;
+    }
+    
+    // Find the current folder
+    const currentFolder = folders?.find(f => f.id === folderId);
+    if (!currentFolder) return;
+    
+    // Build the path from root to current folder
+    const path: Folder[] = [currentFolder];
+    let parentId = currentFolder.parentId;
+    
+    while (parentId) {
+      const parent = folders?.find(f => f.id === parentId);
+      if (parent) {
+        path.unshift(parent); // Add parent to beginning of path
+        parentId = parent.parentId;
+      } else {
+        break;
+      }
+    }
+    
+    setFolderPath(path);
+  };
+  
+  // Effect to update folder path whenever current folder changes
+  useEffect(() => {
+    updateFolderPath(currentFolderId);
+  }, [currentFolderId, folders]);
+  
+  // Handle folder selection
+  const handleFolderSelect = (folderId: string) => {
+    setCurrentFolderId(folderId);
+  };
+  
+  // Handle new folder creation
+  const handleNewFolder = () => {
+    setEditingFolder(null);
+    folderForm.reset();
+    folderForm.setValue('parentId', currentFolderId);
+    setShowFolderDialog(true);
+  };
+  
+  // Handle folder editing
+  const handleEditFolder = (folder: Folder) => {
+    setEditingFolder(folder);
+    folderForm.setValue('name', folder.name);
+    folderForm.setValue('parentId', folder.parentId);
+    setShowFolderDialog(true);
+  };
+  
+  // Handle folder form submission
+  const onFolderSubmit = (data: FolderFormData) => {
+    if (editingFolder) {
+      updateFolderMutation.mutate({ id: editingFolder.id, folder: data });
+    } else {
+      createFolderMutation.mutate(data);
+    }
+  };
+
+  // Loading and error states
+  if (documentsLoading || foldersLoading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
         <Loader2 className="h-8 w-8 animate-spin text-border" />
@@ -203,11 +424,12 @@ export default function DocumentsPage() {
     );
   }
 
-  if (isError) {
+  if (documentsError || foldersError) {
+    const errorMessage = documentsErrorData?.message || foldersErrorData?.message;
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] gap-4">
-        <p className="text-destructive font-medium">Error loading documents</p>
-        <p>{(error as Error).message}</p>
+        <p className="text-destructive font-medium">Error loading data</p>
+        <p>{errorMessage}</p>
       </div>
     );
   }
@@ -215,20 +437,141 @@ export default function DocumentsPage() {
   return (
     <div className="container py-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Documents</h1>
-        <Button onClick={handleNewDocument}>
-          <Plus className="w-4 h-4 mr-2" />
-          New Document
-        </Button>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold">Documents</h1>
+          {currentFolderId && (
+            <Button 
+              variant="ghost" 
+              onClick={() => setCurrentFolderId(null)}
+              size="sm"
+              className="flex items-center gap-1"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>All Documents</span>
+            </Button>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={handleNewFolder} variant="outline">
+            <FolderPlus className="w-4 h-4 mr-2" />
+            New Folder
+          </Button>
+          <Button onClick={handleNewDocument}>
+            <Plus className="w-4 h-4 mr-2" />
+            New Document
+          </Button>
+        </div>
       </div>
-
-      <div className="mb-6">
-        <Input
-          placeholder="Search documents..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="max-w-md"
-        />
+      
+      {/* Breadcrumb Navigation */}
+      {folderPath.length > 0 && (
+        <div className="flex items-center gap-1 text-sm text-muted-foreground mb-4 bg-secondary/20 p-2 rounded">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-6 px-2 text-xs" 
+            onClick={() => setCurrentFolderId(null)}
+          >
+            <Home className="h-3.5 w-3.5 mr-1" />
+            Home
+          </Button>
+          {folderPath.map((folder, index) => (
+            <div key={folder.id} className="flex items-center">
+              <ChevronRight className="h-3.5 w-3.5 mx-1" />
+              <Button
+                variant={index === folderPath.length - 1 ? "secondary" : "ghost"}
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={() => setCurrentFolderId(folder.id)}
+              >
+                <Folder className="h-3.5 w-3.5 mr-1" />
+                {folder.name}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {/* Folders Section */}
+      {!searchQuery && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-medium">Folders</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
+            {folders?.filter(folder => folder.parentId === currentFolderId).map(folder => (
+              <Card 
+                key={folder.id} 
+                className="cursor-pointer hover:bg-secondary/20 transition-colors"
+                onClick={() => handleFolderSelect(folder.id)}
+              >
+                <CardHeader className="py-4 px-4 flex flex-row items-center justify-between space-y-0">
+                  <div className="flex items-center space-x-2">
+                    <Folder className="h-5 w-5" />
+                    <CardTitle className="text-base">{folder.name}</CardTitle>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-4 w-4"
+                        >
+                          <circle cx="12" cy="12" r="1" />
+                          <circle cx="19" cy="12" r="1" />
+                          <circle cx="5" cy="12" r="1" />
+                        </svg>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditFolder(folder);
+                      }}>
+                        <FolderEdit className="mr-2 h-4 w-4" />
+                        Edit Folder
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm("Are you sure you want to delete this folder? All documents inside will be moved to the root.")) {
+                            deleteFolderMutation.mutate(folder.id);
+                          }
+                        }}
+                        className="text-destructive"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete Folder
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </CardHeader>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-lg font-medium">
+          {searchQuery ? "Search Results" : currentFolderId ? "Documents in this folder" : "All Documents"}
+        </h2>
+        <div>
+          <Input
+            placeholder="Search documents..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="max-w-md"
+          />
+        </div>
       </div>
 
       {filteredDocuments?.length === 0 ? (
