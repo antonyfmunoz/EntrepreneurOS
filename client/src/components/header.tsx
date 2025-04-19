@@ -19,11 +19,13 @@ export function Header({ title, children }: HeaderProps) {
 
   return (
     <header className="bg-white border-b border-gray-200 h-16 flex items-center px-6">
-      <div className="flex items-center">
+      <div className="flex items-center w-1/3">
         {children}
+      </div>
+      <div className="flex justify-center items-center w-1/3">
         <h1 className="text-xl font-bold text-gray-800">{title}</h1>
       </div>
-      <div className="ml-auto flex items-center space-x-4">
+      <div className="flex items-center justify-end space-x-4 w-1/3">
         <NotificationDropdown />
 
         <DropdownMenu>
