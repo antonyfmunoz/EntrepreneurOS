@@ -37,17 +37,15 @@ export default function SupportPage() {
   
   return (
     <div className="flex flex-col h-full">
-      <Header title="Contact Support" />
+      <Header title="Contact Support">
+        <Button variant="ghost" size="sm" asChild className="mr-4">
+          <Link href="/">
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+        </Button>
+      </Header>
       <div className="p-6 flex-1 overflow-auto">
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-center mb-6">
-            <Button variant="ghost" size="sm" asChild className="mr-2 -ml-2">
-              <Link href="/">
-                <ArrowLeft className="h-4 w-4 mr-1" />
-                Back to Dashboard
-              </Link>
-            </Button>
-          </div>
           
           <h1 className="text-2xl font-bold mb-2">Contact Support</h1>
           <p className="text-muted-foreground mb-6">
