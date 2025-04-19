@@ -35,7 +35,12 @@ export default function NotificationsPage() {
   };
   
   const handleDeleteNotification = (id: string) => {
+    console.log("Notification page - deleting notification:", id);
     deleteNotification(id);
+    // Force a refresh after deletion
+    setTimeout(() => {
+      refresh();
+    }, 300);
   };
 
   return (
