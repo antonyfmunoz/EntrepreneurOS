@@ -11,6 +11,8 @@ import IntegrationsPage from "@/pages/integrations-page";
 import AnalyticsPage from "@/pages/analytics-page";
 import NotificationsPage from "@/pages/notifications-page";
 import SettingsPage from "@/pages/settings-page";
+import TutorialsPage from "@/pages/tutorials-page";
+import SupportPage from "@/pages/support-page";
 import AuthPage from "@/pages/auth-page";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
@@ -42,8 +44,8 @@ function Router() {
       <ProtectedRoute path="/analytics" component={AnalyticsPage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/notifications" component={NotificationsPage} />
-      <ProtectedRoute path="/support" component={() => <div className="p-8"><h1 className="text-2xl font-bold mb-4">Support</h1><p>Support page is under construction.</p></div>} />
-      <ProtectedRoute path="/tutorials" component={() => <div className="p-8"><h1 className="text-2xl font-bold mb-4">Tutorials</h1><p>Tutorials page is under construction.</p></div>} />
+      <ProtectedRoute path="/support" component={SupportPage} />
+      <ProtectedRoute path="/tutorials" component={TutorialsPage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>
