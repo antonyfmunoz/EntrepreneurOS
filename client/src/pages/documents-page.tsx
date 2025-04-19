@@ -322,6 +322,7 @@ export default function DocumentsPage() {
     setEditingDocument(document);
     form.setValue("title", document.title);
     form.setValue("content", document.content);
+    form.setValue("folderId", document.folderId);
     form.setValue("tags", document.tags.join(", ") as any);
     setShowDocumentDialog(true);
   };
@@ -330,15 +331,32 @@ export default function DocumentsPage() {
   const handleNewDocument = () => {
     setEditingDocument(null);
     form.reset();
+    
+    // If we're in a folder, set the folder ID for the new document
+    if (currentFolderId) {
+      form.setValue('folderId', currentFolderId);
+    }
+    
     setShowDocumentDialog(true);
   };
 
-  // Filter documents based on search query
-  const filteredDocuments = documents?.filter(doc => 
-    doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    doc.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    doc.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  // Filter documents based on search query and current folder
+  const filteredDocuments = documents?.filter(doc => {
+    // Filter by search query if present
+    const matchesSearch = !searchQuery || 
+      doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    // Filter by current folder if not searching
+    const matchesFolder = searchQuery ? true : (
+      currentFolderId 
+        ? doc.folderId === currentFolderId 
+        : true // When on root, show documents without folder
+    );
+    
+    return matchesSearch && matchesFolder;
+  });
 
   // Format date function
   const formatDate = (dateString: Date) => {
@@ -498,65 +516,81 @@ export default function DocumentsPage() {
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-medium">Folders</h2>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
-            {folders?.filter(folder => folder.parentId === currentFolderId).map(folder => (
-              <Card 
-                key={folder.id} 
-                className="cursor-pointer hover:bg-secondary/20 transition-colors"
-                onClick={() => handleFolderSelect(folder.id)}
-              >
-                <CardHeader className="py-4 px-4 flex flex-row items-center justify-between space-y-0">
-                  <div className="flex items-center space-x-2">
-                    <Folder className="h-5 w-5" />
-                    <CardTitle className="text-base">{folder.name}</CardTitle>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="h-4 w-4"
-                        >
-                          <circle cx="12" cy="12" r="1" />
-                          <circle cx="19" cy="12" r="1" />
-                          <circle cx="5" cy="12" r="1" />
-                        </svg>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditFolder(folder);
-                      }}>
-                        <FolderEdit className="mr-2 h-4 w-4" />
-                        Edit Folder
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={(e) => {
+          {folders?.filter(folder => folder.parentId === currentFolderId).length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-6 mb-6 bg-muted/20 rounded-lg">
+              <Folder className="h-12 w-12 text-muted-foreground mb-2" />
+              <h3 className="text-base font-medium">No folders found</h3>
+              <p className="text-sm text-muted-foreground mt-1 mb-3">
+                {folders?.length === 0
+                  ? "Create your first folder to organize your documents."
+                  : "This folder has no subfolders."}
+              </p>
+              <Button onClick={handleNewFolder} variant="outline" size="sm">
+                <FolderPlus className="w-4 h-4 mr-2" />
+                New Folder
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
+              {folders?.filter(folder => folder.parentId === currentFolderId).map(folder => (
+                <Card 
+                  key={folder.id} 
+                  className="cursor-pointer hover:bg-secondary/20 transition-colors"
+                  onClick={() => handleFolderSelect(folder.id)}
+                >
+                  <CardHeader className="py-4 px-4 flex flex-row items-center justify-between space-y-0">
+                    <div className="flex items-center space-x-2">
+                      <Folder className="h-5 w-5" />
+                      <CardTitle className="text-base">{folder.name}</CardTitle>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="h-4 w-4"
+                          >
+                            <circle cx="12" cy="12" r="1" />
+                            <circle cx="19" cy="12" r="1" />
+                            <circle cx="5" cy="12" r="1" />
+                          </svg>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={(e) => {
                           e.stopPropagation();
-                          if (window.confirm("Are you sure you want to delete this folder? All documents inside will be moved to the root.")) {
-                            deleteFolderMutation.mutate(folder.id);
-                          }
-                        }}
-                        className="text-destructive"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete Folder
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </CardHeader>
-              </Card>
-            ))}
-          </div>
+                          handleEditFolder(folder);
+                        }}>
+                          <FolderEdit className="mr-2 h-4 w-4" />
+                          Edit Folder
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm("Are you sure you want to delete this folder? All documents inside will be moved to the root.")) {
+                              deleteFolderMutation.mutate(folder.id);
+                            }
+                          }}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete Folder
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </CardHeader>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       )}
       
@@ -707,6 +741,43 @@ export default function DocumentsPage() {
                   </FormItem>
                 )}
               />
+              
+              <FormField
+                control={form.control}
+                name="folderId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Folder</FormLabel>
+                    <Select
+                      value={field.value || ""}
+                      onValueChange={(value) => field.onChange(value === "null" ? null : value)}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a folder (optional)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="null">
+                          <div className="flex items-center">
+                            <Home className="mr-2 h-4 w-4" />
+                            <span>Root (No folder)</span>
+                          </div>
+                        </SelectItem>
+                        {folders?.map((folder) => (
+                          <SelectItem key={folder.id} value={folder.id}>
+                            <div className="flex items-center">
+                              <Folder className="mr-2 h-4 w-4" />
+                              <span>{folder.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}
@@ -747,6 +818,100 @@ export default function DocumentsPage() {
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
                   {editingDocument ? "Update Document" : "Create Document"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Folder Creation/Editing Dialog */}
+      <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingFolder ? "Edit Folder" : "Create New Folder"}</DialogTitle>
+            <DialogDescription>
+              {editingFolder
+                ? "Update the folder details."
+                : "Enter a name for your new folder."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <Form {...folderForm}>
+            <form onSubmit={folderForm.handleSubmit(onFolderSubmit)} className="space-y-6">
+              <FormField
+                control={folderForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Folder Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="My Folder" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={folderForm.control}
+                name="parentId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Parent Folder</FormLabel>
+                    <Select
+                      value={field.value || ""}
+                      onValueChange={(value) => field.onChange(value === "null" ? null : value)}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a parent folder (optional)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="null">
+                          <div className="flex items-center">
+                            <Home className="mr-2 h-4 w-4" />
+                            <span>Root (No parent)</span>
+                          </div>
+                        </SelectItem>
+                        {folders?.filter(f => f.id !== editingFolder?.id).map((folder) => (
+                          <SelectItem key={folder.id} value={folder.id}>
+                            <div className="flex items-center">
+                              <Folder className="mr-2 h-4 w-4" />
+                              <span>{folder.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end space-x-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowFolderDialog(false);
+                    folderForm.reset();
+                    setEditingFolder(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={
+                    createFolderMutation.isPending || updateFolderMutation.isPending
+                  }
+                >
+                  {(createFolderMutation.isPending || updateFolderMutation.isPending) && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  {editingFolder ? "Update Folder" : "Create Folder"}
                 </Button>
               </div>
             </form>
