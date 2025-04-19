@@ -2,9 +2,12 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Notification } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useState, useEffect } from "react";
 
 export function useNotifications() {
   const { toast } = useToast();
+  // Local state to manage notifications
+  const [localNotifications, setLocalNotifications] = useState<Notification[]>([]);
 
   // Fetch all notifications
   const {
@@ -16,6 +19,13 @@ export function useNotifications() {
     queryKey: ["/api/notifications"],
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
+
+  // Update local state when server data changes
+  useEffect(() => {
+    if (notifications) {
+      setLocalNotifications(notifications);
+    }
+  }, [notifications]);
 
   // Get unread notification count
   const {
@@ -72,15 +82,20 @@ export function useNotifications() {
       const res = await apiRequest("DELETE", `/api/notifications/${id}`);
       const result = await res.json();
       console.log("Delete API response:", result);
-      return result;
+      return { id, result };
     },
-    onSuccess: () => {
-      console.log("Successfully deleted notification");
-      // Directly trigger refetch instead of just invalidating queries
-      refetch();
-      refetchCount();
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/count"] });
+    onSuccess: (data) => {
+      console.log("Successfully deleted notification:", data.id);
+      // Update local state immediately to improve UI responsiveness
+      setLocalNotifications(prev => prev.filter(n => n.id !== data.id));
+      
+      // Also refresh from server to ensure consistency
+      setTimeout(() => {
+        refetch();
+        refetchCount();
+        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/notifications/count"] });
+      }, 100);
     },
     onError: (error) => {
       console.error("Error deleting notification:", error);
@@ -98,13 +113,17 @@ export function useNotifications() {
   };
 
   return {
-    notifications,
+    notifications: localNotifications, // Use local state instead of React Query data directly
     unreadCount: unreadCount.count,
     isLoading: isLoading || isCountLoading,
     error,
     markAsRead: (id: string) => markAsReadMutation.mutate(id),
     markAllAsRead: () => markAllAsReadMutation.mutate(),
-    deleteNotification: (id: string) => deleteNotificationMutation.mutate(id),
+    deleteNotification: (id: string) => {
+      // Update local state immediately before API call for better responsiveness
+      setLocalNotifications(prev => prev.filter(n => n.id !== id));
+      deleteNotificationMutation.mutate(id);
+    },
     isMarkingAsRead: markAsReadMutation.isPending,
     isMarkingAllAsRead: markAllAsReadMutation.isPending,
     isDeletingNotification: deleteNotificationMutation.isPending,

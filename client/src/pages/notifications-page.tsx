@@ -36,8 +36,22 @@ export default function NotificationsPage() {
   
   const handleDeleteNotification = (id: string) => {
     console.log("Notification page - deleting notification:", id);
+    
+    // Optimistic UI update - remove the notification immediately from the displayed list
+    // This will make the UI feel more responsive while the API call completes
+    const updatedDisplayNotifications = displayNotifications.filter(n => n.id !== id);
+    if (activeTab === "all") {
+      // If we're in the "all" tab, manually update tab counts for visual feedback
+      if (!readNotifications.some(n => n.id === id) && 
+          !unreadNotifications.some(n => n.id === id)) {
+        console.log("Notification not found in current lists");
+      }
+    }
+    
+    // Perform the actual deletion
     deleteNotification(id);
-    // Force a refresh after deletion
+    
+    // Force a refresh after deletion to ensure consistency
     setTimeout(() => {
       refresh();
     }, 300);

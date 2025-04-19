@@ -807,8 +807,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteNotification(id: string): Promise<void> {
-    await db.delete(notificationsTable)
-      .where(eq(notificationsTable.id, id));
+    console.log(`Server deleting notification with ID: ${id}`);
+    try {
+      // First check if the notification exists
+      const existingNotification = await db.select()
+        .from(notificationsTable)
+        .where(eq(notificationsTable.id, id))
+        .limit(1);
+        
+      if (existingNotification.length === 0) {
+        console.log(`Notification with ID ${id} not found, nothing to delete`);
+        return;
+      }
+      
+      // Delete the notification
+      await db.delete(notificationsTable)
+        .where(eq(notificationsTable.id, id));
+        
+      console.log(`Successfully deleted notification with ID: ${id}`);
+    } catch (error) {
+      console.error(`Error deleting notification ${id}:`, error);
+      throw error;
+    }
   }
 
   // AI Assistant operations

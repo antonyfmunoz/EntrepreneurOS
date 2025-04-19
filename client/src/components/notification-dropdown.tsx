@@ -40,10 +40,23 @@ export const NotificationDropdown = () => {
     markAsRead(notificationId);
   };
   
-  // Handle deletion directly to bypass complex event propagation issues
+  // Handle deletion with optimistic UI update
   const handleDeleteNotification = (notificationId: string) => {
     // Add manual logging to diagnose the issue
-    console.log("Deleting notification:", notificationId);
+    console.log("Dropdown deleting notification:", notificationId);
+    
+    // Close dropdown after deletion
+    // This ensures the UI refreshes when reopened 
+    const dropdown = document.querySelector("[data-state='open']");
+    if (dropdown) {
+      setTimeout(() => {
+        const closeButton = document.querySelector("[role='menuitem']");
+        if (closeButton) {
+          (closeButton as HTMLElement).click();
+        }
+      }, 100);
+    }
+    
     // Perform the delete operation
     deleteNotification(notificationId);
   };
