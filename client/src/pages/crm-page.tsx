@@ -111,9 +111,9 @@ const contactFormSchema = z.object({
 const dealFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
   company: z.string().min(1, "Company is required"),
-  value: z.string().min(1, "Value is required").transform(val => parseFloat(val)),
+  value: z.string().min(1, "Value is required"),
   stage: z.enum(["discovery", "proposal", "negotiation", "closed-won", "closed-lost"]).default("discovery"),
-  probability: z.string().transform(val => parseInt(val, 10)),
+  probability: z.string(),
   expectedCloseDate: z.string().optional(),
   contactId: z.string(),
   notes: z.string().optional(),
