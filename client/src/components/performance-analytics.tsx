@@ -81,7 +81,7 @@ type AnalyticsData = {
 };
 
 export function PerformanceAnalytics() {
-  const [timeRange, setTimeRange] = useState<"7days" | "30days" | "90days">("7days");
+  const [timeRange, setTimeRange] = useState<"7days" | "30days" | "90days" | "365days">("7days");
   
   const { data, isLoading, error } = useQuery<AnalyticsData>({
     queryKey: ["/api/analytics", timeRange],
@@ -133,12 +133,13 @@ export function PerformanceAnalytics() {
           <Tabs 
             defaultValue={timeRange} 
             className="w-auto" 
-            onValueChange={(value) => setTimeRange(value as "7days" | "30days" | "90days")}
+            onValueChange={(value) => setTimeRange(value as "7days" | "30days" | "90days" | "365days")}
           >
             <TabsList>
               <TabsTrigger value="7days">7 Days</TabsTrigger>
               <TabsTrigger value="30days">30 Days</TabsTrigger>
               <TabsTrigger value="90days">90 Days</TabsTrigger>
+              <TabsTrigger value="365days">1 Year</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -269,17 +270,55 @@ export function PerformanceAnalytics() {
                   dataKey="date"
                   tickFormatter={(value) => {
                     const date = new Date(value);
-                    return date.toLocaleDateString('en-US', { 
-                      month: 'short', 
-                      day: 'numeric' 
-                    });
+                    // Adjust date format based on the time range
+                    if (timeRange === '365days') {
+                      return date.toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        year: 'numeric' 
+                      });
+                    } else if (timeRange === '90days') {
+                      // For 90 days, show abbreviated month and day
+                      return date.toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric',
+                      });
+                    } else {
+                      // For 7 and 30 days, show month/day
+                      return date.toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric' 
+                      });
+                    }
                   }}
                   angle={-45}
                   textAnchor="end"
                   height={70}
+                  // For 365 days, reduce the number of ticks to prevent overcrowding
+                  interval={timeRange === '365days' ? 30 : (timeRange === '90days' ? 6 : 0)}
                 />
                 <YAxis />
-                <Tooltip />
+                <Tooltip 
+                  formatter={(value, name, props) => {
+                    return [value, name === 'created' ? 'Tasks Created' : 'Tasks Completed'];
+                  }}
+                  labelFormatter={(label) => {
+                    const date = new Date(label);
+                    if (timeRange === '365days') {
+                      return date.toLocaleDateString('en-US', { 
+                        year: 'numeric',
+                        month: 'long', 
+                        day: 'numeric'
+                      });
+                    } else {
+                      return date.toLocaleDateString('en-US', { 
+                        weekday: 'short',
+                        year: 'numeric',
+                        month: 'long', 
+                        day: 'numeric'
+                      });
+                    }
+                  }}
+                />
                 <Legend />
                 <Line
                   type="monotone"
