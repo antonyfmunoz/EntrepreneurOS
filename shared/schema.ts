@@ -322,3 +322,24 @@ export type CrmDeal = typeof crmDeals.$inferSelect;
 
 export type InsertCrmActivity = z.infer<typeof insertCrmActivitySchema>;
 export type CrmActivity = typeof crmActivities.$inferSelect;
+
+// Documents table
+export const documents = pgTable("documents", {
+  id: text("id").primaryKey().notNull(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  tags: text("tags").array(),
+  userId: text("user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertDocumentSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  content: z.string(),
+  tags: z.array(z.string()).optional(),
+  userId: z.string(),
+});
+
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type Document = typeof documents.$inferSelect;
