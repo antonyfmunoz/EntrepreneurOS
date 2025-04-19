@@ -74,10 +74,6 @@ export function useNotifications() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/notifications/count"] });
-      toast({
-        title: "Notification deleted",
-        description: "The notification has been removed",
-      });
     },
     onError: (error) => {
       toast({
