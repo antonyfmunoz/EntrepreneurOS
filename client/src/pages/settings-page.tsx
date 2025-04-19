@@ -1,5 +1,4 @@
 import { Layout } from "@/components/layout";
-import { Integrations } from "@/components/integrations";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,8 +65,6 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
           </TabsContent>
-
-
 
           <TabsContent value="account" className="space-y-4">
             <Card>
