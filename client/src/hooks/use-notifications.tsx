@@ -68,14 +68,22 @@ export function useNotifications() {
   // Delete a notification
   const deleteNotificationMutation = useMutation({
     mutationFn: async (id: string) => {
+      console.log("API request to delete notification:", id);
       const res = await apiRequest("DELETE", `/api/notifications/${id}`);
-      return await res.json();
+      const result = await res.json();
+      console.log("Delete API response:", result);
+      return result;
     },
     onSuccess: () => {
+      console.log("Successfully deleted notification");
+      // Directly trigger refetch instead of just invalidating queries
+      refetch();
+      refetchCount();
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/notifications/count"] });
     },
     onError: (error) => {
+      console.error("Error deleting notification:", error);
       toast({
         title: "Failed to delete notification",
         description: error.message,

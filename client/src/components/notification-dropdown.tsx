@@ -40,7 +40,11 @@ export const NotificationDropdown = () => {
     markAsRead(notificationId);
   };
   
+  // Handle deletion directly to bypass complex event propagation issues
   const handleDeleteNotification = (notificationId: string) => {
+    // Add manual logging to diagnose the issue
+    console.log("Deleting notification:", notificationId);
+    // Perform the delete operation
     deleteNotification(notificationId);
   };
 
