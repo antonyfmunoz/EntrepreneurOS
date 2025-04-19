@@ -1040,7 +1040,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Task distribution by type
       const taskDistributionByType = taskTypes.map(type => {
         const count = tasks.filter(task => (task.taskType || 'standard') === type).length;
-        const colors = {
+        const colors: Record<string, string> = {
           'standard': "#3b82f6", // blue-500
           'collaboration': "#8b5cf6", // violet-500
           'delegated': "#ec4899", // pink-500
@@ -1051,7 +1051,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return {
           name: type.charAt(0).toUpperCase() + type.slice(1),
           value: count,
-          color: colors[type] || colors['default']
+          color: colors[type as keyof typeof colors] || colors['default']
         };
       }).filter(item => item.value > 0); // Only include non-zero values
       

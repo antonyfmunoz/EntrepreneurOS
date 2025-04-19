@@ -35,6 +35,9 @@ type AnalyticsData = {
     tasksCompleted: number;
     tasksInProgress: number;
     tasksPending: number;
+    totalTasks: number;
+    messageCount: number;
+    activityScore: number;
     completionRate: number;
     averageCompletionTime: number;
     tasksByPriority: {
@@ -66,8 +69,14 @@ type AnalyticsData = {
   overallStats: {
     totalAgents: number;
     totalTasks: number;
+    completedTasks: number;
+    totalMessages: number;
+    averageTasksPerAgent: number;
+    messagesPerDay: number;
+    tasksPerDay: number;
     completionRate: number;
     averageTaskAge: number;
+    taskGrowthRate: number;
   };
 };
 
@@ -135,52 +144,104 @@ export function PerformanceAnalytics() {
         </div>
       </div>
       
-      {/* Overall Stats Cards */}
+      {/* Enhanced Overall Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsOverview
           title="Active Agents"
           value={data.overallStats.totalAgents}
           description="Currently active agents"
           trend={{
-            value: 0,
+            value: data.overallStats.averageTasksPerAgent,
             isUpward: true,
-            label: "compared to last period",
+            label: `avg. ${data.overallStats.averageTasksPerAgent} tasks/agent`
           }}
           icon="ri-robot-line"
         />
+        
         <StatsOverview
-          title="Total Tasks"
+          title="Tasks"
           value={data.overallStats.totalTasks}
-          description="Tasks created"
+          description={`${data.overallStats.completedTasks} completed`}
           trend={{
-            value: 0,
-            isUpward: true,
-            label: "compared to last period",
+            value: Math.abs(data.overallStats.taskGrowthRate * 100),
+            isUpward: data.overallStats.taskGrowthRate >= 0,
+            label: `${data.overallStats.taskGrowthRate >= 0 ? 'growth' : 'decrease'} from last period`
           }}
           icon="ri-task-line"
         />
+        
         <StatsOverview
           title="Completion Rate"
           value={`${Math.round(data.overallStats.completionRate * 100)}%`}
-          description="Tasks completed successfully"
+          description={`${data.overallStats.completedTasks} of ${data.overallStats.totalTasks} tasks`}
           trend={{
-            value: 0,
+            value: data.overallStats.tasksPerDay,
             isUpward: true,
-            label: "compared to last period",
+            label: `${data.overallStats.tasksPerDay.toFixed(1)} tasks/day`
           }}
           icon="ri-check-double-line"
         />
+        
         <StatsOverview
-          title="Avg. Task Age"
-          value={`${Math.round(data.overallStats.averageTaskAge)} days`}
-          description="Average task lifetime"
+          title="Activity"
+          value={data.overallStats.totalMessages}
+          description="Total messages"
           trend={{
-            value: 0,
-            isUpward: false,
-            label: "compared to last period",
+            value: data.overallStats.messagesPerDay,
+            isUpward: true,
+            label: `${data.overallStats.messagesPerDay.toFixed(1)} msgs/day`
           }}
-          icon="ri-timer-line"
+          icon="ri-message-3-line"
         />
+      </div>
+      
+      {/* Additional Stats Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm text-muted-foreground">Avg. Task Age</p>
+                <h3 className="text-2xl font-bold">{data.overallStats.averageTaskAge.toFixed(1)} days</h3>
+              </div>
+              <div className="p-2 bg-amber-100 rounded-full">
+                <i className="ri-timer-line text-amber-600 text-xl"></i>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm text-muted-foreground">Task Growth Rate</p>
+                <h3 className="text-2xl font-bold">
+                  <span className={data.overallStats.taskGrowthRate >= 0 ? "text-green-600" : "text-red-600"}>
+                    {(data.overallStats.taskGrowthRate * 100).toFixed(0)}%
+                  </span>
+                </h3>
+              </div>
+              <div className={`p-2 ${data.overallStats.taskGrowthRate >= 0 ? "bg-green-100" : "bg-red-100"} rounded-full`}>
+                <i className={`${data.overallStats.taskGrowthRate >= 0 ? "ri-arrow-up-line text-green-600" : "ri-arrow-down-line text-red-600"} text-xl`}></i>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm text-muted-foreground">Tasks Per Agent</p>
+                <h3 className="text-2xl font-bold">{data.overallStats.averageTasksPerAgent.toFixed(1)}</h3>
+              </div>
+              <div className="p-2 bg-purple-100 rounded-full">
+                <i className="ri-stack-line text-purple-600 text-xl"></i>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
       
       {/* Task Completion Trends */}
@@ -360,23 +421,44 @@ export function PerformanceAnalytics() {
                     <h4 className="font-semibold">{agent.name}</h4>
                     <p className="text-sm text-gray-500 capitalize">{agent.role}</p>
                   </div>
-                  <div className="ml-auto">
-                    <span className="font-medium text-lg">{Math.round(agent.completionRate * 100)}%</span>
-                    <p className="text-xs text-gray-500">Completion Rate</p>
+                  <div className="flex items-center space-x-4 ml-auto">
+                    <div className="text-center">
+                      <span className="font-medium text-lg">{agent.activityScore}</span>
+                      <p className="text-xs text-gray-500">Activity Score</p>
+                    </div>
+                    <div className="text-center">
+                      <span className="font-medium text-lg">{Math.round(agent.completionRate * 100)}%</span>
+                      <p className="text-xs text-gray-500">Completion Rate</p>
+                    </div>
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
                     <p className="text-sm text-gray-500 mb-1">Task Status</p>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs">Completed</span>
-                      <span className="text-xs font-medium">{agent.tasksCompleted}</span>
+                      <span className="text-xs font-medium text-green-600">
+                        {agent.tasksCompleted} Completed
+                      </span>
+                      <span className="text-xs font-medium text-amber-600">
+                        {agent.tasksInProgress} In Progress
+                      </span>
+                      <span className="text-xs font-medium text-gray-600">
+                        {agent.tasksPending} Pending
+                      </span>
                     </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="h-3 bg-gray-200 rounded-full overflow-hidden flex">
                       <div 
                         className="h-full bg-green-500" 
-                        style={{ width: `${(agent.tasksCompleted / (agent.tasksCompleted + agent.tasksInProgress + agent.tasksPending || 1)) * 100}%` }}
+                        style={{ width: `${(agent.tasksCompleted / (agent.totalTasks || 1)) * 100}%` }}
+                      />
+                      <div 
+                        className="h-full bg-amber-500" 
+                        style={{ width: `${(agent.tasksInProgress / (agent.totalTasks || 1)) * 100}%` }}
+                      />
+                      <div 
+                        className="h-full bg-gray-400" 
+                        style={{ width: `${(agent.tasksPending / (agent.totalTasks || 1)) * 100}%` }}
                       />
                     </div>
                     
@@ -474,6 +556,35 @@ export function PerformanceAnalytics() {
                           <span className="text-lg font-medium">
                             {agent.tasksCompleted}
                           </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Activity</p>
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-xs mb-1">Messages</p>
+                        <div className="flex items-center">
+                          <span className="text-lg font-medium">
+                            {agent.messageCount}
+                          </span>
+                          <div className="ml-2 px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs">
+                            Communication
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <p className="text-xs mb-1">Total Tasks</p>
+                        <div className="flex items-center">
+                          <span className="text-lg font-medium">
+                            {agent.totalTasks}
+                          </span>
+                          <div className="ml-2 px-2 py-1 rounded-full bg-purple-100 text-purple-700 text-xs">
+                            Workload
+                          </div>
                         </div>
                       </div>
                     </div>
