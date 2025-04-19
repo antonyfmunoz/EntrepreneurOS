@@ -1180,16 +1180,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   app.delete("/api/notifications/:id", async (req, res) => {
+    const notificationId = req.params.id;
+    console.log(`API request to delete notification: ${notificationId}`);
+    
     try {
+      // Authentication check
       if (!req.isAuthenticated()) {
+        console.log("Authentication failed for delete notification request");
         return res.status(401).json({ message: "Not authenticated" });
       }
       
-      await storage.deleteNotification(req.params.id);
-      res.json({ success: true });
+      // Check if the notification exists and belongs to the user
+      const notifications = await storage.getNotifications(req.user.id);
+      const notificationExists = notifications.some(n => n.id === notificationId);
+      
+      if (!notificationExists) {
+        console.log(`Notification ${notificationId} not found for user ${req.user.id}`);
+        return res.status(404).json({ 
+          success: false, 
+          message: "Notification not found or doesn't belong to current user" 
+        });
+      }
+      
+      // Delete the notification
+      await storage.deleteNotification(notificationId);
+      console.log(`Successfully deleted notification: ${notificationId}`);
+      
+      // Return success response
+      res.json({ 
+        success: true,
+        message: "Notification deleted successfully",
+        id: notificationId
+      });
     } catch (error) {
-      console.error("Error deleting notification:", error);
-      res.status(500).json({ message: "Failed to delete notification" });
+      console.error(`Error deleting notification ${notificationId}:`, error);
+      res.status(500).json({ 
+        success: false, 
+        message: "Failed to delete notification",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
   
