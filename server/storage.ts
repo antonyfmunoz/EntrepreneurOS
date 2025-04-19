@@ -38,7 +38,7 @@ import {
   type InsertFolder
 } from "@shared/schema";
 import { db, client } from './db';
-import { eq, and, desc, asc } from 'drizzle-orm';
+import { eq, and, desc, asc, sql } from 'drizzle-orm';
 import session from 'express-session';
 import connectPg from 'connect-pg-simple';
 
@@ -1148,11 +1148,13 @@ export class DatabaseStorage implements IStorage {
           .orderBy(desc(documentsTable.updatedAt));
       } else {
         // Get documents without a folder (root documents)
+        // We need to use SQL for the IS NULL check
         return await db.select()
           .from(documentsTable)
           .where(and(
             eq(documentsTable.userId, userId),
-            eq(documentsTable.folderId, null)
+            // Use SQL.raw for NULL comparison
+            sql`${documentsTable.folderId} IS NULL`
           ))
           .orderBy(desc(documentsTable.updatedAt));
       }
