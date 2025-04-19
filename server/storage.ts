@@ -85,6 +85,22 @@ export interface IStorage {
   addAiMessage(message: InsertAiMessage): Promise<AiMessage>;
   clearAiMessages(userId: string): Promise<void>;
   
+  // CRM operations
+  getCrmContacts(userId: string): Promise<CrmContact[]>;
+  getCrmContact(id: string): Promise<CrmContact | undefined>;
+  createCrmContact(contact: InsertCrmContact): Promise<CrmContact>;
+  updateCrmContact(id: string, updates: Partial<InsertCrmContact>): Promise<CrmContact | undefined>;
+  
+  getCrmDeals(userId: string): Promise<CrmDeal[]>;
+  getCrmDeal(id: string): Promise<CrmDeal | undefined>;
+  createCrmDeal(deal: InsertCrmDeal): Promise<CrmDeal>;
+  updateCrmDeal(id: string, updates: Partial<InsertCrmDeal>): Promise<CrmDeal | undefined>;
+  
+  getCrmActivities(userId: string): Promise<CrmActivity[]>;
+  getCrmActivity(id: string): Promise<CrmActivity | undefined>;
+  createCrmActivity(activity: InsertCrmActivity): Promise<CrmActivity>;
+  updateCrmActivity(id: string, updates: Partial<InsertCrmActivity>): Promise<CrmActivity | undefined>;
+  
   // Session store
   sessionStore: session.Store;
 }

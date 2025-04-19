@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, decimal } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -224,3 +224,101 @@ export const insertAiMessageSchema = z.object({
 
 export type InsertAiMessage = z.infer<typeof insertAiMessageSchema>;
 export type AiMessage = typeof aiMessages.$inferSelect;
+
+// CRM - Contacts
+export const crmContacts = pgTable("crm_contacts", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  company: text("company"),
+  title: text("title"),
+  status: text("status").default("lead"), // lead, prospect, customer, churned
+  lastContact: timestamp("last_contact"),
+  notes: text("notes"),
+  avatar: text("avatar"),
+  userId: text("user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertCrmContactSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Valid email is required"),
+  phone: z.string().optional(),
+  company: z.string().optional(),
+  title: z.string().optional(),
+  status: z.enum(["lead", "prospect", "customer", "churned"]).default("lead"),
+  lastContact: z.date().optional(),
+  notes: z.string().optional(),
+  avatar: z.string().optional(),
+  userId: z.string(),
+});
+
+// CRM - Deals
+export const crmDeals = pgTable("crm_deals", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  company: text("company").notNull(),
+  value: decimal("value", { precision: 10, scale: 2 }).notNull(),
+  stage: text("stage").default("discovery"), // discovery, proposal, negotiation, closed-won, closed-lost
+  probability: integer("probability").default(50),
+  expectedCloseDate: timestamp("expected_close_date"),
+  contactId: text("contact_id").references(() => crmContacts.id),
+  assignedAgentId: text("assigned_agent_id").references(() => agents.id),
+  notes: text("notes"),
+  userId: text("user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertCrmDealSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  company: z.string().min(1, "Company is required"),
+  value: z.number().positive("Value must be positive"),
+  stage: z.enum(["discovery", "proposal", "negotiation", "closed-won", "closed-lost"]).default("discovery"),
+  probability: z.number().min(0).max(100).default(50),
+  expectedCloseDate: z.date().optional(),
+  contactId: z.string(),
+  assignedAgentId: z.string().optional(),
+  notes: z.string().optional(),
+  userId: z.string(),
+});
+
+// CRM - Activities
+export const crmActivities = pgTable("crm_activities", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull(), // email, call, meeting, task, note
+  subject: text("subject").notNull(),
+  date: timestamp("date").notNull(),
+  relatedToType: text("related_to_type").notNull(), // contact, deal
+  relatedToId: text("related_to_id").notNull(),
+  completed: boolean("completed").default(false),
+  notes: text("notes"),
+  createdByAgentId: text("created_by_agent_id").references(() => agents.id),
+  userId: text("user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertCrmActivitySchema = z.object({
+  type: z.enum(["email", "call", "meeting", "task", "note"]),
+  subject: z.string().min(1, "Subject is required"),
+  date: z.date(),
+  relatedToType: z.enum(["contact", "deal"]),
+  relatedToId: z.string(),
+  completed: z.boolean().default(false),
+  notes: z.string().optional(),
+  createdByAgentId: z.string().optional(),
+  userId: z.string(),
+});
+
+// Export CRM types
+export type InsertCrmContact = z.infer<typeof insertCrmContactSchema>;
+export type CrmContact = typeof crmContacts.$inferSelect;
+
+export type InsertCrmDeal = z.infer<typeof insertCrmDealSchema>;
+export type CrmDeal = typeof crmDeals.$inferSelect;
+
+export type InsertCrmActivity = z.infer<typeof insertCrmActivitySchema>;
+export type CrmActivity = typeof crmActivities.$inferSelect;
