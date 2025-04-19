@@ -1109,6 +1109,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Notification API Routes
+  // Track users who have cleared all notifications
+  const usersClearedNotifications = new Set<string>();
+  
   app.get("/api/notifications", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -1118,8 +1121,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if there are any notifications for this user
       const existingNotifications = await storage.getNotifications(req.user.id);
       
-      // If no notifications exist, create a test one
-      if (existingNotifications.length === 0) {
+      // Only create a welcome notification if:
+      // 1. User has no notifications
+      // 2. User hasn't explicitly cleared all notifications
+      if (existingNotifications.length === 0 && !usersClearedNotifications.has(req.user.id)) {
         await storage.createNotification({
           userId: req.user.id,
           title: "Welcome to AgentOS",
@@ -1205,6 +1210,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Delete the notification
       await storage.deleteNotification(notificationId);
       console.log(`Successfully deleted notification: ${notificationId}`);
+      
+      // Check if this was the user's last notification
+      const remainingNotifications = await storage.getNotifications(req.user.id);
+      if (remainingNotifications.length === 0) {
+        // If user deleted all notifications, add them to the tracking set
+        usersClearedNotifications.add(req.user.id);
+        console.log(`User ${req.user.id} cleared all notifications, adding to tracking set`);
+      }
       
       // Return success response
       res.json({ 
