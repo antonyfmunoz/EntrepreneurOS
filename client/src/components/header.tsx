@@ -33,12 +33,6 @@ export function Header({ title, children }: HeaderProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem className="cursor-pointer" onClick={() => window.open("https://docs.agentos.dev", "_blank")}>
-              Documentation
-            </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer" onClick={() => window.open("https://discord.gg/agentos", "_blank")}>
-              Discord Community
-            </DropdownMenuItem>
             <DropdownMenuItem className="cursor-pointer" onClick={() => navigate("/tutorials")}>
               Tutorials
             </DropdownMenuItem>
