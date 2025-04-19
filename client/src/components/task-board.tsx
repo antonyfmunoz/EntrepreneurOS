@@ -2,12 +2,13 @@ import { useState } from "react";
 import { TaskCard } from "./task-card";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "./ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { DragDropContext, Droppable, Draggable, DropResult } from "react-beautiful-dnd";
 
 type Task = {
   id: string;
@@ -28,6 +29,20 @@ type Agent = {
   role: string;
 };
 
+// Define column types for the board
+type ColumnId = "todo" | "in-progress" | "done";
+
+interface Column {
+  id: ColumnId;
+  title: string;
+  taskIds: string[];
+  color: string;
+}
+
+type TaskMap = {
+  [key: string]: Task;
+};
+
 export function TaskBoard() {
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
   const [newTask, setNewTask] = useState({
@@ -37,13 +52,44 @@ export function TaskBoard() {
     agentId: ""
   });
 
-  const { data: tasks = [] } = useQuery<Task[]>({
+  const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({
     queryKey: ["/api/tasks"],
   });
 
   const { data: agents = [] } = useQuery<Agent[]>({
     queryKey: ["/api/agents"],
   });
+
+  // Transform tasks into a map for easier access
+  const tasksMap: TaskMap = {};
+  tasks.forEach(task => {
+    tasksMap[task.id] = task;
+  });
+
+  // Define columns for the board
+  const columns: { [key in ColumnId]: Column } = {
+    "todo": {
+      id: "todo",
+      title: "To Do",
+      taskIds: tasks.filter(task => task.status === "todo").map(task => task.id),
+      color: "bg-gray-400"
+    },
+    "in-progress": {
+      id: "in-progress",
+      title: "In Progress",
+      taskIds: tasks.filter(task => task.status === "in-progress").map(task => task.id),
+      color: "bg-yellow-400"
+    },
+    "done": {
+      id: "done",
+      title: "Done",
+      taskIds: tasks.filter(task => task.status === "done").map(task => task.id),
+      color: "bg-green-500"
+    }
+  };
+
+  // Define the column order
+  const columnOrder: ColumnId[] = ["todo", "in-progress", "done"];
 
   const createTaskMutation = useMutation({
     mutationFn: async (taskData: any) => {
@@ -85,10 +131,6 @@ export function TaskBoard() {
     updateTaskStatusMutation.mutate({ taskId, status: newStatus });
   };
 
-  const todoTasks = tasks.filter(task => task.status === "todo");
-  const inProgressTasks = tasks.filter(task => task.status === "in-progress");
-  const doneTasks = tasks.filter(task => task.status === "done");
-
   const getBadgeVariantFromRole = (role: string) => {
     switch (role) {
       case "marketing":
@@ -101,6 +143,24 @@ export function TaskBoard() {
         return "operations";
       default:
         return "default";
+    }
+  };
+
+  const handleDragEnd = (result: DropResult) => {
+    const { destination, source, draggableId } = result;
+
+    // If there's no destination or the item was dropped back in its original position
+    if (!destination || 
+        (destination.droppableId === source.droppableId && 
+         destination.index === source.index)) {
+      return;
+    }
+
+    // If the task was moved to a different column
+    if (destination.droppableId !== source.droppableId) {
+      // Update the task status in the backend
+      const newStatus = destination.droppableId as "todo" | "in-progress" | "done";
+      moveTask(draggableId, newStatus);
     }
   };
 
@@ -117,75 +177,72 @@ export function TaskBoard() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        {/* To Do Column */}
-        <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-medium text-gray-700 flex items-center">
-              <span className="w-3 h-3 rounded-full bg-gray-400 mr-2"></span>
-              To Do
-            </h3>
-            <span className="bg-gray-100 text-gray-600 text-xs font-medium px-2 py-1 rounded">{todoTasks.length}</span>
-          </div>
-          
-          <div className="space-y-3">
-            {todoTasks.map(task => (
-              <TaskCard 
-                key={task.id}
-                task={task}
-                badgeVariant={task.agent ? getBadgeVariantFromRole(task.agent.role) : undefined}
-                onMoveRight={() => moveTask(task.id, "in-progress")}
-              />
-            ))}
-          </div>
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          {columnOrder.map(columnId => {
+            const column = columns[columnId];
+            const columnTasks = column.taskIds.map(taskId => tasksMap[taskId]);
+            
+            return (
+              <div 
+                key={column.id} 
+                className="bg-white rounded-lg shadow p-4 border border-gray-200 flex flex-col"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-medium text-gray-700 flex items-center">
+                    <span className={`w-3 h-3 rounded-full ${column.color} mr-2`}></span>
+                    {column.title}
+                  </h3>
+                  <span className="bg-gray-100 text-gray-600 text-xs font-medium px-2 py-1 rounded">
+                    {column.taskIds.length}
+                  </span>
+                </div>
+                
+                <Droppable droppableId={column.id}>
+                  {(provided, snapshot) => (
+                    <div 
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={`flex-1 space-y-3 min-h-[200px] ${snapshot.isDraggingOver ? 'bg-gray-50' : ''}`}
+                    >
+                      {columnTasks.map((task, index) => (
+                        <Draggable 
+                          key={task.id} 
+                          draggableId={task.id} 
+                          index={index}
+                        >
+                          {(provided, snapshot) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              {...provided.dragHandleProps}
+                              style={{
+                                ...provided.draggableProps.style,
+                                opacity: snapshot.isDragging ? 0.8 : 1
+                              }}
+                              className={`${snapshot.isDragging ? 'shadow-lg' : ''}`}
+                            >
+                              <TaskCard 
+                                task={task}
+                                badgeVariant={task.agent ? getBadgeVariantFromRole(task.agent.role) : undefined}
+                                isDone={task.status === 'done'}
+                                // We don't need these anymore with drag and drop
+                                // onMoveLeft={column.id !== 'todo' ? () => moveTask(task.id, getPreviousStatus(column.id)) : undefined}
+                                // onMoveRight={column.id !== 'done' ? () => moveTask(task.id, getNextStatus(column.id)) : undefined}
+                              />
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </div>
+            );
+          })}
         </div>
-        
-        {/* In Progress Column */}
-        <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-medium text-gray-700 flex items-center">
-              <span className="w-3 h-3 rounded-full bg-yellow-400 mr-2"></span>
-              In Progress
-            </h3>
-            <span className="bg-gray-100 text-gray-600 text-xs font-medium px-2 py-1 rounded">{inProgressTasks.length}</span>
-          </div>
-          
-          <div className="space-y-3">
-            {inProgressTasks.map(task => (
-              <TaskCard 
-                key={task.id}
-                task={task}
-                badgeVariant={task.agent ? getBadgeVariantFromRole(task.agent.role) : undefined}
-                onMoveLeft={() => moveTask(task.id, "todo")}
-                onMoveRight={() => moveTask(task.id, "done")}
-              />
-            ))}
-          </div>
-        </div>
-        
-        {/* Done Column */}
-        <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-medium text-gray-700 flex items-center">
-              <span className="w-3 h-3 rounded-full bg-green-500 mr-2"></span>
-              Done
-            </h3>
-            <span className="bg-gray-100 text-gray-600 text-xs font-medium px-2 py-1 rounded">{doneTasks.length}</span>
-          </div>
-          
-          <div className="space-y-3">
-            {doneTasks.map(task => (
-              <TaskCard 
-                key={task.id}
-                task={task}
-                badgeVariant={task.agent ? getBadgeVariantFromRole(task.agent.role) : undefined}
-                onMoveLeft={() => moveTask(task.id, "in-progress")}
-                isDone
-              />
-            ))}
-          </div>
-        </div>
-      </div>
+      </DragDropContext>
 
       <Dialog open={isAddTaskOpen} onOpenChange={setIsAddTaskOpen}>
         <DialogContent>
