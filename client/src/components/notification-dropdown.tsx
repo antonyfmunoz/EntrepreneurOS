@@ -30,6 +30,7 @@ export const NotificationDropdown = () => {
     isDeletingNotification,
   } = useNotifications();
 
+  // This function is used by the NotificationItem component
   const handleMarkAsRead = (
     e: React.MouseEvent<HTMLButtonElement>,
     notificationId: string
@@ -39,12 +40,7 @@ export const NotificationDropdown = () => {
     markAsRead(notificationId);
   };
   
-  const handleDeleteNotification = (
-    e: React.MouseEvent<HTMLButtonElement>,
-    notificationId: string
-  ) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDeleteNotification = (notificationId: string) => {
     deleteNotification(notificationId);
   };
 
@@ -132,10 +128,7 @@ interface NotificationItemProps {
     e: React.MouseEvent<HTMLButtonElement>,
     id: string
   ) => void;
-  onDeleteNotification?: (
-    e: React.MouseEvent<HTMLButtonElement>,
-    id: string
-  ) => void;
+  onDeleteNotification?: (id: string) => void;
 }
 
 const NotificationItem: React.FC<NotificationItemProps> = ({
@@ -229,7 +222,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      onDeleteNotification(e, notification.id);
+                      onDeleteNotification(notification.id);
                     }}
                   >
                     <Trash2 className="h-3 w-3" />
