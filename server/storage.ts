@@ -110,6 +110,13 @@ export interface IStorage {
   createCrmActivity(activity: InsertCrmActivity): Promise<CrmActivity>;
   updateCrmActivity(id: string, updates: Partial<InsertCrmActivity>): Promise<CrmActivity | undefined>;
   
+  // Document operations
+  getDocuments(userId: string): Promise<Document[]>;
+  getDocument(id: string): Promise<Document | undefined>;
+  createDocument(document: InsertDocument): Promise<Document>;
+  updateDocument(id: string, updates: Partial<InsertDocument>): Promise<Document | undefined>;
+  deleteDocument(id: string): Promise<void>;
+  
   // Session store
   sessionStore: session.Store;
 }
@@ -1031,6 +1038,81 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return updatedActivity;
+  }
+
+  // Document operations
+  async getDocuments(userId: string): Promise<Document[]> {
+    try {
+      return await db.select()
+        .from(documents)
+        .where(eq(documents.userId, userId))
+        .orderBy(desc(documents.updatedAt));
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+      return [];
+    }
+  }
+
+  async getDocument(id: string): Promise<Document | undefined> {
+    try {
+      const docs = await db.select()
+        .from(documents)
+        .where(eq(documents.id, id));
+      return docs.length > 0 ? docs[0] : undefined;
+    } catch (error) {
+      console.error(`Error fetching document ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async createDocument(document: InsertDocument): Promise<Document> {
+    try {
+      const id = `doc_${Date.now()}`;
+      const now = new Date();
+      
+      const [newDocument] = await db.insert(documents)
+        .values({
+          id,
+          title: document.title,
+          content: document.content,
+          tags: document.tags || [],
+          userId: document.userId,
+          createdAt: now,
+          updatedAt: now
+        })
+        .returning();
+      
+      return newDocument;
+    } catch (error) {
+      console.error('Error creating document:', error);
+      throw error;
+    }
+  }
+
+  async updateDocument(id: string, updates: Partial<InsertDocument>): Promise<Document | undefined> {
+    try {
+      const updateData = { ...updates, updatedAt: new Date() };
+      
+      const [updatedDocument] = await db.update(documents)
+        .set(updateData)
+        .where(eq(documents.id, id))
+        .returning();
+        
+      return updatedDocument;
+    } catch (error) {
+      console.error(`Error updating document ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async deleteDocument(id: string): Promise<void> {
+    try {
+      await db.delete(documents)
+        .where(eq(documents.id, id));
+    } catch (error) {
+      console.error(`Error deleting document ${id}:`, error);
+      throw error;
+    }
   }
 }
 
