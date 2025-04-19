@@ -82,11 +82,12 @@ type AnalyticsData = {
 
 export function PerformanceAnalytics() {
   const [timeRange, setTimeRange] = useState<"7days" | "30days" | "90days" | "365days">("7days");
+  const [showComparison, setShowComparison] = useState(false);
   
   const { data, isLoading, error } = useQuery<AnalyticsData>({
-    queryKey: ["/api/analytics", timeRange],
+    queryKey: ["/api/analytics", timeRange, showComparison],
     queryFn: async () => {
-      const response = await fetch(`/api/analytics?timeRange=${timeRange}`);
+      const response = await fetch(`/api/analytics?timeRange=${timeRange}&showComparison=${showComparison}`);
       if (!response.ok) {
         throw new Error("Failed to fetch analytics data");
       }
@@ -126,22 +127,36 @@ export function PerformanceAnalytics() {
   
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-2 md:space-y-0">
         <h2 className="text-xl font-semibold">Performance Dashboard</h2>
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-500">Time Period:</span>
-          <Tabs 
-            defaultValue={timeRange} 
-            className="w-auto" 
-            onValueChange={(value) => setTimeRange(value as "7days" | "30days" | "90days" | "365days")}
+        <div className="flex flex-col md:flex-row items-start md:items-center space-y-2 md:space-y-0 md:space-x-4">
+          <button
+            onClick={() => setShowComparison(!showComparison)}
+            className={`flex items-center space-x-2 px-3 py-2 text-sm border rounded-md transition-colors ${
+              showComparison 
+                ? "bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200" 
+                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+            }`}
           >
-            <TabsList>
-              <TabsTrigger value="7days">7 Days</TabsTrigger>
-              <TabsTrigger value="30days">30 Days</TabsTrigger>
-              <TabsTrigger value="90days">90 Days</TabsTrigger>
-              <TabsTrigger value="365days">1 Year</TabsTrigger>
-            </TabsList>
-          </Tabs>
+            <i className="ri-history-line"></i>
+            <span>{showComparison ? "Hide Historical Comparison" : "Show Historical Comparison"}</span>
+          </button>
+          
+          <div className="flex items-center space-x-2">
+            <span className="text-sm text-gray-500">Time Period:</span>
+            <Tabs 
+              defaultValue={timeRange} 
+              className="w-auto" 
+              onValueChange={(value) => setTimeRange(value as "7days" | "30days" | "90days" | "365days")}
+            >
+              <TabsList>
+                <TabsTrigger value="7days">7 Days</TabsTrigger>
+                <TabsTrigger value="30days">30 Days</TabsTrigger>
+                <TabsTrigger value="90days">90 Days</TabsTrigger>
+                <TabsTrigger value="365days">1 Year</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
       </div>
       
@@ -247,11 +262,22 @@ export function PerformanceAnalytics() {
       
       {/* Task Completion Trends */}
       <Card>
-        <CardHeader>
-          <CardTitle>Task Completion Trends</CardTitle>
-          <CardDescription>
-            Track task creation and completion rates over time
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Task Completion Trends</CardTitle>
+            <CardDescription>
+              Track task creation and completion rates over time
+            </CardDescription>
+          </div>
+          
+          {showComparison && (
+            <div className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-md text-sm font-medium flex items-center">
+              <i className="ri-time-line mr-1.5"></i>
+              <span>Showing comparison with previous {timeRange === '7days' ? 'week' : 
+                  timeRange === '30days' ? 'month' : 
+                  timeRange === '90days' ? 'quarter' : 'year'}</span>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <div className="w-full h-80">
@@ -344,9 +370,17 @@ export function PerformanceAnalytics() {
       {/* Task Distribution */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
-          <CardHeader>
-            <CardTitle>Task Status Distribution</CardTitle>
-            <CardDescription>Breakdown of tasks by status</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div>
+              <CardTitle>Task Status Distribution</CardTitle>
+              <CardDescription>Breakdown of tasks by status</CardDescription>
+            </div>
+            {showComparison && (
+              <div className="bg-blue-50 px-2 py-1 rounded text-blue-700 text-xs">
+                <i className="ri-time-line mr-1"></i>
+                Comparison active
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             <div className="w-full h-64 flex items-center justify-center">
@@ -376,9 +410,17 @@ export function PerformanceAnalytics() {
         </Card>
         
         <Card>
-          <CardHeader>
-            <CardTitle>Task Type Distribution</CardTitle>
-            <CardDescription>Breakdown of tasks by type</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div>
+              <CardTitle>Task Type Distribution</CardTitle>
+              <CardDescription>Breakdown of tasks by type</CardDescription>
+            </div>
+            {showComparison && (
+              <div className="bg-blue-50 px-2 py-1 rounded text-blue-700 text-xs">
+                <i className="ri-time-line mr-1"></i>
+                Comparison active
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             <div className="w-full h-64 flex items-center justify-center">
@@ -408,9 +450,17 @@ export function PerformanceAnalytics() {
         </Card>
         
         <Card>
-          <CardHeader>
-            <CardTitle>Task Priority Distribution</CardTitle>
-            <CardDescription>Breakdown of tasks by priority</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div>
+              <CardTitle>Task Priority Distribution</CardTitle>
+              <CardDescription>Breakdown of tasks by priority</CardDescription>
+            </div>
+            {showComparison && (
+              <div className="bg-blue-50 px-2 py-1 rounded text-blue-700 text-xs">
+                <i className="ri-time-line mr-1"></i>
+                Comparison active
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             <div className="w-full h-64 flex items-center justify-center">
@@ -442,11 +492,20 @@ export function PerformanceAnalytics() {
       
       {/* Agent Performance */}
       <Card>
-        <CardHeader>
-          <CardTitle>Agent Performance</CardTitle>
-          <CardDescription>
-            Detailed performance metrics for each agent
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Agent Performance</CardTitle>
+            <CardDescription>
+              Detailed performance metrics for each agent
+            </CardDescription>
+          </div>
+          
+          {showComparison && (
+            <div className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-md text-sm font-medium flex items-center">
+              <i className="ri-time-line mr-1.5"></i>
+              <span>Comparing with previous period</span>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <div className="space-y-6">

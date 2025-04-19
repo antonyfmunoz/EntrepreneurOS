@@ -891,6 +891,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const timeRange = req.query.timeRange as string || '7days';
+      const showComparison = req.query.showComparison === 'true';
       const agents = await storage.getAgents();
       const tasks = await storage.getTasks();
       const allMessages = await storage.getAllMessages();
@@ -898,13 +899,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate date range based on timeRange
       const now = new Date();
       const startDate = new Date();
+      let daysToGenerate = 7;
+      let comparisonLabel = 'vs previous week';
+      
       if (timeRange === '7days') {
         startDate.setDate(now.getDate() - 7);
+        daysToGenerate = 7;
+        comparisonLabel = 'vs previous week';
       } else if (timeRange === '30days') {
         startDate.setDate(now.getDate() - 30);
+        daysToGenerate = 30;
+        comparisonLabel = 'vs previous month';
       } else if (timeRange === '90days') {
         startDate.setDate(now.getDate() - 90);
+        daysToGenerate = 90;
+        comparisonLabel = 'vs previous quarter';
+      } else if (timeRange === '365days') {
+        startDate.setDate(now.getDate() - 365);
+        daysToGenerate = 365;
+        comparisonLabel = 'vs previous year';
       }
+      
+      // Calculate start and end dates for previous period
+      const previousPeriodEnd = new Date(startDate);
+      previousPeriodEnd.setDate(previousPeriodEnd.getDate() - 1);
+      
+      const previousPeriodStart = new Date(previousPeriodEnd);
+      previousPeriodStart.setDate(previousPeriodStart.getDate() - daysToGenerate);
       
       // Filter data within the selected time range
       const tasksInRange = tasks.filter(task => {
@@ -981,7 +1002,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Generate accurate task completion trends with real data
       const taskCompletionTrends = [];
-      const daysToGenerate = timeRange === '7days' ? 7 : (timeRange === '30days' ? 30 : 90);
       
       for (let i = 0; i < daysToGenerate; i++) {
         const date = new Date();
