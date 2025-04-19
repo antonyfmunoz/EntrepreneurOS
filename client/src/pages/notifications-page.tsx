@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNotifications } from "@/hooks/use-notifications";
 import { format } from "date-fns";
-import { Check, Loader2, BellOff } from "lucide-react";
+import { Check, Loader2, BellOff, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,8 +15,10 @@ export default function NotificationsPage() {
     isLoading, 
     markAsRead, 
     markAllAsRead,
+    deleteNotification,
     refresh,
-    isMarkingAllAsRead
+    isMarkingAllAsRead,
+    isDeletingNotification
   } = useNotifications();
 
   const readNotifications = notifications.filter(n => n.read);
@@ -30,6 +32,10 @@ export default function NotificationsPage() {
 
   const handleMarkAsRead = (id: string) => {
     markAsRead(id);
+  };
+  
+  const handleDeleteNotification = (id: string) => {
+    deleteNotification(id);
   };
 
   return (
@@ -100,6 +106,7 @@ export default function NotificationsPage() {
                       key={notification.id}
                       notification={notification}
                       onMarkAsRead={handleMarkAsRead}
+                      onDeleteNotification={handleDeleteNotification}
                     />
                   ))}
                 </div>
@@ -115,9 +122,10 @@ export default function NotificationsPage() {
 type NotificationCardProps = {
   notification: any;
   onMarkAsRead: (id: string) => void;
+  onDeleteNotification?: (id: string) => void;
 };
 
-function NotificationCard({ notification, onMarkAsRead }: NotificationCardProps) {
+function NotificationCard({ notification, onMarkAsRead, onDeleteNotification }: NotificationCardProps) {
   const formattedDate = notification.createdAt
     ? format(new Date(notification.createdAt), "MMM d, yyyy 'at' h:mm a")
     : "";
@@ -207,7 +215,23 @@ function NotificationCard({ notification, onMarkAsRead }: NotificationCardProps)
         </div>
       </CardHeader>
       <CardContent className="p-4 pt-2">
-        <p className="text-sm text-muted-foreground mt-2">{notification.content}</p>
+        <div className="flex justify-between items-start">
+          <p className="text-sm text-muted-foreground mt-2">{notification.content}</p>
+          {onDeleteNotification && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-2 shrink-0"
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent the card click handler
+                onDeleteNotification(notification.id);
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1" />
+              Delete
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
