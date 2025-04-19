@@ -13,6 +13,7 @@ import NotificationsPage from "@/pages/notifications-page";
 import SettingsPage from "@/pages/settings-page";
 import TutorialsPage from "@/pages/tutorials-page";
 import SupportPage from "@/pages/support-page";
+import CRMPage from "@/pages/crm-page";
 import AuthPage from "@/pages/auth-page";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
@@ -42,6 +43,7 @@ function Router() {
       </ProtectedRoute>
       <ProtectedRoute path="/integrations" component={IntegrationsPage} />
       <ProtectedRoute path="/analytics" component={AnalyticsPage} />
+      <ProtectedRoute path="/crm" component={CRMPage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/notifications" component={NotificationsPage} />
       <ProtectedRoute path="/support" component={SupportPage} />
