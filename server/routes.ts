@@ -8,7 +8,10 @@ import {
   insertAgentSchema, 
   insertTaskSchema, 
   updateTaskSchema,
-  messages as messagesTable
+  messages as messagesTable,
+  insertCrmContactSchema,
+  insertCrmDealSchema,
+  insertCrmActivitySchema
 } from "@shared/schema";
 import { 
   getModelInfo, 
