@@ -78,6 +78,7 @@ export interface IStorage {
   createNotification(notification: InsertNotification): Promise<Notification>;
   markNotificationAsRead(id: string): Promise<Notification | undefined>;
   markAllNotificationsAsRead(userId: string): Promise<void>;
+  deleteNotification(id: string): Promise<void>;
   
   // AI Assistant operations
   getAiMessages(userId: string): Promise<AiMessage[]>;
@@ -803,6 +804,11 @@ export class DatabaseStorage implements IStorage {
     await db.update(notificationsTable)
       .set({ read: true })
       .where(eq(notificationsTable.userId, userId));
+  }
+
+  async deleteNotification(id: string): Promise<void> {
+    await db.delete(notificationsTable)
+      .where(eq(notificationsTable.id, id));
   }
 
   // AI Assistant operations
