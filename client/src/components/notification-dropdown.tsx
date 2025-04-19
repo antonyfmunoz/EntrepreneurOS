@@ -1,7 +1,7 @@
 import React from "react";
 import { Notification } from "@shared/schema";
 import { useNotifications } from "@/hooks/use-notifications";
-import { Bell, Check, BellOff } from "lucide-react";
+import { Bell, Check, BellOff, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -25,7 +25,9 @@ export const NotificationDropdown = () => {
     isLoading,
     markAsRead,
     markAllAsRead,
+    deleteNotification,
     isMarkingAllAsRead,
+    isDeletingNotification,
   } = useNotifications();
 
   const handleMarkAsRead = (
@@ -35,6 +37,15 @@ export const NotificationDropdown = () => {
     e.preventDefault();
     e.stopPropagation();
     markAsRead(notificationId);
+  };
+  
+  const handleDeleteNotification = (
+    e: React.MouseEvent<HTMLButtonElement>,
+    notificationId: string
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    deleteNotification(notificationId);
   };
 
   return (
@@ -97,6 +108,7 @@ export const NotificationDropdown = () => {
                   key={notification.id}
                   notification={notification}
                   onMarkAsRead={handleMarkAsRead}
+                  onDeleteNotification={handleDeleteNotification}
                 />
               ))}
               {notifications.length > 5 && (
@@ -120,11 +132,16 @@ interface NotificationItemProps {
     e: React.MouseEvent<HTMLButtonElement>,
     id: string
   ) => void;
+  onDeleteNotification?: (
+    e: React.MouseEvent<HTMLButtonElement>,
+    id: string
+  ) => void;
 }
 
 const NotificationItem: React.FC<NotificationItemProps> = ({
   notification,
   onMarkAsRead,
+  onDeleteNotification,
 }) => {
   const href = notification.href || "#";
   const formattedDate = notification.createdAt
@@ -188,21 +205,38 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
               >
                 {notification.title}
               </h4>
-              {!notification.read && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0 ml-2 -mr-1 rounded-full"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    onMarkAsRead(e, notification.id);
-                  }}
-                >
-                  <Check className="h-3 w-3" />
-                  <span className="sr-only">Mark as read</span>
-                </Button>
-              )}
+              <div className="flex">
+                {!notification.read && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0 ml-1 rounded-full"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      onMarkAsRead(e, notification.id);
+                    }}
+                  >
+                    <Check className="h-3 w-3" />
+                    <span className="sr-only">Mark as read</span>
+                  </Button>
+                )}
+                {onDeleteNotification && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0 ml-1 rounded-full text-muted-foreground hover:text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      onDeleteNotification(e, notification.id);
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    <span className="sr-only">Delete notification</span>
+                  </Button>
+                )}
+              </div>
             </div>
             <p className="text-sm text-muted-foreground mt-0.5">
               {notification.content}

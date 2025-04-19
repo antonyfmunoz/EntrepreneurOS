@@ -65,6 +65,29 @@ export function useNotifications() {
     },
   });
 
+  // Delete a notification
+  const deleteNotificationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/notifications/${id}`);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications/count"] });
+      toast({
+        title: "Notification deleted",
+        description: "The notification has been removed",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to delete notification",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const refresh = () => {
     refetch();
     refetchCount();
@@ -77,8 +100,10 @@ export function useNotifications() {
     error,
     markAsRead: (id: string) => markAsReadMutation.mutate(id),
     markAllAsRead: () => markAllAsReadMutation.mutate(),
+    deleteNotification: (id: string) => deleteNotificationMutation.mutate(id),
     isMarkingAsRead: markAsReadMutation.isPending,
     isMarkingAllAsRead: markAllAsReadMutation.isPending,
+    isDeletingNotification: deleteNotificationMutation.isPending,
     refresh
   };
 }
