@@ -133,19 +133,7 @@ export function Sidebar() {
                 </div>
               </Link>
             </li>
-            <li>
-              <Link href="/integrations">
-                <div className={cn(
-                  "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
-                  location === "/integrations" 
-                    ? "bg-blue-50 text-primary font-medium" 
-                    : "hover:bg-gray-100 text-gray-700"
-                )}>
-                  <i className="ri-link"></i>
-                  <span>Integrations</span>
-                </div>
-              </Link>
-            </li>
+            {/* Integrations page removed from sidebar - now accessible only via Settings */}
             <li>
               <Link href="/settings">
                 <div className={cn(
