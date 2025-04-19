@@ -10,6 +10,7 @@ import {
   crmDeals as crmDealsTable,
   crmActivities as crmActivitiesTable,
   documents as documentsTable,
+  folders as foldersTable,
   type Agent, 
   type Task, 
   type InsertAgent, 
@@ -32,7 +33,9 @@ import {
   type CrmActivity,
   type InsertCrmActivity,
   type Document,
-  type InsertDocument
+  type InsertDocument,
+  type Folder,
+  type InsertFolder
 } from "@shared/schema";
 import { db, client } from './db';
 import { eq, and, desc, asc } from 'drizzle-orm';
@@ -113,8 +116,15 @@ export interface IStorage {
   createCrmActivity(activity: InsertCrmActivity): Promise<CrmActivity>;
   updateCrmActivity(id: string, updates: Partial<InsertCrmActivity>): Promise<CrmActivity | undefined>;
   
+  // Folder operations
+  getFolders(userId: string): Promise<Folder[]>;
+  getFolder(id: string): Promise<Folder | undefined>;
+  createFolder(folder: InsertFolder): Promise<Folder>;
+  updateFolder(id: string, updates: Partial<InsertFolder>): Promise<Folder | undefined>;
+  deleteFolder(id: string): Promise<void>;
+  
   // Document operations
-  getDocuments(userId: string): Promise<Document[]>;
+  getDocuments(userId: string, folderId?: string): Promise<Document[]>;
   getDocument(id: string): Promise<Document | undefined>;
   createDocument(document: InsertDocument): Promise<Document>;
   updateDocument(id: string, updates: Partial<InsertDocument>): Promise<Document | undefined>;
@@ -1043,13 +1053,109 @@ export class DatabaseStorage implements IStorage {
     return updatedActivity;
   }
 
-  // Document operations
-  async getDocuments(userId: string): Promise<Document[]> {
+  // Folder operations
+  async getFolders(userId: string): Promise<Folder[]> {
     try {
       return await db.select()
-        .from(documentsTable)
-        .where(eq(documentsTable.userId, userId))
-        .orderBy(desc(documentsTable.updatedAt));
+        .from(foldersTable)
+        .where(eq(foldersTable.userId, userId))
+        .orderBy(asc(foldersTable.name));
+    } catch (error) {
+      console.error('Error fetching folders:', error);
+      return [];
+    }
+  }
+
+  async getFolder(id: string): Promise<Folder | undefined> {
+    try {
+      const folders = await db.select()
+        .from(foldersTable)
+        .where(eq(foldersTable.id, id));
+      return folders.length > 0 ? folders[0] : undefined;
+    } catch (error) {
+      console.error(`Error fetching folder ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async createFolder(folder: InsertFolder): Promise<Folder> {
+    try {
+      const id = `folder_${Date.now()}`;
+      const now = new Date();
+      
+      const [newFolder] = await db.insert(foldersTable)
+        .values({
+          id,
+          name: folder.name,
+          parentId: folder.parentId || null,
+          userId: folder.userId,
+          createdAt: now,
+          updatedAt: now
+        })
+        .returning();
+      
+      return newFolder;
+    } catch (error) {
+      console.error('Error creating folder:', error);
+      throw error;
+    }
+  }
+
+  async updateFolder(id: string, updates: Partial<InsertFolder>): Promise<Folder | undefined> {
+    try {
+      const updateData = { ...updates, updatedAt: new Date() };
+      
+      const [updatedFolder] = await db.update(foldersTable)
+        .set(updateData)
+        .where(eq(foldersTable.id, id))
+        .returning();
+        
+      return updatedFolder;
+    } catch (error) {
+      console.error(`Error updating folder ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async deleteFolder(id: string): Promise<void> {
+    try {
+      // First move any documents in this folder to no folder (root)
+      await db.update(documentsTable)
+        .set({ folderId: null })
+        .where(eq(documentsTable.folderId, id));
+        
+      // Then delete the folder
+      await db.delete(foldersTable)
+        .where(eq(foldersTable.id, id));
+    } catch (error) {
+      console.error(`Error deleting folder ${id}:`, error);
+      throw error;
+    }
+  }
+
+  // Document operations
+  async getDocuments(userId: string, folderId?: string): Promise<Document[]> {
+    try {
+      // Base query to get documents for a user
+      if (folderId) {
+        // Filter documents by specific folder
+        return await db.select()
+          .from(documentsTable)
+          .where(and(
+            eq(documentsTable.userId, userId),
+            eq(documentsTable.folderId, folderId)
+          ))
+          .orderBy(desc(documentsTable.updatedAt));
+      } else {
+        // Get documents without a folder (root documents)
+        return await db.select()
+          .from(documentsTable)
+          .where(and(
+            eq(documentsTable.userId, userId),
+            eq(documentsTable.folderId, null)
+          ))
+          .orderBy(desc(documentsTable.updatedAt));
+      }
     } catch (error) {
       console.error('Error fetching documents:', error);
       return [];
@@ -1078,6 +1184,7 @@ export class DatabaseStorage implements IStorage {
           id,
           title: document.title,
           content: document.content,
+          folderId: document.folderId || null,
           tags: document.tags || [],
           userId: document.userId,
           createdAt: now,
