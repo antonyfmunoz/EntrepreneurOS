@@ -19,11 +19,12 @@ type TaskCardProps = {
   task: Task;
   onMoveLeft?: () => void;
   onMoveRight?: () => void;
+  onEdit?: (task: Task) => void;
   badgeVariant?: VariantProps<typeof Badge>["variant"];
   isDone?: boolean;
 };
 
-export function TaskCard({ task, onMoveLeft, onMoveRight, badgeVariant = "default", isDone = false }: TaskCardProps) {
+export function TaskCard({ task, onMoveLeft, onMoveRight, onEdit, badgeVariant = "default", isDone = false }: TaskCardProps) {
   const formatDate = () => {
     const today = new Date();
     const tomorrow = new Date(today);
@@ -89,6 +90,15 @@ export function TaskCard({ task, onMoveLeft, onMoveRight, badgeVariant = "defaul
           {task.agent ? task.agent.name : 'Unassigned'}
         </Badge>
         <div className="flex space-x-1">
+          {onEdit && (
+            <button 
+              className="text-gray-500 hover:text-blue-600" 
+              title="Edit task"
+              onClick={() => onEdit(task)}
+            >
+              <i className="ri-edit-line"></i>
+            </button>
+          )}
           {onMoveLeft && (
             <button 
               className="text-gray-400 hover:text-gray-600" 
