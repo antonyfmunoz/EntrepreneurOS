@@ -334,7 +334,7 @@ export function TaskBoard() {
                     <SelectValue placeholder="Select an agent" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Unassigned</SelectItem>
+                    <SelectItem value="none">Unassigned</SelectItem>
                     {agents.map(agent => (
                       <SelectItem key={agent.id} value={agent.id}>{agent.name}</SelectItem>
                     ))}
