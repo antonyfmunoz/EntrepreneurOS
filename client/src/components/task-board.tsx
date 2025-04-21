@@ -3,12 +3,14 @@ import { TaskCard } from "./task-card";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "./ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { DragDropContext, Droppable, Draggable, DropResult } from "react-beautiful-dnd";
+import { useToast } from "@/hooks/use-toast";
 
 type Task = {
   id: string;
@@ -134,6 +136,16 @@ export function TaskBoard() {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       setIsTaskDialogOpen(false);
       resetTaskForm();
+    }
+  });
+  
+  const deleteTaskMutation = useMutation({
+    mutationFn: async (taskId: string) => {
+      const res = await apiRequest("DELETE", `/api/tasks/${taskId}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
     }
   });
 
@@ -302,6 +314,7 @@ export function TaskBoard() {
                                 task={task}
                                 onEdit={(task) => handleTaskDialogOpen(true, task)}
                                 onAddSubtask={handleAddSubtask}
+                                onDelete={(taskId) => deleteTaskMutation.mutate(taskId)}
                                 badgeVariant={task.agent ? getBadgeVariantFromRole(task.agent.role) : undefined}
                                 isDone={task.status === 'done'}
                               />

@@ -28,6 +28,7 @@ type TaskCardProps = {
   onMoveRight?: () => void;
   onEdit?: (task: Task) => void;
   onAddSubtask?: (parentTask: Task) => void;
+  onDelete?: (taskId: string) => void;
   badgeVariant?: VariantProps<typeof Badge>["variant"];
   isDone?: boolean;
   depth?: number;
@@ -39,6 +40,7 @@ export function TaskCard({
   onMoveRight, 
   onEdit, 
   onAddSubtask,
+  onDelete,
   badgeVariant = "default", 
   isDone = false,
   depth = 0
@@ -191,6 +193,15 @@ export function TaskCard({
                 <i className="ri-edit-line"></i>
               </button>
             )}
+            {onDelete && (
+              <button 
+                className="text-gray-500 hover:text-red-600 ml-2" 
+                title="Delete task"
+                onClick={() => onDelete(task.id)}
+              >
+                <i className="ri-delete-bin-line"></i>
+              </button>
+            )}
             {onMoveLeft && (
               <button 
                 className="text-gray-400 hover:text-gray-600 ml-2" 
@@ -222,6 +233,7 @@ export function TaskCard({
               task={subtask}
               onEdit={onEdit}
               onAddSubtask={onAddSubtask}
+              onDelete={onDelete}
               badgeVariant={badgeVariant}
               isDone={subtask.status === "done"}
               depth={depth + 1}
