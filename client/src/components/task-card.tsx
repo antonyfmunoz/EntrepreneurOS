@@ -85,7 +85,13 @@ export function TaskCard({ task, onMoveLeft, onMoveRight, onEdit, badgeVariant =
         <h4 className="font-medium text-gray-800">{task.title}</h4>
         {formatDate()}
       </div>
-      <p className="text-sm text-gray-600 mb-3">{task.description}</p>
+      <p className="text-sm text-gray-600 mb-2">{task.description}</p>
+      {task.instructions && (
+        <div className="mb-3">
+          <p className="text-xs font-medium text-gray-500 mb-1">Instructions:</p>
+          <p className="text-xs text-gray-600 bg-gray-100 p-2 rounded">{task.instructions}</p>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <Badge variant={badgeVariant}>
           {task.agent ? task.agent.name : 'Unassigned'}

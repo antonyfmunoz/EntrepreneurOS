@@ -329,6 +329,17 @@ export function TaskBoard() {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="instructions">Instructions for Agent</Label>
+                <Textarea
+                  id="instructions"
+                  value={taskForm.instructions}
+                  onChange={(e) => setTaskForm({...taskForm, instructions: e.target.value})}
+                  placeholder="Provide specific instructions for the assigned agent..."
+                  className="min-h-[100px]"
+                />
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="agent">Assign to Agent</Label>
                 <Select 
                   value={taskForm.agentId} 
