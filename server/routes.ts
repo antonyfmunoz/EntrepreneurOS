@@ -469,6 +469,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  app.delete("/api/tasks/:id", async (req, res) => {
+    try {
+      const taskId = req.params.id;
+      const task = await storage.getTask(taskId);
+      
+      if (!task) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+      
+      await storage.deleteTask(taskId);
+      res.status(200).json({ message: "Task deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid request", errors: error.errors });
+      }
+      res.status(500).json({ 
+        message: "Failed to delete task",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
   // Task Collaboration Endpoints
   app.post("/api/tasks/:id/collaborators", async (req, res) => {
     try {

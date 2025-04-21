@@ -177,7 +177,7 @@ export type Agent = typeof agents.$inferSelect;
 
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type UpdateTask = z.infer<typeof updateTaskSchema>;
-export type Task = typeof tasks.$inferSelect;
+export type Task = typeof tasks.$inferSelect & { subtasks?: Task[] };
 
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Message = typeof messages.$inferSelect;
