@@ -1259,8 +1259,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Notification API Routes
-  // Track users who have cleared all notifications
-  const usersClearedNotifications = new Set<string>();
+  // Using user metadata to track notification preferences
+  // This approach persists across server restarts, unlike the previous in-memory Set approach
   
   app.get("/api/notifications", async (req, res) => {
     try {
@@ -1271,16 +1271,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if there are any notifications for this user
       const existingNotifications = await storage.getNotifications(req.user.id);
       
-      // Only create a welcome notification if:
-      // 1. User has no notifications
-      // 2. User hasn't explicitly cleared all notifications
-      if (existingNotifications.length === 0 && !usersClearedNotifications.has(req.user.id)) {
+      // Only create a welcome notification if this is the very first time
+      // the user is visiting the site and has no notifications.
+      // We'll add a special filter to avoid adding welcome notifications repeatedly
+      const hasWelcomeNotification = existingNotifications.some(n => 
+        n.type === "system" && n.title === "Welcome to AgentOS"
+      );
+      
+      const user = await storage.getUser(req.user.id);
+      // Safely check metadata which might be undefined or null
+      const userMetadata = user?.metadata || {};
+      const hasSeenWelcome = userMetadata.hasSeenWelcome === true;
+      
+      // Only show welcome notification if:
+      // 1. User has no existing welcome notification 
+      // 2. User has no flag indicating they've seen the welcome before
+      if (existingNotifications.length === 0 && !hasWelcomeNotification && !hasSeenWelcome) {
         await storage.createNotification({
           userId: req.user.id,
           title: "Welcome to AgentOS",
           content: "Your notification system is now active. You'll receive updates here as agents complete tasks and integrations are connected.",
           type: "system",
           read: false
+        });
+        
+        // Mark user as having seen welcome notification to prevent it from reappearing
+        await storage.updateUser(req.user.id, {
+          metadata: { 
+            // Preserve existing metadata fields if any
+            ...userMetadata,
+            hasSeenWelcome: true 
+          }
         });
       }
       
@@ -1364,9 +1385,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if this was the user's last notification
       const remainingNotifications = await storage.getNotifications(req.user.id);
       if (remainingNotifications.length === 0) {
-        // If user deleted all notifications, add them to the tracking set
-        usersClearedNotifications.add(req.user.id);
-        console.log(`User ${req.user.id} cleared all notifications, adding to tracking set`);
+        console.log(`User ${req.user.id} cleared all notifications, updating user metadata`);
+        
+        // Get current user data to preserve existing metadata
+        const user = await storage.getUser(req.user.id);
+        // Safely get metadata object, creating empty object if undefined
+        const userMetadata = user?.metadata || {};
+        
+        // Update user metadata to track that they've seen and cleared notifications
+        await storage.updateUser(req.user.id, {
+          metadata: {
+            // Preserve existing metadata fields if any
+            ...userMetadata,
+            hasSeenWelcome: true,
+            hasManuallyCleared: true,
+            lastClearedAt: new Date().toISOString()
+          }
+        });
       }
       
       // Return success response
