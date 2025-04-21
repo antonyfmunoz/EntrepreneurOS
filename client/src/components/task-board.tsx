@@ -297,9 +297,14 @@ export function TaskBoard() {
       </DragDropContext>
 
       <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-full w-[90vw] h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{isEditing ? "Edit Task" : "Add New Task"}</DialogTitle>
+            <DialogDescription>
+              {isEditing 
+                ? "Update your task details below. Use the instructions field to provide specific guidance for your AI agents."
+                : "Create a new task with all the details needed for your AI agents to understand and complete it."}
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleTaskSubmit}>
             <div className="space-y-4 py-2">
@@ -321,6 +326,7 @@ export function TaskBoard() {
                   value={taskForm.description}
                   onChange={(e) => setTaskForm({...taskForm, description: e.target.value})}
                   placeholder="Describe the task..."
+                  className="min-h-[120px]"
                   required
                 />
               </div>
@@ -353,7 +359,7 @@ export function TaskBoard() {
                   value={taskForm.instructions}
                   onChange={(e) => setTaskForm({...taskForm, instructions: e.target.value})}
                   placeholder="Provide specific instructions for the assigned agent..."
-                  className="min-h-[100px]"
+                  className="min-h-[200px]"
                 />
               </div>
 
