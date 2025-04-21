@@ -1152,7 +1152,7 @@ These minutes were prepared by ${user?.username || '[Preparer Name]'} and will b
       
       {/* Folder Creation/Editing Dialog */}
       <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingFolder ? "Edit Folder" : "Create New Folder"}</DialogTitle>
             <DialogDescription>
@@ -1249,7 +1249,7 @@ These minutes were prepared by ${user?.username || '[Preparer Name]'} and will b
 
       {/* Document Creation/Editing Dialog */}
       <Dialog open={showDocumentDialog} onOpenChange={setShowDocumentDialog}>
-        <DialogContent className="sm:max-w-3xl">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingDocument ? "Edit Document" : "Create New Document"}</DialogTitle>
             <DialogDescription>
@@ -1412,7 +1412,7 @@ These minutes were prepared by ${user?.username || '[Preparer Name]'} and will b
       
       {/* Folder Creation/Editing Dialog */}
       <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingFolder ? "Edit Folder" : "Create New Folder"}</DialogTitle>
             <DialogDescription>
