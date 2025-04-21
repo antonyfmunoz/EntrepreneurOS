@@ -2,7 +2,7 @@ import { useState } from "react";
 import { TaskCard } from "./task-card";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "./ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
@@ -300,11 +300,6 @@ export function TaskBoard() {
         <DialogContent className="max-w-full w-[90vw] h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{isEditing ? "Edit Task" : "Add New Task"}</DialogTitle>
-            <DialogDescription>
-              {isEditing 
-                ? "Update your task details below. Use the instructions field to provide specific guidance for your AI agents."
-                : "Create a new task with all the details needed for your AI agents to understand and complete it."}
-            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleTaskSubmit}>
             <div className="space-y-4 py-2">
