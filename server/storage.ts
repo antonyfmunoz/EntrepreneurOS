@@ -64,6 +64,7 @@ export interface IStorage {
   getTask(id: string): Promise<Task | undefined>;
   createTask(task: InsertTask): Promise<Task>;
   updateTask(id: string, updates: UpdateTask): Promise<Task>;
+  deleteTask(id: string): Promise<void>; // Delete a task and its subtasks
   getAgentTasks(agentId: string): Promise<Task[]>;
   getCollaborativeTasks(agentId: string): Promise<Task[]>; // Tasks where agent is a collaborator
   getTasksByType(taskType: string): Promise<Task[]>; // Get tasks by type (standard, collaboration, etc.)
@@ -506,6 +507,18 @@ export class DatabaseStorage implements IStorage {
     // Return only top-level tasks (those without parent tasks)
     // and include their subtasks recursively
     return allTasks.filter(task => !task.parentTaskId).map(task => taskMap[task.id]);
+  }
+  
+  async deleteTask(id: string): Promise<void> {
+    // First, recursively delete all subtasks
+    const subtasks = await this.getSubtasks(id);
+    for (const subtask of subtasks) {
+      // Recursively delete any nested subtasks
+      await this.deleteTask(subtask.id);
+    }
+    
+    // Then delete the task itself
+    await db.delete(tasksTable).where(eq(tasksTable.id, id));
   }
 
   async getTask(id: string): Promise<Task | undefined> {
