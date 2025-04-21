@@ -80,6 +80,7 @@ export const tasks = pgTable("tasks", {
   status: text("status").default("todo"),
   priority: text("priority").default("medium"),
   dueDate: text("due_date"),
+  instructions: text("instructions"),
   agentId: text("agent_id").references(() => agents.id),
   assignedById: text("assigned_by_id").references(() => agents.id),
   collaboratorIds: text("collaborator_ids"), // Comma-separated list of agent IDs
@@ -96,6 +97,7 @@ export const insertTaskSchema = z.object({
   status: z.enum(["todo", "in-progress", "done"]).default("todo"),
   priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
   dueDate: z.string().optional(),
+  instructions: z.string().optional(),
   agentId: z.string().optional(),
   assignedById: z.string().optional(),
   collaboratorIds: z.string().optional(), // Comma-separated agent IDs
@@ -110,6 +112,7 @@ export const updateTaskSchema = z.object({
   status: z.enum(["todo", "in-progress", "done"]).optional(),
   priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
   dueDate: z.string().optional(),
+  instructions: z.string().optional(),
   agentId: z.string().optional(),
   assignedById: z.string().optional(),
   collaboratorIds: z.string().optional(),

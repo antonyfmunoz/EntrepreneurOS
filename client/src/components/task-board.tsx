@@ -16,6 +16,7 @@ type Task = {
   description: string;
   dueDate: string;
   status: "todo" | "in-progress" | "done";
+  instructions?: string;
   agent: {
     id: string;
     name: string;
@@ -51,6 +52,7 @@ export function TaskBoard() {
     title: "",
     description: "",
     dueDate: "",
+    instructions: "",
     agentId: ""
   });
 
@@ -132,6 +134,7 @@ export function TaskBoard() {
       title: "",
       description: "",
       dueDate: "",
+      instructions: "",
       agentId: ""
     });
     setIsEditing(false);
@@ -147,6 +150,7 @@ export function TaskBoard() {
         title: task.title,
         description: task.description,
         dueDate: new Date(task.dueDate).toISOString().split('T')[0], // Format date for input
+        instructions: task.instructions || "",
         agentId: task.agent?.id || ""
       });
     } else {
