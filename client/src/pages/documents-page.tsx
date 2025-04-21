@@ -47,6 +47,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { CreateAgentModal } from "@/components/create-agent-modal";
+
+// Define agent type for the component
+type Agent = {
+  id: string;
+  name: string;
+  role: string;
+  icon: string;
+  activeTasks: number;
+};
 
 // Define folder type
 type Folder = {
@@ -982,6 +992,9 @@ export default function DocumentsPage() {
           </Form>
         </DialogContent>
       </Dialog>
+      
+      {/* Agent Creation Modal */}
+      <CreateAgentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </div>
   );
 }
