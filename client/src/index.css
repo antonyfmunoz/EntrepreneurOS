@@ -1,9 +1,9 @@
+/* Import RemixIcon for Document Vault */
+@import url("https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Import RemixIcon for Document Vault */
-@import url("https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css");
 
 @layer base {
   * {
