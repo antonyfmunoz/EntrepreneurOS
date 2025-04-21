@@ -6,6 +6,7 @@ type Task = {
   id: string;
   title: string;
   description: string;
+  startDate?: string;
   dueDate: string;
   status: "todo" | "in-progress" | "done";
   instructions?: string;
@@ -32,6 +33,8 @@ export function TaskCard({ task, onMoveLeft, onMoveRight, onEdit, badgeVariant =
     tomorrow.setDate(tomorrow.getDate() + 1);
     
     const dueDate = new Date(task.dueDate);
+    const hasStartDate = !!task.startDate;
+    const startDate = hasStartDate ? new Date(task.startDate!) : null;
     
     if (isDone) {
       return (
@@ -42,6 +45,29 @@ export function TaskCard({ task, onMoveLeft, onMoveRight, onEdit, badgeVariant =
       );
     }
     
+    // Check if task has a start date that's in the future
+    if (hasStartDate && startDate && startDate > today) {
+      const startDiffTime = startDate.getTime() - today.getTime();
+      const startDiffDays = Math.ceil(startDiffTime / (1000 * 60 * 60 * 24));
+      
+      if (startDate.toDateString() === tomorrow.toDateString()) {
+        return (
+          <div className="flex items-center text-xs space-x-1 text-blue-500">
+            <i className="ri-calendar-line"></i>
+            <span>Starts tomorrow</span>
+          </div>
+        );
+      } else {
+        return (
+          <div className="flex items-center text-xs space-x-1 text-blue-500">
+            <i className="ri-calendar-line"></i>
+            <span>Starts in {startDiffDays} days</span>
+          </div>
+        );
+      }
+    }
+    
+    // If the task has started (or has no start date), show due date info
     if (dueDate.toDateString() === today.toDateString()) {
       return (
         <div className="flex items-center text-xs space-x-1 text-gray-500">

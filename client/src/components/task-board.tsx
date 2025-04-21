@@ -14,6 +14,7 @@ type Task = {
   id: string;
   title: string;
   description: string;
+  startDate?: string;
   dueDate: string;
   status: "todo" | "in-progress" | "done";
   instructions?: string;
@@ -51,6 +52,7 @@ export function TaskBoard() {
   const [taskForm, setTaskForm] = useState({
     title: "",
     description: "",
+    startDate: "",
     dueDate: "",
     instructions: "",
     agentId: ""
@@ -133,6 +135,7 @@ export function TaskBoard() {
     setTaskForm({
       title: "",
       description: "",
+      startDate: "",
       dueDate: "",
       instructions: "",
       agentId: ""
@@ -149,6 +152,7 @@ export function TaskBoard() {
       setTaskForm({
         title: task.title,
         description: task.description,
+        startDate: task.startDate ? new Date(task.startDate).toISOString().split('T')[0] : "",
         dueDate: new Date(task.dueDate).toISOString().split('T')[0], // Format date for input
         instructions: task.instructions || "",
         agentId: task.agent?.id || ""
