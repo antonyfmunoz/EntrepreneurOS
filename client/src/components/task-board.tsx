@@ -322,6 +322,16 @@ export function TaskBoard() {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="startDate">Start Date</Label>
+                <Input 
+                  id="startDate"
+                  type="date"
+                  value={taskForm.startDate}
+                  onChange={(e) => setTaskForm({...taskForm, startDate: e.target.value})}
+                />
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="dueDate">Due Date</Label>
                 <Input 
                   id="dueDate"
