@@ -488,12 +488,59 @@ export class DatabaseStorage implements IStorage {
 
   // Task operations
   async getTasks(): Promise<Task[]> {
-    return await db.select().from(tasksTable);
+    const allTasks = await db.select().from(tasksTable);
+    
+    // Create a map of tasks by ID for quick access
+    const taskMap: Record<string, Task & { subtasks?: Task[] }> = {};
+    allTasks.forEach(task => {
+      taskMap[task.id] = { ...task, subtasks: [] };
+    });
+    
+    // Assign subtasks to their parent tasks
+    allTasks.forEach(task => {
+      if (task.parentTaskId && taskMap[task.parentTaskId]) {
+        taskMap[task.parentTaskId].subtasks!.push(task);
+      }
+    });
+    
+    // Return only top-level tasks (those without parent tasks)
+    // and include their subtasks recursively
+    return allTasks.filter(task => !task.parentTaskId).map(task => taskMap[task.id]);
   }
 
   async getTask(id: string): Promise<Task | undefined> {
     const tasks = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
-    return tasks.length > 0 ? tasks[0] : undefined;
+    if (tasks.length === 0) {
+      return undefined;
+    }
+    
+    // Get the task and its subtasks
+    const task = tasks[0];
+    const subtasks = await this.getSubtasksRecursive(id);
+    
+    // Add subtasks to the task
+    return {
+      ...task,
+      subtasks
+    };
+  }
+  
+  // Helper method to get subtasks recursively
+  private async getSubtasksRecursive(parentTaskId: string): Promise<Task[]> {
+    const directSubtasks = await this.getSubtasks(parentTaskId);
+    
+    // For each subtask, recursively get its subtasks
+    const subtasksWithChildren = await Promise.all(
+      directSubtasks.map(async (subtask) => {
+        const childSubtasks = await this.getSubtasksRecursive(subtask.id);
+        return {
+          ...subtask,
+          subtasks: childSubtasks
+        };
+      })
+    );
+    
+    return subtasksWithChildren;
   }
 
   async createTask(task: InsertTask): Promise<Task> {
