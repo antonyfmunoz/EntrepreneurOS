@@ -19,6 +19,8 @@ type Task = {
   status: "todo" | "in-progress" | "done";
   priority: "low" | "medium" | "high" | "urgent";
   instructions?: string;
+  parentTaskId?: string;
+  subtasks?: Task[];
   agent: {
     id: string;
     name: string;
@@ -50,6 +52,7 @@ export function TaskBoard() {
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const [parentTaskId, setParentTaskId] = useState<string | null>(null);
   const [taskForm, setTaskForm] = useState({
     title: "",
     description: "",
@@ -57,7 +60,8 @@ export function TaskBoard() {
     dueDate: "",
     instructions: "",
     priority: "medium",
-    agentId: ""
+    agentId: "",
+    parentTaskId: ""
   });
 
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({
@@ -141,10 +145,27 @@ export function TaskBoard() {
       dueDate: "",
       instructions: "",
       priority: "medium",
-      agentId: ""
+      agentId: "",
+      parentTaskId: ""
     });
     setIsEditing(false);
     setCurrentTaskId(null);
+    setParentTaskId(null);
+  };
+  
+  const handleAddSubtask = (parentTask: Task) => {
+    setParentTaskId(parentTask.id);
+    setTaskForm({
+      title: "",
+      description: "",
+      startDate: "",
+      dueDate: new Date().toISOString().split('T')[0], // Default to today
+      instructions: "",
+      priority: "medium",
+      agentId: parentTask.agent?.id || "",
+      parentTaskId: parentTask.id
+    });
+    setIsTaskDialogOpen(true);
   };
 
   const handleTaskDialogOpen = (editing = false, task?: Task) => {
@@ -159,7 +180,8 @@ export function TaskBoard() {
         dueDate: new Date(task.dueDate).toISOString().split('T')[0], // Format date for input
         instructions: task.instructions || "",
         priority: task.priority || "medium",
-        agentId: task.agent?.id || ""
+        agentId: task.agent?.id || "",
+        parentTaskId: task.parentTaskId || ""
       });
     } else {
       resetTaskForm();
@@ -279,6 +301,7 @@ export function TaskBoard() {
                               <TaskCard 
                                 task={task}
                                 onEdit={(task) => handleTaskDialogOpen(true, task)}
+                                onAddSubtask={handleAddSubtask}
                                 badgeVariant={task.agent ? getBadgeVariantFromRole(task.agent.role) : undefined}
                                 isDone={task.status === 'done'}
                               />

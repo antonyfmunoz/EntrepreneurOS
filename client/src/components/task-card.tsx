@@ -1,6 +1,8 @@
 import { Badge } from "@/components/ui/badge";
 import { VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 
 type Task = {
   id: string;
@@ -11,6 +13,8 @@ type Task = {
   status: "todo" | "in-progress" | "done";
   priority: "low" | "medium" | "high" | "urgent";
   instructions?: string;
+  parentTaskId?: string;
+  subtasks?: Task[];
   agent: {
     id: string;
     name: string;
@@ -23,11 +27,23 @@ type TaskCardProps = {
   onMoveLeft?: () => void;
   onMoveRight?: () => void;
   onEdit?: (task: Task) => void;
+  onAddSubtask?: (parentTask: Task) => void;
   badgeVariant?: VariantProps<typeof Badge>["variant"];
   isDone?: boolean;
+  depth?: number;
 };
 
-export function TaskCard({ task, onMoveLeft, onMoveRight, onEdit, badgeVariant = "default", isDone = false }: TaskCardProps) {
+export function TaskCard({ 
+  task, 
+  onMoveLeft, 
+  onMoveRight, 
+  onEdit, 
+  onAddSubtask,
+  badgeVariant = "default", 
+  isDone = false,
+  depth = 0
+}: TaskCardProps) {
+  const [expanded, setExpanded] = useState(true);
   const formatDate = () => {
     const today = new Date();
     const tomorrow = new Date(today);
@@ -122,54 +138,97 @@ export function TaskCard({ task, onMoveLeft, onMoveRight, onEdit, badgeVariant =
     );
   };
 
+  const hasSubtasks = task.subtasks && task.subtasks.length > 0;
+  
   return (
-    <div className="bg-gray-50 p-3 rounded border border-gray-200 shadow-sm hover:shadow transition-shadow">
-      <div className="flex justify-between items-start mb-2">
-        <h4 className="font-medium text-gray-800">{task.title}</h4>
-        {formatDate()}
+    <div className={`${depth > 0 ? 'pl-' + (depth * 4) : ''}`}>
+      <div className="bg-gray-50 p-3 rounded border border-gray-200 shadow-sm hover:shadow transition-shadow">
+        <div className="flex justify-between items-start mb-2">
+          <div className="flex items-center">
+            {hasSubtasks && (
+              <button 
+                className="mr-2 text-gray-500 p-1 hover:bg-gray-200 rounded-full"
+                onClick={() => setExpanded(!expanded)}
+              >
+                {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </button>
+            )}
+            <h4 className="font-medium text-gray-800">{task.title}</h4>
+          </div>
+          {formatDate()}
+        </div>
+        <p className="text-sm text-gray-600 mb-2">{task.description}</p>
+        {task.instructions && (
+          <div className="mb-3">
+            <p className="text-xs font-medium text-gray-500 mb-1">Instructions:</p>
+            <p className="text-xs text-gray-600 bg-gray-100 p-2 rounded">{task.instructions}</p>
+          </div>
+        )}
+        <div className="flex items-center justify-between mb-2">
+          <Badge variant={badgeVariant}>
+            {task.agent ? task.agent.name : 'Unassigned'}
+          </Badge>
+          {priorityIcon()}
+        </div>
+        <div className="flex justify-between">
+          {onAddSubtask && (
+            <button 
+              className="text-gray-500 hover:text-green-600 flex items-center text-xs gap-1" 
+              title="Add subtask"
+              onClick={() => onAddSubtask(task)}
+            >
+              <Plus size={14} />
+              <span>Add subtask</span>
+            </button>
+          )}
+          <div className="flex">
+            {onEdit && (
+              <button 
+                className="text-gray-500 hover:text-blue-600 ml-2" 
+                title="Edit task"
+                onClick={() => onEdit(task)}
+              >
+                <i className="ri-edit-line"></i>
+              </button>
+            )}
+            {onMoveLeft && (
+              <button 
+                className="text-gray-400 hover:text-gray-600 ml-2" 
+                title="Move back"
+                onClick={onMoveLeft}
+              >
+                <i className="ri-arrow-left-line"></i>
+              </button>
+            )}
+            {onMoveRight && (
+              <button 
+                className="text-primary hover:text-blue-700 ml-2" 
+                title="Move forward"
+                onClick={onMoveRight}
+              >
+                <i className="ri-arrow-right-line"></i>
+              </button>
+            )}
+          </div>
+        </div>
       </div>
-      <p className="text-sm text-gray-600 mb-2">{task.description}</p>
-      {task.instructions && (
-        <div className="mb-3">
-          <p className="text-xs font-medium text-gray-500 mb-1">Instructions:</p>
-          <p className="text-xs text-gray-600 bg-gray-100 p-2 rounded">{task.instructions}</p>
+      
+      {/* Render subtasks if they exist and are expanded */}
+      {hasSubtasks && expanded && (
+        <div className="mt-2 space-y-2">
+          {task.subtasks!.map(subtask => (
+            <TaskCard
+              key={subtask.id}
+              task={subtask}
+              onEdit={onEdit}
+              onAddSubtask={onAddSubtask}
+              badgeVariant={badgeVariant}
+              isDone={subtask.status === "done"}
+              depth={depth + 1}
+            />
+          ))}
         </div>
       )}
-      <div className="flex items-center justify-between mb-2">
-        <Badge variant={badgeVariant}>
-          {task.agent ? task.agent.name : 'Unassigned'}
-        </Badge>
-        {priorityIcon()}
-      </div>
-      <div className="flex justify-end">
-        {onEdit && (
-          <button 
-            className="text-gray-500 hover:text-blue-600 ml-2" 
-            title="Edit task"
-            onClick={() => onEdit(task)}
-          >
-            <i className="ri-edit-line"></i>
-          </button>
-        )}
-        {onMoveLeft && (
-          <button 
-            className="text-gray-400 hover:text-gray-600 ml-2" 
-            title="Move back"
-            onClick={onMoveLeft}
-          >
-            <i className="ri-arrow-left-line"></i>
-          </button>
-        )}
-        {onMoveRight && (
-          <button 
-            className="text-primary hover:text-blue-700 ml-2" 
-            title="Move forward"
-            onClick={onMoveRight}
-          >
-            <i className="ri-arrow-right-line"></i>
-          </button>
-        )}
-      </div>
     </div>
   );
 }
