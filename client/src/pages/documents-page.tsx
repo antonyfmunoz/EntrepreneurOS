@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { CreateAgentModal } from "@/components/create-agent-modal";
+import { SOPTemplateButton } from "@/components/sop-template-button";
 
 // Define agent type for the component
 type Agent = {
