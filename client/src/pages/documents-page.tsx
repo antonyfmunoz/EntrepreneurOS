@@ -98,6 +98,7 @@ export default function DocumentsPage() {
   
   const [showDocumentDialog, setShowDocumentDialog] = useState(false);
   const [showFolderDialog, setShowFolderDialog] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false); // For the create agent modal
   const [editingDocument, setEditingDocument] = useState<Document | null>(null);
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
@@ -150,6 +151,14 @@ export default function DocumentsPage() {
     error: foldersErrorData
   } = useQuery<Folder[]>({
     queryKey: ["/api/folders"],
+    enabled: !!user,
+  });
+  
+  // Query for fetching agents
+  const { 
+    data: agents = [] 
+  } = useQuery<Agent[]>({
+    queryKey: ["/api/agents"],
     enabled: !!user,
   });
 
@@ -454,10 +463,41 @@ export default function DocumentsPage() {
 
   return (
     <div className="container py-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-bold">Documents</h1>
-          {currentFolderId && (
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <h1 className="text-2xl font-bold">Document Vault</h1>
+            <p className="text-muted-foreground">Store and organize AI-generated business documents</p>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={handleNewFolder} variant="outline">
+              <FolderPlus className="w-4 h-4 mr-2" />
+              New Folder
+            </Button>
+            <Button onClick={handleNewDocument}>
+              <Plus className="w-4 h-4 mr-2" />
+              New Document
+            </Button>
+          </div>
+        </div>
+
+        <div className="bg-primary/5 rounded-lg p-4 mt-4 border border-primary/10">
+          <div className="flex items-start gap-3">
+            <div className="bg-primary/10 p-2 rounded-full">
+              <FileText className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-medium text-sm">AI Business Document Vault</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                This vault stores all your AI-generated business documents. Use folders to organize business plans, 
+                marketing campaigns, financial reports, product descriptions and other documents created by your agents.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {currentFolderId && (
+          <div className="mt-4">
             <Button 
               variant="ghost" 
               onClick={() => setCurrentFolderId(null)}
@@ -467,18 +507,8 @@ export default function DocumentsPage() {
               <ArrowLeft className="h-4 w-4" />
               <span>All Documents</span>
             </Button>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={handleNewFolder} variant="outline">
-            <FolderPlus className="w-4 h-4 mr-2" />
-            New Folder
-          </Button>
-          <Button onClick={handleNewDocument}>
-            <Plus className="w-4 h-4 mr-2" />
-            New Document
-          </Button>
-        </div>
+          </div>
+        )}
       </div>
       
       {/* Breadcrumb Navigation */}
@@ -704,9 +734,43 @@ export default function DocumentsPage() {
             <DialogDescription>
               {editingDocument
                 ? "Update the details of your document."
-                : "Enter the details for your new document."}
+                : "Enter the details for your new document or use AI to generate content."}
             </DialogDescription>
           </DialogHeader>
+
+          {!editingDocument && (
+            <div className="bg-secondary/20 p-3 rounded-md flex items-start gap-3 mb-4">
+              <div className="bg-primary/10 p-1.5 rounded-full mt-0.5">
+                <i className="ri-robot-line text-primary text-lg"></i>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium">AI-Generated Business Documents</h4>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Your AI agents can generate various business documents like business plans, marketing strategies, 
+                  product descriptions, and financial reports. You can store them here for future reference.
+                </p>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="mt-2"
+                  type="button"
+                  onClick={() => {
+                    // In a real implementation, this would open the agent chat
+                    // with instructions to create a document
+                    if (agents.length > 0) {
+                      window.location.href = `/chat/${agents[0].id}?prompt=Please create a business document`;
+                    } else {
+                      setIsModalOpen(true);
+                      setShowDocumentDialog(false);
+                    }
+                  }}
+                >
+                  <i className="ri-chat-3-line mr-1.5"></i>
+                  Ask an Agent to Create Document
+                </Button>
+              </div>
+            </div>
+          )}
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">

@@ -121,6 +121,19 @@ export function Sidebar() {
               )}
             </li>
             <li>
+              <Link href="/documents">
+                <div className={cn(
+                  "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+                  location === "/documents" 
+                    ? "bg-blue-50 text-primary font-medium" 
+                    : "hover:bg-gray-100 text-gray-700"
+                )}>
+                  <i className="ri-file-list-3-line"></i>
+                  <span>Document Vault</span>
+                </div>
+              </Link>
+            </li>
+            <li>
               <Link href="/analytics">
                 <div className={cn(
                   "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
