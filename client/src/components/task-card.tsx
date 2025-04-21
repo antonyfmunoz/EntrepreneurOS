@@ -8,6 +8,7 @@ type Task = {
   description: string;
   dueDate: string;
   status: "todo" | "in-progress" | "done";
+  instructions?: string;
   agent: {
     id: string;
     name: string;
