@@ -10,8 +10,7 @@ import {
   Trash2, 
   Folder, 
   FolderPlus, 
-  ChevronRight,
-  ChevronDown,
+  ChevronRight, 
   Home,
   FolderEdit,
   ArrowLeft
@@ -49,7 +48,6 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { CreateAgentModal } from "@/components/create-agent-modal";
-import { SOPTemplateButton, LegalTemplateButton, MeetingTemplateButton } from "@/components/sop-template-button";
 
 // Define agent type for the component
 type Agent = {
@@ -478,14 +476,6 @@ export default function DocumentsPage() {
       {/* Google Drive-like header */}
       <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="rounded-full h-9 w-9"
-            onClick={() => window.location.href = "/"}
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
           <div className="text-primary">
             <i className="ri-file-list-3-line text-2xl"></i>
           </div>
@@ -511,206 +501,19 @@ export default function DocumentsPage() {
             <FolderPlus className="w-4 h-4 mr-2" />
             New Folder
           </Button>
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="rounded-full h-10 px-4">
-                <i className="ri-file-add-line mr-2"></i>
-                New Template <ChevronDown className="ml-1 h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-60">
-              <DropdownMenuItem onClick={() => {
-                form.reset();
-                form.setValue('title', 'Standard Operating Procedure: ');
-                form.setValue('content', 
-`# STANDARD OPERATING PROCEDURE
-
-## 1. PURPOSE
-[Describe the purpose of this procedure]
-
-## 2. SCOPE
-[Define what operations, processes, or departments this SOP applies to]
-
-## 3. RESPONSIBILITIES
-[List roles and their responsibilities in executing this procedure]
-
-### Role 1: [e.g., Manager]
-- Responsibility 1
-- Responsibility 2
-
-### Role 2: [e.g., Employee]
-- Responsibility 1
-- Responsibility 2
-
-## 4. PROCEDURE
-[Detail the step-by-step process]
-
-### 4.1 [First Major Step]
-1. Sub-step 1
-2. Sub-step 2
-3. Sub-step 3
-
-### 4.2 [Second Major Step]
-1. Sub-step 1
-2. Sub-step 2
-3. Sub-step 3
-
-## 5. QUALITY CONTROL
-[Describe how to verify the procedure was completed correctly]
-
-## 6. EXCEPTIONS
-[List any exceptions to this procedure and how to handle them]
-
-## 7. REFERENCES
-[List related documents, regulations, or other resources]
-
-## 8. REVISION HISTORY
-
-| Version | Date | Description of Change | Author |
-|---------|------|---------------------|--------|
-| 1.0 | ${new Date().toLocaleDateString()} | Initial creation | ${user?.username || ''} |`);
-                form.setValue('tags', 'sop, procedure, process' as any);
-                setShowDocumentDialog(true);
-              }}>
-                <i className="ri-file-list-3-line mr-2 text-primary"></i>
-                <div className="flex flex-col">
-                  <span>Standard Operating Procedure</span>
-                  <span className="text-xs text-muted-foreground">Create structured workflow guides</span>
-                </div>
-              </DropdownMenuItem>
-              
-              <DropdownMenuItem onClick={() => {
-                form.reset();
-                form.setValue('title', 'Legal Document: ');
-                form.setValue('content', 
-`# LEGAL DOCUMENT
-
-## PARTIES
-[List all parties involved in this agreement]
-
-## EFFECTIVE DATE
-${new Date().toLocaleDateString()}
-
-## RECITALS
-WHEREAS, [state the background facts and circumstances];
-
-WHEREAS, [state the purpose or intent of the agreement];
-
-NOW, THEREFORE, in consideration of the mutual covenants contained herein and other good and valuable consideration, the receipt and sufficiency of which are hereby acknowledged, the parties agree as follows:
-
-## 1. DEFINITIONS
-[Define key terms used throughout the document]
-
-## 2. TERMS AND CONDITIONS
-[Detail the specific terms of the agreement]
-
-### 2.1 [First Term]
-[Description of the term]
-
-### 2.2 [Second Term]
-[Description of the term]
-
-## 3. REPRESENTATIONS AND WARRANTIES
-[List any guarantees or promises made by the parties]
-
-## 4. TERM AND TERMINATION
-[Specify duration and conditions for ending the agreement]
-
-## 5. CONFIDENTIALITY
-[Outline requirements for handling sensitive information]
-
-## 6. GOVERNING LAW
-This Agreement shall be governed by the laws of [Jurisdiction].
-
-## 7. MISCELLANEOUS
-[Include any other provisions not covered above]
-
-## 8. SIGNATURES
-
-________________________
-[Party 1 Name]
-Date: 
-
-________________________
-[Party 2 Name]
-Date:
-
-Prepared by: ${user?.username || '[Enter name]'}`);
-                form.setValue('tags', 'legal, contract, agreement' as any);
-                setShowDocumentDialog(true);
-              }}>
-                <i className="ri-file-paper-2-line mr-2 text-blue-600"></i>
-                <div className="flex flex-col">
-                  <span>Legal Document</span>
-                  <span className="text-xs text-muted-foreground">Create contracts and agreements</span>
-                </div>
-              </DropdownMenuItem>
-              
-              <DropdownMenuItem onClick={() => {
-                form.reset();
-                form.setValue('title', 'Meeting Minutes: ');
-                form.setValue('content', 
-`# MEETING MINUTES
-
-## MEETING DETAILS
-- **Date:** ${new Date().toLocaleDateString()}
-- **Time:** ${new Date().toLocaleTimeString()}
-- **Location:** [Virtual/Physical location]
-- **Meeting Type:** [Regular/Special/Emergency]
-
-## ATTENDEES
-- [List of attendees with roles]
-- [Indicate who was present and who was absent]
-
-## AGENDA ITEMS
-1. **Call to Order**
-   - Meeting called to order at [time] by [name]
-
-2. **Approval of Previous Minutes**
-   - [Decision on previous meeting minutes]
-
-3. **[Agenda Item 1]**
-   - Discussion: [Summary of discussion]
-   - Action Items:
-     - [Action item 1] - Assigned to: [Name], Due: [Date]
-     - [Action item 2] - Assigned to: [Name], Due: [Date]
-   - Decisions:
-     - [Decision made]
-
-4. **[Agenda Item 2]**
-   - Discussion: [Summary of discussion]
-   - Action Items:
-     - [Action item 1] - Assigned to: [Name], Due: [Date]
-   - Decisions:
-     - [Decision made]
-
-## OTHER BUSINESS
-- [Any additional items discussed]
-
-## NEXT MEETING
-- **Date:** [Next meeting date]
-- **Time:** [Next meeting time]
-- **Location:** [Next meeting location]
-- **Agenda Items:** [Preliminary agenda for next meeting]
-
-## ADJOURNMENT
-- Meeting adjourned at [time]
-
-## APPROVAL
-These minutes were prepared by ${user?.username || '[Preparer Name]'} and will be approved at the next meeting.`);
-                form.setValue('tags', 'meeting, minutes, notes' as any);
-                setShowDocumentDialog(true);
-              }}>
-                <i className="ri-calendar-check-line mr-2 text-green-600"></i>
-                <div className="flex flex-col">
-                  <span>Meeting Minutes</span>
-                  <span className="text-xs text-muted-foreground">Document meetings and action items</span>
-                </div>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          
+          <Button 
+            onClick={() => {
+              form.reset();
+              form.setValue('title', 'Standard Operating Procedure: ');
+              form.setValue('tags', 'sop, procedure, process' as any);
+              setShowDocumentDialog(true);
+            }} 
+            variant="outline" 
+            className="rounded-full h-10 px-4"
+          >
+            <i className="ri-file-list-3-line mr-2"></i>
+            Create SOP
+          </Button>
           <Button onClick={handleNewDocument} className="rounded-full h-10 px-4 bg-primary">
             <Plus className="w-4 h-4 mr-2" />
             New Document
@@ -765,24 +568,6 @@ These minutes were prepared by ${user?.username || '[Preparer Name]'} and will b
             >
               <i className="ri-file-list-3-line mr-2"></i>
               SOPs
-            </Button>
-            
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-gray-600"
-              onClick={() => setSearchQuery("legal")}
-            >
-              <i className="ri-file-paper-2-line mr-2"></i>
-              Legal Documents
-            </Button>
-            
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-gray-600"
-              onClick={() => setSearchQuery("meeting")}
-            >
-              <i className="ri-calendar-check-line mr-2"></i>
-              Meeting Minutes
             </Button>
             
             <div className="py-2">
@@ -989,7 +774,7 @@ These minutes were prepared by ${user?.username || '[Preparer Name]'} and will b
       
       {/* Document Creation/Editing Dialog */}
       <Dialog open={showDocumentDialog} onOpenChange={setShowDocumentDialog}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{editingDocument ? "Edit Document" : "Create New Document"}</DialogTitle>
             <DialogDescription>
@@ -1152,7 +937,7 @@ These minutes were prepared by ${user?.username || '[Preparer Name]'} and will b
       
       {/* Folder Creation/Editing Dialog */}
       <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>{editingFolder ? "Edit Folder" : "Create New Folder"}</DialogTitle>
             <DialogDescription>
@@ -1249,7 +1034,7 @@ These minutes were prepared by ${user?.username || '[Preparer Name]'} and will b
 
       {/* Document Creation/Editing Dialog */}
       <Dialog open={showDocumentDialog} onOpenChange={setShowDocumentDialog}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{editingDocument ? "Edit Document" : "Create New Document"}</DialogTitle>
             <DialogDescription>
@@ -1412,7 +1197,7 @@ These minutes were prepared by ${user?.username || '[Preparer Name]'} and will b
       
       {/* Folder Creation/Editing Dialog */}
       <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>{editingFolder ? "Edit Folder" : "Create New Folder"}</DialogTitle>
             <DialogDescription>
