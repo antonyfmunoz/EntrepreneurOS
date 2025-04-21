@@ -9,6 +9,7 @@ type Task = {
   startDate?: string;
   dueDate: string;
   status: "todo" | "in-progress" | "done";
+  priority: "low" | "medium" | "high" | "urgent";
   instructions?: string;
   agent: {
     id: string;
@@ -105,6 +106,22 @@ export function TaskCard({ task, onMoveLeft, onMoveRight, onEdit, badgeVariant =
     }
   };
 
+  const priorityIcon = () => {
+    const colorClass = {
+      low: "text-gray-400",
+      medium: "text-blue-500",
+      high: "text-orange-500",
+      urgent: "text-red-500"
+    };
+    
+    return (
+      <div className="flex items-center space-x-1 text-xs" title={`Priority: ${task.priority}`}>
+        <i className={`ri-flag-2-line ${colorClass[task.priority]}`}></i>
+        <span className={`capitalize ${colorClass[task.priority]}`}>{task.priority}</span>
+      </div>
+    );
+  };
+
   return (
     <div className="bg-gray-50 p-3 rounded border border-gray-200 shadow-sm hover:shadow transition-shadow">
       <div className="flex justify-between items-start mb-2">
@@ -118,39 +135,40 @@ export function TaskCard({ task, onMoveLeft, onMoveRight, onEdit, badgeVariant =
           <p className="text-xs text-gray-600 bg-gray-100 p-2 rounded">{task.instructions}</p>
         </div>
       )}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-2">
         <Badge variant={badgeVariant}>
           {task.agent ? task.agent.name : 'Unassigned'}
         </Badge>
-        <div className="flex space-x-1">
-          {onEdit && (
-            <button 
-              className="text-gray-500 hover:text-blue-600" 
-              title="Edit task"
-              onClick={() => onEdit(task)}
-            >
-              <i className="ri-edit-line"></i>
-            </button>
-          )}
-          {onMoveLeft && (
-            <button 
-              className="text-gray-400 hover:text-gray-600" 
-              title="Move back"
-              onClick={onMoveLeft}
-            >
-              <i className="ri-arrow-left-line"></i>
-            </button>
-          )}
-          {onMoveRight && (
-            <button 
-              className="text-primary hover:text-blue-700" 
-              title="Move forward"
-              onClick={onMoveRight}
-            >
-              <i className="ri-arrow-right-line"></i>
-            </button>
-          )}
-        </div>
+        {priorityIcon()}
+      </div>
+      <div className="flex justify-end">
+        {onEdit && (
+          <button 
+            className="text-gray-500 hover:text-blue-600 ml-2" 
+            title="Edit task"
+            onClick={() => onEdit(task)}
+          >
+            <i className="ri-edit-line"></i>
+          </button>
+        )}
+        {onMoveLeft && (
+          <button 
+            className="text-gray-400 hover:text-gray-600 ml-2" 
+            title="Move back"
+            onClick={onMoveLeft}
+          >
+            <i className="ri-arrow-left-line"></i>
+          </button>
+        )}
+        {onMoveRight && (
+          <button 
+            className="text-primary hover:text-blue-700 ml-2" 
+            title="Move forward"
+            onClick={onMoveRight}
+          >
+            <i className="ri-arrow-right-line"></i>
+          </button>
+        )}
       </div>
     </div>
   );

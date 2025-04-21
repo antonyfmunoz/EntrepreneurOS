@@ -17,6 +17,7 @@ type Task = {
   startDate?: string;
   dueDate: string;
   status: "todo" | "in-progress" | "done";
+  priority: "low" | "medium" | "high" | "urgent";
   instructions?: string;
   agent: {
     id: string;
@@ -55,6 +56,7 @@ export function TaskBoard() {
     startDate: "",
     dueDate: "",
     instructions: "",
+    priority: "medium",
     agentId: ""
   });
 
@@ -138,6 +140,7 @@ export function TaskBoard() {
       startDate: "",
       dueDate: "",
       instructions: "",
+      priority: "medium",
       agentId: ""
     });
     setIsEditing(false);
@@ -155,6 +158,7 @@ export function TaskBoard() {
         startDate: task.startDate ? new Date(task.startDate).toISOString().split('T')[0] : "",
         dueDate: new Date(task.dueDate).toISOString().split('T')[0], // Format date for input
         instructions: task.instructions || "",
+        priority: task.priority || "medium",
         agentId: task.agent?.id || ""
       });
     } else {
@@ -351,6 +355,24 @@ export function TaskBoard() {
                   placeholder="Provide specific instructions for the assigned agent..."
                   className="min-h-[100px]"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="priority">Priority</Label>
+                <Select 
+                  value={taskForm.priority} 
+                  onValueChange={(value) => setTaskForm({...taskForm, priority: value})}
+                >
+                  <SelectTrigger id="priority">
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
