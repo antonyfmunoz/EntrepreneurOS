@@ -1,5 +1,12 @@
-import { db } from "../server/db";
+import { Pool, neonConfig } from '@neondatabase/serverless';
+import ws from 'ws';
 import { sql } from "drizzle-orm";
+
+// Configure Neon to use WebSockets
+neonConfig.webSocketConstructor = ws;
+
+// Connect directly to the database
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 /**
  * This script adds a metadata JSONB column to the users table
@@ -10,30 +17,31 @@ async function addMetadataColumn() {
     console.log("Starting migration: Adding metadata column to users table...");
     
     // Check if the column already exists to avoid errors
-    const checkColumnQuery = sql`
+    const checkColumnResult = await pool.query(`
       SELECT column_name
       FROM information_schema.columns 
       WHERE table_name = 'users' AND column_name = 'metadata';
-    `;
+    `);
     
-    const result = await db.execute(checkColumnQuery);
-    if (result.rows.length > 0) {
+    if (checkColumnResult.rows.length > 0) {
       console.log("Column 'metadata' already exists in users table, skipping...");
       return;
     }
     
     // Add the metadata column
-    const addColumnQuery = sql`
+    await pool.query(`
       ALTER TABLE users
       ADD COLUMN metadata JSONB;
-    `;
+    `);
     
-    await db.execute(addColumnQuery);
     console.log("Successfully added metadata column to users table!");
     
   } catch (error) {
     console.error("Error adding metadata column:", error);
     throw error;
+  } finally {
+    // Close the connection pool
+    await pool.end();
   }
 }
 
