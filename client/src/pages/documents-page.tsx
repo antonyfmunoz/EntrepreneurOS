@@ -989,7 +989,7 @@ These minutes were prepared by ${user?.username || '[Preparer Name]'} and will b
       
       {/* Document Creation/Editing Dialog */}
       <Dialog open={showDocumentDialog} onOpenChange={setShowDocumentDialog}>
-        <DialogContent className="sm:max-w-3xl">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingDocument ? "Edit Document" : "Create New Document"}</DialogTitle>
             <DialogDescription>
