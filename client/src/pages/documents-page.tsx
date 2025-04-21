@@ -708,27 +708,9 @@ export default function DocumentsPage() {
                     </div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-medium text-gray-900 mb-1 truncate">{document.title}</h3>
-                    <p className="text-sm text-gray-500 line-clamp-1">{document.content}</p>
+                    <h3 className="text-base font-medium text-gray-900 truncate">{document.title}</h3>
                     <div className="flex items-center mt-2 text-xs text-gray-500">
-                      <span className="mr-4">Modified {formatDate(document.updatedAt)}</span>
-                      {document.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {document.tags.slice(0, 3).map((tag, index) => (
-                            <span
-                              key={index}
-                              className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-800"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                          {document.tags.length > 3 && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-800">
-                              +{document.tags.length - 3}
-                            </span>
-                          )}
-                        </div>
-                      )}
+                      <span>Modified {formatDate(document.updatedAt)}</span>
                     </div>
                   </div>
                   <div className="flex-shrink-0 ml-2 opacity-0 group-hover:opacity-100">
@@ -774,7 +756,7 @@ export default function DocumentsPage() {
       
       {/* Document Creation/Editing Dialog */}
       <Dialog open={showDocumentDialog} onOpenChange={setShowDocumentDialog}>
-        <DialogContent className="sm:max-w-3xl">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingDocument ? "Edit Document" : "Create New Document"}</DialogTitle>
             <DialogDescription>
@@ -937,7 +919,7 @@ export default function DocumentsPage() {
       
       {/* Folder Creation/Editing Dialog */}
       <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingFolder ? "Edit Folder" : "Create New Folder"}</DialogTitle>
             <DialogDescription>
@@ -1034,7 +1016,7 @@ export default function DocumentsPage() {
 
       {/* Document Creation/Editing Dialog */}
       <Dialog open={showDocumentDialog} onOpenChange={setShowDocumentDialog}>
-        <DialogContent className="sm:max-w-3xl">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingDocument ? "Edit Document" : "Create New Document"}</DialogTitle>
             <DialogDescription>
