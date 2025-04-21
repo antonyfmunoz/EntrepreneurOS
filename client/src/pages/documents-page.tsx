@@ -478,6 +478,14 @@ export default function DocumentsPage() {
       {/* Google Drive-like header */}
       <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="rounded-full h-9 w-9"
+            onClick={() => window.location.href = "/"}
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
           <div className="text-primary">
             <i className="ri-file-list-3-line text-2xl"></i>
           </div>
