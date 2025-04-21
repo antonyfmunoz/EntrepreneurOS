@@ -52,8 +52,10 @@ type TaskMap = {
 
 export function TaskBoard() {
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const [taskToDeleteId, setTaskToDeleteId] = useState<string | null>(null);
   const [parentTaskId, setParentTaskId] = useState<string | null>(null);
   const [taskForm, setTaskForm] = useState({
     title: "",
@@ -65,6 +67,8 @@ export function TaskBoard() {
     agentId: "",
     parentTaskId: ""
   });
+  
+  const { toast } = useToast();
 
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({
     queryKey: ["/api/tasks"],
@@ -314,7 +318,10 @@ export function TaskBoard() {
                                 task={task}
                                 onEdit={(task) => handleTaskDialogOpen(true, task)}
                                 onAddSubtask={handleAddSubtask}
-                                onDelete={(taskId) => deleteTaskMutation.mutate(taskId)}
+                                onDelete={(taskId) => {
+                                  setTaskToDeleteId(taskId);
+                                  setIsDeleteDialogOpen(true);
+                                }}
                                 badgeVariant={task.agent ? getBadgeVariantFromRole(task.agent.role) : undefined}
                                 isDone={task.status === 'done'}
                               />
@@ -455,6 +462,35 @@ export function TaskBoard() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the task and all its subtasks. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => {
+                if (taskToDeleteId) {
+                  deleteTaskMutation.mutate(taskToDeleteId);
+                  toast({
+                    title: "Task deleted",
+                    description: "The task and its subtasks have been deleted.",
+                  });
+                  setTaskToDeleteId(null);
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
