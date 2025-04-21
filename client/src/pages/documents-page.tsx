@@ -472,132 +472,248 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="container py-6">
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-2">
+    <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
+      {/* Google Drive-like header */}
+      <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="text-primary">
+            <i className="ri-file-list-3-line text-2xl"></i>
+          </div>
           <div>
-            <h1 className="text-2xl font-bold">Document Vault</h1>
-            <p className="text-muted-foreground">Store and organize AI-generated business documents</p>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={handleNewFolder} variant="outline">
-              <FolderPlus className="w-4 h-4 mr-2" />
-              New Folder
-            </Button>
-            <Button onClick={handleNewDocument}>
-              <Plus className="w-4 h-4 mr-2" />
-              New Document
-            </Button>
+            <h1 className="text-xl font-medium">Document Vault</h1>
           </div>
         </div>
-
-        <div className="bg-primary/5 rounded-lg p-4 mt-4 border border-primary/10">
-          <div className="flex items-start gap-3">
-            <div className="bg-primary/10 p-2 rounded-full">
-              <FileText className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h3 className="font-medium text-sm">AI Business Document Vault</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                This vault stores all your AI-generated business documents. Use folders to organize business plans, 
-                marketing campaigns, financial reports, product descriptions and other documents created by your agents.
-              </p>
+        <div className="flex-1 max-w-2xl mx-8">
+          <div className="relative">
+            <Input
+              placeholder="Search documents..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 bg-gray-50 h-10 border-gray-200"
+            />
+            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5C10 8.433 8.433 10 6.5 10C4.567 10 3 8.433 3 6.5C3 4.567 4.567 3 6.5 3C8.433 3 10 4.567 10 6.5ZM9.30884 10.0159C8.53901 10.6318 7.56251 11 6.5 11C4.01472 11 2 8.98528 2 6.5C2 4.01472 4.01472 2 6.5 2C8.98528 2 11 4.01472 11 6.5C11 7.56251 10.6318 8.53901 10.0159 9.30884L12.8536 12.1464C13.0488 12.3417 13.0488 12.6583 12.8536 12.8536C12.6583 13.0488 12.3417 13.0488 12.1464 12.8536L9.30884 10.0159Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
             </div>
           </div>
         </div>
+        <div className="flex gap-2">
+          <Button onClick={handleNewFolder} variant="outline" className="rounded-full h-10 px-4">
+            <FolderPlus className="w-4 h-4 mr-2" />
+            New Folder
+          </Button>
+          <Button onClick={handleNewDocument} className="rounded-full h-10 px-4 bg-primary">
+            <Plus className="w-4 h-4 mr-2" />
+            New Document
+          </Button>
+        </div>
+      </div>
 
-        {currentFolderId && (
-          <div className="mt-4">
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Sidebar - Similar to Google Drive */}
+        <div className="w-60 border-r bg-white p-4 overflow-y-auto">
+          <div className="space-y-1">
+            <Button 
+              variant={!currentFolderId ? "secondary" : "ghost"} 
+              className="w-full justify-start mb-1"
+              onClick={() => setCurrentFolderId(null)}
+            >
+              <i className="ri-home-line mr-2"></i>
+              My Drive
+            </Button>
+            
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-gray-600"
+              onClick={() => setSearchQuery("business plan")}
+            >
+              <i className="ri-file-chart-line mr-2"></i>
+              Business Plans
+            </Button>
+            
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-gray-600"
+              onClick={() => setSearchQuery("marketing")}
+            >
+              <i className="ri-megaphone-line mr-2"></i>
+              Marketing Docs
+            </Button>
+            
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-gray-600"
+              onClick={() => setSearchQuery("financial")}
+            >
+              <i className="ri-money-dollar-circle-line mr-2"></i>
+              Financial Reports
+            </Button>
+            
+            <div className="py-2">
+              <div className="h-[1px] bg-gray-200 my-2"></div>
+              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2 px-3">My Folders</h3>
+              
+              {folders?.filter(folder => folder.parentId === null).map(folder => (
+                <Button 
+                  key={folder.id}
+                  variant={currentFolderId === folder.id ? "secondary" : "ghost"}
+                  className="w-full justify-start mb-1 text-gray-700"
+                  onClick={() => handleFolderSelect(folder.id)}
+                >
+                  <Folder className="h-4 w-4 mr-2 text-gray-500" />
+                  <span className="truncate">{folder.name}</span>
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Main content area */}
+        <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
+          {/* Breadcrumb Navigation */}
+          <div className="flex items-center mb-4 text-sm text-gray-600">
             <Button 
               variant="ghost" 
+              size="sm" 
+              className="h-8 px-2" 
               onClick={() => setCurrentFolderId(null)}
-              size="sm"
-              className="flex items-center gap-1"
             >
-              <ArrowLeft className="h-4 w-4" />
-              <span>All Documents</span>
+              <Home className="h-4 w-4 mr-1" />
+              My Drive
             </Button>
+            
+            {folderPath.map((folder, index) => (
+              <div key={folder.id} className="flex items-center">
+                <ChevronRight className="h-3.5 w-3.5 mx-1 text-gray-400" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2"
+                  onClick={() => setCurrentFolderId(folder.id)}
+                >
+                  <span>{folder.name}</span>
+                </Button>
+              </div>
+            ))}
           </div>
-        )}
-      </div>
-      
-      {/* Breadcrumb Navigation */}
-      {folderPath.length > 0 && (
-        <div className="flex items-center gap-1 text-sm text-muted-foreground mb-4 bg-secondary/20 p-2 rounded">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="h-6 px-2 text-xs" 
-            onClick={() => setCurrentFolderId(null)}
-          >
-            <Home className="h-3.5 w-3.5 mr-1" />
-            Home
-          </Button>
-          {folderPath.map((folder, index) => (
-            <div key={folder.id} className="flex items-center">
-              <ChevronRight className="h-3.5 w-3.5 mx-1" />
-              <Button
-                variant={index === folderPath.length - 1 ? "secondary" : "ghost"}
-                size="sm"
-                className="h-6 px-2 text-xs"
-                onClick={() => setCurrentFolderId(folder.id)}
-              >
-                <Folder className="h-3.5 w-3.5 mr-1" />
-                {folder.name}
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-      
-      {/* Folders Section */}
-      {!searchQuery && (
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-medium">Folders</h2>
-          </div>
-          {folders?.filter(folder => folder.parentId === currentFolderId).length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-6 mb-6 bg-muted/20 rounded-lg">
-              <Folder className="h-12 w-12 text-muted-foreground mb-2" />
-              <h3 className="text-base font-medium">No folders found</h3>
-              <p className="text-sm text-muted-foreground mt-1 mb-3">
-                {folders?.length === 0
-                  ? "Create your first folder to organize your documents."
-                  : "This folder has no subfolders."}
+
+          {!searchQuery && folders && folders.filter(folder => folder.parentId === currentFolderId).length > 0 && (
+            <>
+              <h2 className="text-sm font-medium text-gray-500 mb-3">Folders</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
+                {folders?.filter(folder => folder.parentId === currentFolderId).map(folder => (
+                  <div 
+                    key={folder.id} 
+                    className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
+                    onClick={() => handleFolderSelect(folder.id)}
+                  >
+                    <div className="p-4 flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="bg-blue-50 rounded-lg p-2 mr-3">
+                          <Folder className="h-5 w-5 text-blue-500" />
+                        </div>
+                        <span className="font-medium truncate">{folder.name}</span>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                              <circle cx="12" cy="12" r="1" />
+                              <circle cx="19" cy="12" r="1" />
+                              <circle cx="5" cy="12" r="1" />
+                            </svg>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditFolder(folder);
+                          }}>
+                            <FolderEdit className="mr-2 h-4 w-4" />
+                            Rename
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm("Are you sure you want to delete this folder? All documents inside will be moved to the root.")) {
+                                deleteFolderMutation.mutate(folder.id);
+                              }
+                            }}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          <h2 className="text-sm font-medium text-gray-500 mb-3">
+            {searchQuery ? "Search Results" : currentFolderId ? "Documents" : "Recent Documents"}
+          </h2>
+
+          {filteredDocuments?.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 bg-white rounded-lg border border-gray-200">
+              <div className="bg-gray-100 p-4 rounded-full mb-3">
+                <FileText className="h-8 w-8 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-medium mb-1">No documents found</h3>
+              <p className="text-gray-500 text-center max-w-md mb-4">
+                {documents?.length === 0
+                  ? "Create your first document to get started"
+                  : "No documents match your search criteria"}
               </p>
-              <Button onClick={handleNewFolder} variant="outline" size="sm">
-                <FolderPlus className="w-4 h-4 mr-2" />
-                New Folder
+              <Button onClick={handleNewDocument} className="rounded-full">
+                <Plus className="w-4 h-4 mr-2" />
+                New Document
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
-              {folders?.filter(folder => folder.parentId === currentFolderId).map(folder => (
-                <Card 
-                  key={folder.id} 
-                  className="cursor-pointer hover:bg-secondary/20 transition-colors"
-                  onClick={() => handleFolderSelect(folder.id)}
+            <div className="space-y-2">
+              {filteredDocuments?.map((document) => (
+                <div 
+                  key={document.id} 
+                  className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow flex items-start p-4 cursor-pointer group"
+                  onClick={() => handleEditDocument(document)}
                 >
-                  <CardHeader className="py-4 px-4 flex flex-row items-center justify-between space-y-0">
-                    <div className="flex items-center space-x-2">
-                      <Folder className="h-5 w-5" />
-                      <CardTitle className="text-base">{folder.name}</CardTitle>
+                  <div className="flex-shrink-0 mr-4">
+                    <div className="bg-primary/10 p-2 rounded">
+                      <FileText className="h-5 w-5 text-primary" />
                     </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base font-medium text-gray-900 mb-1 truncate">{document.title}</h3>
+                    <p className="text-sm text-gray-500 line-clamp-1">{document.content}</p>
+                    <div className="flex items-center mt-2 text-xs text-gray-500">
+                      <span className="mr-4">Modified {formatDate(document.updatedAt)}</span>
+                      {document.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {document.tags.slice(0, 3).map((tag, index) => (
+                            <span
+                              key={index}
+                              className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-800"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                          {document.tags.length > 3 && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-800">
+                              +{document.tags.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex-shrink-0 ml-2 opacity-0 group-hover:opacity-100">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="h-4 w-4"
-                          >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                             <circle cx="12" cy="12" r="1" />
                             <circle cx="19" cy="12" r="1" />
                             <circle cx="5" cy="12" r="1" />
@@ -607,134 +723,292 @@ export default function DocumentsPage() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={(e) => {
                           e.stopPropagation();
-                          handleEditFolder(folder);
+                          handleEditDocument(document);
                         }}>
-                          <FolderEdit className="mr-2 h-4 w-4" />
-                          Edit Folder
+                          <Edit2 className="mr-2 h-4 w-4" />
+                          Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (window.confirm("Are you sure you want to delete this folder? All documents inside will be moved to the root.")) {
-                              deleteFolderMutation.mutate(folder.id);
+                            if (window.confirm("Are you sure you want to delete this document?")) {
+                              deleteDocumentMutation.mutate(document.id);
                             }
                           }}
                           className="text-destructive"
                         >
                           <Trash2 className="mr-2 h-4 w-4" />
-                          Delete Folder
+                          Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  </CardHeader>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
           )}
         </div>
-      )}
-      
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-medium">
-          {searchQuery ? "Search Results" : currentFolderId ? "Documents in this folder" : "All Documents"}
-        </h2>
-        <div>
-          <Input
-            placeholder="Search documents..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="max-w-md"
-          />
-        </div>
       </div>
+      
+      {/* Document Creation/Editing Dialog */}
+      <Dialog open={showDocumentDialog} onOpenChange={setShowDocumentDialog}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{editingDocument ? "Edit Document" : "Create New Document"}</DialogTitle>
+            <DialogDescription>
+              {editingDocument
+                ? "Update the details of your document."
+                : "Enter the details for your new document or use AI to generate content."}
+            </DialogDescription>
+          </DialogHeader>
 
-      {filteredDocuments?.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <SearchXIcon className="h-16 w-16 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium">No documents found</h3>
-          <p className="text-muted-foreground mt-2 max-w-md">
-            {documents?.length === 0
-              ? "Create your first document by clicking the 'New Document' button above."
-              : "No documents match your search criteria. Try different keywords."}
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredDocuments?.map((document) => (
-            <Card key={document.id} className="overflow-hidden">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-xl">{document.title}</CardTitle>
-                <CardDescription className="flex items-center gap-1">
-                  <FileText className="h-3.5 w-3.5" />
-                  <span>Last updated: {formatDate(document.updatedAt)}</span>
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="prose-sm max-h-36 overflow-hidden relative">
-                <div className="line-clamp-4">
-                  {document.content}
-                </div>
-                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent"></div>
-              </CardContent>
-              <CardFooter className="pt-2 flex justify-between">
-                <div className="flex flex-wrap gap-1">
-                  {document.tags.slice(0, 3).map((tag, index) => (
-                    <span
-                      key={index}
-                      className="inline-flex items-center text-xs px-2 py-1 rounded-full bg-secondary text-secondary-foreground"
+          {!editingDocument && (
+            <div className="bg-secondary/20 p-3 rounded-md flex items-start gap-3 mb-4">
+              <div className="bg-primary/10 p-1.5 rounded-full mt-0.5">
+                <i className="ri-robot-line text-primary text-lg"></i>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium">AI-Generated Business Documents</h4>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Your AI agents can generate various business documents like business plans, marketing strategies, 
+                  product descriptions, and financial reports. You can store them here for future reference.
+                </p>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="mt-2"
+                  type="button"
+                  onClick={() => {
+                    // In a real implementation, this would open the agent chat
+                    // with instructions to create a document
+                    if (agents.length > 0) {
+                      window.location.href = `/chat/${agents[0].id}?prompt=Please create a business document`;
+                    } else {
+                      setIsModalOpen(true);
+                      setShowDocumentDialog(false);
+                    }
+                  }}
+                >
+                  <i className="ri-chat-3-line mr-1.5"></i>
+                  Ask an Agent to Create Document
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Title</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Document Title" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="content"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Content</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Write your document content here..."
+                        {...field}
+                        className="min-h-[200px]"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="folderId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Folder</FormLabel>
+                    <Select
+                      value={field.value || ""}
+                      onValueChange={(value) => field.onChange(value === "null" ? null : value)}
                     >
-                      {tag}
-                    </span>
-                  ))}
-                  {document.tags.length > 3 && (
-                    <span className="inline-flex items-center text-xs px-2 py-1 rounded-full bg-secondary text-secondary-foreground">
-                      +{document.tags.length - 3}
-                    </span>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a folder (optional)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="null">
+                          <div className="flex items-center">
+                            <Home className="mr-2 h-4 w-4" />
+                            <span>Root (No folder)</span>
+                          </div>
+                        </SelectItem>
+                        {folders?.map((folder) => (
+                          <SelectItem key={folder.id} value={folder.id}>
+                            <div className="flex items-center">
+                              <Folder className="mr-2 h-4 w-4" />
+                              <span>{folder.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="tags"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tags</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="business, report, strategy (comma separated)"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end space-x-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowDocumentDialog(false);
+                    form.reset();
+                    setEditingDocument(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={
+                    createDocumentMutation.isPending || updateDocumentMutation.isPending
+                  }
+                >
+                  {(createDocumentMutation.isPending || updateDocumentMutation.isPending) && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="h-4 w-4"
-                      >
-                        <circle cx="12" cy="12" r="1" />
-                        <circle cx="19" cy="12" r="1" />
-                        <circle cx="5" cy="12" r="1" />
-                      </svg>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleEditDocument(document)}>
-                      <Edit2 className="mr-2 h-4 w-4" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        if (window.confirm("Are you sure you want to delete this document?")) {
-                          deleteDocumentMutation.mutate(document.id);
-                        }
-                      }}
-                      className="text-destructive"
+                  {editingDocument ? "Update Document" : "Create Document"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Folder Creation/Editing Dialog */}
+      <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingFolder ? "Edit Folder" : "Create New Folder"}</DialogTitle>
+            <DialogDescription>
+              {editingFolder
+                ? "Update the folder details."
+                : "Enter a name for your new folder."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <Form {...folderForm}>
+            <form onSubmit={folderForm.handleSubmit(onFolderSubmit)} className="space-y-6">
+              <FormField
+                control={folderForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Folder Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="My Folder" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={folderForm.control}
+                name="parentId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Parent Folder</FormLabel>
+                    <Select
+                      value={field.value || ""}
+                      onValueChange={(value) => field.onChange(value === "null" ? null : value)}
                     >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      )}
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a parent folder (optional)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="null">
+                          <div className="flex items-center">
+                            <Home className="mr-2 h-4 w-4" />
+                            <span>Root (No parent)</span>
+                          </div>
+                        </SelectItem>
+                        {folders?.filter(f => f.id !== editingFolder?.id).map((folder) => (
+                          <SelectItem key={folder.id} value={folder.id}>
+                            <div className="flex items-center">
+                              <Folder className="mr-2 h-4 w-4" />
+                              <span>{folder.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end space-x-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowFolderDialog(false);
+                    folderForm.reset();
+                    setEditingFolder(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={
+                    createFolderMutation.isPending || updateFolderMutation.isPending
+                  }
+                >
+                  {(createFolderMutation.isPending || updateFolderMutation.isPending) && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  {editingFolder ? "Update Folder" : "Create Folder"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Agent Creation Modal */}
+      <CreateAgentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
 
       {/* Document Creation/Editing Dialog */}
       <Dialog open={showDocumentDialog} onOpenChange={setShowDocumentDialog}>
