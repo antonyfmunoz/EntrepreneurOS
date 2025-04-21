@@ -1179,7 +1179,7 @@ export default function DocumentsPage() {
       
       {/* Folder Creation/Editing Dialog */}
       <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingFolder ? "Edit Folder" : "Create New Folder"}</DialogTitle>
             <DialogDescription>
