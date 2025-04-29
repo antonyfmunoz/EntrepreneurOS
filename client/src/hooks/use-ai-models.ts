@@ -4,6 +4,7 @@ export type AIModelProvider = "openai" | "anthropic" | "perplexity" | "xai" | "g
 export type AIModelName = 
   | "gpt-4o" 
   | "gpt-4-turbo" 
+  | "gpt-3.5-turbo"
   | "claude-3-7-sonnet-20250219"
   | "claude-3-opus-20240229"
   | "llama-3.1-sonar-small-128k-online"
