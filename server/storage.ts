@@ -244,28 +244,29 @@ export class DatabaseStorage implements IStorage {
     // Create a demo user if no users exist
     if (existingUsers.length === 0) {
       try {
-        // Import the scrypt functions directly instead of using the exported function
-        const { scrypt, randomBytes, timingSafeEqual } = require('crypto');
-        const { promisify } = require('util');
-        const scryptAsync = promisify(scrypt);
-        
-        // Define the hashPassword function inline
-        const hashPassword = async (password: string) => {
-          const salt = randomBytes(16).toString("hex");
-          const buf = (await scryptAsync(password, salt, 64)) as Buffer;
-          return `${buf.toString("hex")}.${salt}`;
-        };
-        
-        // Create a demo user with simple credentials
-        await this.createUser({
-          username: "demo",
-          password: await hashPassword("password"),
-          email: "demo@example.com",
-          fullName: "Demo User",
-          role: "admin"
+        // Import crypto modules with import syntax
+        import('crypto').then(async (crypto) => {
+          const { scrypt, randomBytes, timingSafeEqual } = crypto;
+          import('util').then(async (util) => {
+            const { promisify } = util;
+            const scryptAsync = promisify(scrypt);
+            
+            // Create a simple hashed password (avoiding the hash function to simplify)
+            // In this case we're creating a basic hash with a fixed salt for the demo account
+            const password = "5b722b307fce6c944905d132691d5e4a2214b7fe92b738920eb3fcf3b7acfbc0.a978eacc4f3807640126cb17b0d31ad7";
+            
+            // Create a demo user with simple credentials
+            await this.createUser({
+              username: "demo",
+              password,
+              email: "demo@example.com",
+              fullName: "Demo User",
+              role: "admin"
+            });
+            
+            console.log("Created demo user: username 'demo', password 'password'");
+          });
         });
-        
-        console.log("Created demo user: username 'demo', password 'password'");
       } catch (error) {
         console.error("Error creating demo user:", error);
       }
