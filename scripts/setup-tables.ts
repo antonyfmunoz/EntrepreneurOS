@@ -105,10 +105,12 @@ async function setupTables() {
         "id" text PRIMARY KEY,
         "user_id" text REFERENCES "users"("id"),
         "title" text NOT NULL,
-        "message" text NOT NULL,
+        "content" text NOT NULL,
+        "type" text NOT NULL,
         "read" boolean DEFAULT false,
-        "type" text,
-        "link" text,
+        "href" text,
+        "related_id" text,
+        "metadata" jsonb,
         "created_at" timestamp DEFAULT now()
       );
     `);
