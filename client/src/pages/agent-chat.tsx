@@ -14,7 +14,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { callLLM } from "@/lib/llmApi";
 import { useToast } from "@/hooks/use-toast";
 import { AIModelSelector } from "@/components/ai-model-selector";
-import { AIModelConfig, AIModelProvider } from "@/hooks/use-ai-models";
+import { AIModelConfig, AIModelProvider, AIModelName } from "@/hooks/use-ai-models";
 import { useRequestAIKeys } from "@/hooks/use-ai-api-keys";
 import { ApiKeyDialog } from "@/components/api-key-dialog";
 import { CreateAgentModal } from "@/components/create-agent-modal";
@@ -94,7 +94,8 @@ export default function AgentChat({ params }: AgentChatProps) {
       if (!agentId || agentId === "direct-gpt4o") {
         try {
           // Use our direct llmApi for GPT-4o
-          const aiResponse = await callLLM(message);
+          const model = aiModelConfig?.modelName || "gpt-4o";
+          const aiResponse = await callLLM(message, model);
           return aiResponse;
         } catch (err) {
           console.error("Error calling direct GPT-4o:", err);
@@ -779,10 +780,35 @@ export default function AgentChat({ params }: AgentChatProps) {
                     </Button>
                   </div>
                 </div>
-                <div className="flex justify-center mt-2">
-                  <p className="text-xs text-gray-500">
+                <div className="flex justify-between items-center mt-2">
+                  <div className="flex items-center">
+                    {agentId === "direct-gpt4o" && (
+                      <div className="relative mr-2">
+                        <select 
+                          className="text-xs border border-gray-200 rounded-md pl-6 pr-8 py-1 bg-white appearance-none shadow-sm focus:border-primary focus:ring-1 focus:ring-primary"
+                          value={(aiModelConfig?.modelName as string) || "gpt-4o"}
+                          onChange={(e) => {
+                            const selectedModel = e.target.value as AIModelName;
+                            const provider: AIModelProvider = "openai";
+                            setAIModelConfig({ provider, modelName: selectedModel });
+                          }}
+                        >
+                          <option value="gpt-4o">GPT-4o</option>
+                          <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                          <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        </select>
+                        <div className="absolute left-1.5 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
+                          <i className="ri-ai-generate text-xs"></i>
+                        </div>
+                        <div className="absolute right-1.5 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
+                          <i className="ri-arrow-down-s-line text-xs"></i>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 flex-1 text-center">
                     {agentId === "direct-gpt4o" 
-                      ? "GPT-4o is powered by OpenAI's latest model - direct API connection"
+                      ? `Using OpenAI's ${aiModelConfig?.modelName || "gpt-4o"} model - direct API connection`
                       : `${agent?.name || "The agent"} helps with ${agent?.role || "tasks"} based on current knowledge`}
                   </p>
                 </div>
