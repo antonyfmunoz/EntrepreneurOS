@@ -56,12 +56,16 @@ async function setupTables() {
         "title" text NOT NULL,
         "description" text,
         "status" text NOT NULL,
+        "start_date" text,
         "due_date" text,
         "agent_id" text REFERENCES "agents"("id"),
         "priority" text DEFAULT 'medium',
         "task_type" text DEFAULT 'standard',
         "parent_task_id" text REFERENCES "tasks"("id"),
         "collaborator_ids" text[],
+        "assigned_by_id" text REFERENCES "agents"("id"),
+        "instructions" text,
+        "metadata" text,
         "created_at" timestamp DEFAULT now(),
         "updated_at" timestamp DEFAULT now()
       );
