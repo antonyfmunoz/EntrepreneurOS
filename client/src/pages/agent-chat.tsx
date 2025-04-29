@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } 
 import { sendMessageToAgent } from "@/lib/openai";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { callLLM } from "@/lib/llmApi";
 import { useToast } from "@/hooks/use-toast";
 import { AIModelSelector } from "@/components/ai-model-selector";
 import { AIModelConfig, AIModelProvider } from "@/hooks/use-ai-models";
@@ -89,13 +90,27 @@ export default function AgentChat({ params }: AgentChatProps) {
   const sendMessageMutation = useMutation({
     mutationFn: async (message: string) => {
       setIsLoading(true);
-      const response = await sendMessageToAgent(agentId, message, aiModelConfig);
-      return response;
+      // Check if we're in direct GPT-4o mode (no agent selected or direct GPT-4o toggle is on)
+      if (!agentId || agentId === "direct-gpt4o") {
+        try {
+          // Use our direct llmApi for GPT-4o
+          const aiResponse = await callLLM(message);
+          return aiResponse;
+        } catch (err) {
+          console.error("Error calling direct GPT-4o:", err);
+          throw err;
+        }
+      } else {
+        // Use the regular agent response system
+        const response = await sendMessageToAgent(agentId, message, aiModelConfig);
+        return response;
+      }
     },
     onSuccess: (response) => {
       // Show toast notification when AI response is complete
+      const responder = !agentId || agentId === "direct-gpt4o" ? "GPT-4o" : (agent?.name || "Agent");
       toast({
-        title: `${agent?.name || "Agent"} responded`,
+        title: `${responder} responded`,
         description: response.substring(0, 60) + (response.length > 60 ? "..." : ""),
       });
       
@@ -209,7 +224,7 @@ export default function AgentChat({ params }: AgentChatProps) {
   };
 
   return (
-    <Layout title={agent?.name || "Agent Chat"}>
+    <Layout title={agentId === "direct-gpt4o" ? "GPT-4o Chat" : (agent?.name || "Agent Chat")}>
       <div className="flex h-full overflow-hidden -mt-6 -mx-6">
         {/* API Key Dialog */}
         <ApiKeyDialog 
