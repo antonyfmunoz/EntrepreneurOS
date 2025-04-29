@@ -3,6 +3,10 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { generateAgentResponse, generateTaskSuggestion } from "./openai";
+import OpenAI from "openai";
+
+// Initialize the OpenAI client for our direct calls
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 import { z } from "zod";
 import { 
   insertAgentSchema, 
@@ -1968,6 +1972,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting document:", error);
       res.status(500).json({ message: "Failed to delete document" });
+    }
+  });
+
+  // Generic LLM Chat API endpoint
+  app.post("/api/llm/chat", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const { prompt, systemMessage } = req.body;
+      
+      if (!prompt) {
+        return res.status(400).json({ message: "Prompt is required" });
+      }
+      
+      // Use the OpenAI instance we created at the top of the file
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: systemMessage || "You are an autonomous business agent designed to help build and manage businesses."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.2,
+        max_tokens: 1000,
+      });
+      
+      const content = response.choices[0].message.content;
+      
+      // Log the conversation in the AI messages table if it exists
+      if (req.user.id) {
+        try {
+          await storage.addAiMessage({
+            userId: req.user.id,
+            role: "user",
+            content: prompt,
+            timestamp: new Date().toISOString(),
+          });
+          
+          await storage.addAiMessage({
+            userId: req.user.id,
+            role: "assistant",
+            content: content || "",
+            timestamp: new Date().toISOString(),
+          });
+        } catch (logError) {
+          console.warn("Failed to log AI conversation:", logError);
+          // Continue even if logging fails
+        }
+      }
+      
+      res.json({ response: content });
+    } catch (error) {
+      console.error("Error calling LLM API:", error);
+      res.status(500).json({ 
+        message: "Failed to call LLM API",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
