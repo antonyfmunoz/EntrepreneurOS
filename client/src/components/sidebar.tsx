@@ -108,27 +108,14 @@ export function Sidebar() {
                 </div>
               </Link>
             </li>
-            {/* GPT-4o Direct Chat */}
-            <li>
-              <Link href="/chat/direct-gpt4o">
-                <div className={cn(
-                  "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
-                  location === "/chat/direct-gpt4o" 
-                    ? "bg-blue-50 text-primary font-medium" 
-                    : "hover:bg-gray-100 text-gray-700"
-                )}>
-                  <i className="ri-robot-line"></i>
-                  <span>GPT-4o Chat</span>
-                </div>
-              </Link>
-            </li>
+
             <li>
               {agents.length > 0 ? (
                 <div className="flex items-center">
                   <Link href={`/chat/${agents[0].id}`}>
                     <div className={cn(
                       "flex items-center space-x-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 text-gray-700",
-                      location.startsWith("/chat") && location !== "/chat/direct-gpt4o" && "bg-blue-50 text-primary font-medium",
+                      location.startsWith("/chat") && "bg-blue-50 text-primary font-medium",
                       "flex-grow"
                     )}>
                       <i className="ri-chat-3-line"></i>
