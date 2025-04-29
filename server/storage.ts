@@ -238,6 +238,39 @@ export class DatabaseStorage implements IStorage {
   }
 
   private async initSampleData(): Promise<void> {
+    // Check if there are any users in the database
+    const existingUsers = await this.getUsers();
+    
+    // Create a demo user if no users exist
+    if (existingUsers.length === 0) {
+      try {
+        // Import the scrypt functions directly instead of using the exported function
+        const { scrypt, randomBytes, timingSafeEqual } = require('crypto');
+        const { promisify } = require('util');
+        const scryptAsync = promisify(scrypt);
+        
+        // Define the hashPassword function inline
+        const hashPassword = async (password: string) => {
+          const salt = randomBytes(16).toString("hex");
+          const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+          return `${buf.toString("hex")}.${salt}`;
+        };
+        
+        // Create a demo user with simple credentials
+        await this.createUser({
+          username: "demo",
+          password: await hashPassword("password"),
+          email: "demo@example.com",
+          fullName: "Demo User",
+          role: "admin"
+        });
+        
+        console.log("Created demo user: username 'demo', password 'password'");
+      } catch (error) {
+        console.error("Error creating demo user:", error);
+      }
+    }
+    
     // Check if there are any agents first
     const existingAgents = await this.getAgents();
     
