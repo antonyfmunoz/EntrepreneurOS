@@ -9,6 +9,7 @@ export type AIModelProvider = "openai" | "anthropic" | "perplexity" | "xai" | "g
 export type AIModelName = 
   | "gpt-4o" 
   | "gpt-4-turbo" 
+  | "gpt-3.5-turbo"
   | "claude-3-7-sonnet-20250219"
   | "claude-3-opus-20240229"
   | "llama-3.1-sonar-small-128k-online"
@@ -234,6 +235,12 @@ export function getModelInfo(): Record<AIModelProvider, ModelInfo> {
           description: "Fast and efficient general purpose model",
           contextWindow: 128000,
           capabilities: ["Text generation", "Summarization", "Content creation"],
+        },
+        {
+          name: "gpt-3.5-turbo",
+          description: "Fast and cost-effective general purpose model",
+          contextWindow: 16000,
+          capabilities: ["Text generation", "Summarization", "Basic reasoning"],
         }
       ]
     },
