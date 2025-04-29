@@ -626,12 +626,24 @@ export default function AgentChat({ params }: AgentChatProps) {
                 <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
                   <Bot size={32} className="text-primary" />
                 </div>
-                <h2 className="text-xl font-medium">Hello! I'm {agent?.name || "your AI assistant"}</h2>
-                <p className="text-gray-500 max-w-md">
-                  {agent?.instructions 
-                    ? `I'm here to ${agent.instructions.toLowerCase().slice(0, 60)}...` 
-                    : "How can I help you today? Feel free to ask me anything."}
-                </p>
+                {agentId === "direct-gpt4o" ? (
+                  <>
+                    <h2 className="text-xl font-medium">Hello! I'm GPT-4o</h2>
+                    <p className="text-gray-500 max-w-md">
+                      I'm OpenAI's advanced AI assistant. You're using a direct connection to the OpenAI API.
+                      Ask me anything and I'll do my best to help you.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="text-xl font-medium">Hello! I'm {agent?.name || "your AI assistant"}</h2>
+                    <p className="text-gray-500 max-w-md">
+                      {agent?.instructions 
+                        ? `I'm here to ${agent.instructions.toLowerCase().slice(0, 60)}...` 
+                        : "How can I help you today? Feel free to ask me anything."}
+                    </p>
+                  </>
+                )}
               </div>
             ) : (
               // Show messages from the active conversation
@@ -648,13 +660,13 @@ export default function AgentChat({ params }: AgentChatProps) {
                   <div className="flex items-start">
                     {message.role !== "user" && (
                       <div className="w-9 h-9 flex-shrink-0 rounded-full bg-primary/20 mr-4 flex items-center justify-center">
-                        <i className={cn(`${agent?.icon || "ri-robot-line"} text-primary`)}></i>
+                        <i className={cn(`${agentId === "direct-gpt4o" ? "ri-robot-line" : (agent?.icon || "ri-robot-line")} text-primary`)}></i>
                       </div>
                     )}
                     
                     <div className="flex-1">
                       <div className="mb-1 text-xs font-medium text-gray-500">
-                        {message.role === "user" ? "You" : agent?.name || "Assistant"}
+                        {message.role === "user" ? "You" : agentId === "direct-gpt4o" ? "GPT-4o" : (agent?.name || "Assistant")}
                       </div>
                       <div className={cn(
                         "prose prose-sm max-w-none",
@@ -693,7 +705,9 @@ export default function AgentChat({ params }: AgentChatProps) {
                       onChange={(e) => setMessage(e.target.value)}
                       placeholder={activeConversationId !== "current" 
                         ? "Viewing past conversation... Return to current chat to send messages" 
-                        : `Message ${agent?.name || "your agent"}...`}
+                        : agentId === "direct-gpt4o"
+                          ? "Message GPT-4o..."
+                          : `Message ${agent?.name || "your agent"}...`}
                       disabled={isLoading || activeConversationId !== "current"}
                       className="border-0 rounded-none shadow-none focus-visible:ring-0 text-base py-6 min-h-[60px] max-h-[200px] resize-none"
                     />
@@ -713,7 +727,9 @@ export default function AgentChat({ params }: AgentChatProps) {
                 </div>
                 <div className="flex justify-center mt-2">
                   <p className="text-xs text-gray-500">
-                    {agent?.name || "The agent"} helps with {agent?.role || "tasks"} based on current knowledge
+                    {agentId === "direct-gpt4o" 
+                      ? "GPT-4o is powered by OpenAI's latest model - direct API connection"
+                      : `${agent?.name || "The agent"} helps with ${agent?.role || "tasks"} based on current knowledge`}
                   </p>
                 </div>
               </form>
