@@ -1,18 +1,27 @@
-import axios from 'axios';
+import { apiRequest } from "./queryClient";
 
-// This is a frontend implementation that calls our backend API
-// We never expose the API key directly in the frontend
-export async function callLLM(prompt: string): Promise<string> {
+/**
+ * Call the OpenAI GPT-4o API via our server endpoint
+ * @param prompt The text prompt to send to the API
+ * @param systemMessage Optional system instruction
+ * @returns The response from GPT-4o
+ */
+export async function callLLM(prompt: string, systemMessage?: string): Promise<string> {
   try {
-    // Using our existing backend API endpoint instead of calling OpenAI directly
-    const response = await axios.post('/api/llm/chat', {
+    const response = await apiRequest("POST", "/api/llm/chat", {
       prompt,
-      systemMessage: "You are an autonomous business agent designed to help build and manage businesses."
+      systemMessage
     });
     
-    return response.data.response;
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || "Failed to get response from AI");
+    }
+    
+    return data.response;
   } catch (error) {
-    console.error('LLM API error:', error);
-    throw new Error('Failed to call LLM API');
+    console.error("Error calling LLM API:", error);
+    throw error;
   }
 }

@@ -16,6 +16,7 @@ import SupportPage from "@/pages/support-page";
 import CRMPage from "@/pages/crm-page";
 import DocumentsPage from "@/pages/documents-page";
 import AgentOSDashboard from "@/pages/agent-os-dashboard";
+import GPT4OChatPage from "@/pages/gpt4o-chat-page";
 import AuthPage from "@/pages/auth-page";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
@@ -52,6 +53,7 @@ function Router() {
       <ProtectedRoute path="/notifications" component={NotificationsPage} />
       <ProtectedRoute path="/support" component={SupportPage} />
       <ProtectedRoute path="/tutorials" component={TutorialsPage} />
+      <ProtectedRoute path="/gpt4o-chat" component={GPT4OChatPage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>
