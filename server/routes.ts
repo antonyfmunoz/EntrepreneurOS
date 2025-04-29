@@ -1982,15 +1982,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      const { prompt, systemMessage } = req.body;
+      const { prompt, model, systemMessage } = req.body;
       
       if (!prompt) {
         return res.status(400).json({ message: "Prompt is required" });
       }
       
+      // Allow selecting from available models, with fallback to gpt-4o
+      const modelToUse = model && ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"].includes(model) 
+        ? model 
+        : "gpt-4o";
+        
       // Use the OpenAI instance we created at the top of the file
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: modelToUse,
         messages: [
           {
             role: "system",
@@ -2022,6 +2027,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             role: "assistant",
             content: content || "",
             timestamp: new Date().toISOString(),
+            metadata: { model: modelToUse }
           });
         } catch (logError) {
           console.warn("Failed to log AI conversation:", logError);
