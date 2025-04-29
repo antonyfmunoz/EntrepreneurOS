@@ -134,6 +134,19 @@ export function Sidebar() {
               )}
             </li>
             <li>
+              <Link href="/gpt4o-chat">
+                <div className={cn(
+                  "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+                  location === "/gpt4o-chat" 
+                    ? "bg-blue-50 text-primary font-medium" 
+                    : "hover:bg-gray-100 text-gray-700"
+                )}>
+                  <i className="ri-robot-line"></i>
+                  <span>GPT-4o Chat</span>
+                </div>
+              </Link>
+            </li>
+            <li>
               <Link href="/documents">
                 <div className={cn(
                   "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
