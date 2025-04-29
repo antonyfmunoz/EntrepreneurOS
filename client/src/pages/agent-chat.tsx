@@ -598,30 +598,10 @@ export default function AgentChat({ params }: AgentChatProps) {
           </div>
           
           {/* Settings Footer */}
+          {/* AI Model Settings button removed as requested */}
           <div className="border-t border-gray-200 p-3">
             <div className="flex flex-col space-y-1">
-
-              <Popover open={aiSelectorOpen} onOpenChange={setAiSelectorOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="ghost" size="sm" className="justify-start gap-2">
-                    <Settings size={16} />
-                    <span>AI Model Settings</span>
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80 p-4" align="start">
-                  <h3 className="text-sm font-medium mb-2">AI Model Settings</h3>
-                  <AIModelSelector 
-                    onSelectModel={(config) => {
-                      if (config) {
-                        setAIModelConfig(config);
-                      }
-                      setAiSelectorOpen(false);
-                    }}
-                    defaultProvider={aiModelConfig.provider}
-                    defaultModel={aiModelConfig.modelName}
-                  />
-                </PopoverContent>
-              </Popover>
+              {/* Settings have been moved to the model selector dropdown in the chat interface */}
             </div>
           </div>
         </div>
