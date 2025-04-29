@@ -18,12 +18,33 @@ export async function callLLM(prompt: string, model: string = "gpt-4o", systemMe
     const data = await response.json();
     
     if (!response.ok) {
-      throw new Error(data.message || "Failed to get response from AI");
+      // Create an error with additional properties based on the API response
+      const error = new Error(data.message || "Failed to get response from AI");
+      
+      // Add properties from the response to the error object
+      (error as any).status = response.status;
+      (error as any).code = data.code || 'unknown_error';
+      (error as any).details = data.error || '';
+      
+      throw error;
     }
     
     return data.response;
   } catch (error) {
     console.error("Error calling LLM API:", error);
+    
+    // Enhance error messages for common OpenAI issues
+    if ((error as any).code === 'insufficient_quota' || 
+        ((error as Error).message && (error as Error).message.includes('quota'))) {
+      throw new Error("OpenAI API quota exceeded. Please update your API key or try a different model.");
+    } else if ((error as any).status === 429 || 
+               ((error as Error).message && (error as Error).message.includes('rate limit'))) {
+      throw new Error("Rate limit exceeded. Please try again later.");
+    } else if ((error as any).status === 401 || 
+               ((error as Error).message && (error as Error).message.includes('API key'))) {
+      throw new Error("Invalid API key. Please check your OpenAI API key in settings.");
+    }
+    
     throw error;
   }
 }

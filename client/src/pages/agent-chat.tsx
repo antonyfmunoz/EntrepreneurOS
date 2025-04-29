@@ -122,11 +122,43 @@ export default function AgentChat({ params }: AgentChatProps) {
       setIsLoading(false);
     },
     onError: (error) => {
-      // For OpenAI API key errors (direct mode)
-      if (error.message.includes("quota") || error.message.includes("key") || error.message.includes("API key")) {
+      // Display appropriate error messages based on the error type
+      const errorObj = error as any;
+      
+      // For API quota exceeded errors
+      if (error.message.includes("quota")) {
+        toast({
+          title: "API Quota Exceeded",
+          description: "Your OpenAI API quota has been exceeded. Please update your billing details or try a different model.",
+          variant: "destructive",
+        });
+        
+        // Add an option to try GPT-3.5 turbo which is more affordable
+        if (aiModelConfig.modelName === "gpt-4o" || aiModelConfig.modelName === "gpt-4-turbo") {
+          setAIModelConfig({
+            ...aiModelConfig,
+            modelName: "gpt-3.5-turbo"
+          });
+          
+          toast({
+            title: "Model Changed",
+            description: "Switched to GPT-3.5 Turbo which has a higher free quota limit.",
+          });
+        }
+      }
+      // For OpenAI API key errors 
+      else if (error.message.includes("key") || error.message.includes("API key")) {
         toast({
           title: "OpenAI API Key Required",
           description: "Please add your OpenAI API key in Settings to use GPT-4o direct chat mode.",
+          variant: "destructive",
+        });
+      }
+      // For rate limiting
+      else if (error.message.includes("rate limit") || error.message.includes("too many requests")) {
+        toast({
+          title: "Rate Limit Exceeded",
+          description: "You've sent too many requests. Please wait a moment before trying again.",
           variant: "destructive",
         });
       }
@@ -138,6 +170,7 @@ export default function AgentChat({ params }: AgentChatProps) {
           variant: "destructive",
         });
       }
+      
       console.error("Message error:", error);
       setIsLoading(false);
     },
