@@ -28,10 +28,10 @@ export function DirectGPT4OChat() {
     
     try {
       // Call the LLM API
-      const response = await callLLM(userMessage);
+      const aiResponse = await callLLM(userMessage);
       
       // Add AI response to messages
-      setMessages(prev => [...prev, { role: "assistant", content: response }]);
+      setMessages(prev => [...prev, { role: "assistant", content: aiResponse }]);
     } catch (error) {
       console.error("Error calling LLM:", error);
       toast({
