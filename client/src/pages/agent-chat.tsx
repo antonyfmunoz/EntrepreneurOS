@@ -119,8 +119,16 @@ export default function AgentChat({ params }: AgentChatProps) {
       setIsLoading(false);
     },
     onError: (error) => {
+      // For OpenAI API key errors (direct mode)
+      if (error.message.includes("quota") || error.message.includes("key") || error.message.includes("API key")) {
+        toast({
+          title: "OpenAI API Key Required",
+          description: "Please add your OpenAI API key in Settings to use GPT-4o direct chat mode.",
+          variant: "destructive",
+        });
+      }
       // Only show toast for critical errors, not AI-related ones
-      if (!error.message.includes("API") && !error.message.includes("AI")) {
+      else if (!error.message.includes("API") && !error.message.includes("AI")) {
         toast({
           title: "Error sending message",
           description: error.message,
@@ -619,6 +627,52 @@ export default function AgentChat({ params }: AgentChatProps) {
             </div>
           </div>
           
+          {/* Chat Header with Model Selector */}
+          <div className="border-b border-gray-200 p-4 flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center mr-3">
+                <i className={agentId === "direct-gpt4o" ? "ri-robot-line text-primary" : (agent?.icon || "ri-robot-line text-primary")}></i>
+              </div>
+              <div>
+                <h2 className="text-base font-medium">{agentId === "direct-gpt4o" ? "GPT-4o Chat" : (agent?.name || "Agent Chat")}</h2>
+                <p className="text-xs text-gray-500">
+                  {agentId === "direct-gpt4o" 
+                    ? "Direct interaction with OpenAI's GPT-4o" 
+                    : agent?.role === "executive" 
+                      ? "Chief Executive Agent" 
+                      : agent?.role === "assistant" 
+                        ? "Assistant Agent" 
+                        : agent?.role || "AI Assistant"}
+                </p>
+              </div>
+            </div>
+            
+            {/* Model selector dropdown */}
+            <div className="flex items-center">
+              <div className="relative">
+                <select 
+                  className="text-sm border border-gray-200 rounded-md pl-8 pr-3 py-1.5 bg-white appearance-none shadow-sm focus:border-primary focus:ring-1 focus:ring-primary"
+                  value={agentId}
+                  onChange={(e) => {
+                    const selectedId = e.target.value;
+                    window.location.href = `/chat/${selectedId}`;
+                  }}
+                >
+                  <option value="direct-gpt4o">GPT-4o Direct</option>
+                  {agents.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+                <div className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
+                  <i className={agentId === "direct-gpt4o" ? "ri-robot-line" : "ri-user-line"}></i>
+                </div>
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
+                  <i className="ri-arrow-down-s-line"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Messages Container */}
           <div className="flex-1 overflow-y-auto p-4 md:px-8 space-y-8">
             {messages.length === 0 ? (
