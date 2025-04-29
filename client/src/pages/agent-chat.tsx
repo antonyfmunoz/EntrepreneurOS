@@ -555,11 +555,13 @@ export default function AgentChat({ params }: AgentChatProps) {
                   <h3 className="text-sm font-medium mb-2">AI Model Settings</h3>
                   <AIModelSelector 
                     onSelectModel={(config) => {
-                      setAIModelConfig(config);
+                      if (config) {
+                        setAIModelConfig(config);
+                      }
                       setAiSelectorOpen(false);
                     }}
-                    defaultProvider={aiModelConfig?.provider}
-                    defaultModel={aiModelConfig?.modelName}
+                    defaultProvider={aiModelConfig.provider}
+                    defaultModel={aiModelConfig.modelName}
                   />
                 </PopoverContent>
               </Popover>
@@ -788,7 +790,7 @@ export default function AgentChat({ params }: AgentChatProps) {
                       <div className="relative mr-2">
                         <select 
                           className="text-xs border border-gray-200 rounded-md pl-6 pr-8 py-1 bg-white appearance-none shadow-sm focus:border-primary focus:ring-1 focus:ring-primary"
-                          value={(aiModelConfig?.modelName as string) || "gpt-4o"}
+                          value={aiModelConfig.modelName}
                           onChange={(e) => {
                             const selectedModel = e.target.value as AIModelName;
                             const provider: AIModelProvider = "openai";
@@ -810,7 +812,7 @@ export default function AgentChat({ params }: AgentChatProps) {
                   </div>
                   <p className="text-xs text-gray-500 flex-1 text-center">
                     {agentId === "direct-gpt4o" 
-                      ? `Using OpenAI's ${aiModelConfig?.modelName || "gpt-4o"} model - direct API connection`
+                      ? `Using OpenAI's ${aiModelConfig.modelName} model - direct API connection`
                       : `${agent?.name || "The agent"} helps with ${agent?.role || "tasks"} based on current knowledge`}
                   </p>
                 </div>
