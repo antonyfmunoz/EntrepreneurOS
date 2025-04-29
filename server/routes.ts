@@ -2038,9 +2038,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ response: content });
     } catch (error) {
       console.error("Error calling LLM API:", error);
-      res.status(500).json({ 
-        message: "Failed to call LLM API",
-        error: error instanceof Error ? error.message : String(error)
+      
+      // Check for specific OpenAI errors
+      let statusCode = 500;
+      let errorMessage = "Failed to call LLM API";
+      let errorCode = 'unknown_error';
+      
+      // Extract error properties safely with type checking
+      const errorObj = error as any;
+      
+      if (errorObj && typeof errorObj === 'object') {
+        // Check for quota errors
+        if (errorObj.code === 'insufficient_quota' || 
+            (errorObj.message && typeof errorObj.message === 'string' && errorObj.message.includes('quota'))) {
+          statusCode = 429;
+          errorMessage = "OpenAI API quota exceeded. Please update your billing details or try a different model.";
+          errorCode = 'insufficient_quota';
+        } 
+        // Check for rate limit errors
+        else if (errorObj.status === 429 || 
+                (errorObj.message && typeof errorObj.message === 'string' && errorObj.message.includes('rate limit'))) {
+          statusCode = 429;
+          errorMessage = "Rate limit exceeded. Please try again later.";
+          errorCode = 'rate_limit_exceeded';
+        } 
+        // Check for authentication errors
+        else if (errorObj.status === 401 || 
+                (errorObj.message && typeof errorObj.message === 'string' && errorObj.message.includes('API key'))) {
+          statusCode = 401;
+          errorMessage = "Invalid API key. Please check your OpenAI API key.";
+          errorCode = 'invalid_api_key';
+        }
+      }
+      
+      res.status(statusCode).json({ 
+        message: errorMessage,
+        error: errorObj instanceof Error ? errorObj.message : String(errorObj),
+        code: errorCode
       });
     }
   });
