@@ -105,7 +105,7 @@ export default function AgentChat({ params }: AgentChatProps) {
         }
       } else {
         // Use the regular agent response system
-        const response = await sendMessageToAgent(agentId, message, aiModelConfig);
+        const response = await sendMessageToAgent(agentId, message, aiModelConfig || null);
         return response;
       }
     },
@@ -210,23 +210,47 @@ export default function AgentChat({ params }: AgentChatProps) {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim()) return;
+    if (!message.trim() || isLoading) return;
     
-    // If no custom AI model is selected, we'll use the default (likely OpenAI)
-    const providers: AIModelProvider[] = aiModelConfig ? [aiModelConfig.provider] : ["openai"];
-    
-    // Check if we have the required API keys
-    const hasKeys = await requestKeys(providers);
-    
-    if (!hasKeys) {
-      // Set required providers and open the API key dialog
-      setRequiredApiProviders(providers);
-      setApiKeyDialogOpen(true);
-      return;
+    try {
+      // If no custom AI model is selected, we'll use the default (OpenAI)
+      const providers: AIModelProvider[] = [aiModelConfig.provider];
+      
+      // Check if we have the required API keys
+      const hasKeys = await requestKeys(providers);
+      
+      if (!hasKeys) {
+        // Set required providers and open the API key dialog
+        setRequiredApiProviders(providers);
+        setApiKeyDialogOpen(true);
+        return;
+      }
+      
+      // Store the user message locally first for immediate UI update
+      const userMessage: Message = {
+        id: `user_${Date.now()}`,
+        role: "user",
+        content: message,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Add to message cache immediately for UI responsiveness
+      queryClient.setQueryData([`/api/agents/${agentId}/messages`], (oldData: Message[] = []) => [
+        ...oldData,
+        userMessage
+      ]);
+      
+      // Then send the message to the API
+      sendMessageMutation.mutate(message);
+    } catch (error) {
+      console.error("Error in handleSendMessage:", error);
+      toast({
+        title: "Error",
+        description: "Failed to send message. Please try again.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
     }
-    
-    // If we have the keys, send the message
-    sendMessageMutation.mutate(message);
   };
 
   const formatTime = (dateString: string) => {
@@ -656,7 +680,7 @@ export default function AgentChat({ params }: AgentChatProps) {
             <div className="flex items-center">
               <div className="relative">
                 <select 
-                  className="text-sm border border-gray-200 rounded-md pl-8 pr-3 py-1.5 bg-white appearance-none shadow-sm focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="text-sm border border-gray-200 rounded-md pl-8 pr-3 py-1.5 bg-white appearance-none shadow-sm focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer pointer-events-auto z-10 relative"
                   value={agentId}
                   onChange={(e) => {
                     const selectedId = e.target.value;
@@ -762,19 +786,30 @@ export default function AgentChat({ params }: AgentChatProps) {
                     <Textarea
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage(e);
+                        }
+                      }}
                       placeholder={activeConversationId !== "current" 
                         ? "Viewing past conversation... Return to current chat to send messages" 
                         : agentId === "direct-gpt4o"
                           ? "Message GPT-4o..."
                           : `Message ${agent?.name || "your agent"}...`}
                       disabled={isLoading || activeConversationId !== "current"}
-                      className="border-0 rounded-none shadow-none focus-visible:ring-0 text-base py-6 min-h-[60px] max-h-[200px] resize-none"
+                      className="border-0 rounded-none shadow-none focus-visible:ring-0 text-base py-6 min-h-[60px] max-h-[200px] resize-none pointer-events-auto"
                     />
                     <Button 
                       type="submit" 
                       disabled={isLoading || !message.trim() || activeConversationId !== "current"}
-                      className="rounded-none bg-transparent hover:bg-transparent mr-2 self-end mb-2"
+                      className="rounded-none bg-transparent hover:bg-transparent mr-2 self-end mb-2 pointer-events-auto cursor-pointer"
                       size="icon"
+                      onClick={(e) => {
+                        if (!isLoading && message.trim() && activeConversationId === "current") {
+                          handleSendMessage(e);
+                        }
+                      }}
                     >
                       {isLoading ? (
                         <i className="ri-loader-4-line animate-spin text-primary"></i>
@@ -789,7 +824,7 @@ export default function AgentChat({ params }: AgentChatProps) {
                     {agentId === "direct-gpt4o" && (
                       <div className="relative mr-2">
                         <select 
-                          className="text-xs border border-gray-200 rounded-md pl-6 pr-8 py-1 bg-white appearance-none shadow-sm focus:border-primary focus:ring-1 focus:ring-primary"
+                          className="text-xs border border-gray-200 rounded-md pl-6 pr-8 py-1 bg-white appearance-none shadow-sm focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer pointer-events-auto"
                           value={aiModelConfig.modelName}
                           onChange={(e) => {
                             const selectedModel = e.target.value as AIModelName;
