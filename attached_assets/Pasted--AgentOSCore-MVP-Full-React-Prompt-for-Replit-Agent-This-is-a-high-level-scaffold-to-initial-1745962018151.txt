@@ -1,0 +1,88 @@
+// AgentOSCore MVP — Full React Prompt for Replit Agent
+// This is a high-level scaffold to initialize the AgentOS MVP for deployment
+// It includes UI, LLM integrations, memory logic, task board, agent creation, and integrations.
+
+import React, { useState, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+
+// Fake API placeholder functions — to be connected to Supabase, Pinecone, or real tools
+const fetchAgentMemory = async (agentId) => Promise.resolve("Memory loaded...");
+const saveAgentMemory = async (agentId, memory) => Promise.resolve();
+const callLLM = async (message) => Promise.resolve("[LLM response placeholder]");
+
+export default function AgentOSDashboard() {
+  const [agents, setAgents] = useState([]);
+  const [selectedAgent, setSelectedAgent] = useState(null);
+  const [input, setInput] = useState("");
+  const [output, setOutput] = useState("");
+  const [memory, setMemory] = useState("");
+  const [taskList, setTaskList] = useState([]);
+
+  const handleAgentCreate = () => {
+    const name = prompt("Agent Name?");
+    if (name) setAgents([...agents, { id: agents.length + 1, name }]);
+  };
+
+  const handleLLMChat = async () => {
+    const response = await callLLM(input);
+    setOutput(response);
+    setMemory((prev) => prev + `\nUser: ${input}\nAI: ${response}`);
+    await saveAgentMemory(selectedAgent?.id, memory);
+  };
+
+  const handleTaskAdd = () => {
+    const task = prompt("New Task");
+    if (task) setTaskList([...taskList, { task, status: "Pending" }]);
+  };
+
+  useEffect(() => {
+    if (selectedAgent) {
+      fetchAgentMemory(selectedAgent.id).then(setMemory);
+    }
+  }, [selectedAgent]);
+
+  return (
+    <div className="grid grid-cols-4 gap-4 p-4">
+      {/* Sidebar */}
+      <div className="col-span-1">
+        <h2 className="text-xl font-bold mb-2">Agents</h2>
+        <Button onClick={handleAgentCreate} className="mb-2 w-full">+ New Agent</Button>
+        {agents.map((agent) => (
+          <Card key={agent.id} className="mb-1 cursor-pointer" onClick={() => setSelectedAgent(agent)}>
+            <CardContent className="p-2">{agent.name}</CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Main Chat + Task View */}
+      <div className="col-span-3">
+        {selectedAgent ? (
+          <>
+            <h2 className="text-xl font-bold">{selectedAgent.name} Workspace</h2>
+            <Textarea value={memory} onChange={(e) => setMemory(e.target.value)} className="mt-2 h-40" />
+
+            <div className="flex gap-2 mt-4">
+              <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask something..." />
+              <Button onClick={handleLLMChat}>Send</Button>
+            </div>
+
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold">Task Board</h3>
+              <Button onClick={handleTaskAdd} className="my-2">+ Add Task</Button>
+              <ul>
+                {taskList.map((t, i) => (
+                  <li key={i} className="border p-2 rounded mb-1">{t.task} — {t.status}</li>
+                ))}
+              </ul>
+            </div>
+          </>
+        ) : (
+          <p>Select or create an agent to begin.</p>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -15,6 +15,7 @@ import TutorialsPage from "@/pages/tutorials-page";
 import SupportPage from "@/pages/support-page";
 import CRMPage from "@/pages/crm-page";
 import DocumentsPage from "@/pages/documents-page";
+import AgentOSDashboard from "@/pages/agent-os-dashboard";
 import AuthPage from "@/pages/auth-page";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
@@ -23,6 +24,7 @@ function Router() {
   return (
     <Switch>
       <ProtectedRoute path="/" component={Dashboard} />
+      <ProtectedRoute path="/agent-os" component={AgentOSDashboard} />
       <ProtectedRoute path="/tasks" component={TaskBoardPage} />
       <ProtectedRoute path="/chat/:agentId">
         {(params) => <AgentChat params={params as {agentId: string}} />}
