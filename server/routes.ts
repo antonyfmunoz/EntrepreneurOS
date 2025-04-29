@@ -161,13 +161,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/agents/:id", async (req, res) => {
     try {
-      const agent = await storage.getAgent(req.params.id);
+      const agentId = req.params.id;
+      
+      // Special case for direct-gpt4o virtual agent
+      if (agentId === "direct-gpt4o") {
+        // Return a virtual agent for direct GPT-4o chat
+        return res.json({
+          id: "direct-gpt4o",
+          name: "GPT-4o Direct Chat",
+          role: "AI Assistant",
+          icon: "ri-openai-fill",
+          instructions: "You are GPT-4o, a large language model trained by OpenAI. Answer as concisely as possible.",
+          color: "#10a37f", // OpenAI brand color
+          createdAt: new Date().toISOString(),
+          tasks: []
+        });
+      }
+      
+      // Normal case - get agent from database
+      const agent = await storage.getAgent(agentId);
       if (!agent) {
         return res.status(404).json({ message: "Agent not found" });
       }
       
       // Get the agent's tasks
-      const tasks = await storage.getAgentTasks(req.params.id);
+      const tasks = await storage.getAgentTasks(agentId);
       
       // Return agent with tasks
       res.json({
@@ -223,7 +241,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Agent Messages API
   app.get("/api/agents/:id/messages", async (req, res) => {
-    const messages = await storage.getAgentMessages(req.params.id);
+    const agentId = req.params.id;
+    
+    // Special case for direct-gpt4o virtual agent - let it use database storage for messages
+    // but handle initial state with empty array
+    if (agentId === "direct-gpt4o") {
+      const messages = await storage.getAgentMessages(agentId);
+      
+      // If the agent exists in database, return its messages
+      if (messages && messages.length > 0) {
+        return res.json(messages);
+      }
+      
+      // Otherwise return empty array for first-time use
+      return res.json([]);
+    }
+    
+    // Regular case
+    const messages = await storage.getAgentMessages(agentId);
     res.json(messages);
   });
   
@@ -245,8 +280,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!message) {
         return res.status(400).json({ message: "Message is required" });
       }
-
-      const agent = await storage.getAgent(req.params.id);
+      
+      const agentId = req.params.id;
+      
+      // Special case for direct-gpt4o virtual agent
+      if (agentId === "direct-gpt4o") {
+        // Create a virtual agent for direct GPT-4o chat
+        const virtualGpt4oAgent = {
+          id: "direct-gpt4o",
+          name: "GPT-4o Direct Chat",
+          role: "AI Assistant",
+          icon: "ri-openai-fill",
+          instructions: "You are GPT-4o, a large language model trained by OpenAI. Answer as concisely as possible.",
+          brainContent: "",
+        };
+        
+        // Add user message to storage
+        await storage.addAgentMessage({
+          agentId: agentId,
+          role: "user",
+          content: message,
+          timestamp: new Date().toISOString(),
+        });
+        
+        // Use the LLM API directly with the provided model
+        const selectedModel = aiConfig?.modelName || "gpt-4o";
+        
+        try {
+          // Call OpenAI directly
+          const response = await openai.chat.completions.create({
+            model: selectedModel,
+            messages: [
+              {
+                role: "system",
+                content: virtualGpt4oAgent.instructions
+              },
+              {
+                role: "user",
+                content: message
+              }
+            ],
+            temperature: 0.2,
+            max_tokens: 1000,
+          });
+          
+          const reply = response.choices[0].message.content;
+          
+          // Add AI response to storage
+          const aiMessage = await storage.addAgentMessage({
+            agentId: agentId,
+            role: "assistant",
+            content: reply,
+            timestamp: new Date().toISOString(),
+          });
+          
+          return res.json({ reply, messageId: aiMessage.id });
+        } catch (error) {
+          console.error("Error in direct GPT-4o mode:", error);
+          throw error; // Rethrow to be caught by the outer catch block
+        }
+      }
+      
+      // Normal case - get agent from database for regular agents
+      const agent = await storage.getAgent(agentId);
       if (!agent) {
         return res.status(404).json({ message: "Agent not found" });
       }
@@ -330,7 +426,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Agent Tasks API
   app.get("/api/agents/:id/tasks", async (req, res) => {
-    const tasks = await storage.getAgentTasks(req.params.id);
+    const agentId = req.params.id;
+    
+    // Special case for direct-gpt4o virtual agent
+    if (agentId === "direct-gpt4o") {
+      // Return empty tasks array for the virtual agent
+      return res.json([]);
+    }
+    
+    // Regular case
+    const tasks = await storage.getAgentTasks(agentId);
     res.json(tasks);
   });
 
