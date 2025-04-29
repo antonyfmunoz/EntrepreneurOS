@@ -52,7 +52,10 @@ export default function AgentChat({ params }: AgentChatProps) {
   const agentId = params?.agentId || "";
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [aiModelConfig, setAIModelConfig] = useState<AIModelConfig | null>(null);
+  const [aiModelConfig, setAIModelConfig] = useState<AIModelConfig>({ 
+    provider: "openai", 
+    modelName: "gpt-4o" 
+  });
   const [aiSelectorOpen, setAiSelectorOpen] = useState(false);
   const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
   const [requiredApiProviders, setRequiredApiProviders] = useState<AIModelProvider[]>([]);
@@ -93,9 +96,8 @@ export default function AgentChat({ params }: AgentChatProps) {
       // Check if we're in direct GPT-4o mode (no agent selected or direct GPT-4o toggle is on)
       if (!agentId || agentId === "direct-gpt4o") {
         try {
-          // Use our direct llmApi for GPT-4o
-          const model = aiModelConfig?.modelName || "gpt-4o";
-          const aiResponse = await callLLM(message, model);
+          // Use our direct llmApi with the selected model
+          const aiResponse = await callLLM(message, aiModelConfig.modelName);
           return aiResponse;
         } catch (err) {
           console.error("Error calling direct GPT-4o:", err);
