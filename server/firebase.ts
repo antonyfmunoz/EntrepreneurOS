@@ -1,4 +1,5 @@
-import * as admin from 'firebase-admin';
+import { initializeApp, cert, getApps, type ServiceAccount } from 'firebase-admin/app';
+import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
 
 let firebaseInitialized = false;
 
@@ -14,11 +15,16 @@ export function initializeFirebaseAdmin() {
       return;
     }
 
+    if (getApps().length > 0) {
+      firebaseInitialized = true;
+      return;
+    }
+
     if (serviceAccountKey) {
       try {
-        const serviceAccount = JSON.parse(serviceAccountKey);
-        admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount),
+        const serviceAccount = JSON.parse(serviceAccountKey) as ServiceAccount;
+        initializeApp({
+          credential: cert(serviceAccount),
           projectId,
         });
         firebaseInitialized = true;
@@ -33,8 +39,8 @@ export function initializeFirebaseAdmin() {
     const privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
     if (clientEmail && privateKey) {
-      admin.initializeApp({
-        credential: admin.credential.cert({
+      initializeApp({
+        credential: cert({
           projectId,
           clientEmail,
           privateKey: privateKey.replace(/\\n/g, '\n'),
@@ -56,11 +62,13 @@ export function isFirebaseAdminInitialized() {
   return firebaseInitialized;
 }
 
-export async function verifyFirebaseToken(idToken: string): Promise<admin.auth.DecodedIdToken> {
+export async function verifyFirebaseToken(idToken: string): Promise<DecodedIdToken> {
   if (!firebaseInitialized) {
     throw new Error('Firebase Admin SDK not initialized');
   }
-  return admin.auth().verifyIdToken(idToken);
+  return getAuth().verifyIdToken(idToken);
 }
 
-export { admin };
+export function getFirebaseAuth() {
+  return getAuth();
+}
