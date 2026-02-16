@@ -11,6 +11,9 @@ import {
   crmActivities as crmActivitiesTable,
   documents as documentsTable,
   folders as foldersTable,
+  agentActions as agentActionsTable,
+  oauthTokens as oauthTokensTable,
+  agentMetrics as agentMetricsTable,
   type Agent, 
   type Task, 
   type InsertAgent, 
@@ -35,7 +38,13 @@ import {
   type Document,
   type InsertDocument,
   type Folder,
-  type InsertFolder
+  type InsertFolder,
+  type AgentAction,
+  type InsertAgentAction,
+  type OauthToken,
+  type InsertOauthToken,
+  type AgentMetric,
+  type InsertAgentMetric
 } from "@shared/schema";
 import { db, client } from './db';
 import { eq, and, desc, asc, sql } from 'drizzle-orm';
@@ -131,6 +140,22 @@ export interface IStorage {
   updateDocument(id: string, updates: Partial<InsertDocument>): Promise<Document | undefined>;
   deleteDocument(id: string): Promise<void>;
   
+  // Agent Action operations
+  getActions(userId: string, filters?: { status?: string; agentId?: string }): Promise<AgentAction[]>;
+  getPendingActions(userId: string): Promise<AgentAction[]>;
+  getAction(id: string): Promise<AgentAction | undefined>;
+  createAction(action: InsertAgentAction): Promise<AgentAction>;
+  updateAction(id: string, updates: Partial<AgentAction>): Promise<AgentAction | undefined>;
+
+  // OAuth Token operations
+  getOauthToken(userId: string, provider: string): Promise<OauthToken | undefined>;
+  saveOauthToken(token: InsertOauthToken): Promise<OauthToken>;
+  deleteOauthToken(userId: string, provider: string): Promise<void>;
+
+  // Agent Metrics operations
+  getAgentMetrics(agentId: string, userId: string): Promise<AgentMetric[]>;
+  upsertAgentMetric(metric: InsertAgentMetric): Promise<AgentMetric>;
+
   // Session store
   sessionStore: session.Store;
 }
@@ -1317,6 +1342,230 @@ export class DatabaseStorage implements IStorage {
         .where(eq(documentsTable.id, id));
     } catch (error) {
       console.error(`Error deleting document ${id}:`, error);
+      throw error;
+    }
+  }
+
+  // Agent Action operations
+  async getActions(userId: string, filters?: { status?: string; agentId?: string }): Promise<AgentAction[]> {
+    try {
+      const conditions = [eq(agentActionsTable.userId, userId)];
+      if (filters?.status) {
+        conditions.push(eq(agentActionsTable.status, filters.status));
+      }
+      if (filters?.agentId) {
+        conditions.push(eq(agentActionsTable.agentId, filters.agentId));
+      }
+      return await db.select()
+        .from(agentActionsTable)
+        .where(and(...conditions))
+        .orderBy(desc(agentActionsTable.createdAt));
+    } catch (error) {
+      console.error('Error fetching actions:', error);
+      return [];
+    }
+  }
+
+  async getPendingActions(userId: string): Promise<AgentAction[]> {
+    try {
+      return await db.select()
+        .from(agentActionsTable)
+        .where(and(
+          eq(agentActionsTable.userId, userId),
+          eq(agentActionsTable.status, 'pending')
+        ))
+        .orderBy(desc(agentActionsTable.createdAt));
+    } catch (error) {
+      console.error('Error fetching pending actions:', error);
+      return [];
+    }
+  }
+
+  async getAction(id: string): Promise<AgentAction | undefined> {
+    try {
+      const actions = await db.select()
+        .from(agentActionsTable)
+        .where(eq(agentActionsTable.id, id));
+      return actions.length > 0 ? actions[0] : undefined;
+    } catch (error) {
+      console.error(`Error fetching action ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async createAction(action: InsertAgentAction): Promise<AgentAction> {
+    try {
+      const id = `action_${Date.now()}`;
+      const now = new Date();
+
+      const [newAction] = await db.insert(agentActionsTable)
+        .values({
+          id,
+          agentId: action.agentId,
+          userId: action.userId,
+          actionType: action.actionType,
+          actionName: action.actionName,
+          description: action.description || null,
+          parameters: action.parameters || {},
+          status: action.status || 'pending',
+          requiresApproval: action.requiresApproval ?? true,
+          estimatedTimeSaved: action.estimatedTimeSaved || 0,
+          createdAt: now,
+          updatedAt: now
+        })
+        .returning();
+
+      return newAction;
+    } catch (error) {
+      console.error('Error creating action:', error);
+      throw error;
+    }
+  }
+
+  async updateAction(id: string, updates: Partial<AgentAction>): Promise<AgentAction | undefined> {
+    try {
+      const updateData: Record<string, any> = { ...updates, updatedAt: new Date() };
+
+      const [updatedAction] = await db.update(agentActionsTable)
+        .set(updateData)
+        .where(eq(agentActionsTable.id, id))
+        .returning();
+
+      return updatedAction;
+    } catch (error) {
+      console.error(`Error updating action ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  // OAuth Token operations
+  async getOauthToken(userId: string, provider: string): Promise<OauthToken | undefined> {
+    try {
+      const tokens = await db.select()
+        .from(oauthTokensTable)
+        .where(and(
+          eq(oauthTokensTable.userId, userId),
+          eq(oauthTokensTable.provider, provider)
+        ));
+      return tokens.length > 0 ? tokens[0] : undefined;
+    } catch (error) {
+      console.error(`Error fetching oauth token for ${provider}:`, error);
+      return undefined;
+    }
+  }
+
+  async saveOauthToken(token: InsertOauthToken): Promise<OauthToken> {
+    try {
+      const id = `oauth_${Date.now()}`;
+      const now = new Date();
+
+      const [savedToken] = await db.insert(oauthTokensTable)
+        .values({
+          id,
+          userId: token.userId,
+          provider: token.provider,
+          accessToken: token.accessToken,
+          refreshToken: token.refreshToken || null,
+          tokenType: token.tokenType || 'Bearer',
+          expiresAt: token.expiresAt || null,
+          scope: token.scope || null,
+          createdAt: now,
+          updatedAt: now
+        })
+        .onConflictDoUpdate({
+          target: [oauthTokensTable.userId, oauthTokensTable.provider],
+          set: {
+            accessToken: token.accessToken,
+            refreshToken: token.refreshToken || null,
+            tokenType: token.tokenType || 'Bearer',
+            expiresAt: token.expiresAt || null,
+            scope: token.scope || null,
+            updatedAt: now
+          }
+        })
+        .returning();
+
+      return savedToken;
+    } catch (error) {
+      console.error('Error saving oauth token:', error);
+      throw error;
+    }
+  }
+
+  async deleteOauthToken(userId: string, provider: string): Promise<void> {
+    try {
+      await db.delete(oauthTokensTable)
+        .where(and(
+          eq(oauthTokensTable.userId, userId),
+          eq(oauthTokensTable.provider, provider)
+        ));
+    } catch (error) {
+      console.error(`Error deleting oauth token for ${provider}:`, error);
+      throw error;
+    }
+  }
+
+  // Agent Metrics operations
+  async getAgentMetrics(agentId: string, userId: string): Promise<AgentMetric[]> {
+    try {
+      return await db.select()
+        .from(agentMetricsTable)
+        .where(and(
+          eq(agentMetricsTable.agentId, agentId),
+          eq(agentMetricsTable.userId, userId)
+        ))
+        .orderBy(desc(agentMetricsTable.date));
+    } catch (error) {
+      console.error('Error fetching agent metrics:', error);
+      return [];
+    }
+  }
+
+  async upsertAgentMetric(metric: InsertAgentMetric): Promise<AgentMetric> {
+    try {
+      const existing = await db.select()
+        .from(agentMetricsTable)
+        .where(and(
+          eq(agentMetricsTable.agentId, metric.agentId),
+          eq(agentMetricsTable.userId, metric.userId),
+          eq(agentMetricsTable.date, metric.date)
+        ));
+
+      if (existing.length > 0) {
+        const [updated] = await db.update(agentMetricsTable)
+          .set({
+            tasksCompleted: metric.tasksCompleted ?? 0,
+            actionsExecuted: metric.actionsExecuted ?? 0,
+            messagesSent: metric.messagesSent ?? 0,
+            apiCost: String(metric.apiCost ?? 0),
+            timeSavedMinutes: metric.timeSavedMinutes ?? 0
+          })
+          .where(eq(agentMetricsTable.id, existing[0].id))
+          .returning();
+        return updated;
+      }
+
+      const id = `metric_${Date.now()}`;
+      const now = new Date();
+
+      const [newMetric] = await db.insert(agentMetricsTable)
+        .values({
+          id,
+          agentId: metric.agentId,
+          userId: metric.userId,
+          date: metric.date,
+          tasksCompleted: metric.tasksCompleted ?? 0,
+          actionsExecuted: metric.actionsExecuted ?? 0,
+          messagesSent: metric.messagesSent ?? 0,
+          apiCost: String(metric.apiCost ?? 0),
+          timeSavedMinutes: metric.timeSavedMinutes ?? 0,
+          createdAt: now
+        })
+        .returning();
+
+      return newMetric;
+    } catch (error) {
+      console.error('Error upserting agent metric:', error);
       throw error;
     }
   }
