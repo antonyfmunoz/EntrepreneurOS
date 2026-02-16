@@ -60,6 +60,7 @@
     "firebase": "^11.6.0",
     "firebase-admin": "^13.2.0",
     "framer-motion": "^11.13.1",
+    "googleapis": "^171.4.0",
     "input-otp": "^1.2.4",
     "lucide-react": "^0.453.0",
     "memorystore": "^1.6.7",
