@@ -11,6 +11,9 @@ import {
   crmActivities as crmActivitiesTable,
   documents as documentsTable,
   folders as foldersTable,
+  agentActions as agentActionsTable,
+  oauthTokens as oauthTokensTable,
+  agentMetrics as agentMetricsTable,
   type Agent, 
   type Task, 
   type InsertAgent, 
@@ -35,7 +38,13 @@ import {
   type Document,
   type InsertDocument,
   type Folder,
-  type InsertFolder
+  type InsertFolder,
+  type AgentAction,
+  type InsertAgentAction,
+  type OauthToken,
+  type InsertOauthToken,
+  type AgentMetric,
+  type InsertAgentMetric,
 } from "@shared/schema";
 import { db, client } from './db';
 import { eq, and, desc, asc, sql } from 'drizzle-orm';
@@ -131,6 +140,23 @@ export interface IStorage {
   updateDocument(id: string, updates: Partial<InsertDocument>): Promise<Document | undefined>;
   deleteDocument(id: string): Promise<void>;
   
+  // Agent Action operations
+  getActions(userId: string, filters?: { status?: string; agentId?: string }): Promise<AgentAction[]>;
+  getAction(id: string): Promise<AgentAction | undefined>;
+  getPendingActions(userId: string): Promise<AgentAction[]>;
+  createAction(action: InsertAgentAction): Promise<AgentAction>;
+  updateAction(id: string, updates: Partial<AgentAction>): Promise<AgentAction | undefined>;
+
+  // OAuth Token operations
+  getOauthToken(userId: string, provider: string): Promise<OauthToken | undefined>;
+  upsertOauthToken(token: InsertOauthToken): Promise<OauthToken>;
+  deleteOauthToken(userId: string, provider: string): Promise<void>;
+
+  // Agent Metrics operations
+  getAgentMetrics(agentId: string, userId: string): Promise<AgentMetric[]>;
+  upsertAgentMetric(metric: InsertAgentMetric): Promise<AgentMetric>;
+  incrementMetric(agentId: string, userId: string, field: string, amount?: number): Promise<void>;
+
   // Session store
   sessionStore: session.Store;
 }
@@ -1318,6 +1344,184 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error(`Error deleting document ${id}:`, error);
       throw error;
+    }
+  }
+
+  async getActions(userId: string, filters?: { status?: string; agentId?: string }): Promise<AgentAction[]> {
+    let conditions = [eq(agentActionsTable.userId, userId)];
+    if (filters?.status) {
+      conditions.push(eq(agentActionsTable.status, filters.status));
+    }
+    if (filters?.agentId) {
+      conditions.push(eq(agentActionsTable.agentId, filters.agentId));
+    }
+    return await db.select().from(agentActionsTable)
+      .where(and(...conditions))
+      .orderBy(desc(agentActionsTable.createdAt));
+  }
+
+  async getAction(id: string): Promise<AgentAction | undefined> {
+    const results = await db.select().from(agentActionsTable).where(eq(agentActionsTable.id, id));
+    return results.length > 0 ? results[0] : undefined;
+  }
+
+  async getPendingActions(userId: string): Promise<AgentAction[]> {
+    return await db.select().from(agentActionsTable)
+      .where(and(
+        eq(agentActionsTable.userId, userId),
+        eq(agentActionsTable.status, "pending")
+      ))
+      .orderBy(desc(agentActionsTable.createdAt));
+  }
+
+  async createAction(action: InsertAgentAction): Promise<AgentAction> {
+    const id = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const now = new Date();
+    const [newAction] = await db.insert(agentActionsTable)
+      .values({
+        id,
+        agentId: action.agentId,
+        userId: action.userId,
+        actionType: action.actionType,
+        actionName: action.actionName,
+        description: action.description || null,
+        parameters: action.parameters,
+        status: action.status || "pending",
+        requiresApproval: action.requiresApproval ?? true,
+        taskId: action.taskId || null,
+        conversationId: action.conversationId || null,
+        estimatedTimeSaved: action.estimatedTimeSaved || null,
+        priority: action.priority || "medium",
+        tags: action.tags || null,
+        metadata: action.metadata || null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    return newAction;
+  }
+
+  async updateAction(id: string, updates: Partial<AgentAction>): Promise<AgentAction | undefined> {
+    const updateData: Record<string, any> = { ...updates, updatedAt: new Date() };
+    delete updateData.id;
+    const [updated] = await db.update(agentActionsTable)
+      .set(updateData)
+      .where(eq(agentActionsTable.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getOauthToken(userId: string, provider: string): Promise<OauthToken | undefined> {
+    const results = await db.select().from(oauthTokensTable)
+      .where(and(
+        eq(oauthTokensTable.userId, userId),
+        eq(oauthTokensTable.provider, provider)
+      ));
+    return results.length > 0 ? results[0] : undefined;
+  }
+
+  async upsertOauthToken(token: InsertOauthToken): Promise<OauthToken> {
+    const existing = await this.getOauthToken(token.userId, token.provider);
+    if (existing) {
+      const [updated] = await db.update(oauthTokensTable)
+        .set({
+          accessToken: token.accessToken,
+          refreshToken: token.refreshToken || existing.refreshToken,
+          tokenType: token.tokenType || existing.tokenType,
+          expiresAt: token.expiresAt || existing.expiresAt,
+          scope: token.scope || existing.scope,
+          updatedAt: new Date(),
+        })
+        .where(eq(oauthTokensTable.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const id = `oauth_${Date.now()}`;
+    const [newToken] = await db.insert(oauthTokensTable)
+      .values({
+        id,
+        userId: token.userId,
+        provider: token.provider,
+        accessToken: token.accessToken,
+        refreshToken: token.refreshToken || null,
+        tokenType: token.tokenType || "Bearer",
+        expiresAt: token.expiresAt || null,
+        scope: token.scope || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    return newToken;
+  }
+
+  async deleteOauthToken(userId: string, provider: string): Promise<void> {
+    await db.delete(oauthTokensTable)
+      .where(and(
+        eq(oauthTokensTable.userId, userId),
+        eq(oauthTokensTable.provider, provider)
+      ));
+  }
+
+  async getAgentMetrics(agentId: string, userId: string): Promise<AgentMetric[]> {
+    return await db.select().from(agentMetricsTable)
+      .where(and(
+        eq(agentMetricsTable.agentId, agentId),
+        eq(agentMetricsTable.userId, userId)
+      ))
+      .orderBy(desc(agentMetricsTable.date));
+  }
+
+  async upsertAgentMetric(metric: InsertAgentMetric): Promise<AgentMetric> {
+    const existing = await db.select().from(agentMetricsTable)
+      .where(and(
+        eq(agentMetricsTable.agentId, metric.agentId),
+        eq(agentMetricsTable.userId, metric.userId),
+        eq(agentMetricsTable.date, metric.date)
+      ));
+    if (existing.length > 0) {
+      const [updated] = await db.update(agentMetricsTable)
+        .set({ ...metric, updatedAt: new Date() })
+        .where(eq(agentMetricsTable.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+    const id = `metric_${Date.now()}`;
+    const [newMetric] = await db.insert(agentMetricsTable)
+      .values({
+        id,
+        ...metric,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    return newMetric;
+  }
+
+  async incrementMetric(agentId: string, userId: string, field: string, amount: number = 1): Promise<void> {
+    const today = new Date().toISOString().split("T")[0];
+    const existing = await db.select().from(agentMetricsTable)
+      .where(and(
+        eq(agentMetricsTable.agentId, agentId),
+        eq(agentMetricsTable.userId, userId),
+        eq(agentMetricsTable.date, today)
+      ));
+    if (existing.length > 0) {
+      const currentValue = (existing[0] as any)[field] || 0;
+      await db.update(agentMetricsTable)
+        .set({ [field]: currentValue + amount, updatedAt: new Date() })
+        .where(eq(agentMetricsTable.id, existing[0].id));
+    } else {
+      const id = `metric_${Date.now()}`;
+      await db.insert(agentMetricsTable)
+        .values({
+          id,
+          agentId,
+          userId,
+          date: today,
+          [field]: amount,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
     }
   }
 }

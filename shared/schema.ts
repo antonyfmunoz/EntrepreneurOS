@@ -372,3 +372,110 @@ export const insertDocumentSchema = z.object({
 
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 export type Document = typeof documents.$inferSelect;
+
+export const agentActions = pgTable("agent_actions", {
+  id: text("id").primaryKey(),
+  agentId: text("agent_id").notNull().references(() => agents.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  actionType: text("action_type").notNull(),
+  actionName: text("action_name").notNull(),
+  description: text("description"),
+  parameters: jsonb("parameters").notNull(),
+  status: text("status").notNull().default("pending"),
+  requiresApproval: boolean("requires_approval").notNull().default(true),
+  approvedBy: text("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  executedAt: timestamp("executed_at"),
+  completedAt: timestamp("completed_at"),
+  failedAt: timestamp("failed_at"),
+  executionResult: jsonb("execution_result"),
+  errorMessage: text("error_message"),
+  retryCount: integer("retry_count").default(0),
+  maxRetries: integer("max_retries").default(3),
+  taskId: text("task_id").references(() => tasks.id),
+  conversationId: text("conversation_id"),
+  estimatedTimeSaved: integer("estimated_time_saved"),
+  priority: text("priority").default("medium"),
+  tags: text("tags").array(),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertAgentActionSchema = z.object({
+  agentId: z.string(),
+  userId: z.string(),
+  actionType: z.string(),
+  actionName: z.string(),
+  description: z.string().optional(),
+  parameters: z.record(z.unknown()),
+  status: z.enum(["pending", "approved", "executing", "completed", "failed", "rejected"]).default("pending"),
+  requiresApproval: z.boolean().default(true),
+  taskId: z.string().optional(),
+  conversationId: z.string().optional(),
+  estimatedTimeSaved: z.number().optional(),
+  priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+export type InsertAgentAction = z.infer<typeof insertAgentActionSchema>;
+export type AgentAction = typeof agentActions.$inferSelect;
+
+export const oauthTokens = pgTable("oauth_tokens", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token"),
+  tokenType: text("token_type"),
+  expiresAt: timestamp("expires_at"),
+  scope: text("scope"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertOauthTokenSchema = z.object({
+  userId: z.string(),
+  provider: z.string(),
+  accessToken: z.string(),
+  refreshToken: z.string().optional(),
+  tokenType: z.string().optional(),
+  expiresAt: z.date().optional(),
+  scope: z.string().optional(),
+});
+
+export type InsertOauthToken = z.infer<typeof insertOauthTokenSchema>;
+export type OauthToken = typeof oauthTokens.$inferSelect;
+
+export const agentMetrics = pgTable("agent_metrics", {
+  id: text("id").primaryKey(),
+  agentId: text("agent_id").notNull().references(() => agents.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  date: text("date").notNull(),
+  messagesSent: integer("messages_sent").default(0),
+  messagesReceived: integer("messages_received").default(0),
+  tasksCompleted: integer("tasks_completed").default(0),
+  actionsExecuted: integer("actions_executed").default(0),
+  tokensUsed: integer("tokens_used").default(0),
+  apiCost: text("api_cost").default("0"),
+  estimatedTimeSavedMinutes: integer("estimated_time_saved_minutes").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertAgentMetricSchema = z.object({
+  agentId: z.string(),
+  userId: z.string(),
+  date: z.string(),
+  messagesSent: z.number().default(0),
+  messagesReceived: z.number().default(0),
+  tasksCompleted: z.number().default(0),
+  actionsExecuted: z.number().default(0),
+  tokensUsed: z.number().default(0),
+  apiCost: z.string().default("0"),
+  estimatedTimeSavedMinutes: z.number().default(0),
+});
+
+export type InsertAgentMetric = z.infer<typeof insertAgentMetricSchema>;
+export type AgentMetric = typeof agentMetrics.$inferSelect;
