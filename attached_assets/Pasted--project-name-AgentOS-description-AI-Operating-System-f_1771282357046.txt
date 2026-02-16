@@ -1,0 +1,1405 @@
+{
+  "project": {
+    "name": "AgentOS",
+    "description": "AI Operating System for Business - Complete technical specification for bridging current state to full product vision",
+    "version": "2.0",
+    "objective": "Transform from task manager to autonomous AI operating system where agents execute real work"
+  },
+  
+  "current_state": {
+    "what_exists": {
+      "database_tables": [
+        "users", "agents", "tasks", "messages", "notifications", "integrations",
+        "crm_contacts", "crm_deals", "crm_activities", "folders", "documents", "ai_messages"
+      ],
+      "pages": [
+        "dashboard", "agent-chat", "agent-programming", "task-board", "analytics",
+        "integrations", "documents", "settings", "notifications", "support", "tutorials"
+      ],
+      "components": [
+        "agent-card", "ai-fab", "ai-model-selector", "api-key-dialog", "create-agent-modal",
+        "direct-gpt4o-chat", "notification-dropdown", "sop-template-button", "task-card"
+      ],
+      "working_features": [
+        "Auth (local + Google OAuth)", "Agent CRUD", "Task Board (Kanban)",
+        "Agent Chat (multi-provider AI)", "CRM module", "Document vault", "Notifications"
+      ],
+      "ai_providers": ["OpenAI", "Anthropic", "Gemini", "Perplexity", "xAI"]
+    },
+    "what_is_missing": {
+      "critical_gaps": [
+        "Agent action execution system",
+        "Real integrations (Gmail, Google Workspace, social media)",
+        "RAG knowledge base with vector search",
+        "Workflow automation engine",
+        "Agent learning and memory",
+        "Analytics and ROI tracking"
+      ]
+    }
+  },
+  
+  "implementation_phases": [
+    {
+      "phase": 1,
+      "name": "Core Action System (Week 1-2)",
+      "priority": "CRITICAL",
+      "objective": "Enable agents to execute real actions",
+      "deliverables": [
+        "agent_actions database table",
+        "Action approval UI component",
+        "Action executor service",
+        "Gmail OAuth integration",
+        "Email sending capability"
+      ]
+    },
+    {
+      "phase": 2,
+      "name": "Integrations (Week 3-4)",
+      "priority": "HIGH",
+      "objective": "Connect to external services",
+      "deliverables": [
+        "Google Calendar API",
+        "Google Drive API",
+        "Buffer/Hootsuite for social",
+        "Slack API",
+        "Action types for each integration"
+      ]
+    },
+    {
+      "phase": 3,
+      "name": "RAG Knowledge Base (Week 5-6)",
+      "priority": "HIGH",
+      "objective": "Agents access uploaded knowledge",
+      "deliverables": [
+        "Pinecone vector database setup",
+        "Document chunking service",
+        "Embedding generation",
+        "Semantic search",
+        "Knowledge upload UI"
+      ]
+    },
+    {
+      "phase": 4,
+      "name": "Workflow Automation (Week 7-8)",
+      "priority": "MEDIUM",
+      "objective": "Scheduled and event-based workflows",
+      "deliverables": [
+        "Workflow engine with cron",
+        "Workflow templates",
+        "Workflow execution tracking",
+        "Visual workflow builder"
+      ]
+    }
+  ],
+  
+  "database_migrations": [
+    {
+      "migration_name": "create_agent_actions",
+      "file": "/migrations/create-agent-actions.ts",
+      "description": "Core action system for agent execution",
+      "sql": "CREATE TABLE agent_actions (\n  id TEXT PRIMARY KEY,\n  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,\n  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  action_type TEXT NOT NULL,\n  action_name TEXT NOT NULL,\n  description TEXT,\n  parameters JSONB NOT NULL,\n  status TEXT NOT NULL DEFAULT 'pending',\n  requires_approval BOOLEAN NOT NULL DEFAULT true,\n  approved_by TEXT REFERENCES users(id),\n  approved_at TIMESTAMP,\n  executed_at TIMESTAMP,\n  completed_at TIMESTAMP,\n  failed_at TIMESTAMP,\n  execution_result JSONB,\n  error_message TEXT,\n  retry_count INTEGER DEFAULT 0,\n  max_retries INTEGER DEFAULT 3,\n  task_id TEXT REFERENCES tasks(id),\n  conversation_id TEXT,\n  workflow_id TEXT,\n  estimated_cost DECIMAL(10,4),\n  actual_cost DECIMAL(10,4),\n  estimated_time_saved INTEGER,\n  actual_time_taken INTEGER,\n  priority TEXT DEFAULT 'medium',\n  tags TEXT[],\n  metadata JSONB,\n  created_at TIMESTAMP DEFAULT NOW(),\n  updated_at TIMESTAMP DEFAULT NOW()\n);\nCREATE INDEX idx_agent_actions_agent ON agent_actions(agent_id);\nCREATE INDEX idx_agent_actions_user ON agent_actions(user_id);\nCREATE INDEX idx_agent_actions_status ON agent_actions(status);",
+      "drizzle_schema": {
+        "table_name": "agentActions",
+        "columns": {
+          "id": { "type": "text", "primaryKey": true },
+          "agentId": { "type": "text", "notNull": true, "references": "agents.id" },
+          "userId": { "type": "text", "notNull": true, "references": "users.id" },
+          "actionType": { "type": "text", "notNull": true },
+          "actionName": { "type": "text", "notNull": true },
+          "description": { "type": "text" },
+          "parameters": { "type": "jsonb", "notNull": true },
+          "status": { "type": "text", "notNull": true, "default": "pending" },
+          "requiresApproval": { "type": "boolean", "notNull": true, "default": true },
+          "approvedBy": { "type": "text", "references": "users.id" },
+          "approvedAt": { "type": "timestamp" },
+          "executedAt": { "type": "timestamp" },
+          "completedAt": { "type": "timestamp" },
+          "failedAt": { "type": "timestamp" },
+          "executionResult": { "type": "jsonb" },
+          "errorMessage": { "type": "text" },
+          "retryCount": { "type": "integer", "default": 0 },
+          "maxRetries": { "type": "integer", "default": 3 },
+          "taskId": { "type": "text", "references": "tasks.id" },
+          "conversationId": { "type": "text" },
+          "workflowId": { "type": "text" },
+          "estimatedCost": { "type": "text" },
+          "actualCost": { "type": "text" },
+          "estimatedTimeSaved": { "type": "integer" },
+          "actualTimeTaken": { "type": "integer" },
+          "priority": { "type": "text", "default": "medium" },
+          "tags": { "type": "text[]" },
+          "metadata": { "type": "jsonb" },
+          "createdAt": { "type": "timestamp", "defaultNow": true },
+          "updatedAt": { "type": "timestamp", "defaultNow": true }
+        }
+      }
+    },
+    {
+      "migration_name": "create_oauth_tokens",
+      "file": "/migrations/create-oauth-tokens.ts",
+      "description": "Store OAuth tokens for integrations like Gmail",
+      "sql": "CREATE TABLE oauth_tokens (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  provider TEXT NOT NULL,\n  access_token TEXT NOT NULL,\n  refresh_token TEXT,\n  token_type TEXT,\n  expires_at TIMESTAMP,\n  scope TEXT,\n  created_at TIMESTAMP DEFAULT NOW(),\n  updated_at TIMESTAMP DEFAULT NOW(),\n  UNIQUE(user_id, provider)\n);\nCREATE INDEX idx_oauth_tokens_user ON oauth_tokens(user_id);",
+      "drizzle_schema": {
+        "table_name": "oauthTokens",
+        "columns": {
+          "id": { "type": "text", "primaryKey": true },
+          "userId": { "type": "text", "notNull": true, "references": "users.id" },
+          "provider": { "type": "text", "notNull": true },
+          "accessToken": { "type": "text", "notNull": true },
+          "refreshToken": { "type": "text" },
+          "tokenType": { "type": "text" },
+          "expiresAt": { "type": "timestamp" },
+          "scope": { "type": "text" },
+          "createdAt": { "type": "timestamp", "defaultNow": true },
+          "updatedAt": { "type": "timestamp", "defaultNow": true }
+        }
+      }
+    },
+    {
+      "migration_name": "create_knowledge_chunks",
+      "file": "/migrations/create-knowledge-chunks.ts",
+      "description": "Store chunked knowledge for RAG",
+      "sql": "CREATE TABLE knowledge_chunks (\n  id TEXT PRIMARY KEY,\n  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,\n  content TEXT NOT NULL,\n  chunk_index INTEGER NOT NULL,\n  vector_id TEXT NOT NULL,\n  source_name TEXT,\n  source_type TEXT,\n  metadata JSONB,\n  created_at TIMESTAMP DEFAULT NOW()\n);\nCREATE INDEX idx_knowledge_chunks_agent ON knowledge_chunks(agent_id);",
+      "drizzle_schema": {
+        "table_name": "knowledgeChunks",
+        "columns": {
+          "id": { "type": "text", "primaryKey": true },
+          "agentId": { "type": "text", "notNull": true, "references": "agents.id" },
+          "content": { "type": "text", "notNull": true },
+          "chunkIndex": { "type": "integer", "notNull": true },
+          "vectorId": { "type": "text", "notNull": true },
+          "sourceName": { "type": "text" },
+          "sourceType": { "type": "text" },
+          "metadata": { "type": "jsonb" },
+          "createdAt": { "type": "timestamp", "defaultNow": true }
+        }
+      }
+    },
+    {
+      "migration_name": "create_workflows",
+      "file": "/migrations/create-workflows.ts",
+      "description": "Workflow automation system",
+      "sql": "CREATE TABLE workflows (\n  id TEXT PRIMARY KEY,\n  name TEXT NOT NULL,\n  description TEXT,\n  trigger_type TEXT NOT NULL,\n  trigger_config JSONB NOT NULL,\n  steps JSONB NOT NULL,\n  is_active BOOLEAN DEFAULT true,\n  last_executed_at TIMESTAMP,\n  next_execution_at TIMESTAMP,\n  execution_count INTEGER DEFAULT 0,\n  user_id TEXT NOT NULL REFERENCES users(id),\n  created_at TIMESTAMP DEFAULT NOW(),\n  updated_at TIMESTAMP DEFAULT NOW()\n);\n\nCREATE TABLE workflow_executions (\n  id TEXT PRIMARY KEY,\n  workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,\n  status TEXT NOT NULL DEFAULT 'running',\n  started_at TIMESTAMP DEFAULT NOW(),\n  completed_at TIMESTAMP,\n  steps_completed INTEGER DEFAULT 0,\n  steps_total INTEGER NOT NULL,\n  execution_log JSONB,\n  error_message TEXT,\n  actions_created INTEGER DEFAULT 0,\n  created_at TIMESTAMP DEFAULT NOW()\n);",
+      "drizzle_schema": {
+        "table_name": "workflows",
+        "columns": {
+          "id": { "type": "text", "primaryKey": true },
+          "name": { "type": "text", "notNull": true },
+          "description": { "type": "text" },
+          "triggerType": { "type": "text", "notNull": true },
+          "triggerConfig": { "type": "jsonb", "notNull": true },
+          "steps": { "type": "jsonb", "notNull": true },
+          "isActive": { "type": "boolean", "default": true },
+          "lastExecutedAt": { "type": "timestamp" },
+          "nextExecutionAt": { "type": "timestamp" },
+          "executionCount": { "type": "integer", "default": 0 },
+          "userId": { "type": "text", "notNull": true, "references": "users.id" },
+          "createdAt": { "type": "timestamp", "defaultNow": true },
+          "updatedAt": { "type": "timestamp", "defaultNow": true }
+        }
+      }
+    },
+    {
+      "migration_name": "create_agent_metrics",
+      "file": "/migrations/create-agent-metrics.ts",
+      "description": "Track agent performance and ROI",
+      "sql": "CREATE TABLE agent_metrics (\n  id TEXT PRIMARY KEY,\n  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,\n  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  date DATE NOT NULL,\n  messages_sent INTEGER DEFAULT 0,\n  messages_received INTEGER DEFAULT 0,\n  tasks_completed INTEGER DEFAULT 0,\n  actions_executed INTEGER DEFAULT 0,\n  tokens_used INTEGER DEFAULT 0,\n  api_cost DECIMAL(10,4) DEFAULT 0,\n  estimated_time_saved_minutes INTEGER DEFAULT 0,\n  created_at TIMESTAMP DEFAULT NOW(),\n  updated_at TIMESTAMP DEFAULT NOW(),\n  UNIQUE(agent_id, date)\n);\nCREATE INDEX idx_agent_metrics_agent ON agent_metrics(agent_id);\nCREATE INDEX idx_agent_metrics_date ON agent_metrics(date);",
+      "drizzle_schema": {
+        "table_name": "agentMetrics",
+        "columns": {
+          "id": { "type": "text", "primaryKey": true },
+          "agentId": { "type": "text", "notNull": true, "references": "agents.id" },
+          "userId": { "type": "text", "notNull": true, "references": "users.id" },
+          "date": { "type": "text", "notNull": true },
+          "messagesSent": { "type": "integer", "default": 0 },
+          "messagesReceived": { "type": "integer", "default": 0 },
+          "tasksCompleted": { "type": "integer", "default": 0 },
+          "actionsExecuted": { "type": "integer", "default": 0 },
+          "tokensUsed": { "type": "integer", "default": 0 },
+          "apiCost": { "type": "text", "default": "0" },
+          "estimatedTimeSavedMinutes": { "type": "integer", "default": 0 },
+          "createdAt": { "type": "timestamp", "defaultNow": true },
+          "updatedAt": { "type": "timestamp", "defaultNow": true }
+        }
+      }
+    }
+  ],
+  
+  "backend_services": [
+    {
+      "service_name": "Gmail Integration",
+      "file": "/server/integrations/gmail.ts",
+      "dependencies": ["googleapis", "google-auth-library"],
+      "environment_variables": [
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "GOOGLE_REDIRECT_URI"
+      ],
+      "methods": [
+        {
+          "name": "getAuthUrl",
+          "description": "Generate OAuth URL for user authorization",
+          "returns": "string"
+        },
+        {
+          "name": "exchangeCode",
+          "description": "Exchange auth code for tokens",
+          "params": ["code: string"],
+          "returns": "Promise<tokens>"
+        },
+        {
+          "name": "getAccessToken",
+          "description": "Get valid access token (refresh if needed)",
+          "params": ["userId: string"],
+          "returns": "Promise<string>"
+        },
+        {
+          "name": "sendEmail",
+          "description": "Send email via Gmail API",
+          "params": [
+            "userId: string",
+            "params: { to: string, subject: string, body: string, cc?: string, bcc?: string }"
+          ],
+          "returns": "Promise<{ messageId: string }>"
+        }
+      ],
+      "implementation_notes": [
+        "Store tokens in oauth_tokens table",
+        "Handle token refresh automatically",
+        "Support HTML and plain text emails",
+        "Base64 encode email for API"
+      ]
+    },
+    {
+      "service_name": "Action Executor",
+      "file": "/server/action-executor.ts",
+      "description": "Execute approved actions",
+      "methods": [
+        {
+          "name": "executeAction",
+          "description": "Execute an approved action based on type",
+          "params": ["action: AgentAction"],
+          "returns": "Promise<void>",
+          "implementation": [
+            "Update status to 'executing'",
+            "Switch on action_type (send_email, create_document, etc)",
+            "Call appropriate integration service",
+            "Update status to 'completed' or 'failed'",
+            "Store execution_result",
+            "Create notification for user"
+          ]
+        },
+        {
+          "name": "retryFailedAction",
+          "description": "Retry a failed action with exponential backoff",
+          "params": ["actionId: string"],
+          "returns": "Promise<void>"
+        }
+      ]
+    },
+    {
+      "service_name": "RAG Service",
+      "file": "/server/rag-service.ts",
+      "dependencies": ["@pinecone-database/pinecone", "openai"],
+      "environment_variables": [
+        "PINECONE_API_KEY",
+        "PINECONE_INDEX"
+      ],
+      "methods": [
+        {
+          "name": "chunkText",
+          "description": "Split text into chunks for embedding",
+          "params": ["text: string", "chunkSize?: number", "overlap?: number"],
+          "returns": "string[]",
+          "default_params": { "chunkSize": 500, "overlap": 50 }
+        },
+        {
+          "name": "generateEmbedding",
+          "description": "Generate embedding vector using OpenAI",
+          "params": ["text: string"],
+          "returns": "Promise<number[]>",
+          "model": "text-embedding-3-small"
+        },
+        {
+          "name": "uploadKnowledge",
+          "description": "Upload and index document knowledge",
+          "params": ["agentId: string", "content: string", "sourceName?: string"],
+          "returns": "Promise<{ chunksCreated: number }>",
+          "process": [
+            "Chunk the content",
+            "Generate embeddings for each chunk",
+            "Upload to Pinecone with metadata",
+            "Store in knowledge_chunks table"
+          ]
+        },
+        {
+          "name": "query",
+          "description": "Search knowledge base for relevant chunks",
+          "params": ["agentId: string", "query: string", "topK?: number"],
+          "returns": "Promise<string[]>",
+          "default_params": { "topK": 3 },
+          "similarity_threshold": 0.7
+        }
+      ]
+    },
+    {
+      "service_name": "Workflow Engine",
+      "file": "/server/workflow-engine.ts",
+      "dependencies": ["node-cron"],
+      "methods": [
+        {
+          "name": "initialize",
+          "description": "Load and schedule all active workflows",
+          "returns": "Promise<void>"
+        },
+        {
+          "name": "scheduleWorkflow",
+          "description": "Schedule a cron-based workflow",
+          "params": ["workflow: Workflow"],
+          "returns": "void"
+        },
+        {
+          "name": "executeWorkflow",
+          "description": "Execute workflow steps sequentially",
+          "params": ["workflowId: string"],
+          "returns": "Promise<WorkflowExecution>"
+        },
+        {
+          "name": "executeStep",
+          "description": "Execute single workflow step",
+          "params": ["workflow: Workflow", "step: any"],
+          "returns": "Promise<any>",
+          "step_types": [
+            "generate_content - Use AI to generate content",
+            "create_action - Create action for approval",
+            "create_task - Create task in board",
+            "send_email - Direct email send (no approval)",
+            "wait - Pause execution",
+            "condition - Conditional branching"
+          ]
+        }
+      ]
+    },
+    {
+      "service_name": "Analytics Service",
+      "file": "/server/analytics.ts",
+      "description": "Track metrics and calculate ROI",
+      "methods": [
+        {
+          "name": "recordMessage",
+          "description": "Track message exchange",
+          "params": ["agentId: string", "userId: string", "role: string", "tokensUsed?: number"]
+        },
+        {
+          "name": "recordTaskComplete",
+          "description": "Track task completion and time saved",
+          "params": ["agentId: string", "userId: string", "timeSavedMinutes?: number"]
+        },
+        {
+          "name": "recordActionExecuted",
+          "description": "Track action execution",
+          "params": ["agentId: string", "userId: string", "cost?: number"]
+        },
+        {
+          "name": "getAgentMetrics",
+          "description": "Get metrics for an agent",
+          "params": ["agentId: string", "days?: number"],
+          "returns": "Promise<AgentMetric[]>"
+        },
+        {
+          "name": "getBusinessMetrics",
+          "description": "Get aggregate business metrics",
+          "params": ["userId: string", "days?: number"],
+          "returns": "Promise<BusinessMetrics>"
+        }
+      ]
+    }
+  ],
+  
+  "api_routes": [
+    {
+      "group": "Agent Actions",
+      "base_path": "/api/actions",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/pending",
+          "auth_required": true,
+          "description": "Get all pending actions for current user",
+          "query_params": ["agentId?: string", "limit?: number"],
+          "response": "AgentAction[]"
+        },
+        {
+          "method": "GET",
+          "path": "/:id",
+          "auth_required": true,
+          "description": "Get single action by ID",
+          "response": "AgentAction"
+        },
+        {
+          "method": "POST",
+          "path": "/",
+          "auth_required": true,
+          "description": "Create new action (agents propose actions)",
+          "body": {
+            "agentId": "string",
+            "actionType": "string",
+            "actionName": "string",
+            "description": "string",
+            "parameters": "object",
+            "requiresApproval": "boolean",
+            "estimatedTimeSaved": "number"
+          },
+          "response": "AgentAction",
+          "side_effects": ["Create notification for user"]
+        },
+        {
+          "method": "POST",
+          "path": "/:id/approve",
+          "auth_required": true,
+          "description": "Approve action and trigger execution",
+          "response": "AgentAction",
+          "side_effects": ["Update approved_at, approved_by", "Trigger action execution asynchronously"]
+        },
+        {
+          "method": "POST",
+          "path": "/:id/reject",
+          "auth_required": true,
+          "description": "Reject action",
+          "response": "AgentAction"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/retry",
+          "auth_required": true,
+          "description": "Retry failed action",
+          "response": "AgentAction"
+        }
+      ]
+    },
+    {
+      "group": "Gmail Integration",
+      "base_path": "/api/integrations/gmail",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/auth",
+          "auth_required": false,
+          "description": "Get Gmail OAuth URL",
+          "response": "{ authUrl: string }"
+        },
+        {
+          "method": "GET",
+          "path": "/callback",
+          "description": "OAuth callback handler",
+          "query_params": ["code: string"],
+          "actions": [
+            "Exchange code for tokens",
+            "Store in oauth_tokens table",
+            "Update integration status to connected",
+            "Redirect to /integrations?success=gmail"
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/status",
+          "auth_required": true,
+          "description": "Check if Gmail is connected",
+          "response": "{ connected: boolean }"
+        },
+        {
+          "method": "POST",
+          "path": "/disconnect",
+          "auth_required": true,
+          "description": "Disconnect Gmail",
+          "response": "{ success: boolean }"
+        }
+      ]
+    },
+    {
+      "group": "Knowledge Base",
+      "base_path": "/api/agents/:id/knowledge",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/",
+          "auth_required": true,
+          "description": "Upload knowledge for agent",
+          "body": {
+            "content": "string (required)",
+            "sourceName": "string (optional)",
+            "sourceType": "string (optional)"
+          },
+          "response": "{ chunksCreated: number }",
+          "actions": [
+            "Chunk content",
+            "Generate embeddings",
+            "Upload to Pinecone",
+            "Store in knowledge_chunks table",
+            "Update agent.knowledgeBase field"
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/",
+          "auth_required": true,
+          "description": "Get knowledge chunks for agent",
+          "response": "KnowledgeChunk[]"
+        },
+        {
+          "method": "DELETE",
+          "path": "/",
+          "auth_required": true,
+          "description": "Delete all knowledge for agent",
+          "actions": [
+            "Get all vector IDs from database",
+            "Delete from Pinecone",
+            "Delete from knowledge_chunks table",
+            "Clear agent.knowledgeBase field"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Workflows",
+      "base_path": "/api/workflows",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/",
+          "auth_required": true,
+          "description": "Get all workflows for user",
+          "response": "Workflow[]"
+        },
+        {
+          "method": "POST",
+          "path": "/",
+          "auth_required": true,
+          "description": "Create workflow",
+          "body": {
+            "name": "string",
+            "description": "string",
+            "triggerType": "schedule | event | manual",
+            "triggerConfig": "object",
+            "steps": "array"
+          },
+          "response": "Workflow"
+        },
+        {
+          "method": "POST",
+          "path": "/:id/execute",
+          "auth_required": true,
+          "description": "Manually execute workflow",
+          "response": "WorkflowExecution"
+        },
+        {
+          "method": "PUT",
+          "path": "/:id",
+          "auth_required": true,
+          "description": "Update workflow",
+          "response": "Workflow"
+        },
+        {
+          "method": "DELETE",
+          "path": "/:id",
+          "auth_required": true,
+          "description": "Delete workflow"
+        }
+      ]
+    },
+    {
+      "group": "Analytics",
+      "base_path": "/api/analytics",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/agents/:id",
+          "auth_required": true,
+          "description": "Get agent performance metrics",
+          "query_params": ["days?: number"],
+          "response": {
+            "daily": "AgentMetric[]",
+            "total": {
+              "tasks": "number",
+              "actions": "number",
+              "timeSaved": "number (minutes)",
+              "cost": "number (dollars)"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/business",
+          "auth_required": true,
+          "description": "Get business-wide metrics",
+          "query_params": ["days?: number"],
+          "response": {
+            "overallImpact": "object",
+            "departmentBreakdown": "object",
+            "trends": "object"
+          }
+        }
+      ]
+    }
+  ],
+  
+  "frontend_components": [
+    {
+      "component_name": "ActionApprovalPanel",
+      "file": "/client/src/components/action-approval-panel.tsx",
+      "description": "Display pending actions requiring approval",
+      "location": "Dashboard page (top section)",
+      "props": "none",
+      "state": [
+        "pendingActions: AgentAction[]"
+      ],
+      "ui_elements": [
+        {
+          "element": "Header",
+          "content": "Actions Requiring Approval ({count})",
+          "style": "text-lg font-semibold mb-4"
+        },
+        {
+          "element": "EmptyState",
+          "condition": "pendingActions.length === 0",
+          "content": "Check icon + 'No pending actions'",
+          "style": "text-center text-muted-foreground p-8"
+        },
+        {
+          "element": "ActionCard",
+          "iterate": "pendingActions",
+          "layout": "Card with CardHeader and CardContent",
+          "sections": [
+            {
+              "section": "Header",
+              "elements": [
+                "Action name (CardTitle)",
+                "Action type badge (colored by type)",
+                "Description (CardDescription)"
+              ]
+            },
+            {
+              "section": "Parameters",
+              "elements": [
+                "For send_email: Show to, subject, body preview",
+                "For create_document: Show title, content preview",
+                "For schedule_post: Show platform, content, scheduled time"
+              ],
+              "style": "bg-muted p-3 rounded-md"
+            },
+            {
+              "section": "Footer",
+              "elements": [
+                "Timestamp ('Requested 2 hours ago')",
+                "Time saved estimate ('Saves ~5 min')",
+                "Reject button (outline variant)",
+                "Approve button (primary variant with Check icon)"
+              ],
+              "layout": "flex justify-between items-center pt-2"
+            }
+          ]
+        }
+      ],
+      "interactions": [
+        {
+          "action": "Approve",
+          "api_call": "POST /api/actions/:id/approve",
+          "optimistic_update": false,
+          "on_success": [
+            "Invalidate /api/actions/pending query",
+            "Show toast: 'Action approved'",
+            "Remove from list"
+          ]
+        },
+        {
+          "action": "Reject",
+          "api_call": "POST /api/actions/:id/reject",
+          "on_success": [
+            "Invalidate /api/actions/pending query",
+            "Show toast: 'Action rejected'",
+            "Remove from list"
+          ]
+        }
+      ],
+      "refresh_interval": 10000
+    },
+    {
+      "component_name": "GmailConnectButton",
+      "file": "/client/src/components/gmail-connect-button.tsx",
+      "description": "OAuth connection for Gmail",
+      "location": "Integrations page",
+      "states": [
+        {
+          "state": "disconnected",
+          "display": "Button: 'Connect Gmail' with Mail icon",
+          "color": "primary"
+        },
+        {
+          "state": "connecting",
+          "display": "Button: 'Connecting...' with Loader2 icon",
+          "disabled": true
+        },
+        {
+          "state": "connected",
+          "display": "Green check icon + 'Gmail Connected' + Disconnect button",
+          "layout": "flex items-center gap-3"
+        }
+      ],
+      "interactions": [
+        {
+          "action": "Connect",
+          "steps": [
+            "GET /api/integrations/gmail/auth to get authUrl",
+            "Open popup window with authUrl (600x700)",
+            "Poll for popup close every 1 second",
+            "On popup close: refresh status query"
+          ]
+        },
+        {
+          "action": "Disconnect",
+          "api_call": "POST /api/integrations/gmail/disconnect",
+          "on_success": "Invalidate status query"
+        }
+      ]
+    },
+    {
+      "component_name": "KnowledgeUpload",
+      "file": "/client/src/components/knowledge-upload.tsx",
+      "description": "Upload documents for RAG",
+      "location": "Agent Programming page",
+      "props": {
+        "agentId": "string (required)"
+      },
+      "ui_elements": [
+        {
+          "element": "Card",
+          "title": "Upload Knowledge Base",
+          "sections": [
+            {
+              "label": "Upload File (txt, md, etc.)",
+              "input": "File input",
+              "accepts": ".txt,.md,.html,.csv",
+              "on_change": "Read file content and populate textarea"
+            },
+            {
+              "label": "Or Paste Content",
+              "input": "Textarea (10 rows)",
+              "placeholder": "Paste your knowledge base content here..."
+            },
+            {
+              "element": "Button",
+              "label": "Upload Knowledge",
+              "icon": "Upload",
+              "full_width": true,
+              "disabled": "content is empty or uploading",
+              "loading_state": "'Processing...' with Loader2 icon"
+            },
+            {
+              "element": "FileInfo",
+              "condition": "file is selected",
+              "content": "FileText icon + filename + size in KB"
+            }
+          ]
+        }
+      ],
+      "interactions": [
+        {
+          "action": "Upload",
+          "api_call": "POST /api/agents/:agentId/knowledge",
+          "body": { "content": "string", "sourceName": "string" },
+          "on_success": [
+            "Show toast: '{chunksCreated} chunks created and indexed'",
+            "Clear textarea and file input",
+            "Invalidate agent query"
+          ],
+          "on_error": "Show error toast with message"
+        }
+      ]
+    },
+    {
+      "component_name": "AgentMetrics",
+      "file": "/client/src/components/agent-metrics.tsx",
+      "description": "Display agent performance metrics",
+      "location": "Dashboard or Analytics page",
+      "props": {
+        "agentId": "string (required)"
+      },
+      "layout": "Grid with 4 stat cards",
+      "stat_cards": [
+        {
+          "title": "Tasks Completed",
+          "value": "data.total.tasks",
+          "icon": "CheckCircle2",
+          "color": "text-green-600"
+        },
+        {
+          "title": "Time Saved",
+          "value": "Math.floor(data.total.timeSaved / 60) + 'h ' + (data.total.timeSaved % 60) + 'm'",
+          "icon": "Clock",
+          "color": "text-blue-600"
+        },
+        {
+          "title": "Actions Executed",
+          "value": "data.total.actions",
+          "icon": "Zap",
+          "color": "text-purple-600"
+        },
+        {
+          "title": "API Cost",
+          "value": "'$' + data.total.cost.toFixed(2)",
+          "icon": "DollarSign",
+          "color": "text-orange-600"
+        }
+      ],
+      "card_structure": {
+        "header": "CardHeader with CardTitle (small text)",
+        "content": "CardContent with large bold number",
+        "style": "Card with hover effect"
+      }
+    },
+    {
+      "component_name": "WorkflowBuilder",
+      "file": "/client/src/components/workflow-builder.tsx",
+      "description": "Visual workflow creation",
+      "location": "New Workflows page",
+      "complexity": "HIGH - Phase 2 feature",
+      "ui_sections": [
+        {
+          "section": "Trigger Selection",
+          "options": [
+            "Schedule (cron expression)",
+            "Event (webhook, DB change)",
+            "Manual"
+          ]
+        },
+        {
+          "section": "Step Builder",
+          "elements": [
+            "Add Step button",
+            "Step type dropdown",
+            "Step configuration form",
+            "Delete step button",
+            "Reorder steps (drag-and-drop)"
+          ]
+        },
+        {
+          "section": "Step Types",
+          "types": [
+            {
+              "type": "generate_content",
+              "fields": ["agentId", "prompt", "temperature"]
+            },
+            {
+              "type": "create_action",
+              "fields": ["agentId", "actionType", "parameters", "requiresApproval"]
+            },
+            {
+              "type": "create_task",
+              "fields": ["title", "description", "agentId", "dueDate"]
+            }
+          ]
+        },
+        {
+          "section": "Actions",
+          "buttons": [
+            "Save as Draft",
+            "Save and Activate",
+            "Test Run (simulation)"
+          ]
+        }
+      ]
+    }
+  ],
+  
+  "page_modifications": [
+    {
+      "page": "Dashboard",
+      "file": "/client/src/pages/dashboard.tsx",
+      "modifications": [
+        {
+          "location": "Top of content (before agent cards)",
+          "add": "ActionApprovalPanel component",
+          "import": "import { ActionApprovalPanel } from '@/components/action-approval-panel';"
+        },
+        {
+          "location": "Below ActionApprovalPanel",
+          "add": "AgentMetrics component for each agent (or aggregate)",
+          "conditional": "Only show if agent has metrics"
+        }
+      ]
+    },
+    {
+      "page": "Integrations",
+      "file": "/client/src/pages/integrations-page.tsx",
+      "modifications": [
+        {
+          "location": "Gmail integration card",
+          "replace": "Static card with GmailConnectButton component",
+          "before": "Static 'Connected' badge",
+          "after": "GmailConnectButton with dynamic status"
+        },
+        {
+          "future_additions": [
+            "GoogleCalendarConnect",
+            "GoogleDriveConnect",
+            "BufferConnect",
+            "SlackConnect"
+          ]
+        }
+      ]
+    },
+    {
+      "page": "Agent Programming",
+      "file": "/client/src/pages/agent-programming.tsx",
+      "modifications": [
+        {
+          "location": "New tab or section",
+          "add": "KnowledgeUpload component",
+          "label": "Knowledge Base",
+          "description": "Upload documents for this agent to reference"
+        },
+        {
+          "location": "Below knowledge upload",
+          "add": "List of existing knowledge chunks",
+          "elements": [
+            "Chunk preview (first 100 chars)",
+            "Source name",
+            "Created date",
+            "Delete button"
+          ]
+        }
+      ]
+    },
+    {
+      "page": "Agent Chat",
+      "file": "/client/src/pages/agent-chat.tsx",
+      "modifications": [
+        {
+          "backend_change": "Chat endpoint extracts action proposals from AI responses",
+          "pattern": "[ACTION:ACTION_TYPE|param1:value1|param2:value2]",
+          "example": "[ACTION:SEND_EMAIL|to:john@example.com|subject:Meeting|body:Hi John...]",
+          "on_detection": [
+            "Create action in database",
+            "Create notification for user",
+            "Remove action tag from displayed message"
+          ]
+        },
+        {
+          "ui_addition": "Show notification when action is created",
+          "message": "Action created - check your dashboard to approve",
+          "style": "Info toast with link to dashboard"
+        }
+      ]
+    },
+    {
+      "page": "Analytics (New Enhanced Version)",
+      "file": "/client/src/pages/analytics-page.tsx",
+      "current_state": "Mostly empty placeholder",
+      "new_content": [
+        {
+          "section": "Overview Cards",
+          "metrics": [
+            "Total agents",
+            "Total time saved (hours)",
+            "Total actions executed",
+            "Total cost vs. value"
+          ]
+        },
+        {
+          "section": "Charts",
+          "charts": [
+            "Time saved over time (line chart)",
+            "Actions by type (bar chart)",
+            "Agent activity (heatmap or bar)",
+            "Cost vs. value trend"
+          ]
+        },
+        {
+          "section": "Agent Breakdown Table",
+          "columns": [
+            "Agent name",
+            "Tasks completed",
+            "Actions executed",
+            "Time saved",
+            "Cost",
+            "ROI"
+          ],
+          "sortable": true,
+          "filterable": true
+        }
+      ]
+    },
+    {
+      "page": "Workflows (New Page)",
+      "file": "/client/src/pages/workflows-page.tsx",
+      "current_state": "Does not exist",
+      "create_new": true,
+      "sections": [
+        {
+          "section": "Header",
+          "elements": [
+            "Page title: 'Workflows'",
+            "Create Workflow button (primary)"
+          ]
+        },
+        {
+          "section": "Workflow List",
+          "elements": [
+            "Workflow cards showing name, description, trigger type, status",
+            "Last executed timestamp",
+            "Execution count",
+            "Success rate",
+            "Actions: Edit, Duplicate, Delete, Execute Now"
+          ]
+        },
+        {
+          "section": "Empty State",
+          "condition": "No workflows exist",
+          "content": "Illustration + 'Create your first workflow' + Template gallery"
+        },
+        {
+          "section": "Template Gallery",
+          "templates": [
+            "Daily Content Calendar",
+            "Weekly Report",
+            "Lead Qualification",
+            "Customer Onboarding"
+          ],
+          "action": "One-click install"
+        }
+      ]
+    }
+  ],
+  
+  "system_prompt_modifications": [
+    {
+      "location": "Agent chat system prompt",
+      "file": "/server/routes.ts (agent chat endpoint)",
+      "additions": [
+        {
+          "section": "Action Capabilities",
+          "content": "IMPORTANT CAPABILITIES:\nYou can perform real actions to help the user. When the user needs you to DO something (not just discuss it), you should propose an action.\n\nAvailable actions:\n1. SEND_EMAIL: Send an email via Gmail\n   Format: [ACTION:SEND_EMAIL|to:email@example.com|subject:Email Subject|body:Email body content]\n\n2. CREATE_DOCUMENT: Create a document\n   Format: [ACTION:CREATE_DOCUMENT|title:Document Title|content:Document content here]\n\n3. SCHEDULE_POST: Schedule a social media post\n   Format: [ACTION:SCHEDULE_POST|platform:twitter|content:Post content]\n\n4. CREATE_TASK: Create a task in the board\n   Format: [ACTION:CREATE_TASK|title:Task title|description:Task description|priority:high]\n\nWhen you want to perform an action, include the action tag in your response. The system will extract it and create an approval request for the user.\n\nExample:\nUser: 'Email John at john@example.com and tell him the meeting is rescheduled to 3pm'\nYou: 'I'll send that email to John for you.\n\n[ACTION:SEND_EMAIL|to:john@example.com|subject:Meeting Rescheduled|body:Hi John,\n\nI wanted to let you know that our meeting has been rescheduled to 3pm today.\n\nLooking forward to speaking with you then.\n\nBest regards]\n\nThe email is ready for your approval. Once approved, it will be sent immediately.'"
+        },
+        {
+          "section": "Knowledge Context",
+          "integration": "Before system prompt, query RAG and prepend: '\n\nRELEVANT KNOWLEDGE BASE CONTEXT:\n{relevantChunks}\n\nUse the above context to inform your response when relevant.'"
+        }
+      ]
+    }
+  ],
+  
+  "environment_setup": {
+    "new_environment_variables": [
+      {
+        "name": "GOOGLE_CLIENT_ID",
+        "description": "Google OAuth client ID for Gmail integration",
+        "required_for": ["Gmail OAuth"],
+        "setup_instructions": "Get from Google Cloud Console > APIs & Services > Credentials"
+      },
+      {
+        "name": "GOOGLE_CLIENT_SECRET",
+        "description": "Google OAuth client secret",
+        "required_for": ["Gmail OAuth"],
+        "setup_instructions": "Get from Google Cloud Console"
+      },
+      {
+        "name": "GOOGLE_REDIRECT_URI",
+        "description": "OAuth callback URL",
+        "value": "http://localhost:5000/api/auth/google/callback",
+        "required_for": ["Gmail OAuth"]
+      },
+      {
+        "name": "PINECONE_API_KEY",
+        "description": "Pinecone API key for vector database",
+        "required_for": ["RAG knowledge base"],
+        "setup_instructions": "Get from pinecone.io dashboard"
+      },
+      {
+        "name": "PINECONE_INDEX",
+        "description": "Pinecone index name",
+        "value": "agentos-knowledge",
+        "required_for": ["RAG knowledge base"],
+        "setup_instructions": "Create index in Pinecone with dimensions: 1536, metric: cosine"
+      }
+    ],
+    "package_installations": [
+      {
+        "package": "googleapis",
+        "version": "latest",
+        "purpose": "Gmail API integration",
+        "install": "npm install googleapis"
+      },
+      {
+        "package": "google-auth-library",
+        "version": "latest",
+        "purpose": "Google OAuth authentication",
+        "install": "npm install google-auth-library"
+      },
+      {
+        "package": "@pinecone-database/pinecone",
+        "version": "latest",
+        "purpose": "Vector database for RAG",
+        "install": "npm install @pinecone-database/pinecone"
+      },
+      {
+        "package": "node-cron",
+        "version": "latest",
+        "purpose": "Workflow scheduling",
+        "install": "npm install node-cron"
+      }
+    ]
+  },
+  
+  "implementation_order": [
+    {
+      "step": 1,
+      "task": "Create database migrations",
+      "files": [
+        "/migrations/create-agent-actions.ts",
+        "/migrations/create-oauth-tokens.ts"
+      ],
+      "run": "npm run db:migrate"
+    },
+    {
+      "step": 2,
+      "task": "Add schemas to shared/schema.ts",
+      "add_tables": ["agentActions", "oauthTokens"]
+    },
+    {
+      "step": 3,
+      "task": "Install npm packages",
+      "commands": [
+        "npm install googleapis google-auth-library"
+      ]
+    },
+    {
+      "step": 4,
+      "task": "Create Gmail service",
+      "file": "/server/integrations/gmail.ts",
+      "implement_methods": [
+        "getAuthUrl",
+        "exchangeCode",
+        "getAccessToken",
+        "sendEmail"
+      ]
+    },
+    {
+      "step": 5,
+      "task": "Create action executor",
+      "file": "/server/action-executor.ts",
+      "implement_methods": ["executeAction"]
+    },
+    {
+      "step": 6,
+      "task": "Add storage methods",
+      "file": "/server/storage.ts",
+      "add_methods": [
+        "createAgentAction",
+        "getAgentActions",
+        "updateAgentAction",
+        "approveAgentAction",
+        "saveOAuthToken",
+        "getOAuthToken"
+      ]
+    },
+    {
+      "step": 7,
+      "task": "Add API routes",
+      "file": "/server/routes.ts",
+      "add_route_groups": [
+        "Agent Actions (/api/actions/*)",
+        "Gmail Integration (/api/integrations/gmail/*)"
+      ]
+    },
+    {
+      "step": 8,
+      "task": "Create frontend components",
+      "files": [
+        "/client/src/components/action-approval-panel.tsx",
+        "/client/src/components/gmail-connect-button.tsx"
+      ]
+    },
+    {
+      "step": 9,
+      "task": "Modify existing pages",
+      "pages": [
+        "dashboard.tsx - Add ActionApprovalPanel",
+        "integrations-page.tsx - Add GmailConnectButton",
+        "agent-chat.tsx - Modify to extract actions from AI responses"
+      ]
+    },
+    {
+      "step": 10,
+      "task": "Test end-to-end flow",
+      "test_cases": [
+        "Chat with agent: 'Email test@example.com'",
+        "Verify action appears in approval panel",
+        "Approve action",
+        "Verify email sent via Gmail",
+        "Check action status updated to completed"
+      ]
+    }
+  ],
+  
+  "testing_checklist": [
+    {
+      "feature": "Agent Actions",
+      "tests": [
+        "Create action via agent chat",
+        "Action appears in approval panel",
+        "Approve action updates status",
+        "Reject action updates status",
+        "Failed action can be retried",
+        "Action execution result stored",
+        "Notification created on action creation"
+      ]
+    },
+    {
+      "feature": "Gmail Integration",
+      "tests": [
+        "OAuth flow opens popup",
+        "Callback stores tokens",
+        "Status shows connected",
+        "Email send works",
+        "Token refresh works on expiry",
+        "Disconnect removes tokens"
+      ]
+    },
+    {
+      "feature": "RAG Knowledge",
+      "tests": [
+        "File upload works",
+        "Content chunked correctly",
+        "Embeddings generated",
+        "Vectors stored in Pinecone",
+        "Database records created",
+        "Query returns relevant chunks",
+        "Chat uses knowledge context",
+        "Delete removes all data"
+      ]
+    },
+    {
+      "feature": "Workflows",
+      "tests": [
+        "Workflow created with cron",
+        "Cron triggers execution",
+        "Steps execute in order",
+        "Actions created from workflow",
+        "Execution logged",
+        "Failed workflow logged",
+        "Manual execution works"
+      ]
+    }
+  ],
+  
+  "ui_design_principles": {
+    "colors": {
+      "primary": "Blue (#3B82F6)",
+      "success": "Green (#10B981)",
+      "warning": "Orange (#F59E0B)",
+      "danger": "Red (#EF4444)",
+      "info": "Purple (#8B5CF6)",
+      "muted": "Gray (#6B7280)"
+    },
+    "typography": {
+      "heading": "font-semibold",
+      "body": "font-normal",
+      "small": "text-sm",
+      "tiny": "text-xs"
+    },
+    "spacing": {
+      "section_gap": "space-y-6",
+      "card_gap": "gap-6 or gap-4",
+      "element_gap": "gap-2 or gap-3"
+    },
+    "button_variants": {
+      "primary": "Default button (blue)",
+      "secondary": "Outline button",
+      "ghost": "Text button",
+      "destructive": "Red button for delete"
+    },
+    "card_style": {
+      "default": "Card with shadow and hover effect",
+      "bordered": "Card with border, no shadow",
+      "flat": "No shadow, no border"
+    },
+    "icons": {
+      "library": "lucide-react",
+      "usage": "Always pair with text label",
+      "size": "h-4 w-4 for inline, h-6 w-6 for standalone"
+    },
+    "loading_states": {
+      "button": "Loader2 icon with animate-spin",
+      "page": "Skeleton components",
+      "inline": "Spinner or Loader2"
+    },
+    "empty_states": {
+      "structure": "Icon (large) + Text + Optional action button",
+      "tone": "Encouraging, not discouraging",
+      "examples": [
+        "No agents yet → 'Create your first agent'",
+        "No actions → Check icon + 'All caught up!'",
+        "No workflows → 'Automate your first workflow'"
+      ]
+    }
+  },
+  
+  "success_criteria": {
+    "mvp_complete": [
+      "User can create agent",
+      "Agent can propose email action via chat",
+      "Action appears in approval panel on dashboard",
+      "User can approve action",
+      "Email sends via Gmail API",
+      "Action marked as completed",
+      "All of above works end-to-end without errors"
+    ],
+    "phase_1_complete": [
+      "All MVP criteria met",
+      "Gmail OAuth working",
+      "Token refresh automatic",
+      "Multiple action types supported (email, document, task)",
+      "Error handling and retry logic working",
+      "Analytics tracking actions"
+    ],
+    "production_ready": [
+      "All Phase 1 criteria met",
+      "RAG knowledge base working",
+      "At least 3 integrations live",
+      "Workflow engine running",
+      "Analytics dashboard showing ROI",
+      "No critical bugs",
+      "Performance acceptable (<2s page load)"
+    ]
+  },
+  
+  "notes_for_ai_implementation": {
+    "critical_points": [
+      "This JSON contains COMPLETE specification for bridging the gap",
+      "Current codebase has UI and basic CRUD - needs execution layer",
+      "Priority 1: Agent actions + Gmail (Week 1-2)",
+      "All database schemas are production-ready DDL",
+      "All component specs include exact UI elements and interactions",
+      "All API routes have exact request/response formats",
+      "Follow existing code patterns (Drizzle ORM, TanStack Query, Shadcn UI)",
+      "Test each feature end-to-end before moving to next"
+    ],
+    "implementation_approach": [
+      "Work phase by phase: Phase 1 first (actions + Gmail)",
+      "Create database migrations first",
+      "Then backend services and routes",
+      "Then frontend components",
+      "Then integrate into existing pages",
+      "Test thoroughly before next phase"
+    ],
+    "code_style": [
+      "TypeScript strict mode",
+      "Async/await for promises",
+      "Try/catch for error handling",
+      "Zod for validation",
+      "TanStack Query for data fetching",
+      "Optimistic updates where appropriate",
+      "Toast notifications for user feedback"
+    ]
+  }
+}
