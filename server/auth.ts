@@ -1,12 +1,12 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { Express } from "express";
+import { Express, Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
-import * as admin from "firebase-admin";
+import { initializeFirebaseAdmin, isFirebaseAdminInitialized, verifyFirebaseToken } from './firebase';
 
 declare global {
   namespace Express {
@@ -16,7 +16,6 @@ declare global {
 
 const scryptAsync = promisify(scrypt);
 
-// Export the hashPassword function so it can be imported elsewhere
 export async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
   const buf = (await scryptAsync(password, salt, 64)) as Buffer;
@@ -30,14 +29,9 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
-// Initialize Firebase Admin if configuration exists
-import { initializeFirebaseAdmin, isFirebaseAdminInitialized } from './firebase';
-
 export function setupAuth(app: Express) {
-  // Try to initialize Firebase Admin
   initializeFirebaseAdmin();
   
-  // Generate a random secret if not provided
   const sessionSecret = process.env.SESSION_SECRET || randomBytes(32).toString("hex");
   
   const sessionSettings: session.SessionOptions = {
@@ -47,7 +41,7 @@ export function setupAuth(app: Express) {
     store: storage.sessionStore,
     cookie: {
       secure: process.env.NODE_ENV === "production",
-      maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
+      maxAge: 1000 * 60 * 60 * 24 * 7
     }
   };
 
@@ -59,7 +53,10 @@ export function setupAuth(app: Express) {
   passport.use(
     new LocalStrategy(async (username, password, done) => {
       try {
-        const user = await storage.getUserByUsername(username);
+        let user = await storage.getUserByUsername(username);
+        if (!user && username.includes('@')) {
+          user = await storage.getUserByEmail(username);
+        }
         if (!user || !(await comparePasswords(password, user.password))) {
           return done(null, false);
         } else {
@@ -81,7 +78,6 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Authentication routes
   app.post("/api/register", async (req, res, next) => {
     try {
       const existingUser = await storage.getUserByUsername(req.body.username);
@@ -96,7 +92,6 @@ export function setupAuth(app: Express) {
 
       req.login(user, (err) => {
         if (err) return next(err);
-        // Return user without password
         const { password, ...userWithoutPassword } = user;
         res.status(201).json(userWithoutPassword);
       });
@@ -112,7 +107,6 @@ export function setupAuth(app: Express) {
       
       req.login(user, (err: Error | null) => {
         if (err) return next(err);
-        // Return user without password
         const { password, ...userWithoutPassword } = user;
         res.status(200).json(userWithoutPassword);
       });
@@ -128,15 +122,71 @@ export function setupAuth(app: Express) {
 
   app.get("/api/user", (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    // Return user without password
     const { password, ...userWithoutPassword } = req.user;
     res.json(userWithoutPassword);
   });
 
-  // Google Authentication route
+  app.post("/api/auth/firebase", async (req, res, next) => {
+    try {
+      if (!isFirebaseAdminInitialized()) {
+        return res.status(503).json({
+          error: "Firebase authentication is not available"
+        });
+      }
+
+      const { idToken } = req.body;
+      if (!idToken) {
+        return res.status(400).json({ error: "Missing Firebase ID token" });
+      }
+
+      const decodedToken = await verifyFirebaseToken(idToken);
+      const { uid, email, name, picture } = decodedToken;
+
+      if (!email) {
+        return res.status(400).json({ error: "Email not available from Firebase" });
+      }
+
+      let user = await storage.getUserByFirebaseUid(uid);
+      
+      if (!user) {
+        user = await storage.getUserByEmail(email);
+        
+        if (user) {
+          user = await storage.updateUser(user.id, { firebaseUid: uid });
+        } else {
+          const username = email.split('@')[0] + '_' + Math.floor(Math.random() * 10000);
+          const password = await hashPassword(randomBytes(32).toString('hex'));
+          
+          user = await storage.createUser({
+            username,
+            email,
+            password,
+            fullName: name || '',
+            avatar: picture || '',
+            firebaseUid: uid
+          });
+        }
+      }
+
+      req.login(user, (err) => {
+        if (err) return next(err);
+        const { password, ...userWithoutPassword } = user;
+        return res.status(200).json(userWithoutPassword);
+      });
+    } catch (error: any) {
+      console.error("Firebase auth error:", error);
+      if (error.code === 'auth/id-token-expired') {
+        return res.status(401).json({ error: "Token expired" });
+      }
+      if (error.code === 'auth/argument-error') {
+        return res.status(400).json({ error: "Invalid token" });
+      }
+      next(error);
+    }
+  });
+
   app.post("/api/auth/google", async (req, res, next) => {
     try {
-      // Check if Firebase Admin is initialized
       if (!isFirebaseAdminInitialized()) {
         return res.status(503).json({
           error: "Google authentication is not available - Firebase Admin SDK not initialized"
@@ -149,20 +199,15 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ error: "Missing required user data" });
       }
 
-      // Find if user already exists by Firebase UID
       let user = await storage.getUserByFirebaseUid(uid);
       
       if (!user) {
-        // Check if a user with this email already exists
         user = await storage.getUserByEmail(email);
         
         if (user) {
-          // Update existing user with Firebase UID
           user = await storage.updateUser(user.id, { firebaseUid: uid });
         } else {
-          // Create a new user 
           const username = email.split('@')[0] + '_' + Math.floor(Math.random() * 1000);
-          // Generate a random secure password for the user
           const password = await hashPassword(randomBytes(16).toString('hex'));
           
           user = await storage.createUser({
@@ -175,11 +220,8 @@ export function setupAuth(app: Express) {
         }
       }
 
-      // Log the user in
       req.login(user, (err) => {
         if (err) return next(err);
-        
-        // Return user without password
         const { password, ...userWithoutPassword } = user;
         return res.status(200).json(userWithoutPassword);
       });
