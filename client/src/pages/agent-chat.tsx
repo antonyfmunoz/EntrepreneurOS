@@ -597,6 +597,13 @@ export default function AgentChat({ params }: AgentChatProps) {
             </div>
           </div>
           
+          {/* Settings Footer */}
+          {/* AI Model Settings button removed as requested */}
+          <div className="border-t border-gray-200 p-3">
+            <div className="flex flex-col space-y-1">
+              {/* Settings have been moved to the model selector dropdown in the chat interface */}
+            </div>
+          </div>
         </div>
         
         {/* Main Chat Area */}
