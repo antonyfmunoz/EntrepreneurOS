@@ -1,0 +1,314 @@
+{
+“project”: “AgentOS - AI Operating System Implementation”,
+“objective”: “Build execution layer that makes AI agents actually useful by enabling them to execute real work”,
+“context”: {
+“what_agentos_is”: “AgentOS is NOT a chatbot. It’s a complete operating system where intelligent agents execute real actions (send emails, create documents, manage workflows) autonomously. Users approve actions, then agents DO the work.”,
+“current_state”: “Task manager with AI chat, multi-provider LLM support, solid UI, good database architecture”,
+“target_state”: “Agents that execute real work, learn from experience, run automated workflows, prove ROI with metrics”,
+“critical_path”: [
+“1. Agent Action System - Agents propose actions that execute real work”,
+“2. Gmail Integration - Actions can send actual emails”,
+“3. Action Approval UI - Users see and approve pending actions”,
+“4. RAG Knowledge Base - Agents access uploaded documents”,
+“5. Workflow Automation - Scheduled/triggered processes”
+]
+},
+“implementation_phases”: {
+“phase_1_critical_path”: {
+“timeline”: “Week 1-2”,
+“priority”: “HIGHEST”,
+“goal”: “Make agents send emails via approval”,
+“tasks”: [
+“Create agent_actions database table”,
+“Create oauth_tokens database table”,
+“Build Gmail OAuth integration”,
+“Build action executor service”,
+“Add API routes for actions and Gmail”,
+“Create ActionApprovalPanel component”,
+“Create GmailConnectButton component”,
+“Modify agent chat to extract actions”,
+“Test end-to-end email sending”
+]
+},
+“phase_2_expansion”: {
+“timeline”: “Week 3-4”,
+“tasks”: [
+“Add more action types (create_document, calendar_event)”,
+“Add Google Calendar integration”,
+“Add Google Drive integration”,
+“Add social media integration”
+]
+},
+“phase_3_intelligence”: {
+“timeline”: “Week 5-6”,
+“tasks”: [
+“Set up Pinecone for RAG”,
+“Build knowledge chunk system”,
+“Implement semantic search”,
+“Integrate knowledge into agent chat”
+]
+}
+},
+“database_migrations”: {
+“0001_create_agent_actions”: {
+“file”: “/migrations/0001_create_agent_actions.ts”,
+“sql”: “CREATE TABLE IF NOT EXISTS agent_actions (\n  id TEXT PRIMARY KEY,\n  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,\n  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  action_type TEXT NOT NULL,\n  action_name TEXT NOT NULL,\n  description TEXT,\n  parameters JSONB NOT NULL DEFAULT ‘{}’,\n  status TEXT NOT NULL DEFAULT ‘pending’,\n  requires_approval BOOLEAN NOT NULL DEFAULT true,\n  approved_by TEXT REFERENCES users(id),\n  approved_at TIMESTAMP,\n  executed_at TIMESTAMP,\n  completed_at TIMESTAMP,\n  failed_at TIMESTAMP,\n  execution_result JSONB,\n  error_message TEXT,\n  retry_count INTEGER DEFAULT 0,\n  task_id TEXT REFERENCES tasks(id),\n  conversation_id TEXT,\n  estimated_cost DECIMAL(10,4),\n  actual_cost DECIMAL(10,4),\n  estimated_time_saved INTEGER,\n  created_at TIMESTAMP DEFAULT NOW(),\n  updated_at TIMESTAMP DEFAULT NOW()\n);\nCREATE INDEX IF NOT EXISTS idx_agent_actions_agent ON agent_actions(agent_id);\nCREATE INDEX IF NOT EXISTS idx_agent_actions_user ON agent_actions(user_id);\nCREATE INDEX IF NOT EXISTS idx_agent_actions_status ON agent_actions(status);\nCREATE INDEX IF NOT EXISTS idx_agent_actions_created ON agent_actions(created_at DESC);”
+},
+“0002_create_oauth_tokens”: {
+“file”: “/migrations/0002_create_oauth_tokens.ts”,
+“sql”: “CREATE TABLE IF NOT EXISTS oauth_tokens (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  provider TEXT NOT NULL,\n  access_token TEXT NOT NULL,\n  refresh_token TEXT,\n  token_type TEXT DEFAULT ‘Bearer’,\n  expires_at TIMESTAMP,\n  scope TEXT,\n  created_at TIMESTAMP DEFAULT NOW(),\n  updated_at TIMESTAMP DEFAULT NOW(),\n  UNIQUE(user_id, provider)\n);\nCREATE INDEX IF NOT EXISTS idx_oauth_tokens_user ON oauth_tokens(user_id);\nCREATE INDEX IF NOT EXISTS idx_oauth_tokens_provider ON oauth_tokens(provider);”
+},
+“0005_create_agent_metrics”: {
+“file”: “/migrations/0005_create_agent_metrics.ts”,
+“sql”: “CREATE TABLE IF NOT EXISTS agent_metrics (\n  id TEXT PRIMARY KEY,\n  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,\n  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  date DATE NOT NULL,\n  tasks_completed INTEGER DEFAULT 0,\n  actions_executed INTEGER DEFAULT 0,\n  messages_sent INTEGER DEFAULT 0,\n  api_cost DECIMAL(10,4) DEFAULT 0,\n  time_saved_minutes INTEGER DEFAULT 0,\n  created_at TIMESTAMP DEFAULT NOW(),\n  UNIQUE(agent_id, date)\n);\nCREATE INDEX IF NOT EXISTS idx_agent_metrics_agent_date ON agent_metrics(agent_id, date);\nCREATE INDEX IF NOT EXISTS idx_agent_metrics_user_date ON agent_metrics(user_id, date);”
+}
+},
+“schema_additions”: {
+“file”: “/shared/schema.ts”,
+“instructions”: “ADD these exports to existing schema.ts file”,
+“code”: “export const agentActions = pgTable(‘agent_actions’, {\n  id: text(‘id’).primaryKey(),\n  agentId: text(‘agent_id’).notNull().references(() => agents.id, { onDelete: ‘cascade’ }),\n  userId: text(‘user_id’).notNull().references(() => users.id, { onDelete: ‘cascade’ }),\n  actionType: text(‘action_type’).notNull(),\n  actionName: text(‘action_name’).notNull(),\n  description: text(‘description’),\n  parameters: jsonb(‘parameters’).notNull().$type<Record<string, any>>(),\n  status: text(‘status’).notNull().default(‘pending’),\n  requiresApproval: boolean(‘requires_approval’).notNull().default(true),\n  approvedBy: text(‘approved_by’).references(() => users.id),\n  approvedAt: timestamp(‘approved_at’),\n  executedAt: timestamp(‘executed_at’),\n  completedAt: timestamp(‘completed_at’),\n  failedAt: timestamp(‘failed_at’),\n  executionResult: jsonb(‘execution_result’).$type<Record<string, any>>(),\n  errorMessage: text(‘error_message’),\n  retryCount: integer(‘retry_count’).default(0),\n  taskId: text(‘task_id’).references(() => tasks.id),\n  conversationId: text(‘conversation_id’),\n  estimatedCost: text(‘estimated_cost’),\n  actualCost: text(‘actual_cost’),\n  estimatedTimeSaved: integer(‘estimated_time_saved’),\n  createdAt: timestamp(‘created_at’).defaultNow(),\n  updatedAt: timestamp(‘updated_at’).defaultNow()\n});\n\nexport const oauthTokens = pgTable(‘oauth_tokens’, {\n  id: text(‘id’).primaryKey(),\n  userId: text(‘user_id’).notNull().references(() => users.id, { onDelete: ‘cascade’ }),\n  provider: text(‘provider’).notNull(),\n  accessToken: text(‘access_token’).notNull(),\n  refreshToken: text(‘refresh_token’),\n  tokenType: text(‘token_type’).default(‘Bearer’),\n  expiresAt: timestamp(‘expires_at’),\n  scope: text(‘scope’),\n  createdAt: timestamp(‘created_at’).defaultNow(),\n  updatedAt: timestamp(‘updated_at’).defaultNow()\n});\n\nexport const agentMetrics = pgTable(‘agent_metrics’, {\n  id: text(‘id’).primaryKey(),\n  agentId: text(‘agent_id’).notNull().references(() => agents.id, { onDelete: ‘cascade’ }),\n  userId: text(‘user_id’).notNull().references(() => users.id, { onDelete: ‘cascade’ }),\n  date: text(‘date’).notNull(),\n  tasksCompleted: integer(‘tasks_completed’).default(0),\n  actionsExecuted: integer(‘actions_executed’).default(0),\n  messagesSent: integer(‘messages_sent’).default(0),\n  apiCost: text(‘api_cost’).default(‘0’),\n  timeSavedMinutes: integer(‘time_saved_minutes’).default(0),\n  createdAt: timestamp(‘created_at’).defaultNow()\n});\n\nexport type AgentAction = typeof agentActions.$inferSelect;\nexport type OAuthToken = typeof oauthTokens.$inferSelect;\nexport type AgentMetric = typeof agentMetrics.$inferSelect;”
+},
+“new_files_to_create”: {
+“gmail_service”: {
+“path”: “/server/integrations/gmail.ts”,
+“purpose”: “Handle Gmail OAuth and email sending”,
+“dependencies”: [“npm install googleapis google-auth-library”],
+“key_methods”: [
+“getAuthUrl() - Generate OAuth URL”,
+“exchangeCode(code) - Exchange auth code for tokens”,
+“getAccessToken(userId) - Get valid token, refresh if needed”,
+“sendEmail(userId, params) - Send email via Gmail API”,
+“isConnected(userId) - Check if user has Gmail connected”
+]
+},
+“action_executor”: {
+“path”: “/server/services/action-executor.ts”,
+“purpose”: “Execute approved actions and update metrics”,
+“key_methods”: [
+“executeAction(action) - Main execution orchestrator”,
+“executeSendEmail(action) - Execute email sending”,
+“executeCreateDocument(action) - Create document”,
+“updateMetrics(agentId, userId, updates) - Track performance”
+]
+},
+“action_approval_panel”: {
+“path”: “/client/src/components/action-approval-panel.tsx”,
+“purpose”: “Display pending actions for user approval”,
+“features”: [
+“Shows all pending actions”,
+“Displays action details based on type”,
+“Approve/reject buttons”,
+“Real-time updates every 10 seconds”,
+“Shows estimated time saved”
+]
+},
+“gmail_connect_button”: {
+“path”: “/client/src/components/gmail-connect-button.tsx”,
+“purpose”: “Handle Gmail OAuth flow”,
+“features”: [
+“Opens OAuth popup”,
+“Shows connection status”,
+“Disconnect functionality”,
+“Loading states”
+]
+},
+“agent_metrics”: {
+“path”: “/client/src/components/agent-metrics.tsx”,
+“purpose”: “Display agent performance metrics”,
+“displays”: [
+“Tasks completed”,
+“Actions executed”,
+“Time saved”,
+“API costs”
+]
+}
+},
+“api_routes_to_add”: {
+“file”: “/server/routes.ts”,
+“routes”: [
+{
+“method”: “GET”,
+“path”: “/api/integrations/gmail/auth”,
+“purpose”: “Get Gmail OAuth URL”
+},
+{
+“method”: “GET”,
+“path”: “/api/auth/google/callback”,
+“purpose”: “Handle Gmail OAuth callback”
+},
+{
+“method”: “GET”,
+“path”: “/api/integrations/gmail/status”,
+“purpose”: “Check if Gmail is connected”
+},
+{
+“method”: “POST”,
+“path”: “/api/integrations/gmail/disconnect”,
+“purpose”: “Disconnect Gmail”
+},
+{
+“method”: “GET”,
+“path”: “/api/actions”,
+“purpose”: “Get all actions with optional filters”
+},
+{
+“method”: “GET”,
+“path”: “/api/actions/pending”,
+“purpose”: “Get pending actions requiring approval”
+},
+{
+“method”: “GET”,
+“path”: “/api/actions/:id”,
+“purpose”: “Get single action”
+},
+{
+“method”: “POST”,
+“path”: “/api/actions/:id/approve”,
+“purpose”: “Approve and execute action”
+},
+{
+“method”: “POST”,
+“path”: “/api/actions/:id/reject”,
+“purpose”: “Reject action”
+},
+{
+“method”: “GET”,
+“path”: “/api/agents/:id/metrics”,
+“purpose”: “Get agent performance metrics”
+}
+]
+},
+“files_to_modify”: {
+“dashboard”: {
+“file”: “/client/src/pages/dashboard.tsx”,
+“changes”: [
+“Import ActionApprovalPanel component”,
+“Add <ActionApprovalPanel /> before agent cards section”
+]
+},
+“integrations_page”: {
+“file”: “/client/src/pages/integrations-page.tsx”,
+“changes”: [
+“Import GmailConnectButton component”,
+“Replace static Gmail card with dynamic GmailConnectButton”
+]
+},
+“agent_chat”: {
+“file”: “/server/routes.ts”,
+“endpoint”: “POST /api/agents/:id/chat”,
+“changes”: [
+“Modify system prompt to include action capabilities”,
+“Extract action tags from AI response using regex”,
+“Create action records in database”,
+“Remove action tags from response before sending to user”,
+“Return count of actions created”
+],
+“action_format”: “[ACTION:SEND_EMAIL|to:email@example.com|subject:Subject|body:Body text]”
+}
+},
+“environment_variables”: {
+“required”: [
+“GOOGLE_CLIENT_ID”,
+“GOOGLE_CLIENT_SECRET”,
+“GOOGLE_REDIRECT_URI”
+],
+“example”: {
+“GOOGLE_CLIENT_ID”: “your_client_id_here”,
+“GOOGLE_CLIENT_SECRET”: “your_client_secret_here”,
+“GOOGLE_REDIRECT_URI”: “http://localhost:5000/api/auth/google/callback”
+}
+},
+“google_cloud_setup”: {
+“steps”: [
+“1. Go to https://console.cloud.google.com”,
+“2. Create new project named ‘AgentOS’”,
+“3. Enable Gmail API in APIs & Services > Library”,
+“4. Create OAuth credentials (Web application type)”,
+“5. Add redirect URI: http://localhost:5000/api/auth/google/callback”,
+“6. Copy Client ID and Client Secret to .env file”,
+“7. Configure OAuth consent screen with your email”
+],
+“required_scopes”: [
+“https://www.googleapis.com/auth/gmail.send”,
+“https://www.googleapis.com/auth/gmail.readonly”,
+“https://www.googleapis.com/auth/gmail.compose”
+]
+},
+“testing_checklist”: {
+“test_1_gmail_connection”: [
+“Navigate to /integrations page”,
+“Click ‘Connect Gmail’ button”,
+“Complete OAuth flow in popup”,
+“Verify ‘Gmail Connected’ status shows”,
+“Test disconnect button”
+],
+“test_2_agent_proposes_action”: [
+“Go to agent chat”,
+“Type: ‘Email test@example.com with subject Test and say hello’”,
+“Verify agent response includes action proposal”,
+“Check action appears in approval panel on dashboard”,
+“Verify action shows email details (to, subject, body)”
+],
+“test_3_action_execution”: [
+“Click ‘Approve & Execute’ on pending action”,
+“Wait for execution (should be instant)”,
+“Check Gmail sent folder for email”,
+“Verify action status changed to ‘completed’”,
+“Check metrics updated”
+],
+“test_4_action_rejection”: [
+“Have agent propose another email”,
+“Click ‘Reject’ instead of approve”,
+“Verify action disappears from pending”,
+“Verify no email was sent”
+],
+“test_5_metrics”: [
+“Execute a few actions successfully”,
+“Navigate to agent metrics”,
+“Verify counts increased (actions, time saved)”
+]
+},
+“implementation_order”: {
+“step_1”: “Run database migrations in order (0001, 0002, 0005)”,
+“step_2”: “Add schema exports to /shared/schema.ts”,
+“step_3”: “Create /server/integrations/gmail.ts”,
+“step_4”: “Create /server/services/action-executor.ts”,
+“step_5”: “Add API routes to /server/routes.ts”,
+“step_6”: “Create frontend components (ActionApprovalPanel, GmailConnectButton, AgentMetrics)”,
+“step_7”: “Modify dashboard.tsx to include ActionApprovalPanel”,
+“step_8”: “Modify integrations-page.tsx to include GmailConnectButton”,
+“step_9”: “Modify agent chat endpoint to extract actions”,
+“step_10”: “Add environment variables”,
+“step_11”: “Set up Google Cloud OAuth”,
+“step_12”: “Test end-to-end”
+},
+“success_criteria”: {
+“week_1”: “Agent can send 1 email via approval workflow”,
+“week_2”: “All action types working, metrics tracking”,
+“week_4”: “RAG knowledge base operational”,
+“week_6”: “First workflow running automatically”
+},
+“critical_notes”: {
+“what_makes_this_work”: [
+“Action system is the core - everything builds on this”,
+“User trust through approval - start with everything requiring approval”,
+“Clear value metrics - show time saved and ROI immediately”,
+“Real integrations - Gmail must actually send emails”,
+“Learning from usage - track every action and outcome”
+],
+“what_to_avoid”: [
+“Don’t build more CRUD pages”,
+“Don’t add more AI providers (already have 5)”,
+“Don’t perfect UI before proving value”,
+“Don’t skip approval workflow”,
+“Don’t build features users didn’t request”
+],
+“vision_alignment”: [
+“Agents are employees, not chatbots”,
+“Actions execute real work in the real world”,
+“System learns and improves over time”,
+“Everything designed for business operations”,
+“Prove ROI with data, not promises”
+]
+}
+}
