@@ -28,8 +28,6 @@ import {
   AIModelName 
 } from "./ai";
 import { db } from "./db";
-import { getAuthUrl, generateOAuthState, exchangeCode, isConnected, disconnect, sendEmail } from './integrations/gmail';
-import { executeAction } from './services/action-executor';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication routes and middleware
@@ -379,15 +377,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             content: m.content
           }));
           
+          // Add system message with agent instructions at the beginning
           aiMessages.unshift({
             role: "system",
             content: `You are ${agent.name}, ${agent.role}. ${agent.instructions || ""}
-                    ${agent.brainContent ? `\n\nReference knowledge:\n${agent.brainContent}` : ""}
-
-When the user asks you to perform a real action (send an email, create a document, schedule something), include an action tag in your response using this format:
-[ACTION:SEND_EMAIL|to:recipient@example.com|subject:Email Subject|body:Email body text]
-[ACTION:CREATE_DOCUMENT|title:Document Title|content:Document content here]
-You can include multiple action tags. Always explain what you're proposing to do before the action tag.`
+                    ${agent.brainContent ? `\n\nReference knowledge:\n${agent.brainContent}` : ""}`
           });
           
           reply = await generateAIResponse(aiMessages, aiConfig);
@@ -409,71 +403,18 @@ You can include multiple action tags. Always explain what you're proposing to do
         reply = await generateAgentResponse(message, brain, history);
       }
 
-      let actionsCreated = 0;
-      let cleanReply = reply;
-      const userId = req.isAuthenticated() ? (req.user as any).id : null;
-
-      const actionRegex = /\[ACTION:([A-Z_a-z0-9-]+)\|([^\]]+)\]/g;
-      let match;
-      while ((match = actionRegex.exec(reply)) !== null) {
-        const actionType = match[1].toLowerCase();
-        const paramsStr = match[2];
-        const params: Record<string, string> = {};
-        const paramParts = paramsStr.match(/([a-z_]+):((?:[^|]|\|(?![a-z_]+:))*)/gi);
-        if (paramParts) {
-          paramParts.forEach(part => {
-            const colonIdx = part.indexOf(':');
-            if (colonIdx > 0) {
-              params[part.substring(0, colonIdx).trim().toLowerCase()] = part.substring(colonIdx + 1).trim();
-            }
-          });
-        }
-
-        const actionNameMap: Record<string, string> = {
-          send_email: 'Send Email',
-          create_document: 'Create Document',
-          calendar_event: 'Calendar Event',
-          schedule_meeting: 'Schedule Meeting',
-        };
-
-        if (userId) {
-          try {
-            await storage.createAction({
-              agentId: req.params.id,
-              userId,
-              actionType,
-              actionName: actionNameMap[actionType] || actionType,
-              description: actionType === 'send_email'
-                ? `Send email to ${params.to} with subject "${params.subject}"`
-                : actionType === 'create_document'
-                  ? `Create document: ${params.title}`
-                  : `Execute ${actionType}`,
-              parameters: params,
-              status: 'pending',
-              requiresApproval: true,
-              estimatedTimeSaved: actionType === 'send_email' ? 5 : 15,
-            });
-            actionsCreated++;
-          } catch (actionError) {
-            console.error('Error creating action from chat:', actionError);
-          }
-        }
-
-        cleanReply = cleanReply.replace(match[0], '');
-      }
-
-      cleanReply = cleanReply.trim();
-
+      // Add AI response to storage
       const aiMessage = await storage.addAgentMessage({
         agentId: req.params.id,
         role: "assistant",
-        content: cleanReply,
+        content: reply,
         timestamp: new Date().toISOString(),
       });
 
+      // Update agent's latest activity
       await storage.updateAgentActivity(req.params.id, "Responded to user message");
 
-      res.json({ reply: cleanReply, messageId: aiMessage.id, actionsCreated });
+      res.json({ reply, messageId: aiMessage.id });
     } catch (error) {
       console.error("Error in chat:", error);
       res.status(500).json({ 
@@ -2240,197 +2181,6 @@ You can include multiple action tags. Always explain what you're proposing to do
         error: errorObj instanceof Error ? errorObj.message : String(errorObj),
         code: errorCode
       });
-    }
-  });
-
-  // ==========================================
-  // AGENT ACTIONS API
-  // ==========================================
-
-  // Get all actions for the current user (with optional filters)
-  app.get("/api/actions", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      const userId = (req.user as any).id;
-      const { status, agentId } = req.query;
-      const actions = await storage.getActions(userId, {
-        status: status as string | undefined,
-        agentId: agentId as string | undefined,
-      });
-      res.json(actions);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Get pending actions requiring approval
-  app.get("/api/actions/pending", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      const userId = (req.user as any).id;
-      const actions = await storage.getPendingActions(userId);
-      res.json(actions);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Get single action (with ownership check)
-  app.get("/api/actions/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      const userId = (req.user as any).id;
-      const action = await storage.getAction(req.params.id);
-      if (!action) return res.status(404).json({ message: "Action not found" });
-      if (action.userId !== userId) return res.status(403).json({ message: "Access denied" });
-      res.json(action);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Approve and execute an action (with ownership check)
-  app.post("/api/actions/:id/approve", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      const userId = (req.user as any).id;
-      const action = await storage.getAction(req.params.id);
-      if (!action) return res.status(404).json({ message: "Action not found" });
-      if (action.userId !== userId) return res.status(403).json({ message: "Access denied" });
-      if (action.status !== 'pending') return res.status(400).json({ message: "Action is not pending" });
-
-      await storage.updateAction(action.id, {
-        status: 'approved',
-        approvedBy: userId,
-        approvedAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      const updatedAction = await storage.getAction(action.id);
-      const result = await executeAction(updatedAction!);
-
-      const finalAction = await storage.getAction(action.id);
-      res.json({ action: finalAction, executionResult: result });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Reject an action (with ownership check)
-  app.post("/api/actions/:id/reject", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      const userId = (req.user as any).id;
-      const action = await storage.getAction(req.params.id);
-      if (!action) return res.status(404).json({ message: "Action not found" });
-      if (action.userId !== userId) return res.status(403).json({ message: "Access denied" });
-      if (action.status !== 'pending') return res.status(400).json({ message: "Action is not pending" });
-
-      const updated = await storage.updateAction(action.id, {
-        status: 'rejected',
-        updatedAt: new Date(),
-      });
-      res.json(updated);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // ==========================================
-  // GMAIL INTEGRATION API
-  // ==========================================
-
-  // Get Gmail OAuth URL
-  app.get("/api/integrations/gmail/auth", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      const state = generateOAuthState();
-      (req.session as any).gmailOAuthState = state;
-      const authUrl = getAuthUrl(state);
-      res.json({ authUrl });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Handle Gmail OAuth callback
-  app.get("/api/auth/google/callback", async (req, res) => {
-    if (!req.isAuthenticated()) return res.redirect('/integrations?error=not_authenticated');
-    try {
-      const code = req.query.code as string;
-      const state = req.query.state as string;
-      if (!code) return res.redirect('/integrations?error=no_code');
-
-      const savedState = (req.session as any).gmailOAuthState;
-      if (!state || !savedState || state !== savedState) {
-        return res.redirect('/integrations?error=invalid_state');
-      }
-      delete (req.session as any).gmailOAuthState;
-
-      const userId = (req.user as any).id;
-      await exchangeCode(code, userId);
-      res.redirect('/integrations?gmail=connected');
-    } catch (error: any) {
-      console.error('Gmail OAuth callback error:', error);
-      res.redirect(`/integrations?error=${encodeURIComponent(error.message)}`);
-    }
-  });
-
-  // Check if Gmail is connected
-  app.get("/api/integrations/gmail/status", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      const userId = (req.user as any).id;
-      const connected = await isConnected(userId);
-      res.json({ connected });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Disconnect Gmail
-  app.post("/api/integrations/gmail/disconnect", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      const userId = (req.user as any).id;
-      await disconnect(userId);
-      res.json({ success: true });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // ==========================================
-  // AGENT METRICS API
-  // ==========================================
-
-  // Get agent performance metrics
-  app.get("/api/agents/:id/metrics", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      const userId = (req.user as any).id;
-      const metrics = await storage.getAgentMetrics(req.params.id, userId);
-      
-      const summary = {
-        totalTasksCompleted: 0,
-        totalActionsExecuted: 0,
-        totalMessagesSent: 0,
-        totalTimeSavedMinutes: 0,
-        totalApiCost: 0,
-        dailyMetrics: metrics,
-      };
-      
-      for (const m of metrics) {
-        summary.totalTasksCompleted += m.tasksCompleted || 0;
-        summary.totalActionsExecuted += m.actionsExecuted || 0;
-        summary.totalMessagesSent += m.messagesSent || 0;
-        summary.totalTimeSavedMinutes += m.timeSavedMinutes || 0;
-        summary.totalApiCost += parseFloat(String(m.apiCost || '0'));
-      }
-      
-      res.json(summary);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
     }
   });
 

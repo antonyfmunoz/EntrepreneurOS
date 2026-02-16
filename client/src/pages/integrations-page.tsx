@@ -1,6 +1,5 @@
 import { Header } from "@/components/header";
 import { Integrations } from "@/components/integrations";
-import { GmailConnectButton } from "@/components/gmail-connect-button";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -25,11 +24,6 @@ export default function IntegrationsPage() {
               Agents can fetch data, perform actions, and stay updated with real-time information.
             </p>
           </Card>
-          
-          <div className="mb-6">
-            <h3 className="text-md font-semibold text-gray-800 mb-3">Connected Services</h3>
-            <GmailConnectButton />
-          </div>
           
           <Integrations />
           
