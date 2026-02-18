@@ -22,13 +22,10 @@ export function initializeFirebaseAdmin() {
 
     if (serviceAccountKey) {
       try {
-        const serviceAccount = JSON.parse(serviceAccountKey);
-        if (serviceAccount.project_id) {
-          serviceAccount.project_id = serviceAccount.project_id.trim();
-        }
+        const serviceAccount = JSON.parse(serviceAccountKey) as ServiceAccount;
         initializeApp({
-          credential: cert(serviceAccount as ServiceAccount),
-          projectId: projectId.trim(),
+          credential: cert(serviceAccount),
+          projectId,
         });
         firebaseInitialized = true;
         console.log('Firebase Admin SDK initialized with service account');
