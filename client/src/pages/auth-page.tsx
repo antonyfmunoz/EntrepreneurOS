@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Mail, KeyRound, Shield, Loader2 } from "lucide-react";
+import appLogo from "@assets/2_1771536495596.png";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address."),
@@ -287,6 +288,7 @@ export default function AuthPage() {
       <div className="flex flex-col justify-center items-center w-full lg:w-1/2 px-6 py-12">
         <div className="max-w-md w-full space-y-8">
           <div className="text-center">
+            <img src={appLogo} alt="AgentOS" className="w-20 h-20 mx-auto mb-4 rounded-xl" />
             <h1 className="text-4xl font-bold tracking-tight mb-2 bg-gradient-to-r from-violet-500 to-indigo-600 bg-clip-text text-transparent">
               AgentOS
             </h1>
