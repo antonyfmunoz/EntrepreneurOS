@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { CreateAgentModal } from "@/components/create-agent-modal";
+import { Layout } from "@/components/layout";
 
 // Define agent type for the component
 type Agent = {
@@ -455,73 +456,69 @@ export default function DocumentsPage() {
   // Loading and error states
   if (documentsLoading || foldersLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-        <Loader2 className="h-8 w-8 animate-spin text-border" />
-      </div>
+      <Layout title="Document Vault">
+        <div className="flex items-center justify-center h-full">
+          <Loader2 className="h-8 w-8 animate-spin text-border" />
+        </div>
+      </Layout>
     );
   }
 
   if (documentsError || foldersError) {
     const errorMessage = documentsErrorData?.message || foldersErrorData?.message;
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] gap-4">
-        <p className="text-destructive font-medium">Error loading data</p>
-        <p>{errorMessage}</p>
-      </div>
+      <Layout title="Document Vault">
+        <div className="flex flex-col items-center justify-center h-full gap-4">
+          <p className="text-destructive font-medium">Error loading data</p>
+          <p>{errorMessage}</p>
+        </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
-      {/* Google Drive-like header */}
-      <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="text-primary">
-            <i className="ri-file-list-3-line text-2xl"></i>
-          </div>
-          <div>
-            <h1 className="text-xl font-medium">Document Vault</h1>
-          </div>
-        </div>
-        <div className="flex-1 max-w-2xl mx-8">
-          <div className="relative">
-            <Input
-              placeholder="Search documents..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 bg-gray-50 h-10 border-gray-200"
-            />
-            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-              <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5C10 8.433 8.433 10 6.5 10C4.567 10 3 8.433 3 6.5C3 4.567 4.567 3 6.5 3C8.433 3 10 4.567 10 6.5ZM9.30884 10.0159C8.53901 10.6318 7.56251 11 6.5 11C4.01472 11 2 8.98528 2 6.5C2 4.01472 4.01472 2 6.5 2C8.98528 2 11 4.01472 11 6.5C11 7.56251 10.6318 8.53901 10.0159 9.30884L12.8536 12.1464C13.0488 12.3417 13.0488 12.6583 12.8536 12.8536C12.6583 13.0488 12.3417 13.0488 12.1464 12.8536L9.30884 10.0159Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
+    <Layout title="Document Vault">
+      <div className="flex flex-col h-full overflow-hidden -m-6">
+        <div className="bg-white border-b px-6 py-3 flex items-center justify-between flex-wrap gap-2">
+          <div className="flex-1 max-w-2xl">
+            <div className="relative">
+              <Input
+                placeholder="Search documents..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 bg-gray-50 h-10 border-gray-200"
+              />
+              <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5C10 8.433 8.433 10 6.5 10C4.567 10 3 8.433 3 6.5C3 4.567 4.567 3 6.5 3C8.433 3 10 4.567 10 6.5ZM9.30884 10.0159C8.53901 10.6318 7.56251 11 6.5 11C4.01472 11 2 8.98528 2 6.5C2 4.01472 4.01472 2 6.5 2C8.98528 2 11 4.01472 11 6.5C11 7.56251 10.6318 8.53901 10.0159 9.30884L12.8536 12.1464C13.0488 12.3417 13.0488 12.6583 12.8536 12.8536C12.6583 13.0488 12.3417 13.0488 12.1464 12.8536L9.30884 10.0159Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
+              </div>
             </div>
           </div>
+          <div className="flex gap-2">
+            <Button onClick={handleNewFolder} variant="outline" className="rounded-full h-10 px-4">
+              <FolderPlus className="w-4 h-4 mr-2" />
+              New Folder
+            </Button>
+            <Button 
+              onClick={() => {
+                form.reset();
+                form.setValue('title', 'Standard Operating Procedure: ');
+                form.setValue('tags', 'sop, procedure, process' as any);
+                setShowDocumentDialog(true);
+              }} 
+              variant="outline" 
+              className="rounded-full h-10 px-4"
+            >
+              <i className="ri-file-list-3-line mr-2"></i>
+              Create SOP
+            </Button>
+            <Button onClick={handleNewDocument} className="rounded-full h-10 px-4 bg-primary">
+              <Plus className="w-4 h-4 mr-2" />
+              New Document
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={handleNewFolder} variant="outline" className="rounded-full h-10 px-4">
-            <FolderPlus className="w-4 h-4 mr-2" />
-            New Folder
-          </Button>
-          <Button 
-            onClick={() => {
-              form.reset();
-              form.setValue('title', 'Standard Operating Procedure: ');
-              form.setValue('tags', 'sop, procedure, process' as any);
-              setShowDocumentDialog(true);
-            }} 
-            variant="outline" 
-            className="rounded-full h-10 px-4"
-          >
-            <i className="ri-file-list-3-line mr-2"></i>
-            Create SOP
-          </Button>
-          <Button onClick={handleNewDocument} className="rounded-full h-10 px-4 bg-primary">
-            <Plus className="w-4 h-4 mr-2" />
-            New Document
-          </Button>
-        </div>
-      </div>
 
-      <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar - Similar to Google Drive */}
         <div className="w-60 border-r bg-white p-4 overflow-y-auto">
           <div className="space-y-1">
@@ -1273,6 +1270,7 @@ export default function DocumentsPage() {
       
       {/* Agent Creation Modal */}
       <CreateAgentModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
-    </div>
+      </div>
+    </Layout>
   );
 }

@@ -13,7 +13,11 @@ type Agent = {
   activeTasks: number;
 };
 
-export function Sidebar() {
+type SidebarProps = {
+  collapsed?: boolean;
+};
+
+export function Sidebar({ collapsed = false }: SidebarProps) {
   const [location] = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { user, logoutMutation } = useAuth();
