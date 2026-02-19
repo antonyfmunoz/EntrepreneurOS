@@ -22,7 +22,11 @@ export function initializeFirebaseAdmin() {
 
     if (serviceAccountKey) {
       try {
-        const serviceAccount = JSON.parse(serviceAccountKey);
+        let keyToParse = serviceAccountKey.trim();
+        if (!keyToParse.startsWith('{')) {
+          keyToParse = Buffer.from(keyToParse, 'base64').toString('utf-8');
+        }
+        const serviceAccount = JSON.parse(keyToParse);
         if (serviceAccount.project_id) {
           serviceAccount.project_id = serviceAccount.project_id.trim();
         }
@@ -39,6 +43,8 @@ export function initializeFirebaseAdmin() {
       } catch (parseError) {
         console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:', parseError);
       }
+    } else {
+      console.log('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set');
     }
 
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
