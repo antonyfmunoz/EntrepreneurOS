@@ -10,8 +10,8 @@ export type AIModelName =
   | "gpt-4o" 
   | "gpt-4-turbo" 
   | "gpt-3.5-turbo"
-  | "claude-3-7-sonnet-20250219"
-  | "claude-3-opus-20240229"
+  | "claude-haiku-4-5"
+  | "claude-sonnet-4-5"
   | "llama-3.1-sonar-small-128k-online"
   | "llama-3.1-sonar-large-128k-online"
   | "grok-2-1212"
@@ -38,60 +38,57 @@ export interface AIServiceInterface {
   analyzeImage?(base64Image: string, prompt: string): Promise<string>;
 }
 
-// Default configurations for each provider
 const defaultConfigs: Record<AIModelProvider, AIModelConfig> = {
+  anthropic: {
+    provider: "anthropic",
+    modelName: "claude-haiku-4-5",
+    maxTokens: 8192,
+    temperature: 0.7
+  },
   openai: {
     provider: "openai",
     modelName: "gpt-4o",
-    maxTokens: 1000,
-    temperature: 0.7
-  },
-  anthropic: {
-    provider: "anthropic",
-    modelName: "claude-3-7-sonnet-20250219",
-    maxTokens: 1000,
+    maxTokens: 8192,
     temperature: 0.7
   },
   perplexity: {
     provider: "perplexity",
     modelName: "llama-3.1-sonar-small-128k-online",
-    maxTokens: 1000,
+    maxTokens: 8192,
     temperature: 0.7
   },
   xai: {
     provider: "xai",
     modelName: "grok-2-1212",
-    maxTokens: 1000,
+    maxTokens: 8192,
     temperature: 0.7
   },
   gemini: {
     provider: "gemini",
     modelName: "gemini-2.5-pro",
-    maxTokens: 1000,
+    maxTokens: 8192,
     temperature: 0.7
   }
 };
 
-// Singleton services
 let openAIService: OpenAIService | null = null;
 let anthropicService: AnthropicService | null = null;
 let perplexityService: PerplexityService | null = null;
 let xaiService: XAIService | null = null;
 let geminiService: GeminiService | null = null;
 
-// Helper to get the appropriate service
 function getService(provider: AIModelProvider): AIServiceInterface | null {
   switch (provider) {
-    case "openai":
-      if (!openAIService) {
-        openAIService = new OpenAIService();
-      }
-      return openAIService;
     case "anthropic":
       if (!anthropicService) {
         anthropicService = new AnthropicService();
       }
       return anthropicService;
+    case "openai":
+      if (!openAIService) {
+        openAIService = new OpenAIService();
+      }
+      return openAIService;
     case "perplexity":
       if (!perplexityService) {
         perplexityService = new PerplexityService();
@@ -112,16 +109,15 @@ function getService(provider: AIModelProvider): AIServiceInterface | null {
   }
 }
 
-// Get available AI providers
 export function getAvailableProviders(): AIModelProvider[] {
   const providers: AIModelProvider[] = [];
   
-  if (new OpenAIService().isAvailable()) {
-    providers.push("openai");
-  }
-  
   if (new AnthropicService().isAvailable()) {
     providers.push("anthropic");
+  }
+  
+  if (new OpenAIService().isAvailable()) {
+    providers.push("openai");
   }
   
   if (new PerplexityService().isAvailable()) {
@@ -139,12 +135,11 @@ export function getAvailableProviders(): AIModelProvider[] {
   return providers;
 }
 
-// Generate a response using a specific provider and model
 export async function generateAIResponse(
   messages: AIMessage[],
   config: Partial<AIModelConfig> = {}
 ): Promise<string> {
-  const provider = config.provider || "openai";
+  const provider = config.provider || "anthropic";
   const service = getService(provider);
   
   if (!service || !service.isAvailable()) {
@@ -159,13 +154,11 @@ export async function generateAIResponse(
   return await service.generateResponse(messages, fullConfig);
 }
 
-// Agent-specific helper method
 export async function generateAgentResponse(
   messages: AIMessage[],
   brain: AgentBrain,
   config: Partial<AIModelConfig> = {}
 ): Promise<string> {
-  // Add system message with agent instructions
   const systemMessage: AIMessage = {
     role: "system",
     content: `You are ${brain.name}, ${brain.role}. ${brain.instructions}`
@@ -180,7 +173,6 @@ export async function generateAgentResponse(
   return await generateAIResponse(allMessages, config);
 }
 
-// Generate an image using a provider that supports it
 export async function generateImage(
   prompt: string,
   provider: AIModelProvider = "openai"
@@ -194,11 +186,10 @@ export async function generateImage(
   return await service.generateImage(prompt);
 }
 
-// Analyze an image using a provider that supports it
 export async function analyzeImage(
   base64Image: string,
   prompt: string,
-  provider: AIModelProvider = "openai"
+  provider: AIModelProvider = "anthropic"
 ): Promise<string> {
   const service = getService(provider);
   
@@ -209,7 +200,6 @@ export async function analyzeImage(
   return await service.analyzeImage(base64Image, prompt);
 }
 
-// Model descriptions
 interface ModelInfo {
   models: {
     name: AIModelName;
@@ -219,9 +209,24 @@ interface ModelInfo {
   }[];
 }
 
-// Get model information
 export function getModelInfo(): Record<AIModelProvider, ModelInfo> {
   return {
+    anthropic: {
+      models: [
+        {
+          name: "claude-haiku-4-5",
+          description: "Fast and efficient for everyday tasks",
+          contextWindow: 200000,
+          capabilities: ["Text generation", "Quick answers", "Basic reasoning", "Summarization"],
+        },
+        {
+          name: "claude-sonnet-4-5",
+          description: "Balanced performance for complex reasoning",
+          contextWindow: 200000,
+          capabilities: ["Advanced reasoning", "Code generation", "Deep analysis", "Complex tasks"],
+        }
+      ]
+    },
     openai: {
       models: [
         {
@@ -241,22 +246,6 @@ export function getModelInfo(): Record<AIModelProvider, ModelInfo> {
           description: "Fast and cost-effective general purpose model",
           contextWindow: 16000,
           capabilities: ["Text generation", "Summarization", "Basic reasoning"],
-        }
-      ]
-    },
-    anthropic: {
-      models: [
-        {
-          name: "claude-3-7-sonnet-20250219",
-          description: "Latest balanced model for most tasks",
-          contextWindow: 200000,
-          capabilities: ["Text generation", "Complex reasoning", "Content creation"],
-        },
-        {
-          name: "claude-3-opus-20240229",
-          description: "Most powerful model for complex tasks",
-          contextWindow: 200000,
-          capabilities: ["Advanced reasoning", "Long-form content", "Code generation"],
         }
       ]
     },

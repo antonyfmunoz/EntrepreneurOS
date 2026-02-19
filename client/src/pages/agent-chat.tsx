@@ -53,8 +53,8 @@ export default function AgentChat({ params }: AgentChatProps) {
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [aiModelConfig, setAIModelConfig] = useState<AIModelConfig>({ 
-    provider: "openai", 
-    modelName: "gpt-4o" 
+    provider: "anthropic", 
+    modelName: "claude-haiku-4-5" 
   });
   const [aiSelectorOpen, setAiSelectorOpen] = useState(false);
   const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
@@ -94,7 +94,7 @@ export default function AgentChat({ params }: AgentChatProps) {
     mutationFn: async (message: string) => {
       setIsLoading(true);
       // Check if we're in direct GPT-4o mode (no agent selected or direct GPT-4o toggle is on)
-      if (!agentId || agentId === "direct-gpt4o") {
+      if (!agentId || agentId === "direct-claude") {
         try {
           // Use our direct llmApi with the selected model
           const aiResponse = await callLLM(message, aiModelConfig.modelName);
@@ -111,7 +111,7 @@ export default function AgentChat({ params }: AgentChatProps) {
     },
     onSuccess: (response) => {
       // Show toast notification when AI response is complete
-      const responder = !agentId || agentId === "direct-gpt4o" ? "GPT-4o" : (agent?.name || "Agent");
+      const responder = !agentId || agentId === "direct-claude" ? "Claude" : (agent?.name || "Agent");
       toast({
         title: `${responder} responded`,
         description: response.substring(0, 60) + (response.length > 60 ? "..." : ""),
@@ -126,31 +126,29 @@ export default function AgentChat({ params }: AgentChatProps) {
       const errorObj = error as any;
       
       // For API quota exceeded errors
-      if (error.message.includes("quota")) {
+      if (error.message.includes("quota") || error.message.includes("rate limit")) {
         toast({
-          title: "API Quota Exceeded",
-          description: "Your OpenAI API quota has been exceeded. Please update your billing details or try a different model.",
+          title: "Rate Limit",
+          description: "Too many requests. Please wait a moment and try again.",
           variant: "destructive",
         });
         
-        // Add an option to try GPT-3.5 turbo which is more affordable
-        if (aiModelConfig.modelName === "gpt-4o" || aiModelConfig.modelName === "gpt-4-turbo") {
+        if (aiModelConfig.modelName === "claude-sonnet-4-5") {
           setAIModelConfig({
             ...aiModelConfig,
-            modelName: "gpt-3.5-turbo"
+            modelName: "claude-haiku-4-5"
           });
           
           toast({
             title: "Model Changed",
-            description: "Switched to GPT-3.5 Turbo which has a higher free quota limit.",
+            description: "Switched to Haiku for faster responses.",
           });
         }
       }
-      // For OpenAI API key errors 
       else if (error.message.includes("key") || error.message.includes("API key")) {
         toast({
-          title: "OpenAI API Key Required",
-          description: "Please add your OpenAI API key in Settings to use GPT-4o direct chat mode.",
+          title: "AI Configuration Issue",
+          description: "The AI service is not properly configured. Please contact support.",
           variant: "destructive",
         });
       }
@@ -292,7 +290,7 @@ export default function AgentChat({ params }: AgentChatProps) {
   };
 
   return (
-    <Layout title={agentId === "direct-gpt4o" ? "GPT-4o Chat" : (agent?.name || "Agent Chat")}>
+    <Layout title={agentId === "direct-claude" ? "Claude Chat" : (agent?.name || "Agent Chat")}>
       <div className="flex h-full overflow-hidden -mt-6 -mx-6">
         {/* API Key Dialog */}
         <ApiKeyDialog 
@@ -673,13 +671,13 @@ export default function AgentChat({ params }: AgentChatProps) {
           <div className="border-b border-gray-200 p-4 flex items-center justify-between">
             <div className="flex items-center">
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center mr-3">
-                <i className={agentId === "direct-gpt4o" ? "ri-robot-line text-primary" : (agent?.icon || "ri-robot-line text-primary")}></i>
+                <i className={agentId === "direct-claude" ? "ri-robot-2-line text-primary" : (agent?.icon || "ri-robot-line text-primary")}></i>
               </div>
               <div>
-                <h2 className="text-base font-medium">{agentId === "direct-gpt4o" ? "GPT-4o Chat" : (agent?.name || "Agent Chat")}</h2>
+                <h2 className="text-base font-medium">{agentId === "direct-claude" ? "Claude Chat" : (agent?.name || "Agent Chat")}</h2>
                 <p className="text-xs text-gray-500">
-                  {agentId === "direct-gpt4o" 
-                    ? "Direct interaction with OpenAI's GPT-4o" 
+                  {agentId === "direct-claude" 
+                    ? `Using ${aiModelConfig.modelName === "claude-sonnet-4-5" ? "Sonnet (deep thinking)" : "Haiku (fast)"}` 
                     : agent?.role === "executive" 
                       ? "Chief Executive Agent" 
                       : agent?.role === "assistant" 
@@ -700,13 +698,13 @@ export default function AgentChat({ params }: AgentChatProps) {
                     window.location.href = `/chat/${selectedId}`;
                   }}
                 >
-                  <option value="direct-gpt4o">GPT-4o Direct</option>
+                  <option value="direct-claude">Claude Direct</option>
                   {agents.map(a => (
                     <option key={a.id} value={a.id}>{a.name}</option>
                   ))}
                 </select>
                 <div className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
-                  <i className={agentId === "direct-gpt4o" ? "ri-robot-line" : "ri-user-line"}></i>
+                  <i className={agentId === "direct-claude" ? "ri-robot-2-line" : "ri-user-line"}></i>
                 </div>
                 <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
                   <i className="ri-arrow-down-s-line"></i>
@@ -722,12 +720,12 @@ export default function AgentChat({ params }: AgentChatProps) {
                 <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
                   <Bot size={32} className="text-primary" />
                 </div>
-                {agentId === "direct-gpt4o" ? (
+                {agentId === "direct-claude" ? (
                   <>
-                    <h2 className="text-xl font-medium">Hello! I'm GPT-4o</h2>
+                    <h2 className="text-xl font-medium">Hello! I'm Claude</h2>
                     <p className="text-gray-500 max-w-md">
-                      I'm OpenAI's advanced AI assistant. You're using a direct connection to the OpenAI API.
-                      Ask me anything and I'll do my best to help you.
+                      I'm your AI assistant powered by Anthropic's Claude. Simple questions use Haiku for fast responses, 
+                      and complex tasks automatically escalate to Sonnet for deeper thinking.
                     </p>
                   </>
                 ) : (
@@ -756,13 +754,13 @@ export default function AgentChat({ params }: AgentChatProps) {
                   <div className="flex items-start">
                     {message.role !== "user" && (
                       <div className="w-9 h-9 flex-shrink-0 rounded-full bg-primary/20 mr-4 flex items-center justify-center">
-                        <i className={cn(`${agentId === "direct-gpt4o" ? "ri-robot-line" : (agent?.icon || "ri-robot-line")} text-primary`)}></i>
+                        <i className={cn(`${agentId === "direct-claude" ? "ri-robot-2-line" : (agent?.icon || "ri-robot-line")} text-primary`)}></i>
                       </div>
                     )}
                     
                     <div className="flex-1">
                       <div className="mb-1 text-xs font-medium text-gray-500">
-                        {message.role === "user" ? "You" : agentId === "direct-gpt4o" ? "GPT-4o" : (agent?.name || "Assistant")}
+                        {message.role === "user" ? "You" : agentId === "direct-claude" ? "Claude" : (agent?.name || "Assistant")}
                       </div>
                       <div className={cn(
                         "prose prose-sm max-w-none",
@@ -807,8 +805,8 @@ export default function AgentChat({ params }: AgentChatProps) {
                       }}
                       placeholder={activeConversationId !== "current" 
                         ? "Viewing past conversation... Return to current chat to send messages" 
-                        : agentId === "direct-gpt4o"
-                          ? "Message GPT-4o..."
+                        : agentId === "direct-claude"
+                          ? "Message Claude..."
                           : `Message ${agent?.name || "your agent"}...`}
                       disabled={isLoading || activeConversationId !== "current"}
                       className="border-0 rounded-none shadow-none focus-visible:ring-0 text-base py-6 min-h-[60px] max-h-[200px] resize-none pointer-events-auto"
@@ -834,20 +832,19 @@ export default function AgentChat({ params }: AgentChatProps) {
                 </div>
                 <div className="flex justify-between items-center mt-2">
                   <div className="flex items-center">
-                    {agentId === "direct-gpt4o" && (
+                    {agentId === "direct-claude" && (
                       <div className="relative mr-2">
                         <select 
                           className="text-xs border border-gray-200 rounded-md pl-6 pr-8 py-1 bg-white appearance-none shadow-sm focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer pointer-events-auto"
                           value={aiModelConfig.modelName}
                           onChange={(e) => {
                             const selectedModel = e.target.value as AIModelName;
-                            const provider: AIModelProvider = "openai";
+                            const provider: AIModelProvider = "anthropic";
                             setAIModelConfig({ provider, modelName: selectedModel });
                           }}
                         >
-                          <option value="gpt-4o">GPT-4o</option>
-                          <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                          <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                          <option value="claude-haiku-4-5">Haiku (Fast)</option>
+                          <option value="claude-sonnet-4-5">Sonnet (Deep Thinking)</option>
                         </select>
                         <div className="absolute left-1.5 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
                           <i className="ri-ai-generate text-xs"></i>
@@ -859,8 +856,8 @@ export default function AgentChat({ params }: AgentChatProps) {
                     )}
                   </div>
                   <p className="text-xs text-gray-500 flex-1 text-center">
-                    {agentId === "direct-gpt4o" 
-                      ? `Using OpenAI's ${aiModelConfig.modelName} model - direct API connection`
+                    {agentId === "direct-claude" 
+                      ? `Using Claude ${aiModelConfig.modelName === "claude-sonnet-4-5" ? "Sonnet - deep thinking mode" : "Haiku - fast responses"}`
                       : `${agent?.name || "The agent"} helps with ${agent?.role || "tasks"} based on current knowledge`}
                   </p>
                 </div>

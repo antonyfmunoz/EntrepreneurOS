@@ -1,7 +1,9 @@
-import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 
-// the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "sk-demo-key" });
+const anthropic = new Anthropic({
+  apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
+  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+});
 
 export type AgentBrain = {
   instructions: string;
@@ -16,24 +18,30 @@ export async function generateAgentResponse(
   history: { role: string; content: string }[]
 ): Promise<string> {
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: `You are ${brain.name}, an AI assistant with the role of ${brain.role}. 
+    const systemContent = `You are ${brain.name}, an AI assistant with the role of ${brain.role}. 
           ${brain.instructions}
           ${brain.knowledgeBase ? `Use this knowledge base: ${brain.knowledgeBase}` : ""}
-          Respond in a helpful, concise, and professional manner. Focus on your specific role.`,
-        },
-        ...history,
-        { role: "user", content: message },
-      ],
+          Respond in a helpful, concise, and professional manner. Focus on your specific role.`;
+
+    const anthropicMessages = [
+      ...history.filter(m => m.role !== "system").map(m => ({
+        role: (m.role === "user" ? "user" : "assistant") as "user" | "assistant",
+        content: m.content,
+      })),
+      { role: "user" as const, content: message },
+    ];
+
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 8192,
+      system: systemContent,
+      messages: anthropicMessages,
     });
 
-    return response.choices[0].message.content || "I'm sorry, I couldn't generate a response.";
+    const firstBlock = response.content[0];
+    return firstBlock.type === "text" ? firstBlock.text : "I'm sorry, I couldn't generate a response.";
   } catch (error) {
-    console.error("Error generating response from OpenAI:", error);
+    console.error("Error generating response from Claude:", error);
     return "I'm having trouble connecting to my knowledge base. Please try again in a moment.";
   }
 }
@@ -43,12 +51,10 @@ export async function generateTaskSuggestion(
   currentTasks: { title: string; description: string; status: string }[]
 ): Promise<{ title: string; description: string } | null> {
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: `You are ${agentBrain.name}, an AI assistant with the role of ${agentBrain.role}.
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 8192,
+      system: `You are ${agentBrain.name}, an AI assistant with the role of ${agentBrain.role}.
           Based on your role and the current tasks, suggest a new task that would be valuable to work on.
           Current tasks: ${JSON.stringify(currentTasks)}
           
@@ -57,12 +63,13 @@ export async function generateTaskSuggestion(
             "title": "Task title - keep it short and specific",
             "description": "Brief description of what needs to be done and why it's important"
           }`,
-        },
+      messages: [
+        { role: "user", content: "Suggest a new task based on current priorities." }
       ],
-      response_format: { type: "json_object" },
     });
 
-    const content = response.choices[0].message.content;
+    const firstBlock = response.content[0];
+    const content = firstBlock.type === "text" ? firstBlock.text : null;
     if (!content) return null;
     
     return JSON.parse(content);
