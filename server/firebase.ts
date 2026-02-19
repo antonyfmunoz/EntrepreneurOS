@@ -22,10 +22,16 @@ export function initializeFirebaseAdmin() {
 
     if (serviceAccountKey) {
       try {
-        const serviceAccount = JSON.parse(serviceAccountKey) as ServiceAccount;
+        const serviceAccount = JSON.parse(serviceAccountKey);
+        if (serviceAccount.project_id) {
+          serviceAccount.project_id = serviceAccount.project_id.trim();
+        }
+        if (serviceAccount.client_email) {
+          serviceAccount.client_email = serviceAccount.client_email.trim();
+        }
         initializeApp({
-          credential: cert(serviceAccount),
-          projectId,
+          credential: cert(serviceAccount as ServiceAccount),
+          projectId: projectId.trim(),
         });
         firebaseInitialized = true;
         console.log('Firebase Admin SDK initialized with service account');
@@ -41,11 +47,11 @@ export function initializeFirebaseAdmin() {
     if (clientEmail && privateKey) {
       initializeApp({
         credential: cert({
-          projectId,
-          clientEmail,
+          projectId: projectId.trim(),
+          clientEmail: clientEmail.trim(),
           privateKey: privateKey.replace(/\\n/g, '\n'),
         }),
-        projectId,
+        projectId: projectId.trim(),
       });
       firebaseInitialized = true;
       console.log('Firebase Admin SDK initialized with individual credentials');
