@@ -270,29 +270,18 @@ export class DatabaseStorage implements IStorage {
     // Create a demo user if no users exist
     if (existingUsers.length === 0) {
       try {
-        // Import crypto modules with import syntax
-        import('crypto').then(async (crypto) => {
-          const { scrypt, randomBytes, timingSafeEqual } = crypto;
-          import('util').then(async (util) => {
-            const { promisify } = util;
-            const scryptAsync = promisify(scrypt);
-            
-            // Create a simple hashed password (avoiding the hash function to simplify)
-            // In this case we're creating a basic hash with a fixed salt for the demo account
-            const password = "5b722b307fce6c944905d132691d5e4a2214b7fe92b738920eb3fcf3b7acfbc0.a978eacc4f3807640126cb17b0d31ad7";
-            
-            // Create a demo user with simple credentials
-            await this.createUser({
-              username: "demo",
-              password,
-              email: "demo@example.com",
-              fullName: "Demo User",
-              role: "admin"
-            });
-            
-            console.log("Created demo user: username 'demo', password 'password'");
-          });
+        const { hashPassword } = await import('./auth');
+        const password = await hashPassword("password");
+
+        await this.createUser({
+          username: "demo",
+          password,
+          email: "demo@example.com",
+          fullName: "Demo User",
+          role: "admin"
         });
+
+        console.log("Created demo user: username 'demo', password 'password'");
       } catch (error) {
         console.error("Error creating demo user:", error);
       }
