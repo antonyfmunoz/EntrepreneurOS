@@ -5,16 +5,15 @@ async function updateNotificationsTable() {
   console.log('Starting notifications table update...');
   
   try {
-    // First check if the table exists
     let tableExists = false;
     let count = 0;
     
     try {
-      const checkTable = await client.query("SELECT to_regclass('notifications') IS NOT NULL as exists");
+      const checkTable = await db.execute(sql`SELECT to_regclass('notifications') IS NOT NULL as exists`);
       tableExists = checkTable.rows[0].exists;
       
       if (tableExists) {
-        const countResult = await client.query('SELECT COUNT(*) as count FROM notifications');
+        const countResult = await db.execute(sql`SELECT COUNT(*) as count FROM notifications`);
         count = parseInt(countResult.rows[0].count);
         console.log(`Table exists with ${count} rows`);
       }
@@ -23,25 +22,22 @@ async function updateNotificationsTable() {
       tableExists = false;
     }
     
-    // If table exists and has data, create a backup
     if (tableExists && count > 0) {
       console.log(`Found ${count} notifications. Creating backup before modifying the table.`);
       try {
-        await client.query('CREATE TABLE IF NOT EXISTS notifications_backup AS SELECT * FROM notifications');
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS notifications_backup AS SELECT * FROM notifications`);
         console.log('✓ Created notifications_backup table');
       } catch (err) {
         console.error('Failed to create backup:', err.message);
       }
     }
     
-    // Drop and recreate the table with the correct structure
     if (tableExists) {
-      await client.query('DROP TABLE IF EXISTS notifications CASCADE');
+      await db.execute(sql`DROP TABLE IF EXISTS notifications CASCADE`);
       console.log('✓ Dropped old notifications table');
     }
     
-    // Create the notifications table with the correct structure
-    await client.query(`
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "notifications" (
         "id" text PRIMARY KEY,
         "user_id" text REFERENCES "users"("id"),
@@ -57,10 +53,9 @@ async function updateNotificationsTable() {
     `);
     console.log('✓ Created notifications table with correct structure');
     
-    // If we had data, try to restore it with the new structure
     if (tableExists && count > 0) {
       try {
-        await client.query(`
+        await db.execute(sql`
           INSERT INTO notifications (id, user_id, title, content, type, read, href, created_at)
           SELECT id, user_id, title, message, COALESCE(type, 'general'), read, link, created_at 
           FROM notifications_backup
@@ -75,12 +70,10 @@ async function updateNotificationsTable() {
   } catch (error) {
     console.error('Error updating notifications table:', error.message);
   } finally {
-    // Close the connection
     await client.end();
   }
 }
 
-// Run the script
 updateNotificationsTable()
   .then(() => {
     console.log('Notifications table update completed');
