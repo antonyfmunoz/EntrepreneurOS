@@ -3,9 +3,12 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { generateAgentResponse, generateTaskSuggestion } from "./openai";
-import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const anthropic = new Anthropic({
+  apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
+  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+});
 import { z } from "zod";
 import { 
   insertAgentSchema, 
@@ -61,11 +64,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/ai/provider-status", (_req, res) => {
     try {
       const providerStatus = {
-        openai: process.env.OPENAI_API_KEY ? true : false,
-        anthropic: process.env.ANTHROPIC_API_KEY ? true : false,
-        perplexity: process.env.PERPLEXITY_API_KEY ? true : false,
-        xai: process.env.XAI_API_KEY ? true : false,
-        gemini: process.env.GEMINI_API_KEY ? true : false
+        anthropic: !!(process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY && process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL),
+        openai: !!process.env.OPENAI_API_KEY,
+        perplexity: !!process.env.PERPLEXITY_API_KEY,
+        xai: !!process.env.XAI_API_KEY,
+        gemini: !!process.env.GEMINI_API_KEY
       };
       
       res.json({ providerStatus });
@@ -165,16 +168,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const agentId = req.params.id;
       
-      // Special case for direct-gpt4o virtual agent
-      if (agentId === "direct-gpt4o") {
-        // Return a virtual agent for direct GPT-4o chat
+      if (agentId === "direct-claude" || agentId === "direct-gpt4o") {
         return res.json({
-          id: "direct-gpt4o",
-          name: "GPT-4o Direct Chat",
+          id: "direct-claude",
+          name: "Claude Direct Chat",
           role: "AI Assistant",
-          icon: "ri-openai-fill",
-          instructions: "You are GPT-4o, a large language model trained by OpenAI. Answer as concisely as possible.",
-          color: "#10a37f", // OpenAI brand color
+          icon: "ri-robot-2-line",
+          instructions: "You are Claude, an AI assistant. Answer helpfully, concisely, and professionally.",
+          color: "#7C3AED",
           createdAt: new Date().toISOString(),
           tasks: []
         });
@@ -245,9 +246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/agents/:id/messages", async (req, res) => {
     const agentId = req.params.id;
     
-    // Special case for direct-gpt4o virtual agent - let it use database storage for messages
-    // but handle initial state with empty array
-    if (agentId === "direct-gpt4o") {
+    if (agentId === "direct-claude" || agentId === "direct-gpt4o") {
       const messages = await storage.getAgentMessages(agentId);
       
       // If the agent exists in database, return its messages
@@ -285,19 +284,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const agentId = req.params.id;
       
-      // Special case for direct-gpt4o virtual agent
-      if (agentId === "direct-gpt4o") {
-        // Create a virtual agent for direct GPT-4o chat
-        const virtualGpt4oAgent = {
-          id: "direct-gpt4o",
-          name: "GPT-4o Direct Chat",
+      if (agentId === "direct-claude") {
+        const virtualClaudeAgent = {
+          id: "direct-claude",
+          name: "Claude Direct Chat",
           role: "AI Assistant",
-          icon: "ri-openai-fill",
-          instructions: "You are GPT-4o, a large language model trained by OpenAI. Answer as concisely as possible.",
+          icon: "ri-robot-2-line",
+          instructions: "You are Claude, an AI assistant made by Anthropic. Answer helpfully, concisely, and professionally.",
           brainContent: "",
         };
         
-        // Add user message to storage
         await storage.addAgentMessage({
           agentId: agentId,
           role: "user",
@@ -305,30 +301,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           timestamp: new Date().toISOString(),
         });
         
-        // Use the LLM API directly with the provided model
-        const selectedModel = aiConfig?.modelName || "gpt-4o";
+        const selectedModel = aiConfig?.modelName || "claude-haiku-4-5";
         
         try {
-          // Call OpenAI directly
-          const response = await openai.chat.completions.create({
+          const response = await anthropic.messages.create({
             model: selectedModel,
+            max_tokens: 8192,
+            system: virtualClaudeAgent.instructions,
             messages: [
-              {
-                role: "system",
-                content: virtualGpt4oAgent.instructions
-              },
               {
                 role: "user",
                 content: message
               }
             ],
             temperature: 0.2,
-            max_tokens: 1000,
           });
           
-          const reply = response.choices[0].message.content;
+          const firstBlock = response.content[0];
+          const reply = firstBlock.type === "text" ? firstBlock.text : "";
           
-          // Add AI response to storage
           const aiMessage = await storage.addAgentMessage({
             agentId: agentId,
             role: "assistant",
@@ -338,8 +329,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           return res.json({ reply, messageId: aiMessage.id });
         } catch (error) {
-          console.error("Error in direct GPT-4o mode:", error);
-          throw error; // Rethrow to be caught by the outer catch block
+          console.error("Error in direct Claude mode:", error);
+          throw error;
         }
       }
       
@@ -478,9 +469,7 @@ Only propose actions when the user explicitly asks you to do something actionabl
   app.get("/api/agents/:id/tasks", async (req, res) => {
     const agentId = req.params.id;
     
-    // Special case for direct-gpt4o virtual agent
-    if (agentId === "direct-gpt4o") {
-      // Return empty tasks array for the virtual agent
+    if (agentId === "direct-claude" || agentId === "direct-gpt4o") {
       return res.json([]);
     }
     
@@ -943,14 +932,13 @@ Only propose actions when the user explicitly asks you to do something actionabl
       if (aiConfig) {
         response = await generateAIResponse(collaborationMessages, aiConfig);
       } else {
-        // Use the highest-capability model available
         const availableProviders = getAvailableProviders();
-        let provider: AIModelProvider = "openai";
-        let modelName: AIModelName = "gpt-4o";
+        let provider: AIModelProvider = "anthropic";
+        let modelName: AIModelName = "claude-sonnet-4-5";
         
         if (availableProviders.includes("anthropic")) {
           provider = "anthropic";
-          modelName = "claude-3-7-sonnet-20250219";
+          modelName = "claude-sonnet-4-5";
         } else if (availableProviders.includes("openai")) {
           provider = "openai";
           modelName = "gpt-4o";
@@ -2130,7 +2118,6 @@ Only propose actions when the user explicitly asks you to do something actionabl
     }
   });
 
-  // Generic LLM Chat API endpoint
   app.post("/api/llm/chat", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -2143,31 +2130,26 @@ Only propose actions when the user explicitly asks you to do something actionabl
         return res.status(400).json({ message: "Prompt is required" });
       }
       
-      // Allow selecting from available models, with fallback to gpt-4o
-      const modelToUse = model && ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"].includes(model) 
+      const modelToUse = model && ["claude-haiku-4-5", "claude-sonnet-4-5"].includes(model) 
         ? model 
-        : "gpt-4o";
+        : "claude-haiku-4-5";
         
-      // Use the OpenAI instance we created at the top of the file
-      const response = await openai.chat.completions.create({
+      const response = await anthropic.messages.create({
         model: modelToUse,
+        max_tokens: 8192,
+        system: systemMessage || "You are an autonomous business agent designed to help build and manage businesses.",
         messages: [
-          {
-            role: "system",
-            content: systemMessage || "You are an autonomous business agent designed to help build and manage businesses."
-          },
           {
             role: "user",
             content: prompt
           }
         ],
         temperature: 0.2,
-        max_tokens: 1000,
       });
       
-      const content = response.choices[0].message.content;
+      const firstBlock = response.content[0];
+      const content = firstBlock.type === "text" ? firstBlock.text : "";
       
-      // Log the conversation in the AI messages table if it exists
       if (req.user.id) {
         try {
           await storage.addAiMessage({
@@ -2186,7 +2168,6 @@ Only propose actions when the user explicitly asks you to do something actionabl
           });
         } catch (logError) {
           console.warn("Failed to log AI conversation:", logError);
-          // Continue even if logging fails
         }
       }
       
@@ -2194,35 +2175,24 @@ Only propose actions when the user explicitly asks you to do something actionabl
     } catch (error) {
       console.error("Error calling LLM API:", error);
       
-      // Check for specific OpenAI errors
       let statusCode = 500;
       let errorMessage = "Failed to call LLM API";
       let errorCode = 'unknown_error';
       
-      // Extract error properties safely with type checking
       const errorObj = error as any;
       
       if (errorObj && typeof errorObj === 'object') {
-        // Check for quota errors
-        if (errorObj.code === 'insufficient_quota' || 
-            (errorObj.message && typeof errorObj.message === 'string' && errorObj.message.includes('quota'))) {
-          statusCode = 429;
-          errorMessage = "OpenAI API quota exceeded. Please update your billing details or try a different model.";
-          errorCode = 'insufficient_quota';
-        } 
-        // Check for rate limit errors
-        else if (errorObj.status === 429 || 
-                (errorObj.message && typeof errorObj.message === 'string' && errorObj.message.includes('rate limit'))) {
+        if (errorObj.status === 429 || 
+            (errorObj.message && typeof errorObj.message === 'string' && errorObj.message.includes('rate limit'))) {
           statusCode = 429;
           errorMessage = "Rate limit exceeded. Please try again later.";
           errorCode = 'rate_limit_exceeded';
         } 
-        // Check for authentication errors
         else if (errorObj.status === 401 || 
                 (errorObj.message && typeof errorObj.message === 'string' && errorObj.message.includes('API key'))) {
           statusCode = 401;
-          errorMessage = "Invalid API key. Please check your OpenAI API key.";
-          errorCode = 'invalid_api_key';
+          errorMessage = "AI service configuration issue. Please contact support.";
+          errorCode = 'configuration_error';
         }
       }
       

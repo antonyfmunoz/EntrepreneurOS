@@ -5,8 +5,8 @@ export type AIModelName =
   | "gpt-4o" 
   | "gpt-4-turbo" 
   | "gpt-3.5-turbo"
-  | "claude-3-7-sonnet-20250219"
-  | "claude-3-opus-20240229"
+  | "claude-haiku-4-5"
+  | "claude-sonnet-4-5"
   | "llama-3.1-sonar-small-128k-online"
   | "llama-3.1-sonar-large-128k-online"
   | "grok-2-1212"
@@ -32,7 +32,6 @@ export interface AIModelInfo {
   isAvailable: boolean;
 }
 
-// Hook to fetch available AI models and providers
 export function useAIModels() {
   const { data, isLoading, error } = useQuery<{providers: AIModelInfo[]}>({
     queryKey: ["/api/ai/models"],
@@ -43,7 +42,6 @@ export function useAIModels() {
       }
       return await response.json();
     },
-    // Don't refetch on window focus to avoid unnecessary API calls
     refetchOnWindowFocus: false,
   });
 

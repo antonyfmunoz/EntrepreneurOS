@@ -29,8 +29,8 @@ interface AIModelSelectorProps {
 
 export function AIModelSelector({ 
   onSelectModel,
-  defaultProvider = "openai",
-  defaultModel = "gpt-4o"
+  defaultProvider = "anthropic",
+  defaultModel = "claude-haiku-4-5"
 }: AIModelSelectorProps) {
   const { models, isLoading } = useAIModels();
   const { providerStatus } = useAIApiKeyStatus();
