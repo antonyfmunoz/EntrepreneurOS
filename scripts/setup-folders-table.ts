@@ -1,5 +1,6 @@
 import { db } from "../server/db";
 import { folders } from "../shared/schema";
+import { sql } from "drizzle-orm";
 
 /**
  * Creates the folder table if it doesn't exist
@@ -9,7 +10,7 @@ async function createFoldersTable() {
     console.log("Setting up folders table...");
 
     // Create the folders table
-    await db.execute(`
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS folders (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -21,7 +22,7 @@ async function createFoldersTable() {
     `);
 
     // Add the folder_id column to the documents table if it doesn't exist
-    await db.execute(`
+    await db.execute(sql`
       ALTER TABLE documents 
       ADD COLUMN IF NOT EXISTS folder_id TEXT REFERENCES folders(id);
     `);
