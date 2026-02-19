@@ -4,6 +4,7 @@ import { Header } from "./header";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { PanelLeftClose, PanelLeftOpen, Menu } from "lucide-react";
 
 type LayoutProps = {
   children: ReactNode;
@@ -14,7 +15,6 @@ export function Layout({ children, title }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const isMobile = useIsMobile();
   
-  // Auto-close sidebar on mobile
   useEffect(() => {
     if (isMobile) {
       setIsSidebarOpen(false);
@@ -25,38 +25,58 @@ export function Layout({ children, title }: LayoutProps) {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* Sidebar with transition */}
-      <div 
-        className={cn(
-          "fixed md:static inset-y-0 left-0 z-20 transform transition-transform duration-300 ease-in-out bg-white",
-          isSidebarOpen ? "translate-x-0" : "-translate-x-full md:-translate-x-64",
-          "md:translate-x-0 md:w-64 md:flex"
-        )}
-      >
-        <Sidebar />
-      </div>
-      
-      {/* Overlay for mobile */}
-      {isSidebarOpen && isMobile && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-10"
-          onClick={() => setIsSidebarOpen(false)}
-        />
+      {isMobile ? (
+        <>
+          <div
+            className={cn(
+              "fixed inset-y-0 left-0 z-30 w-64 transform transition-transform duration-300 ease-in-out bg-white shadow-lg",
+              isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+            )}
+          >
+            <Sidebar collapsed={false} />
+          </div>
+          {isSidebarOpen && (
+            <div
+              className="fixed inset-0 bg-black/50 z-20"
+              onClick={() => setIsSidebarOpen(false)}
+            />
+          )}
+        </>
+      ) : (
+        <div
+          className={cn(
+            "relative flex-shrink-0 transition-all duration-300 ease-in-out border-r border-gray-200 bg-white",
+            isSidebarOpen ? "w-64" : "w-0"
+          )}
+        >
+          <div className={cn(
+            "h-full w-64 overflow-hidden transition-opacity duration-200",
+            isSidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+          )}>
+            <Sidebar collapsed={false} />
+          </div>
+        </div>
       )}
-      
-      {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Header title={title}>
-          <Button 
-            variant="ghost" 
-            size="icon" 
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className="mr-2 hover:bg-blue-100"
+            title={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
           >
-            <i className="ri-menu-line text-black text-xl hover:text-blue-600"></i>
+            {isMobile ? (
+              <Menu className="h-5 w-5 text-gray-700" />
+            ) : isSidebarOpen ? (
+              <PanelLeftClose className="h-5 w-5 text-gray-700" />
+            ) : (
+              <PanelLeftOpen className="h-5 w-5 text-gray-700" />
+            )}
           </Button>
         </Header>
-        
+
         <main className="flex-1 overflow-auto p-6">
           {children}
         </main>
