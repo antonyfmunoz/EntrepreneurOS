@@ -4,7 +4,6 @@ import { CreateAgentModal } from "./create-agent-modal";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
-import appLogo from "@assets/2_1771536495596.png";
 
 type Agent = {
   id: string;
@@ -59,7 +58,7 @@ export function Sidebar() {
         <div className="p-4 border-b border-gray-200">
           <Link href="/">
             <div className="flex items-center space-x-2 cursor-pointer hover:text-primary transition-colors">
-              <img src={appLogo} alt="AgentOS" className="w-8 h-8 rounded" />
+              <i className="ri-cpu-line text-primary text-2xl"></i>
               <h1 className="text-xl font-bold text-gray-800 hover:text-primary">AgentOS</h1>
             </div>
             <p className="text-xs text-gray-500 mt-1">AI Operating System for Business</p>
