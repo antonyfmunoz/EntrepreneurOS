@@ -283,7 +283,7 @@ export default function AuthPage() {
   const isRegisterPending = isFirebaseReady ? firebaseRegisterMutation.isPending : registerMutation.isPending;
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-white">
       <div className="flex flex-col justify-center items-center w-full lg:w-1/2 px-6 py-12">
         <div className="max-w-md w-full space-y-8">
           <div className="text-center">
