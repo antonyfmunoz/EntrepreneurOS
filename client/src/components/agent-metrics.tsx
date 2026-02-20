@@ -65,8 +65,8 @@ export function AgentMetrics({ agentId }: { agentId: string }) {
       label: "Time Saved",
       value: `${totals.timeSaved}m`,
       icon: Clock,
-      color: "text-purple-500",
-      bgColor: "bg-purple-50",
+      color: "text-[#5e17eb]",
+      bgColor: "bg-[#5e17eb]/10",
     },
   ];
 
