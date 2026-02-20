@@ -4,8 +4,8 @@
   "description": "AI Operating System for Business",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#5e17eb",
-  "theme_color": "#5e17eb",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
   "icons": [
     {
       "src": "/icon-192.png",
