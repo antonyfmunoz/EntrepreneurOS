@@ -544,7 +544,7 @@ export default function AuthPage() {
         </div>
       </div>
 
-      <div className="hidden lg:block w-1/2 bg-gradient-to-br from-violet-500 to-indigo-700">
+      <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-[#5e17eb] to-[#4311b3]">
         <div className="flex flex-col justify-center items-center h-full p-12 text-white">
           <h2 className="text-4xl font-bold mb-6">
             The AI Operating System for Business
