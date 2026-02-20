@@ -148,7 +148,7 @@ function getStatusBadge(status: Contact["status"]) {
 function getDealStageBadge(stage: Deal["stage"]) {
   const colors = {
     discovery: "bg-blue-100 text-blue-800",
-    proposal: "bg-purple-100 text-purple-800",
+    proposal: "bg-[#5e17eb]/10 text-[#5e17eb]",
     negotiation: "bg-yellow-100 text-yellow-800",
     "closed-won": "bg-green-100 text-green-800",
     "closed-lost": "bg-red-100 text-red-800",

@@ -83,14 +83,14 @@ export default function TutorialsPage() {
                 <TutorialCard
                   title="Programming Agents"
                   description="Configure sophisticated agents capable of writing and reviewing code."
-                  icon={<Code className="h-5 w-5 text-purple-500" />}
+                  icon={<Code className="h-5 w-5 text-[#5e17eb]" />}
                   duration="25 minutes"
                   level="Advanced"
                 />
                 <TutorialCard
                   title="Agent Collaboration"
                   description="Learn how to set up multiple agents that work together on complex tasks."
-                  icon={<Code className="h-5 w-5 text-purple-500" />}
+                  icon={<Code className="h-5 w-5 text-[#5e17eb]" />}
                   duration="30 minutes"
                   level="Advanced"
                 />
@@ -109,7 +109,7 @@ export default function TutorialsPage() {
                 <TutorialCard
                   title="Zapier & n8n Integration"
                   description="Automate workflows between your agents and other tools."
-                  icon={<Code className="h-5 w-5 text-purple-500" />}
+                  icon={<Code className="h-5 w-5 text-[#5e17eb]" />}
                   duration="20 minutes"
                   level="Intermediate"
                 />
@@ -123,7 +123,7 @@ export default function TutorialsPage() {
                 <TutorialCard
                   title="Custom API Integrations"
                   description="Build custom integrations with any API or service."
-                  icon={<Code className="h-5 w-5 text-purple-500" />}
+                  icon={<Code className="h-5 w-5 text-[#5e17eb]" />}
                   duration="35 minutes"
                   level="Advanced"
                 />
@@ -135,14 +135,14 @@ export default function TutorialsPage() {
                 <TutorialCard
                   title="Creating Agent Teams"
                   description="Build hierarchical teams of agents that work together on complex projects."
-                  icon={<Code className="h-5 w-5 text-purple-500" />}
+                  icon={<Code className="h-5 w-5 text-[#5e17eb]" />}
                   duration="40 minutes"
                   level="Advanced"
                 />
                 <TutorialCard
                   title="Custom Agent Training"
                   description="Learn how to fine-tune your agents for specific business domains."
-                  icon={<Code className="h-5 w-5 text-purple-500" />}
+                  icon={<Code className="h-5 w-5 text-[#5e17eb]" />}
                   duration="45 minutes"
                   level="Advanced"
                 />
@@ -190,7 +190,7 @@ function TutorialCard({ title, description, icon, duration, level }: TutorialCar
             text-xs font-medium rounded-full px-2 py-1
             ${level === "Beginner" ? "bg-blue-100 text-blue-800" : 
               level === "Intermediate" ? "bg-amber-100 text-amber-800" : 
-              "bg-purple-100 text-purple-800"}
+              "bg-[#5e17eb]/10 text-[#5e17eb]"}
           `}>
             {level}
           </div>

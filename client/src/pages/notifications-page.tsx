@@ -175,7 +175,7 @@ function NotificationCard({ notification, onMarkAsRead, onDeleteNotification }: 
       case "agent-created":
         return "text-green-500 bg-green-500/10";
       case "message-received":
-        return "text-purple-500 bg-purple-500/10";
+        return "text-[#5e17eb] bg-[#5e17eb]/10";
       case "system":
         return "text-gray-500 bg-gray-500/10";
       default:

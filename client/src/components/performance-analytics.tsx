@@ -280,8 +280,8 @@ export function PerformanceAnalytics() {
                 <p className="text-sm text-muted-foreground">Tasks Per Agent</p>
                 <h3 className="text-2xl font-bold">{data.overallStats.averageTasksPerAgent.toFixed(1)}</h3>
               </div>
-              <div className="p-2 bg-purple-100 rounded-full">
-                <i className="ri-stack-line text-purple-600 text-xl"></i>
+              <div className="p-2 bg-[#5e17eb]/10 rounded-full">
+                <i className="ri-stack-line text-[#5e17eb] text-xl"></i>
               </div>
             </div>
           </CardContent>
@@ -427,7 +427,7 @@ export function PerformanceAnalytics() {
                           cy="50%"
                           labelLine={false}
                           outerRadius={70}
-                          fill="#8884d8"
+                          fill="#5e17eb"
                           dataKey="value"
                           nameKey="name"
                           label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
@@ -450,7 +450,7 @@ export function PerformanceAnalytics() {
                           cy="50%"
                           labelLine={false}
                           outerRadius={70}
-                          fill="#8884d8"
+                          fill="#5e17eb"
                           dataKey="value"
                           nameKey="name"
                           label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
@@ -476,7 +476,7 @@ export function PerformanceAnalytics() {
                       cy="50%"
                       labelLine={false}
                       outerRadius={80}
-                      fill="#8884d8"
+                      fill="#5e17eb"
                       dataKey="value"
                       nameKey="name"
                       label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
@@ -517,7 +517,7 @@ export function PerformanceAnalytics() {
                     cy="50%"
                     labelLine={false}
                     outerRadius={80}
-                    fill="#8884d8"
+                    fill="#5e17eb"
                     dataKey="value"
                     nameKey="name"
                     label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
@@ -557,7 +557,7 @@ export function PerformanceAnalytics() {
                     cy="50%"
                     labelLine={false}
                     outerRadius={80}
-                    fill="#8884d8"
+                    fill="#5e17eb"
                     dataKey="value"
                     nameKey="name"
                     label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
@@ -765,7 +765,7 @@ export function PerformanceAnalytics() {
                           <span className="text-lg font-medium">
                             {agent.totalTasks}
                           </span>
-                          <div className="ml-2 px-2 py-1 rounded-full bg-purple-100 text-purple-700 text-xs">
+                          <div className="ml-2 px-2 py-1 rounded-full bg-[#5e17eb]/10 text-[#5e17eb] text-xs">
                             Workload
                           </div>
                         </div>
