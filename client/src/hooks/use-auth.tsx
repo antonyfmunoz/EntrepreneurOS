@@ -209,7 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     },
     onSuccess: () => {
-      toast({ title: "Account created", description: "Welcome to AgentOS!" });
+      toast({ title: "Account created", description: "Welcome to EntrepreneurOS!" });
     },
     onError: (error: Error) => {
       toast({ title: "Registration failed", description: error.message, variant: "destructive" });
@@ -227,7 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: (userData: UserWithoutPassword) => {
       queryClient.setQueryData(["/api/user"], userData);
-      toast({ title: "Registration successful", description: `Welcome to AgentOS, ${userData.username}!` });
+      toast({ title: "Registration successful", description: `Welcome to EntrepreneurOS, ${userData.username}!` });
     },
     onError: (error: Error) => {
       toast({ title: "Registration failed", description: error.message, variant: "destructive" });

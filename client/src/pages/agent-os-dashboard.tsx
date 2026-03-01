@@ -173,7 +173,7 @@ export default function AgentOSDashboard() {
                    sendMessageMutation.isPending;
 
   return (
-    <Layout title="AgentOS Dashboard">
+    <Layout title="EntrepreneurOS Dashboard">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-2">
         {/* Sidebar */}
         <div className="col-span-1 bg-card p-4 rounded-lg">
@@ -289,7 +289,7 @@ export default function AgentOSDashboard() {
               </div>
               <h2 className="text-xl font-medium">Select or create an agent to begin</h2>
               <p className="text-muted-foreground max-w-md">
-                Choose an agent from the sidebar or create a new one to start interacting with the AgentOS platform.
+                Choose an agent from the sidebar or create a new one to start interacting with the EntrepreneurOS platform.
               </p>
               <Button onClick={handleAgentCreate} className="mt-4">Create Your First Agent</Button>
             </div>

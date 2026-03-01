@@ -288,7 +288,7 @@ export default function AuthPage() {
         <div className="max-w-md w-full space-y-8">
           <div className="text-center">
             <h1 className="text-4xl font-bold tracking-tight mb-2 bg-gradient-to-r from-violet-500 to-indigo-600 bg-clip-text text-transparent">
-              AgentOS
+              EntrepreneurOS
             </h1>
             <p className="text-gray-500 dark:text-gray-400 mb-8">
               Your AI Operating System for Business
@@ -412,7 +412,7 @@ export default function AuthPage() {
                 <CardHeader>
                   <CardTitle>Create a new account</CardTitle>
                   <CardDescription>
-                    Enter your details to create your AgentOS workspace
+                    Enter your details to create your EntrepreneurOS workspace
                   </CardDescription>
                 </CardHeader>
                 <CardContent>

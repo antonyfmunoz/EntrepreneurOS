@@ -20,7 +20,7 @@ export default function TutorialsPage() {
           
           <h1 className="text-2xl font-bold mb-2">Tutorials & Learning Resources</h1>
           <p className="text-muted-foreground mb-6">
-            Learn how to get the most out of AgentOS with these helpful resources.
+            Learn how to get the most out of EntrepreneurOS with these helpful resources.
           </p>
           
           <Tabs defaultValue="getting-started" className="mb-8">
@@ -34,7 +34,7 @@ export default function TutorialsPage() {
             <TabsContent value="getting-started">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <TutorialCard
-                  title="Welcome to AgentOS"
+                  title="Welcome to EntrepreneurOS"
                   description="An introduction to the platform and its core capabilities."
                   icon={<FileText className="h-5 w-5 text-blue-500" />}
                   duration="5 minutes"
@@ -49,7 +49,7 @@ export default function TutorialsPage() {
                 />
                 <TutorialCard
                   title="Understanding the Dashboard"
-                  description="Navigate and use all the features of the AgentOS dashboard."
+                  description="Navigate and use all the features of the EntrepreneurOS dashboard."
                   icon={<FileText className="h-5 w-5 text-blue-500" />}
                   duration="8 minutes"
                   level="Beginner"

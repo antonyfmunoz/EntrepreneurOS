@@ -63,7 +63,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
           <Link href="/">
             <div className="flex items-center space-x-2 cursor-pointer hover:text-primary transition-colors">
               <i className="ri-cpu-line text-primary text-2xl"></i>
-              <h1 className="text-xl font-bold text-gray-800 hover:text-primary">AgentOS</h1>
+              <h1 className="text-xl font-bold text-gray-800 hover:text-primary">EntrepreneurOS</h1>
             </div>
             <p className="text-xs text-gray-500 mt-1">AI Operating System for Business</p>
           </Link>
