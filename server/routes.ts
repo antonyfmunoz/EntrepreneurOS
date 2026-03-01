@@ -1445,7 +1445,7 @@ Only propose actions when the user explicitly asks you to do something actionabl
       // the user is visiting the site and has no notifications.
       // We'll add a special filter to avoid adding welcome notifications repeatedly
       const hasWelcomeNotification = existingNotifications.some(n => 
-        n.type === "system" && n.title === "Welcome to AgentOS"
+        n.type === "system" && n.title === "Welcome to EntrepreneurOS"
       );
       
       const user = await storage.getUser(req.user.id);
@@ -1459,7 +1459,7 @@ Only propose actions when the user explicitly asks you to do something actionabl
       if (existingNotifications.length === 0 && !hasWelcomeNotification && !hasSeenWelcome) {
         await storage.createNotification({
           userId: req.user.id,
-          title: "Welcome to AgentOS",
+          title: "Welcome to EntrepreneurOS",
           content: "Your notification system is now active. You'll receive updates here as agents complete tasks and integrations are connected.",
           type: "system",
           read: false
@@ -1622,7 +1622,7 @@ Only propose actions when the user explicitly asks you to do something actionabl
       // Usually this would involve an actual AI service call
       const assistantMessage = await storage.addAiMessage({
         role: "assistant",
-        content: "I'm your AI assistant. I can help answer questions about the AgentOS platform and your agents. How can I assist you today?",
+        content: "I'm your AI assistant. I can help answer questions about the EntrepreneurOS platform and your agents. How can I assist you today?",
         userId: req.user.id
       });
       

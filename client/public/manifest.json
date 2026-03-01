@@ -1,6 +1,6 @@
 {
-  "name": "AgentOS",
-  "short_name": "AgentOS",
+  "name": "EntrepreneurOS",
+  "short_name": "EntrepreneurOS",
   "description": "AI Operating System for Business",
   "start_url": "/",
   "display": "standalone",

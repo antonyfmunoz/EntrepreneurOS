@@ -1,7 +1,7 @@
-# AgentOS - AI Operating System for Business
+# EntrepreneurOS - AI Operating System for Business
 
 ## Overview
-AgentOS is an AI operating system where intelligent agents execute real actions (send emails, create documents, manage workflows) autonomously. Users approve actions, then agents do the work.
+EntrepreneurOS is an AI operating system where intelligent agents execute real actions (send emails, create documents, manage workflows) autonomously. Users approve actions, then agents do the work.
 
 ## Current State
 - Authentication: Firebase Auth (primary) with Passport.js fallback
@@ -16,6 +16,10 @@ AgentOS is an AI operating system where intelligent agents execute real actions 
 - Agent Action System (Phase 1) - agents propose actions, users approve
 
 ## Recent Changes
+- 2026-03-01: Renamed AgentOS to EntrepreneurOS across entire codebase
+  - Updated all user-facing text, page titles, manifest, HTML title, sidebar brand name
+  - Updated welcome notifications, toast messages, tutorials, support page
+  - Internal function names (AgentOSDashboard) kept for code stability
 - 2026-02-19: Switched from OpenAI to Claude (Anthropic) as primary AI
   - Uses Replit AI Integrations for Anthropic (credits-based, no API key required)
   - Tiered model approach: Haiku for basic tasks, Sonnet for complex reasoning

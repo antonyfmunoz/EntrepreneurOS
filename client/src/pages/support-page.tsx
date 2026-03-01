@@ -49,7 +49,7 @@ export default function SupportPage() {
           
           <h1 className="text-2xl font-bold mb-2">Contact Support</h1>
           <p className="text-muted-foreground mb-6">
-            Get help with AgentOS or provide feedback. Our team is ready to assist you.
+            Get help with EntrepreneurOS or provide feedback. Our team is ready to assist you.
           </p>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
