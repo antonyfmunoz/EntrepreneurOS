@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, json, jsonb, decimal, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -479,3 +479,21 @@ export const insertAgentMetricSchema = z.object({
 
 export type InsertAgentMetric = z.infer<typeof insertAgentMetricSchema>;
 export type AgentMetric = typeof agentMetrics.$inferSelect;
+
+export const companies = pgTable("companies", {
+  id: serial("id").primaryKey(),
+  ownerUserId: text("owner_user_id").notNull(),
+  name: text("name").notNull(),
+  type: text("type"),
+  stage: text("stage"),
+  offer: text("offer"),
+  targetCustomer: text("target_customer"),
+  goals: text("goals"),
+  createdAt: timestamp("created_at").defaultNow()
+});
+
+export const session = pgTable("session", {
+  sid: varchar("sid").primaryKey(),
+  sess: json("sess").notNull(),
+  expire: timestamp("expire", { precision: 6 }).notNull(),
+});
