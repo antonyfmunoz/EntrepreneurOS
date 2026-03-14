@@ -15,45 +15,142 @@ import TutorialsPage from "@/pages/tutorials-page";
 import SupportPage from "@/pages/support-page";
 import CRMPage from "@/pages/crm-page";
 import DocumentsPage from "@/pages/documents-page";
-
+import CompanySetupPage from "@/pages/company-setup-page";
 
 import AuthPage from "@/pages/auth-page";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
+import { CompanyGate } from "@/lib/company-guard";
 
 function Router() {
   return (
     <Switch>
-      <ProtectedRoute path="/" component={Dashboard} />
-      <ProtectedRoute path="/tasks" component={TaskBoardPage} />
+      <ProtectedRoute path="/home">
+        {() => (
+          <CompanyGate>
+            <Dashboard />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/tasks">
+        {() => (
+          <CompanyGate>
+            <TaskBoardPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/company-setup" component={CompanySetupPage} />
+
       <ProtectedRoute path="/chat/:agentId">
-        {(params) => <AgentChat params={params as {agentId: string}} />}
+        {(params) => (
+          <CompanyGate>
+            <AgentChat params={params as { agentId: string }} />
+          </CompanyGate>
+        )}
       </ProtectedRoute>
+
       <ProtectedRoute path="/agent-chat/:agentId">
-        {(params) => <AgentChat params={params as {agentId: string}} />}
+        {(params) => (
+          <CompanyGate>
+            <AgentChat params={params as { agentId: string }} />
+          </CompanyGate>
+        )}
       </ProtectedRoute>
-      {/* Legacy route kept for compatibility */}
-      <Route path="/agent/:agentId/program">
-        {(params) => <AgentProgramming agentId={params.agentId} />}
-      </Route>
-      {/* New agent programming route with agentId parameter */}
+
+      <ProtectedRoute path="/agent/:agentId/program">
+        {(params) => (
+          <CompanyGate>
+            <AgentProgramming agentId={params.agentId} />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
       <ProtectedRoute path="/agent-programming/:agentId">
-        {(params) => <AgentProgramming agentId={params.agentId} />}
+        {(params) => (
+          <CompanyGate>
+            <AgentProgramming agentId={params.agentId} />
+          </CompanyGate>
+        )}
       </ProtectedRoute>
-      {/* Generic agent programming route */}
+
       <ProtectedRoute path="/agent-programming">
-        {() => <AgentProgramming />}
+        {() => (
+          <CompanyGate>
+            <AgentProgramming />
+          </CompanyGate>
+        )}
       </ProtectedRoute>
-      <ProtectedRoute path="/integrations" component={IntegrationsPage} />
-      <ProtectedRoute path="/analytics" component={AnalyticsPage} />
-      <ProtectedRoute path="/crm" component={CRMPage} />
-      <ProtectedRoute path="/documents" component={DocumentsPage} />
-      <ProtectedRoute path="/settings" component={SettingsPage} />
-      <ProtectedRoute path="/notifications" component={NotificationsPage} />
-      <ProtectedRoute path="/support" component={SupportPage} />
-      <ProtectedRoute path="/tutorials" component={TutorialsPage} />
+
+      <ProtectedRoute path="/integrations">
+        {() => (
+          <CompanyGate>
+            <IntegrationsPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/analytics">
+        {() => (
+          <CompanyGate>
+            <AnalyticsPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/crm">
+        {() => (
+          <CompanyGate>
+            <CRMPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/documents">
+        {() => (
+          <CompanyGate>
+            <DocumentsPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/settings">
+        {() => (
+          <CompanyGate>
+            <SettingsPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/notifications">
+        {() => (
+          <CompanyGate>
+            <NotificationsPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/support">
+        {() => (
+          <CompanyGate>
+            <SupportPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/tutorials">
+        {() => (
+          <CompanyGate>
+            <TutorialsPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
       <Route path="/auth" component={AuthPage} />
+
       <Route component={NotFound} />
+
     </Switch>
   );
 }
