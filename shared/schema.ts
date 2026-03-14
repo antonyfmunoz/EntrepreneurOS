@@ -492,8 +492,31 @@ export const companies = pgTable("companies", {
   createdAt: timestamp("created_at").defaultNow()
 });
 
+export type InsertCompany = typeof companies.$inferInsert;
+export type Company = typeof companies.$inferSelect;
+
 export const session = pgTable("session", {
   sid: varchar("sid").primaryKey(),
   sess: json("sess").notNull(),
   expire: timestamp("expire", { precision: 6 }).notNull(),
 });
+
+export const workflows = pgTable("workflows", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  companyId: integer("company_id").references(() => companies.id),
+  status: text("status").default("active"), // active, paused
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertWorkflowSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  description: z.string().optional(),
+  companyId: z.number(),
+  status: z.enum(["active", "paused"]).default("active"),
+});
+
+export type InsertWorkflow = z.infer<typeof insertWorkflowSchema>;
+export type Workflow = typeof workflows.$inferSelect;
