@@ -12,7 +12,9 @@ One system that takes a SaaS product from spec document to deployed, tested, hos
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] Design consistency memory — Neon PostgreSQL schema created with 6 tables (dm_projects, dm_pages, dm_tokens, dm_components, dm_layouts, pipeline_states) and Zod validation contracts. Validated in Phase 01: Foundation.
+- [x] Stitch API integration — typed SDK wrapper with retry logic, secret-safe error handling. Validated in Phase 01: Foundation.
+- [x] Framework-aware — framework detection function identifies React+Vite+Tailwind+shadcn/ui with confidence scoring. Validated in Phase 01: Foundation.
 
 ### Active
 
@@ -48,7 +50,7 @@ One system that takes a SaaS product from spec document to deployed, tested, hos
 
 **Google Stitch:** User has API access/key. Stitch generates both code and a visual preview from prompts. Works best one page at a time rather than generating an entire app at once. Research needed on exact API contract, what context it accepts, and how to maintain design consistency across calls.
 
-**Design consistency:** A Neon PostgreSQL database (not yet connected) will store approved page context so Claude can reference previous design decisions when generating or reviewing new pages. This ensures visual cohesion across the entire product.
+**Design consistency:** Neon PostgreSQL database schema is live with 6 tables for storing approved page context (design tokens, component patterns, layout decisions). Phase 01 created the schema and validation contracts; subsequent phases will wire the storage layer and query logic.
 
 **Skill ecosystem:** 30+ existing Claude Code skills map into this system's lifecycle — from brainstorming and planning through code review, testing, debugging, analytics, and deployment. The system is an orchestrator that calls the right skill at the right time.
 
@@ -157,4 +159,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-25 after initialization*
+*Last updated: 2026-03-27 after Phase 01 (Foundation) completion*
