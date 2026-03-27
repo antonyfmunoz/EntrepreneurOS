@@ -40,7 +40,7 @@ created: 2026-03-27
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
 | 01-01-01 | 01 | 0 | ORCH-02 | unit | `npx vitest run tests/unit/design-schema.test.ts` | ❌ W0 | ⬜ pending |
 | 01-01-02 | 01 | 0 | ORCH-03 | unit | `npx vitest run tests/unit/design-schema.test.ts` | ❌ W0 | ⬜ pending |
-| 01-01-03 | 01 | 0 | ORCH-04 | unit | `npx vitest run tests/unit/pipeline-schemas.test.ts` | ❌ W0 | ⬜ pending |
+| 01-01-03 | 01 | 0 | ORCH-04 | unit | `npx vitest run tests/unit/design-schema.test.ts` | ❌ W0 | ⬜ pending |
 | 01-01-04 | 01 | 0 | INTG-06 | unit | `npx vitest run tests/unit/detect-framework.test.ts` | ❌ W0 | ⬜ pending |
 | 01-01-05 | 01 | 0 | ORCH-01/05 | smoke | manual file inspection | ❌ W0 | ⬜ pending |
 
@@ -52,7 +52,7 @@ created: 2026-03-27
 
 - [ ] `vitest.config.ts` — dual-environment config (node + jsdom projects)
 - [ ] `tests/unit/design-schema.test.ts` — stubs for ORCH-02, ORCH-03
-- [ ] `tests/unit/pipeline-schemas.test.ts` — stubs for ORCH-04
+- [ ] `tests/unit/design-schema.test.ts` — also covers ORCH-04 pipeline schema tests
 - [ ] `tests/unit/detect-framework.test.ts` — stubs for INTG-06
 - [ ] `tests/setup-dom.ts` — @testing-library/jest-dom import for jsdom project
 - [ ] Framework install: `npm install -D vitest@2 jsdom @testing-library/react @testing-library/jest-dom`
