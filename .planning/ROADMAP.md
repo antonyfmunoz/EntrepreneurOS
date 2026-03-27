@@ -34,7 +34,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Design memory + pipeline state schemas, Zod contracts, and Drizzle config
+- [x] 01-01-PLAN.md — Design memory + pipeline state schemas, Zod contracts, and Drizzle config
 - [x] 01-02-PLAN.md — Stitch SDK wrapper with secret-safe errors and framework detection function
 - [ ] 01-03-PLAN.md — Vitest setup, smoke tests, and Claude Code skill skeletons
 

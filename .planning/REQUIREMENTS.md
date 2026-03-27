@@ -71,9 +71,9 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Orchestration & State
 
 - [x] **ORCH-01**: System orchestrates existing Claude Code skills at correct lifecycle phase
-- [ ] **ORCH-02**: Pipeline state persisted in Neon PostgreSQL (not conversation context)
-- [ ] **ORCH-03**: System supports pause/resume/interrupt — resumes from last checkpoint
-- [ ] **ORCH-04**: System is reusable across SaaS repos (no hardcoded paths, accepts project config)
+- [x] **ORCH-02**: Pipeline state persisted in Neon PostgreSQL (not conversation context)
+- [x] **ORCH-03**: System supports pause/resume/interrupt — resumes from last checkpoint
+- [x] **ORCH-04**: System is reusable across SaaS repos (no hardcoded paths, accepts project config)
 - [ ] **ORCH-05**: System is built as Claude Code skills using skill-creator
 
 ## v2 Requirements
@@ -155,9 +155,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEPLOY-04 | Phase 6 | Pending |
 | DEPLOY-05 | Phase 6 | Pending |
 | ORCH-01 | Phase 1 | Complete |
-| ORCH-02 | Phase 1 | Pending |
-| ORCH-03 | Phase 1 | Pending |
-| ORCH-04 | Phase 1 | Pending |
+| ORCH-02 | Phase 1 | Complete |
+| ORCH-03 | Phase 1 | Complete |
+| ORCH-04 | Phase 1 | Complete |
 | ORCH-05 | Phase 1 | Pending |
 
 **Coverage:**
