@@ -35,7 +35,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 Plans:
 - [ ] 01-01-PLAN.md — Design memory + pipeline state schemas, Zod contracts, and Drizzle config
-- [ ] 01-02-PLAN.md — Stitch SDK wrapper with secret-safe errors and framework detection function
+- [x] 01-02-PLAN.md — Stitch SDK wrapper with secret-safe errors and framework detection function
 - [ ] 01-03-PLAN.md — Vitest setup, smoke tests, and Claude Code skill skeletons
 
 ### Phase 2: Spec Layer
@@ -107,7 +107,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/3 | Planning complete | - |
+| 1. Foundation | 1/3 | In Progress|  |
 | 2. Spec Layer | 0/TBD | Not started | - |
 | 3. UI Generation | 0/TBD | Not started | - |
 | 4. Code Integration | 0/TBD | Not started | - |
