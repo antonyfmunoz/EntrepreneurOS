@@ -31,7 +31,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The Stitch SDK wrapper executes a live generate call and returns typed HTML + screenshot URL without error
   4. Vitest runs and passes on the project with at least one smoke test confirming the test harness works
   5. Framework detection reads package.json and correctly identifies React + Vite + Tailwind + shadcn/ui
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Design memory + pipeline state schemas and Drizzle config
+- [ ] 01-02-PLAN.md — Stitch SDK wrapper and framework detection function
+- [ ] 01-03-PLAN.md — Vitest setup, smoke tests, and Claude Code skill skeletons
 
 ### Phase 2: Spec Layer
 **Goal**: User can provide a spec (paste or collaborate) and the system produces a validated, structured PageSpec[] that all downstream phases consume
@@ -102,7 +107,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/TBD | Not started | - |
+| 1. Foundation | 0/3 | Planning complete | - |
 | 2. Spec Layer | 0/TBD | Not started | - |
 | 3. UI Generation | 0/TBD | Not started | - |
 | 4. Code Integration | 0/TBD | Not started | - |
