@@ -26,16 +26,16 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Depends on**: Nothing (first phase)
 **Requirements**: ORCH-01, ORCH-02, ORCH-03, ORCH-04, ORCH-05, INTG-06
 **Success Criteria** (what must be TRUE):
-  1. Neon PostgreSQL design memory tables exist and are queryable (design_projects, design_pages, design_tokens, component_patterns)
-  2. pipeline-state.json schema is defined with Zod and validates correctly against all inter-phase handoff shapes
-  3. The Stitch SDK wrapper executes a live generate call and returns typed HTML + screenshot URL without error
-  4. Vitest runs and passes on the project with at least one smoke test confirming the test harness works
+  1. Neon PostgreSQL design memory tables exist and are queryable (dm_projects, dm_pages, dm_tokens, dm_patterns)
+  2. Pipeline state Zod schemas are defined in Neon PostgreSQL (pipeline_runs, pipeline_pages tables) and validate correctly against all inter-phase handoff shapes
+  3. The Stitch SDK wrapper is installed, typed, and exports generateScreen with retry logic (live API call verification deferred to Phase 3 when API key is available)
+  4. Vitest runs and passes on the project with smoke tests confirming schema validation, framework detection, and Stitch wrapper error handling
   5. Framework detection reads package.json and correctly identifies React + Vite + Tailwind + shadcn/ui
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Design memory + pipeline state schemas and Drizzle config
-- [ ] 01-02-PLAN.md — Stitch SDK wrapper and framework detection function
+- [ ] 01-01-PLAN.md — Design memory + pipeline state schemas, Zod contracts, and Drizzle config
+- [ ] 01-02-PLAN.md — Stitch SDK wrapper with secret-safe errors and framework detection function
 - [ ] 01-03-PLAN.md — Vitest setup, smoke tests, and Claude Code skill skeletons
 
 ### Phase 2: Spec Layer
