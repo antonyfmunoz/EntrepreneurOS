@@ -32,7 +32,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **INTG-03**: System creates/updates React component files from approved Stitch output
 - [ ] **INTG-04**: System updates routing configuration for new pages
 - [ ] **INTG-05**: System wires new pages into existing app layout and navigation
-- [ ] **INTG-06**: System detects React + Vite + Tailwind + shadcn/ui framework via package.json (extensible to other frameworks)
+- [x] **INTG-06**: System detects React + Vite + Tailwind + shadcn/ui framework via package.json (extensible to other frameworks)
 
 ### Backend
 
@@ -70,7 +70,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Orchestration & State
 
-- [ ] **ORCH-01**: System orchestrates existing Claude Code skills at correct lifecycle phase
+- [x] **ORCH-01**: System orchestrates existing Claude Code skills at correct lifecycle phase
 - [ ] **ORCH-02**: Pipeline state persisted in Neon PostgreSQL (not conversation context)
 - [ ] **ORCH-03**: System supports pause/resume/interrupt — resumes from last checkpoint
 - [ ] **ORCH-04**: System is reusable across SaaS repos (no hardcoded paths, accepts project config)
@@ -134,7 +134,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INTG-03 | Phase 4 | Pending |
 | INTG-04 | Phase 4 | Pending |
 | INTG-05 | Phase 4 | Pending |
-| INTG-06 | Phase 1 | Pending |
+| INTG-06 | Phase 1 | Complete |
 | BACK-01 | Phase 5 | Pending |
 | BACK-02 | Phase 5 | Pending |
 | BACK-03 | Phase 5 | Pending |
@@ -154,7 +154,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEPLOY-03 | Phase 6 | Pending |
 | DEPLOY-04 | Phase 6 | Pending |
 | DEPLOY-05 | Phase 6 | Pending |
-| ORCH-01 | Phase 1 | Pending |
+| ORCH-01 | Phase 1 | Complete |
 | ORCH-02 | Phase 1 | Pending |
 | ORCH-03 | Phase 1 | Pending |
 | ORCH-04 | Phase 1 | Pending |
