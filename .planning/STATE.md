@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-spec-layer 02-01-PLAN.md
-last_updated: "2026-03-28T05:07:19.728Z"
+stopped_at: Completed 02-spec-layer 02-02-PLAN.md
+last_updated: "2026-03-28T05:14:20.605Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 ## Current Position
 
 Phase: 02 (spec-layer) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-03-28
 
@@ -56,6 +56,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01-foundation P01 | 7 | 2 tasks | 5 files |
 | Phase 01-foundation P03 | 328 | 3 tasks | 8 files |
 | Phase 02-spec-layer P01 | 305 | 2 tasks | 7 files |
+| Phase 02-spec-layer P02 | 273 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,9 @@ Recent decisions affecting current work:
 - [Phase 02-spec-layer]: PageSpecFull uses .merge() chain (Core -> UI -> Data -> Analytics) for composability over monolithic z.object
 - [Phase 02-spec-layer]: source: 'inferred' is default across all SpecItemSource provenance fields — safe default for AI outputs
 - [Phase 02-spec-layer]: MAX_RAW_INPUT_SIZE = 100_000 chars (100KB) — size guard fires before AI call per review feedback
+- [Phase 02-spec-layer]: deduplicateComponents returns merges array alongside deduplicated list for D-22 user confirmation flow
+- [Phase 02-spec-layer]: chunkSpecByDomain uses DOMAIN_PATTERNS map with auth-onboarding / admin-settings / core-features for page classification
+- [Phase 02-spec-layer]: chunkRawText splits at markdown heading boundaries before paragraph fallback — pure function no AI dependency
 
 ### Pending Todos
 
@@ -88,6 +92,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T05:07:19.720Z
-Stopped at: Completed 02-spec-layer 02-01-PLAN.md
+Last session: 2026-03-28T05:14:20.594Z
+Stopped at: Completed 02-spec-layer 02-02-PLAN.md
 Resume file: None
