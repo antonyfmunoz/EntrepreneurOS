@@ -19,7 +19,7 @@ created: 2026-03-27
 |----------|-------|
 | **Framework** | vitest 2.x |
 | **Config file** | vitest.config.ts |
-| **Quick run command** | `npx vitest run tests/unit/spec-` |
+| **Quick run command** | `npx vitest run tests/unit/spec-parser/` |
 | **Full suite command** | `npx vitest run` |
 | **Estimated runtime** | ~10 seconds |
 
@@ -27,7 +27,7 @@ created: 2026-03-27
 
 ## Sampling Rate
 
-- **After every task commit:** Run `npx vitest run tests/unit/spec-`
+- **After every task commit:** Run `npx vitest run tests/unit/spec-parser/`
 - **After every plan wave:** Run `npx vitest run`
 - **Before `/gsd:verify-work`:** Full suite must be green
 - **Max feedback latency:** 15 seconds
@@ -38,11 +38,12 @@ created: 2026-03-27
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 02-01-01 | 01 | 1 | SPEC-03 | unit | `npx vitest run tests/unit/spec-schema.test.ts` | ❌ W0 | ⬜ pending |
-| 02-01-02 | 01 | 1 | SPEC-01 | unit | `npx vitest run tests/unit/spec-parser.test.ts` | ❌ W0 | ⬜ pending |
-| 02-02-01 | 02 | 1 | SPEC-05 | unit | `npx vitest run tests/unit/spec-enrichment.test.ts` | ❌ W0 | ⬜ pending |
-| 02-02-02 | 02 | 1 | SPEC-04 | unit | `npx vitest run tests/unit/backend-spec.test.ts` | ❌ W0 | ⬜ pending |
-| 02-03-01 | 03 | 2 | SPEC-02 | manual | N/A — collaborative flow | ❌ | ⬜ pending |
+| 02-01-01 | 01 | 1 | SPEC-03 | unit | `npx vitest run tests/unit/spec-parser/parse-spec.test.ts` | ❌ W0 | ⬜ pending |
+| 02-01-02 | 01 | 1 | SPEC-01, SPEC-05 | unit | `npx vitest run tests/unit/spec-parser/restructure-spec.test.ts` | ❌ W0 | ⬜ pending |
+| 02-02-01 | 02 | 2 | SPEC-04 | unit | `npx vitest run tests/unit/spec-parser/derive-backend-spec.test.ts tests/unit/spec-parser/deduplicate-components.test.ts` | ❌ W0 | ⬜ pending |
+| 02-02-02 | 02 | 2 | SPEC-04 | unit | `npx vitest run tests/unit/spec-parser/chunk-spec.test.ts` | ❌ W0 | ⬜ pending |
+| 02-03-01 | 03 | 2 | SPEC-02, SPEC-05 | unit | `npx vitest run tests/unit/spec-parser/collaborative-flow.test.ts` | ❌ W0 | ⬜ pending |
+| 02-03-02 | 03 | 2 | SPEC-02 | manual | N/A — skill definition (SKILL.md) | ❌ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -50,10 +51,12 @@ created: 2026-03-27
 
 ## Wave 0 Requirements
 
-- [ ] `tests/unit/spec-schema.test.ts` — stubs for PageSpec Zod contract validation
-- [ ] `tests/unit/spec-parser.test.ts` — stubs for format-agnostic parsing
-- [ ] `tests/unit/spec-enrichment.test.ts` — stubs for implied requirement extraction
-- [ ] `tests/unit/backend-spec.test.ts` — stubs for backend spec derivation
+- [ ] `tests/unit/spec-parser/parse-spec.test.ts` — stubs for format-agnostic parsing and PageSpec schema validation
+- [ ] `tests/unit/spec-parser/restructure-spec.test.ts` — stubs for AI restructuring and implied requirement extraction
+- [ ] `tests/unit/spec-parser/derive-backend-spec.test.ts` — stubs for backend spec derivation from UI spec
+- [ ] `tests/unit/spec-parser/deduplicate-components.test.ts` — stubs for shared component deduplication
+- [ ] `tests/unit/spec-parser/chunk-spec.test.ts` — stubs for large spec chunking (26+ pages)
+- [ ] `tests/unit/spec-parser/collaborative-flow.test.ts` — stubs for pure state machine functions (createInitialState, isFlowComplete, buildSystemPromptForStage)
 
 *Existing vitest infrastructure covers test framework needs.*
 
@@ -63,7 +66,7 @@ created: 2026-03-27
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| Collaborative spec creation flow | SPEC-02 | Requires interactive AI questioning loop — cannot be automated with unit tests | Run skill with no spec input, verify structured questioning produces valid PageSpec[] |
+| Collaborative spec creation full loop | SPEC-02 | Requires interactive AI questioning with real Claude responses | Run skill with no spec input, verify structured questioning produces valid PageSpec[] |
 | Full restructured spec confirmation gate | SPEC-01 | Requires human review of AI-inferred items | Paste a raw spec, verify inferred items are visually distinct in output |
 
 ---
