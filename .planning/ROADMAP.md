@@ -13,7 +13,7 @@ Six phases that deliver a complete spec-to-deployment pipeline as Claude Code sk
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Infrastructure schemas, state contracts, Stitch SDK wrapper, Vitest setup, and framework detection (completed 2026-03-27)
-- [ ] **Phase 2: Spec Layer** - Spec ingestion (paste or collaborate) producing validated PageSpec[] output
+- [x] **Phase 2: Spec Layer** - Spec ingestion (paste or collaborate) producing validated PageSpec[] output (completed 2026-03-28)
 - [ ] **Phase 3: UI Generation** - Stitch integration with design memory and confidence-calibrated approval gates
 - [ ] **Phase 4: Code Integration** - Brownfield-aware frontend integration with git workflow
 - [ ] **Phase 5: Backend + Quality** - Backend wiring against actual UI contracts with autonomous test fix loop
@@ -54,7 +54,7 @@ Plans:
 Plans:
 - [x] 02-01-PLAN.md — PageSpec Zod schema contracts (4 composable layers) and core parse/restructure pipeline
 - [x] 02-02-PLAN.md — Backend spec derivation, shared component deduplication, and large spec chunking
-- [ ] 02-03-PLAN.md — Collaborative spec creation flow and spec-parser skill definition
+- [x] 02-03-PLAN.md — Collaborative spec creation flow and spec-parser skill definition
 
 ### Phase 3: UI Generation
 **Goal**: System generates pixel-quality UI for each page via Stitch, maintains visual consistency across all pages using design memory, and routes to user only when confidence is below threshold
@@ -113,7 +113,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/3 | Complete   | 2026-03-27 |
-| 2. Spec Layer | 2/3 | In Progress|  |
+| 2. Spec Layer | 3/3 | Complete   | 2026-03-28 |
 | 3. UI Generation | 0/TBD | Not started | - |
 | 4. Code Integration | 0/TBD | Not started | - |
 | 5. Backend + Quality | 0/TBD | Not started | - |
