@@ -15,11 +15,11 @@ One system that takes a SaaS product from spec document to deployed, tested, hos
 - [x] Design consistency memory — Neon PostgreSQL schema created with 6 tables (dm_projects, dm_pages, dm_tokens, dm_components, dm_layouts, pipeline_states) and Zod validation contracts. Validated in Phase 01: Foundation.
 - [x] Stitch API integration — typed SDK wrapper with retry logic, secret-safe error handling. Validated in Phase 01: Foundation.
 - [x] Framework-aware — framework detection function identifies React+Vite+Tailwind+shadcn/ui with confidence scoring. Validated in Phase 01: Foundation.
+- [x] Spec ingestion — parseSpec() accepts raw text, restructures via Claude AI into validated PageSpec[] with 4 composable layers and provenance tracking. Validated in Phase 02: Spec Layer.
+- [x] Spec collaboration — 5-stage domain-first collaborative flow (vision → user-flows → pages → page-detail → implied) produces complete PageSpec[] through guided questioning. Validated in Phase 02: Spec Layer.
+- [x] Backend spec ingestion — deriveBackendSpec() auto-generates CRUD endpoints from PageSpec data layer with provenance propagation. Validated in Phase 02: Spec Layer.
 
 ### Active
-
-- [ ] Spec collaboration — if no spec doc is provided, the system collaborates with the user to create one (using brainstorming/GSD questioning patterns)
-- [ ] Spec ingestion — accept a pasted spec document as input, parse it into individual page specs
 - [ ] Stitch API integration — call Google Stitch API with page specs, receive generated code + visual preview
 - [ ] Design consistency memory — store approved page context (design tokens, component patterns, layout decisions) in Neon PostgreSQL, reference it for subsequent pages
 - [ ] Self-review — Claude reviews each generated page against the spec and previously approved pages before escalating to user
@@ -27,7 +27,6 @@ One system that takes a SaaS product from spec document to deployed, tested, hos
 - [ ] Pause/resume/interrupt — user can inject feedback, pause, or resume at any point in the pipeline
 - [ ] Frontend code integration — take approved Stitch output and integrate it into the project (create/update files, update routing, respect existing code)
 - [ ] Brownfield awareness — check what exists before adding, avoid duplicates and redundancy
-- [ ] Backend spec ingestion — separate backend spec document with same input optionality (paste or collaborate)
 - [ ] Backend wiring — upgrade existing Express/Drizzle backend (routes, schema, validation) to serve what the new UI needs
 - [ ] Testing — test what gets built, not just generate code; fix errors when tests fail
 - [ ] Analytics setup — PostHog integration (event tracking, feature flags, dashboards, error tracking)
@@ -159,4 +158,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-27 after Phase 01 (Foundation) completion*
+*Last updated: 2026-03-28 after Phase 02 (Spec Layer) completion*
