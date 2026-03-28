@@ -42,7 +42,7 @@ created: 2026-03-27
 | 02-01-02 | 01 | 1 | SPEC-01, SPEC-05 | unit | `npx vitest run tests/unit/spec-parser/restructure-spec.test.ts` | ❌ W0 | ⬜ pending |
 | 02-02-01 | 02 | 2 | SPEC-04 | unit | `npx vitest run tests/unit/spec-parser/derive-backend-spec.test.ts tests/unit/spec-parser/deduplicate-components.test.ts` | ❌ W0 | ⬜ pending |
 | 02-02-02 | 02 | 2 | SPEC-04 | unit | `npx vitest run tests/unit/spec-parser/chunk-spec.test.ts` | ❌ W0 | ⬜ pending |
-| 02-03-01 | 03 | 2 | SPEC-02, SPEC-05 | unit | `npx vitest run tests/unit/spec-parser/collaborative-flow.test.ts` | ❌ W0 | ⬜ pending |
+| 02-03-01 | 03 | 2 | SPEC-02, SPEC-05 | unit | `npx vitest run tests/unit/spec-parser/collaborative-flow.test.ts tests/unit/spec-parser/spec-editor.test.ts` | ❌ W0 | ⬜ pending |
 | 02-03-02 | 03 | 2 | SPEC-02 | manual | N/A — skill definition (SKILL.md) | ❌ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
@@ -57,6 +57,7 @@ created: 2026-03-27
 - [ ] `tests/unit/spec-parser/deduplicate-components.test.ts` — stubs for shared component deduplication
 - [ ] `tests/unit/spec-parser/chunk-spec.test.ts` — stubs for large spec chunking (26+ pages)
 - [ ] `tests/unit/spec-parser/collaborative-flow.test.ts` — stubs for pure state machine functions (createInitialState, isFlowComplete, buildSystemPromptForStage)
+- [ ] `tests/unit/spec-parser/spec-editor.test.ts` — stubs for surgical edit, version bumping, dependency flagging, provenance marking
 
 *Existing vitest infrastructure covers test framework needs.*
 
