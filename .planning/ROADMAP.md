@@ -12,7 +12,7 @@ Six phases that deliver a complete spec-to-deployment pipeline as Claude Code sk
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [x] **Phase 1: Foundation** - Infrastructure schemas, state contracts, Stitch SDK wrapper, Vitest setup, and framework detection (completed 2026-03-27)
+- [x] **Phase 1: Foundation** - Infrastructure schemas, state contracts, Stitch SDK wrapper, Vitest setup, and framework detection (completed 2026-03-27)
 - [ ] **Phase 2: Spec Layer** - Spec ingestion (paste or collaborate) producing validated PageSpec[] output
 - [ ] **Phase 3: UI Generation** - Stitch integration with design memory and confidence-calibrated approval gates
 - [ ] **Phase 4: Code Integration** - Brownfield-aware frontend integration with git workflow
@@ -48,8 +48,13 @@ Plans:
   3. System extracts implied requirements (auth gates, error states, loading states, empty states) that were not explicit in the spec
   4. Backend spec follows the same dual-path input (paste or collaborate) and produces a validated backend spec structure
   5. Event taxonomy is extracted from spec pages during parsing and written to state file for Phase 6 consumption
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: no
+
+Plans:
+- [ ] 02-01-PLAN.md — PageSpec Zod schema contracts (4 composable layers) and core parse/restructure pipeline
+- [ ] 02-02-PLAN.md — Backend spec derivation, shared component deduplication, and large spec chunking
+- [ ] 02-03-PLAN.md — Collaborative spec creation flow and spec-parser skill definition
 
 ### Phase 3: UI Generation
 **Goal**: System generates pixel-quality UI for each page via Stitch, maintains visual consistency across all pages using design memory, and routes to user only when confidence is below threshold
@@ -108,7 +113,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/3 | Complete   | 2026-03-27 |
-| 2. Spec Layer | 0/TBD | Not started | - |
+| 2. Spec Layer | 0/3 | Not started | - |
 | 3. UI Generation | 0/TBD | Not started | - |
 | 4. Code Integration | 0/TBD | Not started | - |
 | 5. Backend + Quality | 0/TBD | Not started | - |
