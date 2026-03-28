@@ -127,6 +127,7 @@ export const PipelineRunSchema = z.object({
   config: z.lazy(() => ProjectConfigSchema),
 });
 
+/** @deprecated Use SpecOutputSchema from shared/spec-schema.ts instead. Kept for Phase 1 test compatibility. */
 export const SpecPhaseOutputSchema = z.object({
   pages: z.array(z.object({
     name: z.string(),
