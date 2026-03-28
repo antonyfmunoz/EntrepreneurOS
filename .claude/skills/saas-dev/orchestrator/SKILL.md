@@ -34,6 +34,7 @@ Required fields validated by ProjectConfigSchema in shared/design-schema.ts:
 ## Current Sub-Skills
 
 - saas-dev:detect-framework
+- saas-dev:spec-parser
 
 ## Usage
 
