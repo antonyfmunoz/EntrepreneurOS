@@ -12,7 +12,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **SPEC-01**: User can paste a pre-written spec document and system parses it into page-level units
 - [ ] **SPEC-02**: User can collaboratively create a spec with the system if no document exists (using brainstorming/GSD questioning)
 - [x] **SPEC-03**: System parses spec into individual page specs (name, purpose, components, data requirements)
-- [ ] **SPEC-04**: User can paste a backend spec document with same input optionality as UI spec
+- [x] **SPEC-04**: User can paste a backend spec document with same input optionality as UI spec
 - [x] **SPEC-05**: System extracts implied requirements from page specs (auth, data fetching, error states, loading states, empty states)
 
 ### UI Generation
@@ -120,7 +120,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SPEC-01 | Phase 2 | Complete |
 | SPEC-02 | Phase 2 | Pending |
 | SPEC-03 | Phase 2 | Complete |
-| SPEC-04 | Phase 2 | Pending |
+| SPEC-04 | Phase 2 | Complete |
 | SPEC-05 | Phase 2 | Complete |
 | UIGEN-01 | Phase 3 | Pending |
 | UIGEN-02 | Phase 3 | Pending |
