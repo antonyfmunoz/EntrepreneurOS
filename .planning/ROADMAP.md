@@ -105,7 +105,7 @@ Plans:
 
 Plans:
 - [x] 05-01-PLAN.md — Phase 5 type contracts and backend brownfield audit
-- [ ] 05-02-PLAN.md — Route, schema, storage, and hook code generators
+- [x] 05-02-PLAN.md — Route, schema, storage, and hook code generators
 - [x] 05-03-PLAN.md — Integration test generator, transaction isolation, and fix loop
 - [ ] 05-04-PLAN.md — Wiring applier (file mutations) and backend-wirer SKILL.md
 
@@ -132,5 +132,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Spec Layer | 3/3 | Complete   | 2026-03-28 |
 | 3. UI Generation | 3/3 | Complete   | 2026-03-29 |
 | 4. Code Integration | 3/3 | Complete   | 2026-03-29 |
-| 5. Backend + Quality | 2/4 | In Progress|  |
+| 5. Backend + Quality | 3/4 | In Progress|  |
 | 6. Analytics + Delivery | 0/TBD | Not started | - |
