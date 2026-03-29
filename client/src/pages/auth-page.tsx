@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
+import { useCompany } from "@/hooks/use-company";
+import { queryClient } from "@/lib/queryClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Mail, KeyRound, Shield, Loader2 } from "lucide-react";
 
@@ -33,6 +35,7 @@ const loginSchema = z.object({
 });
 
 const registerSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters."),
   email: z.string().email("Please enter a valid email address."),
   password: z.string().min(6, "Password must be at least 6 characters."),
   confirmPassword: z.string(),
@@ -77,13 +80,20 @@ export default function AuthPage() {
     sendMFAVerificationCode,
     verifyMFASignIn,
   } = useAuth();
+  const { hasCompany, isLoading: companyLoading } = useCompany();
   const [, navigate] = useLocation();
 
   useEffect(() => {
     if (user && !isLoading) {
-      navigate("/");
+      queryClient.invalidateQueries({ queryKey: ["/api/company"] });
     }
-  }, [user, isLoading, navigate]);
+  }, [user, isLoading]);
+
+  useEffect(() => {
+    if (user && !isLoading && !companyLoading) {
+      navigate(hasCompany ? "/home" : "/company-setup");
+    }
+  }, [user, isLoading, companyLoading, hasCompany, navigate]);
 
   useEffect(() => {
     if (mfaResolver) {
@@ -109,8 +119,8 @@ export default function AuthPage() {
 
   const registerForm = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { email: "", password: "", confirmPassword: "", fullName: "", company: "" },
-  });
+    defaultValues: { username: "", email: "", password: "", confirmPassword: "", fullName: "", company: "" }
+});
 
   const resetForm = useForm<ResetPasswordFormValues>({
     resolver: zodResolver(resetPasswordSchema),
@@ -146,7 +156,7 @@ export default function AuthPage() {
       });
     } else {
       registerMutation.mutate({
-        username: data.email.split('@')[0],
+        username: data.username,
         email: data.email,
         password: data.password,
         fullName: data.fullName,
@@ -417,7 +427,20 @@ export default function AuthPage() {
                 </CardHeader>
                 <CardContent>
                   <Form {...registerForm}>
-                    <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">
+                    <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">             
+                    <FormField
+  control={registerForm.control}
+  name="username"
+  render={({ field }) => (
+    <FormItem>
+      <FormLabel>Username</FormLabel>
+      <FormControl>
+        <Input placeholder="yourusername" {...field} />
+      </FormControl>
+      <FormMessage />
+    </FormItem>
+  )}
+/>
                       <FormField
                         control={registerForm.control}
                         name="email"
