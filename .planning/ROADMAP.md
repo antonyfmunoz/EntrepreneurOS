@@ -70,8 +70,8 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [ ] 03-01-PLAN.md — Type contracts, Stitch prompt builder, and approval gate logic
-- [ ] 03-02-PLAN.md — Claude-based token/pattern extraction and conflict detection
+- [x] 03-01-PLAN.md — Type contracts, Stitch prompt builder, and approval gate logic
+- [x] 03-02-PLAN.md — Claude-based token/pattern extraction and conflict detection
 - [ ] 03-03-PLAN.md — Self-review scorer and ui-generator SKILL.md definition
 
 ### Phase 4: Code Integration
@@ -119,7 +119,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/3 | Complete   | 2026-03-27 |
 | 2. Spec Layer | 3/3 | Complete   | 2026-03-28 |
-| 3. UI Generation | 0/3 | Planned    |  |
+| 3. UI Generation | 2/3 | In Progress|  |
 | 4. Code Integration | 0/TBD | Not started | - |
 | 5. Backend + Quality | 0/TBD | Not started | - |
 | 6. Analytics + Delivery | 0/TBD | Not started | - |
