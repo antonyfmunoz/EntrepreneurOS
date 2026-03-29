@@ -28,7 +28,7 @@ Does NOT include: data fetching, API endpoints, backend wiring (Phase 5), or ana
 ### Page Wiring
 - **D-07:** All new pages wrapped in ProtectedRoute + CompanyGuard by default. Matches existing App.tsx pattern where every page except /auth uses ProtectedRoute.
 - **D-08:** Default Layout wrapper with opt-out. New pages render inside existing Layout (sidebar + header + content area) by default. PageSpec flags like `fullScreen: true` or page types `onboarding`/`auth` trigger standalone rendering without the shell.
-- **D-09:** Auto-add navigation entries. System reads page name from PageSpec, picks an appropriate Lucide icon, and adds entry to existing sidebar.tsx. Follows existing nav item pattern.
+- **D-09:** Auto-add navigation entries. System reads page name from PageSpec, picks an appropriate remixicon icon (ri-* class, matching existing sidebar pattern), and adds entry to existing sidebar.tsx. Follows existing nav item pattern.
 
 ### Brownfield Conflict Resolution
 - **D-10:** Flag conflicts + smart merge option. When a new page's route or filename collides with an existing one, system detects the conflict, shows both versions to the user, and offers three choices: replace existing, AI smart-merge, or skip. AI merge only runs when user explicitly picks it.
