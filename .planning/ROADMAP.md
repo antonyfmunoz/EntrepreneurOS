@@ -104,7 +104,7 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Phase 5 type contracts and backend brownfield audit
+- [x] 05-01-PLAN.md — Phase 5 type contracts and backend brownfield audit
 - [ ] 05-02-PLAN.md — Route, schema, storage, and hook code generators
 - [ ] 05-03-PLAN.md — Integration test generator, transaction isolation, and fix loop
 - [ ] 05-04-PLAN.md — Wiring applier (file mutations) and backend-wirer SKILL.md
