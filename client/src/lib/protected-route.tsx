@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
+import { useCompany } from "@/hooks/use-company";
 import { Loader2 } from "lucide-react";
 import { Route, Redirect } from "wouter";
 import { ReactNode } from "react";
@@ -12,9 +13,11 @@ type ProtectedRouteProps = {
 
 export function ProtectedRoute(props: ProtectedRouteProps) {
   const { path, component: Component, children } = props;
-  const { user, isLoading } = useAuth();
 
-  if (isLoading) {
+  const { user, isLoading } = useAuth();
+  const { hasCompany, isLoading: companyLoading } = useCompany();
+
+  if (isLoading || companyLoading) {
     return (
       <Route path={path}>
         <div className="flex items-center justify-center min-h-screen">
@@ -24,10 +27,29 @@ export function ProtectedRoute(props: ProtectedRouteProps) {
     );
   }
 
+  // Not logged in
   if (!user) {
     return (
       <Route path={path}>
         <Redirect to="/auth" />
+      </Route>
+    );
+  }
+
+  // Logged in but no company: only /company-setup is allowed; block all other app routes
+  if (!hasCompany && path !== "/company-setup") {
+    return (
+      <Route path={path}>
+        <Redirect to="/company-setup" />
+      </Route>
+    );
+  }
+
+  // Logged in with company: redirect /company-setup to /home so setup page never mounts
+  if (hasCompany && path === "/company-setup") {
+    return (
+      <Route path={path}>
+        <Redirect to="/home" />
       </Route>
     );
   }
