@@ -40,7 +40,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **BACK-02**: System adds Express routes for endpoints the new UI requires
 - [x] **BACK-03**: System extends Drizzle schema for new data requirements
 - [x] **BACK-04**: System adds Zod validation for new endpoints
-- [ ] **BACK-05**: Backend wiring is brownfield-aware (checks existing routes, migrations, middleware)
+- [x] **BACK-05**: Backend wiring is brownfield-aware (checks existing routes, migrations, middleware)
 
 ### Quality & Testing
 
@@ -139,7 +139,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BACK-02 | Phase 5 | Complete |
 | BACK-03 | Phase 5 | Complete |
 | BACK-04 | Phase 5 | Complete |
-| BACK-05 | Phase 5 | Pending |
+| BACK-05 | Phase 5 | Complete |
 | TEST-01 | Phase 5 | Complete |
 | TEST-02 | Phase 5 | Complete |
 | TEST-03 | Phase 5 | Complete |
