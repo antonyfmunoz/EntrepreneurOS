@@ -66,8 +66,13 @@ Plans:
   3. After page 1 approval, design tokens (color palette, type scale, spacing, component patterns, border radius) are extracted and persisted to Neon
   4. Subsequent pages are generated with stored design tokens injected as hard constraints into the Stitch prompt
   5. Self-review scores generated output against spec requirements and consistency with prior pages; pages that score above confidence threshold auto-approve without user interruption
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 03-01-PLAN.md — Type contracts, Stitch prompt builder, and approval gate logic
+- [ ] 03-02-PLAN.md — Claude-based token/pattern extraction and conflict detection
+- [ ] 03-03-PLAN.md — Self-review scorer and ui-generator SKILL.md definition
 
 ### Phase 4: Code Integration
 **Goal**: Approved Stitch output becomes real, working React files in the existing repo — integrated into routing, navigation, and layout — with every change tracked in git
@@ -114,7 +119,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/3 | Complete   | 2026-03-27 |
 | 2. Spec Layer | 3/3 | Complete   | 2026-03-28 |
-| 3. UI Generation | 0/TBD | Not started | - |
+| 3. UI Generation | 0/3 | Not started | - |
 | 4. Code Integration | 0/TBD | Not started | - |
 | 5. Backend + Quality | 0/TBD | Not started | - |
 | 6. Analytics + Delivery | 0/TBD | Not started | - |
