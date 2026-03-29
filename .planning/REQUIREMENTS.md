@@ -37,16 +37,16 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Backend
 
 - [ ] **BACK-01**: System extracts actual API calls from integrated frontend components (contract extraction)
-- [ ] **BACK-02**: System adds Express routes for endpoints the new UI requires
-- [ ] **BACK-03**: System extends Drizzle schema for new data requirements
-- [ ] **BACK-04**: System adds Zod validation for new endpoints
+- [x] **BACK-02**: System adds Express routes for endpoints the new UI requires
+- [x] **BACK-03**: System extends Drizzle schema for new data requirements
+- [x] **BACK-04**: System adds Zod validation for new endpoints
 - [ ] **BACK-05**: Backend wiring is brownfield-aware (checks existing routes, migrations, middleware)
 
 ### Quality & Testing
 
-- [ ] **TEST-01**: System runs tests after each phase, parses failures, attempts fixes, re-runs until pass or escalates
-- [ ] **TEST-02**: System writes integration tests per phase (not just unit tests)
-- [ ] **TEST-03**: System requires passing test suite before deployment gate
+- [x] **TEST-01**: System runs tests after each phase, parses failures, attempts fixes, re-runs until pass or escalates
+- [x] **TEST-02**: System writes integration tests per phase (not just unit tests)
+- [x] **TEST-03**: System requires passing test suite before deployment gate
 
 ### Git Workflow
 
@@ -136,13 +136,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INTG-05 | Phase 4 | Pending |
 | INTG-06 | Phase 1 | Complete |
 | BACK-01 | Phase 5 | Pending |
-| BACK-02 | Phase 5 | Pending |
-| BACK-03 | Phase 5 | Pending |
-| BACK-04 | Phase 5 | Pending |
+| BACK-02 | Phase 5 | Complete |
+| BACK-03 | Phase 5 | Complete |
+| BACK-04 | Phase 5 | Complete |
 | BACK-05 | Phase 5 | Pending |
-| TEST-01 | Phase 5 | Pending |
-| TEST-02 | Phase 5 | Pending |
-| TEST-03 | Phase 5 | Pending |
+| TEST-01 | Phase 5 | Complete |
+| TEST-02 | Phase 5 | Complete |
+| TEST-03 | Phase 5 | Complete |
 | GIT-01 | Phase 4 | Pending |
 | GIT-02 | Phase 4 | Pending |
 | GIT-03 | Phase 4 | Pending |
