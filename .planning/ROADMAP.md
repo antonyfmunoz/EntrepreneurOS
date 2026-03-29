@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Spec Layer** - Spec ingestion (paste or collaborate) producing validated PageSpec[] output (completed 2026-03-28)
 - [x] **Phase 3: UI Generation** - Stitch integration with design memory and confidence-calibrated approval gates (completed 2026-03-29)
 - [x] **Phase 4: Code Integration** - Brownfield-aware frontend integration with git workflow (completed 2026-03-29)
-- [ ] **Phase 5: Backend + Quality** - Backend wiring against actual UI contracts with autonomous test fix loop
+- [x] **Phase 5: Backend + Quality** - Backend wiring against actual UI contracts with autonomous test fix loop (completed 2026-03-29)
 - [ ] **Phase 6: Analytics + Delivery** - PostHog instrumentation and full deployment automation
 
 ## Phase Details
@@ -107,7 +107,7 @@ Plans:
 - [x] 05-01-PLAN.md — Phase 5 type contracts and backend brownfield audit
 - [x] 05-02-PLAN.md — Route, schema, storage, and hook code generators
 - [x] 05-03-PLAN.md — Integration test generator, transaction isolation, and fix loop
-- [ ] 05-04-PLAN.md — Wiring applier (file mutations) and backend-wirer SKILL.md
+- [x] 05-04-PLAN.md — Wiring applier (file mutations) and backend-wirer SKILL.md
 
 ### Phase 6: Analytics + Delivery
 **Goal**: The finished, tested app is instrumented with meaningful analytics and deployed to the target host with explicit user confirmation at the deployment gate
@@ -132,5 +132,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Spec Layer | 3/3 | Complete   | 2026-03-28 |
 | 3. UI Generation | 3/3 | Complete   | 2026-03-29 |
 | 4. Code Integration | 3/3 | Complete   | 2026-03-29 |
-| 5. Backend + Quality | 3/4 | In Progress|  |
+| 5. Backend + Quality | 4/4 | Complete   | 2026-03-29 |
 | 6. Analytics + Delivery | 0/TBD | Not started | - |
