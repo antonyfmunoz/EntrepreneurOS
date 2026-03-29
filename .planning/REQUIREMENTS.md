@@ -18,10 +18,10 @@ Requirements for initial release. Each maps to roadmap phases.
 ### UI Generation
 
 - [x] **UIGEN-01**: System calls Google Stitch API with page spec and receives generated code + visual preview
-- [ ] **UIGEN-02**: System stores approved page design context (tokens, patterns, layout decisions) in Neon PostgreSQL
+- [x] **UIGEN-02**: System stores approved page design context (tokens, patterns, layout decisions) in Neon PostgreSQL
 - [x] **UIGEN-03**: System injects prior design context into Stitch prompts for subsequent pages
 - [ ] **UIGEN-04**: System self-reviews generated output against spec requirements (structured checklist, not freeform)
-- [ ] **UIGEN-05**: System self-reviews generated output against previously approved pages for visual consistency
+- [x] **UIGEN-05**: System self-reviews generated output against previously approved pages for visual consistency
 - [x] **UIGEN-06**: Page 1 always escalates to user for approval regardless of self-review confidence
 - [x] **UIGEN-07**: Subsequent pages auto-approve if self-review passes, escalate to user if below confidence threshold
 
@@ -123,10 +123,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SPEC-04 | Phase 2 | Complete |
 | SPEC-05 | Phase 2 | Complete |
 | UIGEN-01 | Phase 3 | Complete |
-| UIGEN-02 | Phase 3 | Pending |
+| UIGEN-02 | Phase 3 | Complete |
 | UIGEN-03 | Phase 3 | Complete |
 | UIGEN-04 | Phase 3 | Pending |
-| UIGEN-05 | Phase 3 | Pending |
+| UIGEN-05 | Phase 3 | Complete |
 | UIGEN-06 | Phase 3 | Complete |
 | UIGEN-07 | Phase 3 | Complete |
 | INTG-01 | Phase 4 | Pending |

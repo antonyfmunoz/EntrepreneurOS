@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-03-29T01:09:26.885Z"
-last_activity: 2026-03-28
+status: executing
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-03-29T01:17:00.000Z"
+last_activity: 2026-03-29
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 9
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 ---
 
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 
 ## Current Position
 
-Phase: 3
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-03-28
+Phase: 3 (ui-generation)
+Plan: 2 of 3 complete
+Status: Executing Phase 03 — Plan 02 complete
+Last activity: 2026-03-29
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -59,6 +59,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02-spec-layer P02 | 273 | 2 tasks | 6 files |
 | Phase 02-spec-layer P03 | 5 | 2 tasks | 6 files |
 | Phase 03 P01 | 161 | 2 tasks | 5 files |
+| Phase 03 P02 | 175 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,9 @@ Recent decisions affecting current work:
 - [Phase 03]: CONFIDENCE_THRESHOLD = 0.9 per D-10 — all four dimensions must meet this for auto-approval
 - [Phase 03]: buildStitchPrompt joins spec fields as newline-separated parts, omitting undefined/null fields
 - [Phase 03]: evaluateApprovalGate pageIndex 0 always returns first_page regardless of review score (D-13)
+- [Phase 03-02]: extractPatternsFromHtml not a separate function — patterns returned alongside tokens in extractTokensFromHtml per D-06 (one Claude call, both data types)
+- [Phase 03-02]: mergeTokens uses TOKEN_FIELDS const array enumerating 12 dmTokens columns — prevents field drift if schema changes
+- [Phase 03-02]: usageContextsDiffer uses substring inclusion check — prevents false positives where context phrasing differs but intent is same (Pitfall 5)
 
 ### Pending Todos
 
@@ -99,6 +103,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T01:09:26.876Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-03-29T01:17:00.000Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
