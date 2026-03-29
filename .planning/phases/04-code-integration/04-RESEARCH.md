@@ -34,7 +34,7 @@ The git workflow layer is straightforward: one feature branch, one atomic commit
 **Page Wiring**
 - D-07: All new pages wrapped in ProtectedRoute + CompanyGate by default. Opt-out via PageSpec flags (fullScreen: true, page type onboarding/auth).
 - D-08: Default Layout wrapper with opt-out. New pages render inside existing Layout (sidebar + header + content area) by default.
-- D-09: Auto-add navigation entries. System reads page name from PageSpec, picks appropriate Lucide icon, adds entry to sidebar.tsx.
+- D-09: Auto-add navigation entries. System reads page name from PageSpec, picks appropriate remixicon icon (ri-* class), adds entry to sidebar.tsx.
 
 **Brownfield Conflict Resolution**
 - D-10: Flag conflicts + smart merge option. Route/filename collision shows both versions, offers: replace existing, AI smart-merge, or skip.
@@ -65,7 +65,7 @@ None — discussion stayed within phase scope.
 | INTG-02 | System translates Stitch output to match existing design system (shadcn/ui components) before integration | Claude AI rewrite step: send HTML + installed shadcn component list → receive TypeScript React component. Full installed component inventory documented below. |
 | INTG-03 | System creates/updates React component files from approved Stitch output | Page file writer: create client/src/pages/[name].tsx following established patterns (default export, Layout wrapper, kebab-case file name) |
 | INTG-04 | System updates routing configuration for new pages | Route injector: parse App.tsx, insert ProtectedRoute + CompanyGate blocks in Router Switch, write back |
-| INTG-05 | System wires new pages into existing app layout and navigation | Nav injector: parse sidebar.tsx, append nav item with Lucide icon in the ul.space-y-2 list |
+| INTG-05 | System wires new pages into existing app layout and navigation | Nav injector: parse sidebar.tsx, append nav item with remixicon icon (ri-* class) in the ul.space-y-2 list |
 | GIT-01 | System creates feature branches per phase | `git checkout -b feature/ui-integration [base-branch]` at pipeline start |
 | GIT-02 | System commits at phase boundaries with descriptive messages | One `git add + git commit` per page after all wiring steps complete |
 | GIT-03 | System pushes to remote and surfaces PR-ready state | `git push -u origin feature/ui-integration` then `gh pr create` with page summary |
