@@ -27,11 +27,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Code Integration
 
-- [x] **INTG-01**: System scans existing codebase before writing any files (brownfield audit)
-- [ ] **INTG-02**: System translates Stitch output to match existing design system (shadcn/ui components) before integration
-- [ ] **INTG-03**: System creates/updates React component files from approved Stitch output
-- [x] **INTG-04**: System updates routing configuration for new pages
-- [x] **INTG-05**: System wires new pages into existing app layout and navigation
+- [ ] **INTG-01**: System scans existing codebase before writing any files (brownfield audit)
+- [x] **INTG-02**: System translates Stitch output to match existing design system (shadcn/ui components) before integration
+- [x] **INTG-03**: System creates/updates React component files from approved Stitch output
+- [ ] **INTG-04**: System updates routing configuration for new pages
+- [ ] **INTG-05**: System wires new pages into existing app layout and navigation
 - [x] **INTG-06**: System detects React + Vite + Tailwind + shadcn/ui framework via package.json (extensible to other frameworks)
 
 ### Backend
@@ -50,9 +50,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Git Workflow
 
-- [x] **GIT-01**: System creates feature branches per phase
-- [x] **GIT-02**: System commits at phase boundaries (not per-file) with descriptive messages
-- [x] **GIT-03**: System pushes to remote and surfaces PR-ready state
+- [ ] **GIT-01**: System creates feature branches per phase
+- [ ] **GIT-02**: System commits at phase boundaries (not per-file) with descriptive messages
+- [ ] **GIT-03**: System pushes to remote and surfaces PR-ready state
 
 ### Analytics
 
@@ -129,11 +129,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UIGEN-05 | Phase 3 | Complete |
 | UIGEN-06 | Phase 3 | Complete |
 | UIGEN-07 | Phase 3 | Complete |
-| INTG-01 | Phase 4 | Complete |
-| INTG-02 | Phase 4 | Pending |
-| INTG-03 | Phase 4 | Pending |
-| INTG-04 | Phase 4 | Complete |
-| INTG-05 | Phase 4 | Complete |
+| INTG-01 | Phase 4 | Pending |
+| INTG-02 | Phase 4 | Complete |
+| INTG-03 | Phase 4 | Complete |
+| INTG-04 | Phase 4 | Pending |
+| INTG-05 | Phase 4 | Pending |
 | INTG-06 | Phase 1 | Complete |
 | BACK-01 | Phase 5 | Pending |
 | BACK-02 | Phase 5 | Pending |
@@ -143,9 +143,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-01 | Phase 5 | Pending |
 | TEST-02 | Phase 5 | Pending |
 | TEST-03 | Phase 5 | Pending |
-| GIT-01 | Phase 4 | Complete |
-| GIT-02 | Phase 4 | Complete |
-| GIT-03 | Phase 4 | Complete |
+| GIT-01 | Phase 4 | Pending |
+| GIT-02 | Phase 4 | Pending |
+| GIT-03 | Phase 4 | Pending |
 | ANLYT-01 | Phase 6 | Pending |
 | ANLYT-02 | Phase 6 | Pending |
 | ANLYT-03 | Phase 6 | Pending |
