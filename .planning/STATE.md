@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-03-PLAN.md
-last_updated: "2026-03-29T04:10:35.024Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-03-29T04:07:52.499Z"
 last_activity: 2026-03-29
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 3
   total_plans: 12
-  completed_plans: 12
+  completed_plans: 10
   percent: 0
 ---
 
@@ -60,7 +60,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02-spec-layer P03 | 5 | 2 tasks | 6 files |
 | Phase 03-ui-generation P03 | 7 | 2 tasks | 3 files |
 | Phase 04-code-integration P01 | 5 | 2 tasks | 3 files |
-| Phase 04-code-integration P03 | 6 | 2 tasks | 7 files |
+| Phase 04-code-integration P02 | 251 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -90,7 +90,8 @@ Recent decisions affecting current work:
 - [Phase 03-ui-generation]: selfReview uses Claude Sonnet 4-5 with max_tokens 2048 — review response is smaller than extraction, lazy Anthropic client pattern matches extract-tokens.ts
 - [Phase 03-ui-generation]: SKILL.md user confirmation gate (D-05) documents three options: Confirm, Edit, Skip persistence — token diff table shown when prior tokens exist
 - [Phase 04-code-integration]: BrownfieldInventory uses per-block regex parsing for ProtectedRoute blocks — handles multi-line JSX correctly
-- [Phase 04-code-integration]: ExecFn injectable parameter in git-workflow functions — promisify captures reference at module init; injectable pattern avoids vi.mock binding issues in vitest
+- [Phase 04-code-integration]: translateHtmlToShadcn accepts optional Anthropic client for test injection — avoids env var requirement in unit tests
+- [Phase 04-code-integration]: Post-translation data-fetch guard: one re-prompt with stricter instructions, then regex strip as final fallback (useQuery, useMutation, fetch, axios)
 
 ### Pending Todos
 
@@ -102,6 +103,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T04:10:35.017Z
-Stopped at: Completed 04-03-PLAN.md
+Last session: 2026-03-29T04:07:52.489Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
