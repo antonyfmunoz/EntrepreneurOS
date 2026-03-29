@@ -87,7 +87,7 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [ ] 04-01-PLAN.md — Phase 4 type contracts and brownfield audit module
+- [x] 04-01-PLAN.md — Phase 4 type contracts and brownfield audit module
 - [ ] 04-02-PLAN.md — HTML-to-shadcn Claude AI translation and page file writer
 - [ ] 04-03-PLAN.md — Route/nav injectors, git workflow, and integrator SKILL.md
 
@@ -125,6 +125,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Foundation | 3/3 | Complete   | 2026-03-27 |
 | 2. Spec Layer | 3/3 | Complete   | 2026-03-28 |
 | 3. UI Generation | 3/3 | Complete   | 2026-03-29 |
-| 4. Code Integration | 0/3 | Not started | - |
+| 4. Code Integration | 1/3 | In Progress|  |
 | 5. Backend + Quality | 0/TBD | Not started | - |
 | 6. Analytics + Delivery | 0/TBD | Not started | - |
