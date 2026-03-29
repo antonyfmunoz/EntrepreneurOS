@@ -101,7 +101,12 @@ Plans:
   3. Integration tests are written against spec requirements (not just unit tests) before implementation is marked complete
   4. System runs tests autonomously, parses failures, fixes the implementation (never the tests), re-runs, and either passes or escalates after 3 cycles
   5. No deployment gate is reachable with a failing test suite
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Phase 5 type contracts and backend brownfield audit
+- [ ] 05-02-PLAN.md — Route, schema, storage, and hook code generators
+- [ ] 05-03-PLAN.md — Integration test generator, transaction isolation, and fix loop
 
 ### Phase 6: Analytics + Delivery
 **Goal**: The finished, tested app is instrumented with meaningful analytics and deployed to the target host with explicit user confirmation at the deployment gate
@@ -126,5 +131,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Spec Layer | 3/3 | Complete   | 2026-03-28 |
 | 3. UI Generation | 3/3 | Complete   | 2026-03-29 |
 | 4. Code Integration | 3/3 | Complete   | 2026-03-29 |
-| 5. Backend + Quality | 0/TBD | Not started | - |
+| 5. Backend + Quality | 0/3 | Planning complete | - |
 | 6. Analytics + Delivery | 0/TBD | Not started | - |
