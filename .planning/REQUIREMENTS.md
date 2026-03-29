@@ -28,8 +28,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Code Integration
 
 - [ ] **INTG-01**: System scans existing codebase before writing any files (brownfield audit)
-- [ ] **INTG-02**: System translates Stitch output to match existing design system (shadcn/ui components) before integration
-- [ ] **INTG-03**: System creates/updates React component files from approved Stitch output
+- [x] **INTG-02**: System translates Stitch output to match existing design system (shadcn/ui components) before integration
+- [x] **INTG-03**: System creates/updates React component files from approved Stitch output
 - [ ] **INTG-04**: System updates routing configuration for new pages
 - [ ] **INTG-05**: System wires new pages into existing app layout and navigation
 - [x] **INTG-06**: System detects React + Vite + Tailwind + shadcn/ui framework via package.json (extensible to other frameworks)
@@ -130,8 +130,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UIGEN-06 | Phase 3 | Complete |
 | UIGEN-07 | Phase 3 | Complete |
 | INTG-01 | Phase 4 | Pending |
-| INTG-02 | Phase 4 | Pending |
-| INTG-03 | Phase 4 | Pending |
+| INTG-02 | Phase 4 | Complete |
+| INTG-03 | Phase 4 | Complete |
 | INTG-04 | Phase 4 | Pending |
 | INTG-05 | Phase 4 | Pending |
 | INTG-06 | Phase 1 | Complete |
