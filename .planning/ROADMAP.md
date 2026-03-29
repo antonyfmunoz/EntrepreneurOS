@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Infrastructure schemas, state contracts, Stitch SDK wrapper, Vitest setup, and framework detection (completed 2026-03-27)
 - [x] **Phase 2: Spec Layer** - Spec ingestion (paste or collaborate) producing validated PageSpec[] output (completed 2026-03-28)
-- [x] **Phase 3: UI Generation** - Stitch integration with design memory and confidence-calibrated approval gates (completed 2026-03-29)
+- [x] **Phase 3: UI Generation** - Stitch integration with design memory and confidence-calibrated approval gates (completed 2026-03-29)
 - [ ] **Phase 4: Code Integration** - Brownfield-aware frontend integration with git workflow
 - [ ] **Phase 5: Backend + Quality** - Backend wiring against actual UI contracts with autonomous test fix loop
 - [ ] **Phase 6: Analytics + Delivery** - PostHog instrumentation and full deployment automation
@@ -83,8 +83,13 @@ Plans:
   2. Stitch HTML output is translated to use existing shadcn/ui components and design system conventions before any file is written
   3. New pages are navigable in the running app — routes are added to App.tsx, pages appear in navigation, and existing auth-protected routes remain intact
   4. Each phase's work lives on its own feature branch with incremental commits at phase boundaries, and the branch is pushed to remote in PR-ready state
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 04-01-PLAN.md — Phase 4 type contracts and brownfield audit module
+- [ ] 04-02-PLAN.md — HTML-to-shadcn Claude AI translation and page file writer
+- [ ] 04-03-PLAN.md — Route/nav injectors, git workflow, and integrator SKILL.md
 
 ### Phase 5: Backend + Quality
 **Goal**: The backend serves exactly what the integrated UI requests, tests verify what was built, and nothing ships until the test suite passes
@@ -120,6 +125,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Foundation | 3/3 | Complete   | 2026-03-27 |
 | 2. Spec Layer | 3/3 | Complete   | 2026-03-28 |
 | 3. UI Generation | 3/3 | Complete   | 2026-03-29 |
-| 4. Code Integration | 0/TBD | Not started | - |
+| 4. Code Integration | 0/3 | Not started | - |
 | 5. Backend + Quality | 0/TBD | Not started | - |
 | 6. Analytics + Delivery | 0/TBD | Not started | - |
