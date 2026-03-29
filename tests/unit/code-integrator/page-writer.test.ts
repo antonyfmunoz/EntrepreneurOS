@@ -1,7 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtemp, mkdir, writeFile, rm, readFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
+
+// Mock child_process.exec before importing page-writer to prevent real npx calls
+vi.mock("child_process", () => ({
+  exec: vi.fn((_cmd: string, _opts: unknown, callback: (err: null, stdout: string, stderr: string) => void) => {
+    callback(null, "", "");
+  }),
+}));
 
 import {
   writePage,
@@ -140,39 +147,19 @@ describe("checkFileConflict", () => {
 // ─── ensureShadcnComponents tests ────────────────────────────────────────────
 
 describe("ensureShadcnComponents", () => {
-  it("identifies missing components", async () => {
-    // We won't actually run npx in tests — just test the logic
-    // ensureShadcnComponents should detect that "tabs" is missing
+  it("identifies missing components and installs them", async () => {
     const installedComponents = ["button", "card"];
     const extractedImports = ["button", "card", "tabs"];
 
-    // Mock the exec: override by passing empty projectRoot so npx would fail
-    // Instead, let's test at unit level with a no-op approach
-    // The actual npx call should only happen for MISSING components
-    // Since we can't run npx in test env, we test the comparison logic
-    // by checking that only "tabs" would be attempted
+    // child_process.exec is mocked above — no real npx runs
+    const installed = await ensureShadcnComponents({
+      projectRoot: tempRoot,
+      extractedImports,
+      installedComponents,
+    });
 
-    // This test verifies the comparison returns the right missing list
-    // We'll test ensureShadcnComponents with a mock that captures what would be installed
-    // Since ensureShadcnComponents returns the newly installed list, we check it
-
-    // For unit testing without actual npx, we accept that it may throw on npx
-    // but we verify the function correctly identifies "tabs" as missing
-    // In real env with projectRoot pointing to the actual repo it would work
-    try {
-      const installed = await ensureShadcnComponents({
-        projectRoot: tempRoot,
-        extractedImports,
-        installedComponents,
-      });
-      // If it doesn't throw, it should have tried to install "tabs"
-      expect(installed).toContain("tabs");
-    } catch {
-      // npx shadcn not available in temp dir — that's expected in unit tests
-      // The important thing is the function attempts to install "tabs"
-      // We verify this by checking that it would call npx for "tabs" only
-      // This is validated by the implementation logic
-    }
+    // "tabs" is the only missing component — should be installed
+    expect(installed).toEqual(["tabs"]);
   });
 
   it("returns empty when all components present", async () => {
