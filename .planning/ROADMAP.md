@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Infrastructure schemas, state contracts, Stitch SDK wrapper, Vitest setup, and framework detection (completed 2026-03-27)
 - [x] **Phase 2: Spec Layer** - Spec ingestion (paste or collaborate) producing validated PageSpec[] output (completed 2026-03-28)
-- [ ] **Phase 3: UI Generation** - Stitch integration with design memory and confidence-calibrated approval gates
+- [x] **Phase 3: UI Generation** - Stitch integration with design memory and confidence-calibrated approval gates (completed 2026-03-29)
 - [ ] **Phase 4: Code Integration** - Brownfield-aware frontend integration with git workflow
 - [ ] **Phase 5: Backend + Quality** - Backend wiring against actual UI contracts with autonomous test fix loop
 - [ ] **Phase 6: Analytics + Delivery** - PostHog instrumentation and full deployment automation
@@ -72,7 +72,7 @@ Plans:
 Plans:
 - [x] 03-01-PLAN.md — Type contracts, Stitch prompt builder, and approval gate logic
 - [x] 03-02-PLAN.md — Claude-based token/pattern extraction and conflict detection
-- [ ] 03-03-PLAN.md — Self-review scorer and ui-generator SKILL.md definition
+- [x] 03-03-PLAN.md — Self-review scorer and ui-generator SKILL.md definition
 
 ### Phase 4: Code Integration
 **Goal**: Approved Stitch output becomes real, working React files in the existing repo — integrated into routing, navigation, and layout — with every change tracked in git
@@ -119,7 +119,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/3 | Complete   | 2026-03-27 |
 | 2. Spec Layer | 3/3 | Complete   | 2026-03-28 |
-| 3. UI Generation | 2/3 | In Progress|  |
+| 3. UI Generation | 3/3 | Complete   | 2026-03-29 |
 | 4. Code Integration | 0/TBD | Not started | - |
 | 5. Backend + Quality | 0/TBD | Not started | - |
 | 6. Analytics + Delivery | 0/TBD | Not started | - |
