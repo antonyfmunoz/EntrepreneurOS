@@ -1,19 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type Anthropic from "@anthropic-ai/sdk";
 import type { TranslationInput } from "../../../lib/code-integrator/types.js";
 
-// ─── Mock Anthropic before importing the module under test ────────────────────
-
-const mockMessagesCreate = vi.fn();
-
-vi.mock("@anthropic-ai/sdk", () => {
-  return {
-    default: vi.fn().mockImplementation(() => ({
-      messages: {
-        create: mockMessagesCreate,
-      },
-    })),
-  };
-});
+// ─── Mock p-retry to execute immediately ─────────────────────────────────────
 
 vi.mock("p-retry", () => ({
   default: vi.fn((fn: () => Promise<unknown>) => fn()),
@@ -43,14 +32,21 @@ function makeResponse(content: string) {
   };
 }
 
+// ─── Factory: create a mock Anthropic client with a configurable create fn ───
+
+function makeMockClient(
+  mockCreate: ReturnType<typeof vi.fn>
+): Anthropic {
+  return {
+    messages: { create: mockCreate },
+  } as unknown as Anthropic;
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("translateHtmlToShadcn", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("extracts shadcn imports from TSX output", async () => {
+    const mockCreate = vi.fn();
     const tsxWithImports = `import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -61,10 +57,9 @@ export default function TestPage() {
     </Layout>
   );
 }`;
+    mockCreate.mockResolvedValueOnce(makeResponse(tsxWithImports));
 
-    mockMessagesCreate.mockResolvedValueOnce(makeResponse(tsxWithImports));
-
-    const result = await translateHtmlToShadcn(makeInput());
+    const result = await translateHtmlToShadcn(makeInput(), makeMockClient(mockCreate));
 
     expect(result.extractedImports).toContain("button");
     expect(result.extractedImports).toContain("card");
@@ -72,6 +67,7 @@ export default function TestPage() {
   });
 
   it("detects Layout wrapper", async () => {
+    const mockCreate = vi.fn();
     const tsxWithLayout = `import { Layout } from "@/components/layout";
 
 export default function TestPage() {
@@ -81,26 +77,28 @@ export default function TestPage() {
     </Layout>
   );
 }`;
+    mockCreate.mockResolvedValueOnce(makeResponse(tsxWithLayout));
 
-    mockMessagesCreate.mockResolvedValueOnce(makeResponse(tsxWithLayout));
-
-    const result = await translateHtmlToShadcn(makeInput());
+    const result = await translateHtmlToShadcn(makeInput(), makeMockClient(mockCreate));
 
     expect(result.layoutWrapped).toBe(true);
   });
 
   it("strips markdown fences from output", async () => {
-    const tsxWithFences = "```tsx\nexport default function Page() {\n  return <div>content</div>;\n}\n```";
+    const mockCreate = vi.fn();
+    const tsxWithFences =
+      "```tsx\nexport default function Page() {\n  return <div>content</div>;\n}\n```";
+    mockCreate.mockResolvedValueOnce(makeResponse(tsxWithFences));
 
-    mockMessagesCreate.mockResolvedValueOnce(makeResponse(tsxWithFences));
-
-    const result = await translateHtmlToShadcn(makeInput());
+    const result = await translateHtmlToShadcn(makeInput(), makeMockClient(mockCreate));
 
     expect(result.tsxContent).not.toContain("```");
     expect(result.tsxContent).toContain("export default function Page()");
   });
 
   it("rejects data-fetching code — final output must not contain useQuery", async () => {
+    const mockCreate = vi.fn();
+
     // First response contains forbidden data-fetching code
     const tsxWithDataFetch = `import { useQuery } from "@tanstack/react-query";
 export default function TestPage() {
@@ -113,22 +111,22 @@ export default function TestPage() {
   return <Layout title="Test"><div>static content</div></Layout>;
 }`;
 
-    mockMessagesCreate
+    mockCreate
       .mockResolvedValueOnce(makeResponse(tsxWithDataFetch))
       .mockResolvedValueOnce(makeResponse(cleanTsx));
 
-    const result = await translateHtmlToShadcn(makeInput());
+    const result = await translateHtmlToShadcn(makeInput(), makeMockClient(mockCreate));
 
     expect(result.tsxContent).not.toMatch(/useQuery|useMutation|fetch\(|axios\./);
   });
 
   it("passes correct prompt structure to Claude", async () => {
+    const mockCreate = vi.fn();
     const cleanTsx = `import { Layout } from "@/components/layout";
 export default function ReportsPage() {
   return <Layout title="Reports"><div>content</div></Layout>;
 }`;
-
-    mockMessagesCreate.mockResolvedValueOnce(makeResponse(cleanTsx));
+    mockCreate.mockResolvedValueOnce(makeResponse(cleanTsx));
 
     const input = makeInput({
       pageName: "Reports",
@@ -137,10 +135,10 @@ export default function ReportsPage() {
       htmlContent: "<div><h1>Reports</h1></div>",
     });
 
-    await translateHtmlToShadcn(input);
+    await translateHtmlToShadcn(input, makeMockClient(mockCreate));
 
-    expect(mockMessagesCreate).toHaveBeenCalledOnce();
-    const callArg = mockMessagesCreate.mock.calls[0][0];
+    expect(mockCreate).toHaveBeenCalledOnce();
+    const callArg = mockCreate.mock.calls[0][0];
 
     // Verify model and max_tokens
     expect(callArg.model).toBe("claude-sonnet-4-5");
