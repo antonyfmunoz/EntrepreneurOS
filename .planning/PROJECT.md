@@ -25,12 +25,12 @@ One system that takes a SaaS product from spec document to deployed, tested, hos
 - [ ] Self-review — Claude reviews each generated page against the spec and previously approved pages before escalating to user
 - [ ] Approval gates — page 1 always escalates to user for direction-setting; subsequent pages auto-approve if confident, escalate if not
 - [ ] Pause/resume/interrupt — user can inject feedback, pause, or resume at any point in the pipeline
-- [ ] Frontend code integration — take approved Stitch output and integrate it into the project (create/update files, update routing, respect existing code)
-- [ ] Brownfield awareness — check what exists before adding, avoid duplicates and redundancy
+- [x] Frontend code integration — take approved Stitch output and integrate it into the project (create/update files, update routing, respect existing code). Validated in Phase 04: Code Integration.
+- [x] Brownfield awareness — check what exists before adding, avoid duplicates and redundancy. Validated in Phase 04: Code Integration.
 - [ ] Backend wiring — upgrade existing Express/Drizzle backend (routes, schema, validation) to serve what the new UI needs
 - [ ] Testing — test what gets built, not just generate code; fix errors when tests fail
 - [ ] Analytics setup — PostHog integration (event tracking, feature flags, dashboards, error tracking)
-- [ ] Git workflow — branch management, push/pull, GitHub repository integration
+- [x] Git workflow — branch management, push/pull, GitHub repository integration. Validated in Phase 04: Code Integration.
 - [ ] Hosting/deployment — guided setup for hosting decisions + full deploy automation (Docker, CI/CD, VPS/cloud)
 - [ ] Reusable across projects — works with any SaaS repo, not tied to EntrepreneurOS
 - [ ] Framework-aware — v1 targets React + Vite, designed to extend to Next.js, Vue/Nuxt, and others
