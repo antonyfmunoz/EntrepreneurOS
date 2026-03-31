@@ -7,14 +7,16 @@ import type { DmTokenRow } from "./types.js";
  * Translates a PageSpecFull + optional design tokens into a Stitch-ready prompt string.
  * Pure function — no I/O, no AI calls. (D-01, D-02)
  *
- * @param spec          The full page specification for this page
- * @param tokens        Design memory tokens (null = no constraints injected)
+ * @param spec                The full page specification for this page
+ * @param tokens              Design memory tokens (null = no constraints injected)
  * @param priorScreenshotUrl  URL of a previously approved screenshot for style reference
+ * @param componentDirection  Optional component style direction from DesignSystemSeed
  */
 export function buildStitchPrompt(
   spec: PageSpecFull,
   tokens: DmTokenRow | null,
-  priorScreenshotUrl?: string
+  priorScreenshotUrl?: string,
+  componentDirection?: string
 ): string {
   const parts: string[] = [];
 
@@ -103,6 +105,11 @@ export function buildStitchPrompt(
   // 10. Prior screenshot reference (only when URL provided)
   if (priorScreenshotUrl !== undefined && priorScreenshotUrl !== null) {
     parts.push("Reference the visual style from the previously approved page screenshot.");
+  }
+
+  // 11. Component style direction (from design system seed, optional)
+  if (componentDirection) {
+    parts.push(`Component style direction: ${componentDirection}`);
   }
 
   return parts.join("\n");

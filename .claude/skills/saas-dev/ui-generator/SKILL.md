@@ -33,6 +33,9 @@ All modules live under `lib/ui-generator/` and `lib/stitch/`:
 | `lib/ui-generator/extract-tokens.ts` | `extractTokensFromHtml`, `mergeTokens` | Extract design tokens from HTML via Claude |
 | `lib/ui-generator/conflict-detector.ts` | `detectPatternConflicts` | Identify conflicting component patterns |
 | `lib/ui-generator/types.ts` | `ReviewScoreSchema`, `CONFIDENCE_THRESHOLD`, `DeviceType`, `MAX_HTML_FOR_REVIEW` | Shared types and constants |
+| `lib/ui-generator/design-system-seeder.ts` | `seedDesignSystem`, `seedToTokens` | Generate initial design system from project spec |
+| `lib/ui-generator/gemini-mockup.ts` | `generateReferenceMockup` | Generate reference mockup via Gemini |
+| `lib/ui-generator/html-sanitizer.ts` | `sanitizeHtmlForModel` | Sanitize HTML before LLM input (security) |
 
 ## Pipeline
 
@@ -51,6 +54,44 @@ Enter choice [1/2/3] or press Enter for default:
 
 - Default to `["DESKTOP"]` if user skips or enters 1
 - Store as `deviceTypes: DeviceType[]` for use in Step 2b
+
+### Step 0.5 — Design System Seeding (Enhancement)
+
+Before any page generation, seed the design system from the project description.
+Only runs if no existing tokens (first pipeline execution).
+
+```typescript
+import { seedDesignSystem, seedToTokens } from "../../lib/ui-generator/design-system-seeder.js";
+
+if (currentTokens === null) {
+  const seed = await seedDesignSystem({
+    projectDescription: specOutput.projectDescription ?? "SaaS application",
+    brandDescription: specOutput.brandDescription,
+    targetAudience: specOutput.targetAudience,
+  });
+
+  console.log(`Design system seeded:`);
+  console.log(`  Colors: ${seed.colorPalette.primary} (primary), ${seed.colorPalette.secondary} (secondary)`);
+  console.log(`  Fonts: ${seed.fontPairing.heading} / ${seed.fontPairing.body}`);
+  console.log(`  Direction: ${seed.componentDirection}`);
+
+  const seedTokens = seedToTokens(seed);
+  var componentDirection = seed.componentDirection;
+
+  currentTokens = {
+    ...seedTokens,
+    projectId: projectConfig.projectId,
+    version: 0,
+    id: 0,
+    createdAt: new Date(),
+    typeScaleRatio: null,
+    shadowStyle: null,
+  } as DmTokenRow;
+}
+```
+
+If seedDesignSystem fails internally, it returns DEFAULT_DESIGN_SEED (fail-closed).
+The seed provides Page 1 with an informed starting point instead of zero design context.
 
 ### Step 1 — Page Order
 
@@ -98,6 +139,25 @@ const prompt = buildStitchPrompt(pageSpec, currentTokens, priorScreenshotUrl);
 ```
 
 `buildStitchPrompt` translates PageSpec fields into a Stitch-ready prompt string, injecting token constraints when available and referencing prior screenshots for visual continuity.
+
+#### Step 2a.5 — Generate Reference Mockup (Enhancement)
+
+```typescript
+import { generateReferenceMockup } from "../../lib/ui-generator/gemini-mockup.js";
+
+const mockupResult = await generateReferenceMockup({
+  spec: pageSpec,
+  tokens: currentTokens,
+  deviceType: deviceTypes[0],
+});
+
+if (mockupResult) {
+  console.log(`  Reference mockup generated for ${pageSpec.name}`);
+}
+```
+
+The mockup is best-effort. If GEMINI_API_KEY is not set or Gemini fails, returns null and pipeline continues.
+When available, the mockup is shown alongside Stitch output at the approval gate for comparison.
 
 #### Step 2b — Call Stitch API (one call per device type)
 
@@ -470,6 +530,27 @@ return {
 | Claude API error (after pRetry exhaustion) | Transient AI service outage | Mark review as `review_failed`. Escalate to user: "Self-review unavailable for [page]. Approve manually or skip?" |
 | Database write error | Neon connection / constraint issue | Log error with context. Do NOT block pipeline. Warn user: "Design memory may be incomplete for this page." |
 | `fetch(htmlUrl)` failure | Presigned URL expired | Re-call `generateScreen` to get a fresh URL. If still fails after 1 retry, treat as recoverable: false. |
+
+## Security: HTML Sanitization
+
+**All Stitch HTML MUST pass through sanitizeHtmlForModel before being sent to any LLM.**
+This prevents prompt injection from content embedded in Stitch-generated HTML.
+
+```typescript
+import { sanitizeHtmlForModel } from "../../lib/ui-generator/html-sanitizer.js";
+import { MAX_HTML_FOR_REVIEW, MAX_HTML_FOR_EXTRACTION } from "../../lib/ui-generator/types.js";
+
+// After fetching HTML from Stitch presigned URL:
+const rawHtml = await fetch(result.htmlUrl).then(r => r.text());
+const htmlForReview = sanitizeHtmlForModel(rawHtml, MAX_HTML_FOR_REVIEW);
+const htmlForExtraction = sanitizeHtmlForModel(rawHtml, MAX_HTML_FOR_EXTRACTION);
+
+// Use htmlForReview in selfReview/dualReview calls
+// Use htmlForExtraction in extractTokensFromHtml calls
+// Store rawHtml for file output (unsanitized) — sanitization is only for LLM input
+```
+
+Sanitization removes: script tags, event handlers, prompt-injection markers in comments, oversized data attributes.
 
 ## Database Schema Reference
 
