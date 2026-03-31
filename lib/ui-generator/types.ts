@@ -146,3 +146,19 @@ export const DEFAULT_DESIGN_SEED: DesignSystemSeed = {
   },
   componentDirection: "clean minimal cards with subtle shadows and rounded interactive elements",
 };
+
+// ─── SECTION 14: Component Discovery ────────────────────────────────────────
+
+export interface ComponentReference {
+  componentName: string;
+  source: "shadcn" | "21st-dev" | "magicui";
+  codeSnippet?: string;     // actual implementation code (from shadcn), max 500 chars
+  description?: string;     // textual description of the component
+  visualRef?: string;       // URL to visual reference (from 21st.dev)
+}
+
+export interface ComponentDiscoveryResult {
+  references: ComponentReference[];
+  queriedComponents: string[];
+  skippedComponents: string[];  // simple components that don't need registry lookup
+}

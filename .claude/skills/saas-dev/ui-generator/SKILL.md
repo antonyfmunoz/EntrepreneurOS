@@ -32,10 +32,11 @@ All modules live under `lib/ui-generator/` and `lib/stitch/`:
 | `lib/ui-generator/approval-gate.ts` | `evaluateApprovalGate`, `formatApprovalGateDisplay`, `formatAutoApproveNotice` | Decide auto-approve vs escalate |
 | `lib/ui-generator/extract-tokens.ts` | `extractTokensFromHtml`, `mergeTokens` | Extract design tokens from HTML via Claude |
 | `lib/ui-generator/conflict-detector.ts` | `detectPatternConflicts` | Identify conflicting component patterns |
-| `lib/ui-generator/types.ts` | `ReviewScoreSchema`, `CONFIDENCE_THRESHOLD`, `DeviceType`, `MAX_HTML_FOR_REVIEW` | Shared types and constants |
+| `lib/ui-generator/types.ts` | `ReviewScoreSchema`, `CONFIDENCE_THRESHOLD`, `DeviceType`, `MAX_HTML_FOR_REVIEW`, `MAX_PROMPT_TOTAL_CHARS` | Shared types and constants |
 | `lib/ui-generator/design-system-seeder.ts` | `seedDesignSystem`, `seedToTokens` | Generate initial design system from project spec |
 | `lib/ui-generator/gemini-mockup.ts` | `generateReferenceMockup` | Generate reference mockup via Gemini |
 | `lib/ui-generator/html-sanitizer.ts` | `sanitizeHtmlForModel` | Sanitize HTML before LLM input (security) |
+| `lib/ui-generator/component-discovery.ts` | `discoverComponents`, `formatDiscoveryForPrompt` | Multi-registry component lookup for prompt enrichment |
 
 ## Pipeline
 
@@ -93,6 +94,7 @@ if (currentTokens === null) {
 If seedDesignSystem fails internally, it returns DEFAULT_DESIGN_SEED (fail-closed).
 The seed provides Page 1 with an informed starting point instead of zero design context.
 
+
 ### Step 1 — Page Order
 
 Determine processing order before entering the page loop:
@@ -132,11 +134,38 @@ Iterate over `pageOrder`. Track `pageIndex` (0-based).
 
 #### Step 2a — Build Stitch Prompt
 
+<<<<<<< HEAD
+##### Component Discovery (Enhancement)
+
+Before building the prompt, query component registries for complex components:
+
+```typescript
+import { discoverComponents, formatDiscoveryForPrompt } from "../../lib/ui-generator/component-discovery.js";
+
+const discoveryResult = await discoverComponents(pageSpec.components);
+const componentReferences = formatDiscoveryForPrompt(discoveryResult);
+
+if (discoveryResult.queriedComponents.length > 0) {
+  console.log(`  Component discovery: queried ${discoveryResult.queriedComponents.join(", ")}`);
+  console.log(`  Found ${discoveryResult.references.length} references from registries`);
+}
+```
+
+Then pass the references to the prompt builder:
+
 ```typescript
 import { buildStitchPrompt } from "../../lib/ui-generator/build-stitch-prompt.js";
 
-const prompt = buildStitchPrompt(pageSpec, currentTokens, priorScreenshotUrl);
+const prompt = buildStitchPrompt(
+  pageSpec,
+  currentTokens,
+  priorScreenshotUrl,
+  componentDirection,      // from design system seed (Step 0.5)
+  componentReferences,     // from component discovery
+);
 ```
+
+Component discovery is best-effort. If MCP tools are not configured, the pipeline continues with standard prompts. The total prompt is capped at MAX_PROMPT_TOTAL_CHARS (30,000 chars) to prevent unbounded growth.
 
 `buildStitchPrompt` translates PageSpec fields into a Stitch-ready prompt string, injecting token constraints when available and referencing prior screenshots for visual continuity.
 
@@ -531,6 +560,7 @@ return {
 | Database write error | Neon connection / constraint issue | Log error with context. Do NOT block pipeline. Warn user: "Design memory may be incomplete for this page." |
 | `fetch(htmlUrl)` failure | Presigned URL expired | Re-call `generateScreen` to get a fresh URL. If still fails after 1 retry, treat as recoverable: false. |
 
+<<<<<<< HEAD
 ## Security: HTML Sanitization
 
 **All Stitch HTML MUST pass through sanitizeHtmlForModel before being sent to any LLM.**
@@ -551,6 +581,7 @@ const htmlForExtraction = sanitizeHtmlForModel(rawHtml, MAX_HTML_FOR_EXTRACTION)
 ```
 
 Sanitization removes: script tags, event handlers, prompt-injection markers in comments, oversized data attributes.
+
 
 ## Database Schema Reference
 
