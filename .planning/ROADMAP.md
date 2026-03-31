@@ -79,7 +79,7 @@ Plans:
 - [x] 03-03-PLAN.md — Self-review scorer and ui-generator SKILL.md definition
 - [x] 03-04-PLAN.md — Design system seeder, Gemini mockup, and HTML sanitizer (security)
 - [x] 03-05-PLAN.md — Component discovery layer with prompt size budgeting
-- [ ] 03-06-PLAN.md — Dual reviewer (Claude + Gemini) with fail-closed scoring
+- [x] 03-06-PLAN.md — Dual reviewer (Claude + Gemini) with fail-closed scoring
 
 ### Phase 4: Code Integration
 **Goal**: Approved Stitch output becomes real, working React files in the existing repo — integrated into routing, navigation, and layout — with every change tracked in git
