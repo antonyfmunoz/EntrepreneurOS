@@ -1,5 +1,6 @@
 import type { PageSpecFull } from "@shared/spec-schema.js";
 import type { DmTokenRow } from "./types.js";
+import { MAX_PROMPT_TOTAL_CHARS } from "./types.js";
 
 // ─── buildStitchPrompt ───────────────────────────────────────────────────────
 
@@ -11,12 +12,14 @@ import type { DmTokenRow } from "./types.js";
  * @param tokens              Design memory tokens (null = no constraints injected)
  * @param priorScreenshotUrl  URL of a previously approved screenshot for style reference
  * @param componentDirection  Optional component style direction from DesignSystemSeed
+ * @param componentReferences Formatted component registry references from discovery layer (optional)
  */
 export function buildStitchPrompt(
   spec: PageSpecFull,
   tokens: DmTokenRow | null,
   priorScreenshotUrl?: string,
-  componentDirection?: string
+  componentDirection?: string,
+  componentReferences?: string
 ): string {
   const parts: string[] = [];
 
@@ -112,5 +115,15 @@ export function buildStitchPrompt(
     parts.push(`Component style direction: ${componentDirection}`);
   }
 
-  return parts.join("\n");
+  // 12. Component implementation references (from discovery layer, optional)
+  if (componentReferences && componentReferences.length > 0) {
+    parts.push(componentReferences);
+  }
+
+  // Enforce total prompt size budget to prevent unbounded growth
+  let result = parts.join("\n");
+  if (result.length > MAX_PROMPT_TOTAL_CHARS) {
+    result = result.slice(0, MAX_PROMPT_TOTAL_CHARS);
+  }
+  return result;
 }
