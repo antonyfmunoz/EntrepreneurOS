@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 06-analytics-delivery 06-01-PLAN.md
-last_updated: "2026-03-31T03:14:58.236Z"
+stopped_at: Completed 06-analytics-delivery 06-02-PLAN.md
+last_updated: "2026-03-31T03:22:16.902Z"
 last_activity: 2026-03-31
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 20
-  completed_plans: 16
+  completed_plans: 18
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 ## Current Position
 
 Phase: 06 (analytics-delivery) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-03-31
 
@@ -65,6 +65,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 05-backend-quality P02 | 18 | 2 tasks | 8 files |
 | Phase 05-backend-quality P04 | 44 | 2 tasks | 3 files |
 | Phase 06-analytics-delivery P01 | 246 | 2 tasks | 5 files |
+| Phase 06-analytics-delivery P02 | 215 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -107,6 +108,9 @@ Recent decisions affecting current work:
 - [Phase 06-analytics-delivery]: auditTaxonomy returns structured TaxonomyReport on empty input (valid=false) instead of throwing — addresses Codex review concern
 - [Phase 06-analytics-delivery]: Collision detection: distinct event names normalizing to same snake_case key produce warnings in TaxonomyReport.collisions — user informed but not blocked
 - [Phase 06-analytics-delivery]: generateEnvExample always injects VITE_POSTHOG_API_KEY (client) and POSTHOG_PERSONAL_API_KEY (server) per D-03 regardless of scan results
+- [Phase 06-analytics-delivery]: Dockerfile curl install goes before HEALTHCHECK directive — node:20-slim has no curl; apt-get installs it in runner stage
+- [Phase 06-analytics-delivery]: GET /health placed before registerRoutes in server/index.ts — health responds even if route registration fails
+- [Phase 06-analytics-delivery]: PORT env var: parseInt(process.env.PORT ?? '5000', 10) — Railway/Render/Fly inject at runtime, defaults 5000 for local dev
 
 ### Pending Todos
 
@@ -118,6 +122,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-31T03:14:58.226Z
-Stopped at: Completed 06-analytics-delivery 06-01-PLAN.md
+Last session: 2026-03-31T03:22:16.894Z
+Stopped at: Completed 06-analytics-delivery 06-02-PLAN.md
 Resume file: None

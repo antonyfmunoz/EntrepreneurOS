@@ -123,7 +123,7 @@ Plans:
 
 Plans:
 - [x] 06-01-PLAN.md — Phase 6 type contracts, taxonomy auditor, and env var scanner
-- [ ] 06-02-PLAN.md — Docker config generator and GitHub Actions CI/CD workflow generator
+- [x] 06-02-PLAN.md — Docker config generator and GitHub Actions CI/CD workflow generator
 - [ ] 06-03-PLAN.md — Analytics injector (PostHog capture code-mod) and PostHog setup module
 - [ ] 06-04-PLAN.md — Deploy runner (confirmation gate + CLI execution) and analytics-delivery SKILL.md
 

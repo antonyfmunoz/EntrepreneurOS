@@ -62,9 +62,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Deployment
 
-- [ ] **DEPLOY-01**: System guides user through hosting decisions (VPS, cloud, Replit, etc.)
-- [ ] **DEPLOY-02**: System generates Docker/docker-compose configs for chosen hosting
-- [ ] **DEPLOY-03**: System generates CI/CD pipeline (GitHub Actions)
+- [x] **DEPLOY-01**: System guides user through hosting decisions (VPS, cloud, Replit, etc.)
+- [x] **DEPLOY-02**: System generates Docker/docker-compose configs for chosen hosting
+- [x] **DEPLOY-03**: System generates CI/CD pipeline (GitHub Actions)
 - [ ] **DEPLOY-04**: System can execute full deployment to configured target
 - [ ] **DEPLOY-05**: Deployment requires explicit user confirmation gate
 
@@ -149,9 +149,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ANLYT-01 | Phase 6 | Complete |
 | ANLYT-02 | Phase 6 | Pending |
 | ANLYT-03 | Phase 6 | Pending |
-| DEPLOY-01 | Phase 6 | Pending |
-| DEPLOY-02 | Phase 6 | Pending |
-| DEPLOY-03 | Phase 6 | Pending |
+| DEPLOY-01 | Phase 6 | Complete |
+| DEPLOY-02 | Phase 6 | Complete |
+| DEPLOY-03 | Phase 6 | Complete |
 | DEPLOY-04 | Phase 6 | Pending |
 | DEPLOY-05 | Phase 6 | Pending |
 | ORCH-01 | Phase 1 | Complete |
