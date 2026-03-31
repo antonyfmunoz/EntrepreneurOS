@@ -18,12 +18,12 @@ One system that takes a SaaS product from spec document to deployed, tested, hos
 - [x] Spec ingestion — parseSpec() accepts raw text, restructures via Claude AI into validated PageSpec[] with 4 composable layers and provenance tracking. Validated in Phase 02: Spec Layer.
 - [x] Spec collaboration — 5-stage domain-first collaborative flow (vision → user-flows → pages → page-detail → implied) produces complete PageSpec[] through guided questioning. Validated in Phase 02: Spec Layer.
 - [x] Backend spec ingestion — deriveBackendSpec() auto-generates CRUD endpoints from PageSpec data layer with provenance propagation. Validated in Phase 02: Spec Layer.
+- [x] Stitch API integration — buildStitchPrompt with 5-param signature (spec, tokens, screenshot, componentDirection, componentReferences), prompt size capping at 30K chars, HTML sanitization pipeline. Validated in Phase 03: UI Generation.
+- [x] Design consistency memory — design system seeding from project spec, token extraction via Claude, mergeTokens with nullish coalescing, conflict detection. Validated in Phase 03: UI Generation.
+- [x] Self-review — Claude Sonnet 4-dimension review (specCompliance, visualConsistency, structuralCompleteness, contentQuality) + Gemini 2.0 Pro vision-based dual reviewer with worst-of-both scoring. Validated in Phase 03: UI Generation.
+- [x] Approval gates — evaluateApprovalGate with page-1-always-escalates, 90% threshold across all dimensions, auto-approve notice for high-confidence pages. Validated in Phase 03: UI Generation.
 
 ### Active
-- [ ] Stitch API integration — call Google Stitch API with page specs, receive generated code + visual preview
-- [ ] Design consistency memory — store approved page context (design tokens, component patterns, layout decisions) in Neon PostgreSQL, reference it for subsequent pages
-- [ ] Self-review — Claude reviews each generated page against the spec and previously approved pages before escalating to user
-- [ ] Approval gates — page 1 always escalates to user for direction-setting; subsequent pages auto-approve if confident, escalate if not
 - [ ] Pause/resume/interrupt — user can inject feedback, pause, or resume at any point in the pipeline
 - [x] Frontend code integration — take approved Stitch output and integrate it into the project (create/update files, update routing, respect existing code). Validated in Phase 04: Code Integration.
 - [x] Brownfield awareness — check what exists before adding, avoid duplicates and redundancy. Validated in Phase 04: Code Integration.
@@ -158,4 +158,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-31 after Phase 06 (Analytics + Delivery) completion — all 6 phases complete, v1.0 milestone done*
+*Last updated: 2026-03-31 after Phase 03 (UI Generation) enhancement plans completion — design seeder, component discovery, dual reviewer, HTML sanitizer added*
