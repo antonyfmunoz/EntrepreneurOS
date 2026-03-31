@@ -57,8 +57,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Analytics
 
 - [x] **ANLYT-01**: System defines event taxonomy during spec parsing (before implementation)
-- [ ] **ANLYT-02**: System instruments PostHog event capture during page integration (not as afterthought)
-- [ ] **ANLYT-03**: System sets up PostHog feature flags, error tracking, and dashboards
+- [x] **ANLYT-02**: System instruments PostHog event capture during page integration (not as afterthought)
+- [x] **ANLYT-03**: System sets up PostHog feature flags, error tracking, and dashboards
 
 ### Deployment
 
@@ -147,8 +147,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GIT-02 | Phase 4 | Pending |
 | GIT-03 | Phase 4 | Pending |
 | ANLYT-01 | Phase 6 | Complete |
-| ANLYT-02 | Phase 6 | Pending |
-| ANLYT-03 | Phase 6 | Pending |
+| ANLYT-02 | Phase 6 | Complete |
+| ANLYT-03 | Phase 6 | Complete |
 | DEPLOY-01 | Phase 6 | Complete |
 | DEPLOY-02 | Phase 6 | Complete |
 | DEPLOY-03 | Phase 6 | Complete |

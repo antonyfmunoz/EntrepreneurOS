@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 06-analytics-delivery 06-02-PLAN.md
-last_updated: "2026-03-31T03:22:16.902Z"
+stopped_at: Completed 06-analytics-delivery 06-03-PLAN.md
+last_updated: "2026-03-31T03:24:11.609Z"
 last_activity: 2026-03-31
 progress:
   total_phases: 6
@@ -66,6 +66,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 05-backend-quality P04 | 44 | 2 tasks | 3 files |
 | Phase 06-analytics-delivery P01 | 246 | 2 tasks | 5 files |
 | Phase 06-analytics-delivery P02 | 215 | 2 tasks | 5 files |
+| Phase 06-analytics-delivery P03 | 339 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -111,6 +112,9 @@ Recent decisions affecting current work:
 - [Phase 06-analytics-delivery]: Dockerfile curl install goes before HEALTHCHECK directive — node:20-slim has no curl; apt-get installs it in runner stage
 - [Phase 06-analytics-delivery]: GET /health placed before registerRoutes in server/index.ts — health responds even if route registration fails
 - [Phase 06-analytics-delivery]: PORT env var: parseInt(process.env.PORT ?? '5000', 10) — Railway/Render/Fly inject at runtime, defaults 5000 for local dev
+- [Phase 06-analytics-delivery]: captureCode includes useRef(false) inline — self-contained for injection without hookCode ordering dependency
+- [Phase 06-analytics-delivery]: manualCaptures replaces comment markers for click/submit events — structured objects with copy-paste captureSnippet addresses review concern
+- [Phase 06-analytics-delivery]: createFeatureFlags takes injectable fetchFn parameter defaulting to global fetch — clean vi.fn() test injection without module mocking
 
 ### Pending Todos
 
@@ -122,6 +126,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-31T03:22:16.894Z
-Stopped at: Completed 06-analytics-delivery 06-02-PLAN.md
+Last session: 2026-03-31T03:24:11.601Z
+Stopped at: Completed 06-analytics-delivery 06-03-PLAN.md
 Resume file: None
