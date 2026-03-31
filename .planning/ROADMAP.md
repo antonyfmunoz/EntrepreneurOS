@@ -14,10 +14,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Infrastructure schemas, state contracts, Stitch SDK wrapper, Vitest setup, and framework detection (completed 2026-03-27)
 - [x] **Phase 2: Spec Layer** - Spec ingestion (paste or collaborate) producing validated PageSpec[] output (completed 2026-03-28)
-- [x] **Phase 3: UI Generation** - Stitch integration with design memory and confidence-calibrated approval gates (completed 2026-03-29)
+- [ ] **Phase 3: UI Generation** - Stitch integration with design memory, confidence-calibrated approval gates, and enhanced pre-generation + review pipeline
 - [x] **Phase 4: Code Integration** - Brownfield-aware frontend integration with git workflow (completed 2026-03-29)
 - [x] **Phase 5: Backend + Quality** - Backend wiring against actual UI contracts with autonomous test fix loop (completed 2026-03-29)
-- [x] **Phase 6: Analytics + Delivery** - PostHog instrumentation and full deployment automation (completed 2026-03-31)
+- [x] **Phase 6: Analytics + Delivery** - PostHog instrumentation and full deployment automation (completed 2026-03-31)
 
 ## Phase Details
 
@@ -66,13 +66,20 @@ Plans:
   3. After page 1 approval, design tokens (color palette, type scale, spacing, component patterns, border radius) are extracted and persisted to Neon
   4. Subsequent pages are generated with stored design tokens injected as hard constraints into the Stitch prompt
   5. Self-review scores generated output against spec requirements and consistency with prior pages; pages that score above confidence threshold auto-approve without user interruption
-**Plans**: 3 plans
+  6. Design system is seeded from project spec before first Stitch call, providing informed initial tokens
+  7. Component registries (shadcn, 21st.dev, MagicUI) are queried for production-ready implementations before Stitch calls
+  8. Dual reviewer (Claude + Gemini) combines text and vision review for more reliable scoring
+  9. Targeted component refinement attempts focused fixes before full Stitch re-calls on rejection
+**Plans**: 6 plans
 **UI hint**: yes
 
 Plans:
 - [x] 03-01-PLAN.md — Type contracts, Stitch prompt builder, and approval gate logic
 - [x] 03-02-PLAN.md — Claude-based token/pattern extraction and conflict detection
 - [x] 03-03-PLAN.md — Self-review scorer and ui-generator SKILL.md definition
+- [ ] 03-04-PLAN.md — Design system seeding and Gemini reference mockup generation
+- [ ] 03-05-PLAN.md — Component discovery layer (shadcn + 21st.dev + MagicUI)
+- [ ] 03-06-PLAN.md — Dual reviewer (Claude + Gemini) and targeted component refiner
 
 ### Phase 4: Code Integration
 **Goal**: Approved Stitch output becomes real, working React files in the existing repo — integrated into routing, navigation, and layout — with every change tracked in git
@@ -136,7 +143,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/3 | Complete   | 2026-03-27 |
 | 2. Spec Layer | 3/3 | Complete   | 2026-03-28 |
-| 3. UI Generation | 3/3 | Complete   | 2026-03-29 |
+| 3. UI Generation | 3/6 | In Progress | — |
 | 4. Code Integration | 3/3 | Complete   | 2026-03-29 |
 | 5. Backend + Quality | 4/4 | Complete   | 2026-03-29 |
 | 6. Analytics + Delivery | 4/4 | Complete   | 2026-03-31 |
