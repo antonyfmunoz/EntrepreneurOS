@@ -119,7 +119,13 @@ Plans:
   3. User is guided through a hosting decision (VPS, cloud, Replit) with a clear explanation of trade-offs before any config is generated
   4. Docker, docker-compose, and GitHub Actions CI/CD configs are generated and correct for the chosen target
   5. Deployment executes to the configured target only after explicit user confirmation — autonomous deployment without this gate is not possible
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — Phase 6 type contracts, taxonomy auditor, and env var scanner
+- [ ] 06-02-PLAN.md — Docker config generator and GitHub Actions CI/CD workflow generator
+- [ ] 06-03-PLAN.md — Analytics injector (PostHog capture code-mod) and PostHog setup module
+- [ ] 06-04-PLAN.md — Deploy runner (confirmation gate + CLI execution) and analytics-delivery SKILL.md
 
 ## Progress
 
@@ -133,4 +139,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. UI Generation | 3/3 | Complete   | 2026-03-29 |
 | 4. Code Integration | 3/3 | Complete   | 2026-03-29 |
 | 5. Backend + Quality | 4/4 | Complete   | 2026-03-29 |
-| 6. Analytics + Delivery | 0/TBD | Not started | - |
+| 6. Analytics + Delivery | 0/4 | Not started | - |
