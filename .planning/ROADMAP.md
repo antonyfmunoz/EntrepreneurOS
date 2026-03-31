@@ -77,8 +77,8 @@ Plans:
 - [x] 03-01-PLAN.md — Type contracts, Stitch prompt builder, and approval gate logic
 - [x] 03-02-PLAN.md — Claude-based token/pattern extraction and conflict detection
 - [x] 03-03-PLAN.md — Self-review scorer and ui-generator SKILL.md definition
-- [ ] 03-04-PLAN.md — Design system seeder, Gemini mockup, and HTML sanitizer (security)
-- [ ] 03-05-PLAN.md — Component discovery layer with prompt size budgeting
+- [x] 03-04-PLAN.md — Design system seeder, Gemini mockup, and HTML sanitizer (security)
+- [x] 03-05-PLAN.md — Component discovery layer with prompt size budgeting
 - [ ] 03-06-PLAN.md — Dual reviewer (Claude + Gemini) with fail-closed scoring
 
 ### Phase 4: Code Integration
