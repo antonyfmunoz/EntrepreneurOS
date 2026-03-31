@@ -147,6 +147,15 @@ export const DEFAULT_DESIGN_SEED: DesignSystemSeed = {
   componentDirection: "clean minimal cards with subtle shadows and rounded interactive elements",
 };
 
+// ─── SECTION 15: Dual Review Score ──────────────────────────────────────────
+
+export interface DualReviewScore {
+  claude: ReviewScore;
+  gemini: ReviewScore | null;    // null if Gemini unavailable or failed
+  combined: ReviewScore;          // worst-of-both per dimension
+  reviewerCount: 1 | 2;
+}
+
 // ─── SECTION 14: Component Discovery ────────────────────────────────────────
 
 export interface ComponentReference {
