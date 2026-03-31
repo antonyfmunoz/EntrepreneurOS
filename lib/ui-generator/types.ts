@@ -87,3 +87,62 @@ export const MAX_HTML_FOR_EXTRACTION = 80_000;
 
 // Maximum HTML size (in chars) accepted for AI self-review
 export const MAX_HTML_FOR_REVIEW = 120_000;
+
+// ─── SECTION 10: Prompt Size Budget ─────────────────────────────────────────
+
+// Addresses review concern: prompt size growth across tokens, patterns, component refs
+// Total prompt budget = Stitch prompt + component refs + design seed direction
+export const MAX_PROMPT_TOTAL_CHARS = 30_000;
+
+// ─── SECTION 11: Design System Seed ─────────────────────────────────────────
+
+export interface DesignSystemSeed {
+  colorPalette: {
+    primary: string;       // hex
+    secondary: string;     // hex
+    background: string;    // hex
+    surface: string;       // hex
+    text: string;          // hex
+    accent: string;        // hex
+  };
+  fontPairing: {
+    heading: string;       // font family name
+    body: string;          // font family name
+  };
+  spacingSystem: {
+    unit: number;          // px base unit (4 or 8)
+    borderRadius: number;  // px
+  };
+  componentDirection: string; // e.g. "minimal cards with subtle shadows, rounded buttons"
+}
+
+// ─── SECTION 12: Mockup Result ───────────────────────────────────────────────
+
+export interface MockupResult {
+  imageBase64: string;     // base64-encoded PNG
+  mimeType: string;        // "image/png"
+}
+
+// ─── SECTION 13: Default Seed (fail-closed fallback) ─────────────────────────
+
+// When Claude returns malformed JSON for design system seeding,
+// use this neutral default rather than crashing the pipeline.
+export const DEFAULT_DESIGN_SEED: DesignSystemSeed = {
+  colorPalette: {
+    primary: "#1a1a2e",
+    secondary: "#16213e",
+    background: "#0f0f23",
+    surface: "#1a1a3e",
+    text: "#e4e4e7",
+    accent: "#6366f1",
+  },
+  fontPairing: {
+    heading: "Inter",
+    body: "Inter",
+  },
+  spacingSystem: {
+    unit: 4,
+    borderRadius: 8,
+  },
+  componentDirection: "clean minimal cards with subtle shadows and rounded interactive elements",
+};
