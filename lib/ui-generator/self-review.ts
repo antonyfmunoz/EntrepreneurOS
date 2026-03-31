@@ -2,8 +2,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import pRetry from "p-retry";
 import { extractJsonFromResponse } from "../spec-parser/restructure-spec.js";
 import { ReviewScoreSchema, MAX_HTML_FOR_REVIEW } from "./types.js";
-import type { ReviewScore, DmTokenRow } from "./types.js";
+import type { ReviewScore, DmTokenRow, DualReviewScore } from "./types.js";
 import type { PageSpecFull } from "@shared/spec-schema.js";
+import { geminiReview } from "./gemini-reviewer.js";
 
 // ─── SelfReviewInput ──────────────────────────────────────────────────────────
 
@@ -182,4 +183,75 @@ export async function selfReview(input: SelfReviewInput): Promise<ReviewScore> {
 
   // Step g: Return validated ReviewScore
   return validated;
+}
+
+// ─── combineScores ────────────────────────────────────────────────────────────
+
+/**
+ * Takes the minimum score per dimension from both reviewers (worst-of-both).
+ * Merges findings from both with reviewer prefix labels.
+ * If gemini is null, returns claude scores unchanged.
+ */
+export function combineScores(
+  claude: ReviewScore,
+  gemini: ReviewScore | null
+): ReviewScore {
+  if (gemini === null) {
+    return claude;
+  }
+
+  const dimensions = [
+    "specCompliance",
+    "visualConsistency",
+    "structuralCompleteness",
+    "contentQuality",
+  ] as const;
+
+  const combined: Record<string, { score: number; findings: string[] }> = {};
+
+  for (const dim of dimensions) {
+    combined[dim] = {
+      score: Math.min(claude[dim].score, gemini[dim].score),
+      findings: [
+        ...claude[dim].findings.map((f) => `[Claude] ${f}`),
+        ...gemini[dim].findings.map((f) => `[Gemini] ${f}`),
+      ],
+    };
+  }
+
+  return ReviewScoreSchema.parse(combined);
+}
+
+// ─── dualReview ───────────────────────────────────────────────────────────────
+
+/**
+ * Combines Claude text-based review with Gemini vision-based review.
+ * Returns DualReviewScore with combined worst-of-both per dimension.
+ *
+ * The existing selfReview function is preserved for backwards compatibility.
+ * dualReview calls selfReview internally, then calls geminiReview in parallel.
+ *
+ * Fail behavior:
+ * - If Claude fails (selfReview throws), the error propagates (Claude is required)
+ * - If Gemini fails (geminiReview returns null), falls back to Claude-only (Gemini is optional)
+ */
+export async function dualReview(input: SelfReviewInput): Promise<DualReviewScore> {
+  const [claudeScore, geminiScore] = await Promise.all([
+    selfReview(input),
+    geminiReview({
+      screenshotUrls: input.screenshotUrls,
+      spec: input.spec,
+      tokens: input.tokens,
+      priorPatterns: input.priorPatterns,
+    }),
+  ]);
+
+  const combined = combineScores(claudeScore, geminiScore);
+
+  return {
+    claude: claudeScore,
+    gemini: geminiScore,
+    combined,
+    reviewerCount: geminiScore !== null ? 2 : 1,
+  };
 }
