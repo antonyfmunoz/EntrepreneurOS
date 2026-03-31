@@ -37,6 +37,7 @@ All modules live under `lib/ui-generator/` and `lib/stitch/`:
 | `lib/ui-generator/gemini-mockup.ts` | `generateReferenceMockup` | Generate reference mockup via Gemini |
 | `lib/ui-generator/html-sanitizer.ts` | `sanitizeHtmlForModel` | Sanitize HTML before LLM input (security) |
 | `lib/ui-generator/component-discovery.ts` | `discoverComponents`, `formatDiscoveryForPrompt` | Multi-registry component lookup for prompt enrichment |
+| `lib/ui-generator/gemini-reviewer.ts` | `geminiReview` | Gemini vision-based secondary reviewer |
 
 ## Pipeline
 
@@ -134,7 +135,6 @@ Iterate over `pageOrder`. Track `pageIndex` (0-based).
 
 #### Step 2a — Build Stitch Prompt
 
-<<<<<<< HEAD
 ##### Component Discovery (Enhancement)
 
 Before building the prompt, query component registries for complex components:
@@ -227,21 +227,33 @@ const desktopResult = generationResults.find((r) => r.deviceType === "DESKTOP")
 const screenshotUrls = generationResults.map((r) => r.screenshotUrl);
 ```
 
-#### Step 2c — Self-Review
+#### Step 2c — Self-Review (Enhanced with Dual Reviewer)
+
+Run Claude text-based and Gemini vision-based reviews in parallel:
 
 ```typescript
-import { selfReview } from "../../lib/ui-generator/self-review.js";
+import { dualReview } from "../../lib/ui-generator/self-review.js";
 
-// Per D-12: when multiple device types, desktop HTML is reviewed with all screenshot URLs
-// so the reviewer evaluates responsive consistency across devices in one call.
-const reviewScore = await selfReview({
-  htmlContent: desktopResult.htmlContent,
-  screenshotUrls,          // includes all device screenshots
+const dualScore = await dualReview({
+  htmlContent: sanitizedHtml,   // from sanitizeHtmlForModel
+  screenshotUrls,
   spec: pageSpec,
   tokens: currentTokens,
   priorPatterns: existingPatterns,
 });
+
+console.log(`  Review: ${dualScore.reviewerCount} reviewer(s)`);
+console.log(`  Claude: spec=${dualScore.claude.specCompliance.score.toFixed(2)}, visual=${dualScore.claude.visualConsistency.score.toFixed(2)}`);
+if (dualScore.gemini) {
+  console.log(`  Gemini: spec=${dualScore.gemini.specCompliance.score.toFixed(2)}, visual=${dualScore.gemini.visualConsistency.score.toFixed(2)}`);
+}
+console.log(`  Combined: spec=${dualScore.combined.specCompliance.score.toFixed(2)}, visual=${dualScore.combined.visualConsistency.score.toFixed(2)}`);
+
+// Use combined score (worst-of-both) for gate evaluation
+const reviewScore = dualScore.combined;
 ```
+
+Combined scoring uses worst-of-both per dimension. If either reviewer flags a dimension below 0.9, it triggers user escalation. When Gemini is unavailable (no API key or error), falls back to Claude-only review without blocking.
 
 #### Step 2d — Approval Gate
 
@@ -285,6 +297,28 @@ Wait for user response:
 **Option 1 — Approve:** Proceed to Step 4.
 
 **Option 2 — Reject + feedback (3 retries max per D-04):**
+
+##### Targeted Component Refinement (Orchestration Pattern)
+
+Before re-calling Stitch for the full page, check if the issue is component-level:
+
+1. Gather all findings from `dualScore.combined` across dimensions
+2. Check if findings mention specific component names from `pageSpec.components`
+3. If exactly 1-2 components are mentioned and the issue is NOT structural:
+   - This is a component-level issue
+   - If `mcp__magic21__21st_magic_component_refiner` MCP tool is available:
+     ```typescript
+     const refined = await mcpInvoke("mcp__magic21__21st_magic_component_refiner", {
+       code: existingComponentHtml,
+       instructions: `Refine: ${userFeedback ?? findings.join("; ")}`,
+     });
+     ```
+   - If refinement succeeds, re-run dualReview on the patched HTML
+   - If re-review passes, skip the full Stitch re-call (saves API credits)
+4. If the issue is page-level (layout, structure, 3+ components, or structural dimension failed):
+   - Fall through to the existing full Stitch re-call retry logic
+
+This is an orchestration pattern, not a library function -- the classification logic is simple enough to inline in the skill flow. The 21st.dev MCP tool is best-effort (may not be available).
 
 ```typescript
 let retryCount = 0;
@@ -560,7 +594,6 @@ return {
 | Database write error | Neon connection / constraint issue | Log error with context. Do NOT block pipeline. Warn user: "Design memory may be incomplete for this page." |
 | `fetch(htmlUrl)` failure | Presigned URL expired | Re-call `generateScreen` to get a fresh URL. If still fails after 1 retry, treat as recoverable: false. |
 
-<<<<<<< HEAD
 ## Security: HTML Sanitization
 
 **All Stitch HTML MUST pass through sanitizeHtmlForModel before being sent to any LLM.**
@@ -629,3 +662,5 @@ Key decisions applied by this skill:
 | D-14 | Gate shows screenshots, per-dimension scores, component checklist |
 | D-15 | Three gate actions: Approve, Reject+feedback, Skip |
 | D-16 | Auto-approved pages show one-line notice only |
+| Enhancement | Dual reviewer (Claude + Gemini) -- combined worst-of-both per dimension |
+| Enhancement | Targeted component refinement via 21st.dev MCP as orchestration pattern |

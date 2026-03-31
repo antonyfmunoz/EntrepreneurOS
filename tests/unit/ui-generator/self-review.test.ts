@@ -14,13 +14,21 @@ vi.mock("@anthropic-ai/sdk", () => {
   };
 });
 
+// ─── Mock gemini-reviewer ─────────────────────────────────────────────────────
+
+const mockGeminiReview = vi.fn();
+
+vi.mock("../../../lib/ui-generator/gemini-reviewer.js", () => ({
+  geminiReview: (...args: unknown[]) => mockGeminiReview(...args),
+}));
+
 // ─── Import under test ────────────────────────────────────────────────────────
 
-import { selfReview } from "../../../lib/ui-generator/self-review.js";
+import { selfReview, combineScores, dualReview } from "../../../lib/ui-generator/self-review.js";
 import type { SelfReviewInput } from "../../../lib/ui-generator/self-review.js";
 import { MAX_HTML_FOR_REVIEW } from "../../../lib/ui-generator/types.js";
+import type { ReviewScore, DmTokenRow } from "../../../lib/ui-generator/types.js";
 import type { PageSpecFull } from "@shared/spec-schema.js";
-import type { DmTokenRow } from "../../../lib/ui-generator/types.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -226,5 +234,102 @@ describe("selfReview", () => {
     mockMessagesCreate.mockResolvedValue(makeClaudeResponse(invalidResponse));
 
     await expect(selfReview(makeSelfReviewInput())).rejects.toThrow();
+  });
+});
+
+// ─── combineScores helpers ────────────────────────────────────────────────────
+
+function makeReviewScore(
+  overrides: Partial<Record<keyof ReviewScore, number>> = {}
+): ReviewScore {
+  return {
+    specCompliance: {
+      score: overrides.specCompliance ?? 0.95,
+      findings: [],
+    },
+    visualConsistency: {
+      score: overrides.visualConsistency ?? 0.95,
+      findings: [],
+    },
+    structuralCompleteness: {
+      score: overrides.structuralCompleteness ?? 0.95,
+      findings: [],
+    },
+    contentQuality: {
+      score: overrides.contentQuality ?? 0.95,
+      findings: [],
+    },
+  };
+}
+
+// ─── combineScores tests ──────────────────────────────────────────────────────
+
+describe("combineScores", () => {
+  it("returns claude scores unchanged when gemini is null", () => {
+    const claude = makeReviewScore({
+      specCompliance: 0.95,
+      visualConsistency: 0.92,
+      structuralCompleteness: 0.88,
+      contentQuality: 0.91,
+    });
+    const result = combineScores(claude, null);
+    expect(result.specCompliance.score).toBe(0.95);
+    expect(result.visualConsistency.score).toBe(0.92);
+    expect(result.structuralCompleteness.score).toBe(0.88);
+    expect(result.contentQuality.score).toBe(0.91);
+  });
+
+  it("takes minimum score per dimension from both reviewers", () => {
+    const claude = makeReviewScore({ specCompliance: 0.95, visualConsistency: 0.80 });
+    const gemini = makeReviewScore({ specCompliance: 0.85, visualConsistency: 0.92 });
+    const result = combineScores(claude, gemini);
+    expect(result.specCompliance.score).toBe(0.85);  // gemini lower
+    expect(result.visualConsistency.score).toBe(0.80);  // claude lower
+  });
+
+  it("merges findings with reviewer prefix labels", () => {
+    const claude = makeReviewScore({});
+    claude.specCompliance.findings = ["Missing sidebar"];
+    const gemini = makeReviewScore({});
+    gemini.specCompliance.findings = ["Colors too dark"];
+    const result = combineScores(claude, gemini);
+    expect(result.specCompliance.findings).toContain("[Claude] Missing sidebar");
+    expect(result.specCompliance.findings).toContain("[Gemini] Colors too dark");
+  });
+});
+
+// ─── dualReview tests ─────────────────────────────────────────────────────────
+
+describe("dualReview", () => {
+  beforeEach(() => {
+    mockMessagesCreate.mockReset();
+    mockGeminiReview.mockReset();
+  });
+
+  it("returns DualReviewScore with reviewerCount 2 when Gemini available", async () => {
+    mockMessagesCreate.mockResolvedValue(makeClaudeResponse(VALID_REVIEW_SCORE));
+    mockGeminiReview.mockResolvedValue(makeReviewScore({ specCompliance: 0.88, visualConsistency: 0.85 }));
+
+    const result = await dualReview(makeSelfReviewInput());
+
+    expect(result.reviewerCount).toBe(2);
+    expect(result.claude).toBeDefined();
+    expect(result.gemini).not.toBeNull();
+    expect(result.combined).toBeDefined();
+    // combined should use worst-of-both: Gemini scores lower on specCompliance and visualConsistency
+    expect(result.combined.specCompliance.score).toBe(0.88);
+    expect(result.combined.visualConsistency.score).toBe(0.85);
+  });
+
+  it("returns reviewerCount 1 when Gemini returns null", async () => {
+    mockMessagesCreate.mockResolvedValue(makeClaudeResponse(VALID_REVIEW_SCORE));
+    mockGeminiReview.mockResolvedValue(null);
+
+    const result = await dualReview(makeSelfReviewInput());
+
+    expect(result.reviewerCount).toBe(1);
+    expect(result.gemini).toBeNull();
+    // combined equals claude when gemini is null
+    expect(result.combined.specCompliance.score).toBe(result.claude.specCompliance.score);
   });
 });
