@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 06-analytics-delivery 06-03-PLAN.md
-last_updated: "2026-03-31T03:24:11.609Z"
+stopped_at: Completed 06-analytics-delivery 06-04-PLAN.md
+last_updated: "2026-03-31T03:33:28.537Z"
 last_activity: 2026-03-31
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 20
-  completed_plans: 18
+  completed_plans: 19
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 ## Current Position
 
 Phase: 06 (analytics-delivery) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-03-31
 
@@ -67,6 +67,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 06-analytics-delivery P01 | 246 | 2 tasks | 5 files |
 | Phase 06-analytics-delivery P02 | 215 | 2 tasks | 5 files |
 | Phase 06-analytics-delivery P03 | 339 | 2 tasks | 5 files |
+| Phase 06-analytics-delivery P04 | 6 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,9 @@ Recent decisions affecting current work:
 - [Phase 06-analytics-delivery]: captureCode includes useRef(false) inline — self-contained for injection without hookCode ordering dependency
 - [Phase 06-analytics-delivery]: manualCaptures replaces comment markers for click/submit events — structured objects with copy-paste captureSnippet addresses review concern
 - [Phase 06-analytics-delivery]: createFeatureFlags takes injectable fetchFn parameter defaulting to global fetch — clean vi.fn() test injection without module mocking
+- [Phase 06-analytics-delivery]: deploy-runner uses injectable execFn parameter (same as migration-runner pattern) — enables vi.fn() test injection without module mocking
+- [Phase 06-analytics-delivery]: preflightDeploy separates missingSecrets and missingCLI into distinct arrays for precise error messaging per target
+- [Phase 06-analytics-delivery]: Render deploy uses curl (not dedicated CLI) — render deploy hooks are HTTP endpoints, curl always available on Linux/macOS
 
 ### Pending Todos
 
@@ -126,6 +130,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-31T03:24:11.601Z
-Stopped at: Completed 06-analytics-delivery 06-03-PLAN.md
+Last session: 2026-03-31T03:33:28.527Z
+Stopped at: Completed 06-analytics-delivery 06-04-PLAN.md
 Resume file: None
