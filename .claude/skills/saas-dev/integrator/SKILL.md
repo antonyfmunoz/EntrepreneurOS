@@ -1,25 +1,26 @@
 ---
 name: saas-dev:integrator
-description: Takes approved Stitch HTML from Phase 3 (ui-gen) and integrates it as working React pages — route-wired, nav-linked, committed per page, and PR-ready. Use when executing Phase 4 (code-integration) of the SaaS development pipeline.
+description: Takes approved Stitch HTML from Phase 3 and integrates it as working React pages — translating HTML to shadcn/ui TSX, wiring routes into App.tsx, adding sidebar nav items, and managing the git branch lifecycle. Use after ui-generator completes with approved pages.
 ---
 
 # Skill: saas-dev:integrator
 
-Takes approved Stitch HTML from Phase 3 and integrates each page as a working React component — routing wired in App.tsx, nav item added to sidebar.tsx, committed atomically, and finalized via a GitHub PR.
+Takes approved Stitch HTML from Phase 3 and integrates it as working React pages with proper routing, navigation, and atomic git commits.
 
 ## Prerequisites
 
-- Phase 3 (saas-dev:ui-generator) complete: `pipeline_pages` table has rows with `phase="ui-gen"` and `status="complete"`
-- `AI_INTEGRATIONS_ANTHROPIC_API_KEY` env var set (required for HTML-to-TSX translation)
+- Phase 3 (ui-generator) complete: `pipeline_pages` table has rows with `phase="ui-gen"` AND `status="complete"`
+- `AI_INTEGRATIONS_ANTHROPIC_API_KEY` configured in .env — required for HTML-to-TSX translation
 - `DATABASE_URL` configured for Neon PostgreSQL
 - `git` CLI available in PATH
-- `gh` CLI available in PATH (fallback: print manual PR instructions if missing)
+- `gh` CLI available in PATH (fallback: manual PR instructions printed if absent)
 
 ## Inputs
 
-- `projectRoot: string` — absolute path to the SaaS project repo
-- `runId: string` — pipeline run ID (used to query pipeline_pages)
-- `projectConfig: { projectId, appTsxPath, sidebarPath }` — file paths for injection targets
+- `projectRoot: string` — absolute path to the SaaS project root
+- `appTsxPath: string` — path to `client/src/App.tsx`
+- `sidebarPath: string` — path to `client/src/components/sidebar.tsx`
+- `projectId: string` — pipeline project ID for database queries
 
 ## Module Map
 
@@ -27,96 +28,88 @@ All modules live under `lib/code-integrator/`:
 
 | Module | Export | Role |
 |--------|--------|------|
-| `lib/code-integrator/brownfield-audit.js` | `auditBrownfield` | Snapshot existing routes, pages, nav items, shadcn components |
-| `lib/code-integrator/html-to-shadcn.js` | `translateHtmlToShadcn` | Translate Stitch HTML to shadcn/ui TSX via Claude |
-| `lib/code-integrator/page-writer.js` | `writePage`, `ensureShadcnComponents`, `checkFileConflict` | Write TSX to disk, install missing shadcn components, detect file collisions |
-| `lib/code-integrator/route-injector.js` | `injectRoute`, `detectRouteConflict` | Insert ProtectedRoute + CompanyGate into App.tsx before NotFound anchor |
-| `lib/code-integrator/nav-injector.js` | `injectNavItem` | Insert nav item into sidebar.tsx before closing </ul> |
-| `lib/code-integrator/git-workflow.js` | `createBranch`, `commitPage`, `pushAndCreatePR`, `detectBaseBranch` | Branch lifecycle, per-page atomic commits, push and PR |
-| `lib/code-integrator/types.js` | All shared type interfaces | RouteInjectionInput, NavInjectionInput, BrownfieldInventory, etc. |
+| `lib/code-integrator/brownfield-audit.ts` | `auditBrownfield` | Snapshot existing routes, pages, nav items, shadcn components |
+| `lib/code-integrator/html-to-shadcn.ts` | `translateHtmlToShadcn` | Claude AI translation: HTML → React TSX with shadcn/ui |
+| `lib/code-integrator/page-writer.ts` | `writePage`, `ensureShadcnComponents`, `checkFileConflict` | Write translated TSX to disk, auto-install missing shadcn components, detect file conflicts |
+| `lib/code-integrator/route-injector.ts` | `injectRoute`, `detectRouteConflict` | Insert ProtectedRoute + optional CompanyGate into App.tsx |
+| `lib/code-integrator/nav-injector.ts` | `injectNavItem` | Insert remixicon nav item into sidebar.tsx |
+| `lib/code-integrator/git-workflow.ts` | `createBranch`, `commitPage`, `pushAndCreatePR`, `detectBaseBranch` | Branch creation, per-page atomic commits, push and PR creation |
+| `lib/code-integrator/types.ts` | `BrownfieldInventory`, `RouteInjectionInput`, `NavInjectionInput`, `PageIntegrationResult`, `RouteConflict`, `ConflictResolution` | Shared type contracts |
 
 ## Pipeline
 
 ### Step 1 — Initialize
 
-**1a. Detect base branch (D-16):**
+Determine the correct base branch and create the integration branch.
 
 ```typescript
-import { detectBaseBranch } from "../../lib/code-integrator/git-workflow.js";
+import { detectBaseBranch, createBranch } from "../../lib/code-integrator/git-workflow.js";
 
+// D-16: detect base branch from file system state
 const baseBranch = await detectBaseBranch(projectRoot);
-// Returns "main" if client/src/lib/company-guard.tsx and client/src/hooks/use-company.ts exist
-// Returns "feature/company-system" if files absent and that branch exists
-// Falls back to "main" if neither condition met
-```
-
-**1b. Create integration branch:**
-
-```typescript
-import { createBranch } from "../../lib/code-integrator/git-workflow.js";
+// Returns "main" when client/src/lib/company-guard.tsx exists
+// Returns "feature/company-system" when absent and that branch exists
+// Falls back to "main" otherwise
 
 await createBranch(baseBranch);
-// Creates feature/ui-integration from baseBranch
+// Runs: git checkout {baseBranch} && git checkout -b feature/ui-integration
 ```
 
-**1c. Load pages to integrate:**
+Then load pages to integrate from the database:
 
 ```typescript
-import { db } from "../../server/db.js";
-import { pipelinePages } from "@shared/design-schema.js";
-import { eq, and } from "drizzle-orm";
-
+// Query pipeline_pages where phase="ui-gen" AND status="complete" AND projectId matches
 const pages = await db
   .select()
   .from(pipelinePages)
-  .where(and(
-    eq(pipelinePages.runId, runId),
-    eq(pipelinePages.phase, "ui-gen"),
-    eq(pipelinePages.status, "complete"),
-  ));
-
-console.log(`Integrating ${pages.length} approved pages...`);
+  .where(
+    and(
+      eq(pipelinePages.projectId, projectId),
+      eq(pipelinePages.phase, "ui-gen"),
+      eq(pipelinePages.status, "complete"),
+    ),
+  );
 ```
 
 ### Step 2 — Brownfield Audit
 
-Run once before the per-page loop. Produces the inventory used for conflict detection and incremental updates.
+Snapshot the existing codebase state before writing anything. Store as `inventory` for all subsequent steps.
 
 ```typescript
 import { auditBrownfield } from "../../lib/code-integrator/brownfield-audit.js";
 
 const inventory = await auditBrownfield(projectRoot);
-// inventory.existingRoutes — all current routes in App.tsx
-// inventory.existingPages — all current page files
-// inventory.existingNavItems — all current sidebar nav items
-// inventory.installedShadcnComponents — shadcn components already installed
+// Reads App.tsx for existing routes (ProtectedRoute blocks, path= attrs)
+// Reads sidebar.tsx for existing nav items (href= and span text)
+// Reads components.json for installed shadcn components
+// Reads client/src/pages/ for existing page files
 ```
 
-Per D-11, D-12: audit provides the ground truth before any writes. Do NOT skip or cache across sessions.
+Inventory structure (per D-11, D-12):
+- `existingRoutes[].path` — all registered route paths
+- `existingNavItems[].href` — all nav item hrefs
+- `installedShadcnComponents[]` — shadcn component names already installed
+- `existingPages[].fileName` — existing page file names
 
-### Step 3 — Per-Page Loop
+### Step 3 — Per-Page Integration Loop
 
-For each page from Step 1c, execute steps 3a–3j in sequence.
+For each page from Step 1, execute the full integration pipeline:
 
-#### Step 3a — Fetch HTML content
+#### 3a. Fetch HTML
 
 ```typescript
-const uiGenOutput = JSON.parse(page.output as string);
-const htmlResponse = await fetch(uiGenOutput.htmlUrl);
+const htmlResponse = await fetch(page.uiGenOutput.htmlUrl);
 
-if (!htmlResponse.ok) {
-  // Pitfall 1: Stitch presigned URLs expire
-  if (htmlResponse.status === 403 || htmlResponse.status === 410) {
-    console.error(`HTML URL expired for ${page.pageName}. Re-run Phase 3 for this page or paste HTML directly.`);
-    continue; // escalate to user
-  }
-  throw new Error(`Failed to fetch HTML for ${page.pageName}: ${htmlResponse.status}`);
+// Per Research Pitfall 1: check for URL expiry
+if (htmlResponse.status === 403 || htmlResponse.status === 410) {
+  console.error(`URL expired for page ${page.pageName}. Re-run Phase 3 for this page or paste HTML directly.`);
+  continue; // skip this page, escalate to user
 }
 
 const htmlContent = await htmlResponse.text();
 ```
 
-#### Step 3b — Translate HTML to shadcn/ui TSX
+#### 3b. Translate HTML to TSX
 
 ```typescript
 import { translateHtmlToShadcn } from "../../lib/code-integrator/html-to-shadcn.js";
@@ -124,18 +117,15 @@ import { translateHtmlToShadcn } from "../../lib/code-integrator/html-to-shadcn.
 const translationResult = await translateHtmlToShadcn({
   htmlContent,
   pageName: page.pageName,
-  pageRoute: page.pageSlug,
+  pageRoute: page.pageRoute,
   installedComponents: inventory.installedShadcnComponents,
-  authLevel: "authenticated", // or "public" for onboarding/auth pages
+  authLevel: page.authLevel ?? "authenticated", // D-01, D-04
 });
-// translationResult.tsxContent — the translated React component
-// translationResult.extractedImports — shadcn components used
-// Per D-01, D-04
+// Returns { tsxContent, extractedImports, layoutWrapped }
+// Post-translation guard strips useQuery/useMutation/fetch/axios (Pitfall 2)
 ```
 
-Post-translation validation: if `tsxContent` contains `useQuery(` or `useMutation(` — these are TanStack Query hooks that should not be generated by translation. Strip or replace with placeholder data before proceeding (Pitfall 2).
-
-#### Step 3c — Ensure shadcn components installed
+#### 3c. Ensure shadcn Components
 
 ```typescript
 import { ensureShadcnComponents } from "../../lib/code-integrator/page-writer.js";
@@ -145,63 +135,63 @@ await ensureShadcnComponents({
   extractedImports: translationResult.extractedImports,
   installedComponents: inventory.installedShadcnComponents,
 });
-// Per D-03, Pitfall 5: check existence before running npx shadcn@latest add
-// to avoid interactive prompts
+// Per D-03: checks existence before running npx shadcn@latest add
+// Updates inventory.installedShadcnComponents in-place
 ```
 
-#### Step 3d — Route conflict check (D-10)
+#### 3d. Route Conflict Check
 
 ```typescript
 import { detectRouteConflict } from "../../lib/code-integrator/route-injector.js";
 
-const componentName = toPascalCase(page.pageName) + "Page";
-const routeConflict = detectRouteConflict(page.pageSlug, componentName, inventory);
+const routeConflict = detectRouteConflict(
+  page.pageRoute,
+  componentName,
+  inventory, // D-10
+);
 
 if (routeConflict) {
-  console.log(`Route conflict at ${page.pageSlug}:`);
+  // Show both sides to user
+  console.log(`Route conflict at ${page.pageRoute}:`);
   console.log(`  Existing: ${routeConflict.existingComponent} (${routeConflict.existingFile})`);
   console.log(`  New: ${routeConflict.newComponent}`);
-  console.log("Options: replace / merge / skip");
-  const resolution = await getUserInput("[replace/merge/skip]: ");
-  if (resolution === "skip") continue;
-  // If replace/merge: proceed (page-writer will handle overwrite per Step 3e)
+
+  const choice = await promptUser("Resolve conflict: [replace/merge/skip]");
+  if (choice === "skip") continue;
+  // "replace" and "merge" handled in step 3e
 }
 ```
 
-#### Step 3e — File conflict check and write page (D-10)
+#### 3e. File Conflict Check and Write (D-10)
 
 ```typescript
 import { checkFileConflict, writePage } from "../../lib/code-integrator/page-writer.js";
 
-const { exists, existingPath } = await checkFileConflict({ projectRoot, pageName: page.pageName });
-let pageFile: string;
+const fileConflict = await checkFileConflict({ projectRoot, pageName: page.pageName });
 
-if (exists && existingPath) {
-  console.log(`File conflict: ${existingPath} already exists.`);
-  console.log("Options:");
-  console.log("  replace — overwrite existing file");
-  console.log("  merge   — Claude AI smart-merge of existing and new content");
-  console.log("  skip    — keep existing file, skip this page");
-  const resolution = await getUserInput("[replace/merge/skip]: ");
+if (fileConflict.exists) {
+  // D-10: show existing file and new translated content
+  console.log(`File already exists: ${fileConflict.existingPath}`);
 
-  if (resolution === "skip") continue;
+  const choice = await promptUser("File exists. Resolve: [replace/merge/skip]");
 
-  if (resolution === "merge") {
-    // AI smart-merge: send both files to Claude for reconciliation
-    const existingContent = await readFile(existingPath, "utf-8");
+  if (choice === "skip") continue;
+
+  if (choice === "replace") {
+    pageFile = await writePage({
+      projectRoot,
+      pageName: page.pageName,
+      tsxContent: translationResult.tsxContent,
+      overwrite: true,
+    });
+  } else if (choice === "merge") {
+    // AI smart-merge: send both existing and new to Claude
+    const existingContent = await readFile(fileConflict.existingPath, "utf-8");
     const mergedContent = await mergeWithClaude(existingContent, translationResult.tsxContent);
     pageFile = await writePage({
       projectRoot,
       pageName: page.pageName,
       tsxContent: mergedContent,
-      overwrite: true,
-    });
-  } else {
-    // replace
-    pageFile = await writePage({
-      projectRoot,
-      pageName: page.pageName,
-      tsxContent: translationResult.tsxContent,
       overwrite: true,
     });
   }
@@ -215,197 +205,226 @@ if (exists && existingPath) {
 }
 ```
 
-#### Step 3f — Inject route into App.tsx
+#### 3f. Inject Route
 
 ```typescript
 import { injectRoute } from "../../lib/code-integrator/route-injector.js";
 
-const isStandalonePage = ["onboarding", "auth", "login", "register"].some((s) =>
-  page.pageSlug.includes(s),
-);
+// Determine if page needs CompanyGate (D-07, D-08)
+// isStandalone=true for auth/onboarding pages that should not be wrapped
+const isStandalone = page.authLevel === "public";
 
 await injectRoute({
-  appTsxPath: projectConfig.appTsxPath,
+  appTsxPath,
   componentName,
-  importPath: `@/pages/${toKebabCase(page.pageName)}`,
-  routePath: page.pageSlug,
-  wrapCompanyGate: !isStandalonePage,
-  isStandalone: isStandalonePage,
+  importPath: `@/pages/${kebabCase(page.pageName)}`,
+  routePath: page.pageRoute,
+  wrapCompanyGate: !isStandalone,
+  isStandalone,
 });
-// Per D-07, D-08: ProtectedRoute + CompanyGate for authenticated pages
-// Per D-08: isStandalone=true for auth/onboarding pages (no CompanyGate)
 ```
 
-#### Step 3g — Inject nav item into sidebar.tsx
+#### 3g. Inject Nav Item
 
 ```typescript
 import { injectNavItem } from "../../lib/code-integrator/nav-injector.js";
 
-// Per Pitfall 7: iconClass MUST be a remixicon class string (ri-*), NOT a Lucide import.
-// Select from remixicon set based on page name:
-// analytics/reports -> ri-bar-chart-line
-// settings -> ri-settings-3-line
-// users/crm -> ri-user-star-line
-// documents/files -> ri-file-list-3-line
-// tasks/board -> ri-task-line
-// home/dashboard -> ri-dashboard-line
-// Default: ri-pages-line
+// D-09: select remixicon class based on page semantics (Pitfall 7 — must be ri-* not lucide)
 const iconClass = selectRemixIcon(page.pageName);
+// Examples: reports -> ri-bar-chart-line, settings -> ri-settings-3-line,
+//           users -> ri-user-line, analytics -> ri-line-chart-line
 
 await injectNavItem({
-  sidebarPath: projectConfig.sidebarPath,
+  sidebarPath,
   label: page.pageName,
-  href: page.pageSlug,
+  href: page.pageRoute,
   iconClass,
 });
-// Per D-09: inserts before </ul> of space-y-2 nav list, uses location variable for active state
 ```
 
-#### Step 3h — Commit page atomically
+#### 3h. Commit Page (D-14)
 
 ```typescript
 import { commitPage } from "../../lib/code-integrator/git-workflow.js";
 
-const commitHash = await commitPage(page.pageName, [
-  pageFile,
-  projectConfig.appTsxPath,
-  projectConfig.sidebarPath,
-  // Include package.json if new shadcn components were installed
-  ...(newShadcnInstalled.length > 0 ? [join(projectRoot, "package.json")] : []),
-]);
-// Per D-14: atomic commit per page — message: "feat(ui): integrate {pageName} page"
+const commitHash = await commitPage(
+  page.pageName,
+  [
+    pageFile,                     // translated TSX page file
+    appTsxPath,                   // App.tsx with new route injected
+    sidebarPath,                  // sidebar.tsx with new nav item
+    ...installedPackageJsonPaths, // package.json if shadcn components were installed
+  ],
+);
+// Commits: "feat(ui): integrate {pageName} page"
+// Returns short commit hash (e.g. "abc1234")
 ```
 
-#### Step 3i — Update inventory incrementally
+#### 3i. Update Inventory
+
+After each page, update inventory to prevent false negatives in subsequent pages:
 
 ```typescript
-// Add new page to inventory so subsequent pages can see it
+inventory.existingRoutes.push({
+  path: page.pageRoute,
+  componentName,
+  filePath: pageFile,
+  isProtected: true,
+  hasCompanyGate: !isStandalone,
+});
+
+inventory.existingNavItems.push({
+  label: page.pageName,
+  href: page.pageRoute,
+  iconClass,
+});
+
 inventory.existingPages.push({
-  fileName: basename(pageFile),
+  fileName: path.basename(pageFile),
   filePath: pageFile,
   exportName: componentName,
 });
-inventory.existingRoutes.push({
-  path: page.pageSlug,
-  componentName,
-  filePath: pageFile,
-  isProtected: !isStandalonePage,
-  hasCompanyGate: !isStandalonePage,
-});
-inventory.existingNavItems.push({
-  label: page.pageName,
-  href: page.pageSlug,
-  iconClass,
-});
 ```
 
-#### Step 3j — Write integration output to database
+#### 3j. Write Integration Phase Output
 
 ```typescript
-import { IntegrationPhaseOutputSchema } from "../../lib/code-integrator/types.js";
-
-const integrationOutput = IntegrationPhaseOutputSchema.parse({
-  pageName: page.pageName,
-  pageFile,
-  routePath: page.pageSlug,
-  committed: true,
-  commitHash,
-});
-
-await db.update(pipelinePages)
-  .set({
+await db
+  .insert(pipelinePages)
+  .values({
+    projectId,
+    pageName: page.pageName,
     phase: "integration",
     status: "complete",
-    output: JSON.stringify(integrationOutput),
-    completedAt: new Date(),
-  })
-  .where(and(
-    eq(pipelinePages.runId, runId),
-    eq(pipelinePages.pageIndex, page.pageIndex),
-  ));
+    output: JSON.stringify({
+      pageName: page.pageName,
+      pageFile,
+      routePath: page.pageRoute,
+      committed: true,
+      commitHash,
+    } satisfies IntegrationPhaseOutput),
+  });
 ```
 
 ### Step 4 — Push and PR (D-13, D-15)
 
+After all pages are integrated:
+
 ```typescript
 import { pushAndCreatePR } from "../../lib/code-integrator/git-workflow.js";
 
-const pagesSummary = completedPages.map((p) => `${p.pageName} (${p.pageSlug})`);
-
 try {
-  const prUrl = await pushAndCreatePR(pagesSummary);
-  console.log(`\nPR created: ${prUrl}`);
+  const prUrl = await pushAndCreatePR(
+    integratedPages.map((p) => p.pageName),
+  );
+  console.log(`PR created: ${prUrl}`);
 } catch (err) {
-  // Pitfall: gh CLI not available
-  console.log("\ngh CLI unavailable. Push and create PR manually:");
+  // gh CLI unavailable — print manual instructions
+  console.log("gh CLI not available. Create PR manually:");
   console.log(`  git push -u origin feature/ui-integration`);
-  console.log(`  gh pr create --title "feat(ui): integrate generated pages"`);
+  console.log(`  Then open a PR from feature/ui-integration -> ${baseBranch}`);
 }
 ```
 
 ### Step 5 — Completion Summary
 
+Print a summary table of all integrated pages:
+
 ```
-Integration Complete
+Integration complete. Pages integrated:
 
-  Pages integrated: 4
-  Commits: [hash1] Reports, [hash2] Analytics, [hash3] Settings, [hash4] CRM
-  PR: https://github.com/user/repo/pull/42
-
-All pages are routed in App.tsx and linked in sidebar.tsx.
+| Page         | Route         | Commit  | Nav Added |
+|--------------|---------------|---------|-----------|
+| Reports      | /reports      | abc1234 | yes       |
+| Analytics    | /analytics    | def5678 | yes       |
 ```
 
-## Pitfall Reference
+## Icon Selection Guide
 
-| # | Pitfall | Detection | Action |
-|---|---------|-----------|--------|
-| 1 | Stitch presigned URL expiry | HTTP 403 or 410 on htmlUrl fetch | Escalate to user: re-run Phase 3 for that page or paste HTML directly |
-| 2 | Claude generates useQuery/useMutation | Post-translation string check | Strip TanStack Query hooks from tsxContent before wiring |
-| 3 | Route collision | detectRouteConflict returns non-null | D-10: show existing vs new, ask user for replace/merge/skip |
-| 4 | File collision | checkFileConflict returns `{ exists: true }` | D-10: show existing path, ask user for replace/merge/skip |
-| 5 | shadcn interactive prompt | `npx shadcn@latest add` asks questions | Check existence before install via ensureShadcnComponents |
-| 6 | Wrong base branch | company-guard.tsx absent from projectRoot | D-16: detectBaseBranch determines correct base branch |
-| 7 | Sidebar uses remixicon not Lucide | iconClass must start with `ri-` | NEVER pass Lucide component names; always use remixicon `ri-*` strings |
+Use remixicon classes (ri-* format) — sidebar uses remixicon not Lucide React (Pitfall 7).
+
+| Page type | Icon class |
+|-----------|-----------|
+| Analytics, Charts | `ri-bar-chart-line` or `ri-line-chart-line` |
+| Users, Team | `ri-user-line` or `ri-team-line` |
+| Settings | `ri-settings-3-line` |
+| Reports | `ri-file-chart-line` |
+| Dashboard, Home | `ri-dashboard-line` |
+| Documents | `ri-file-list-3-line` |
+| Messages, Chat | `ri-chat-3-line` |
+| Calendar, Schedule | `ri-calendar-line` |
+| Billing, Payments | `ri-bank-card-line` |
+| Integrations | `ri-plug-line` |
+| Notifications | `ri-notification-line` |
+| CRM, Contacts | `ri-user-star-line` |
+| Tasks | `ri-task-line` |
+| Other | `ri-layout-line` |
+
+## Pitfalls
+
+### Pitfall 1: Stitch Presigned URL Expiry
+Presigned URLs from Stitch expire (typically 1 hour). Check HTTP status before reading HTML.
+- If 403 or 410: notify user to re-run Phase 3 for that page OR paste HTML directly.
+- Never silently fail — escalate to user so they can unblock.
+
+### Pitfall 2: Claude Generates Data-Fetching Code
+Post-translation, Claude may add `useQuery`, `useMutation`, `fetch`, or `axios` calls.
+`translateHtmlToShadcn` runs a guard pass after initial translation:
+1. First, one re-prompt with stricter instructions forbidding data fetching
+2. Final fallback: regex strip of patterns matching `useQuery|useMutation|fetch\(|axios`
+
+### Pitfall 3: Route Collision (D-10)
+Always call `detectRouteConflict` before `injectRoute`. The BrownfieldInventory is updated
+incrementally after each page (step 3i) so in-loop collisions are also detected.
+
+### Pitfall 4: File Already Exists (D-10)
+Always call `checkFileConflict` before `writePage`. Present user with replace/merge/skip choice.
+Never overwrite silently — existing files may have manual edits.
+
+### Pitfall 5: shadcn Interactive Prompt
+`ensureShadcnComponents` checks component existence before running `npx shadcn@latest add`.
+Do not run the install command if the component is already present — it triggers an interactive
+confirmation prompt that blocks execution.
+
+### Pitfall 6: Base Branch Selection (D-16)
+`detectBaseBranch` checks whether `client/src/lib/company-guard.tsx` exists on the current branch.
+- If present: base is `main` (company-guard work is already merged)
+- If absent: base is `feature/company-system` (company-guard work still in that branch)
+- If `feature/company-system` doesn't exist either: fall back to `main`
+
+### Pitfall 7: Sidebar Uses remixicon Not Lucide
+The sidebar uses `<i className="ri-*">` elements from the remixicon library.
+Do NOT inject Lucide React `<Icon />` components into the nav item template.
+The `injectNavItem` function generates `<i className="${input.iconClass}">` — pass ri-* class strings.
 
 ## Error Handling
 
 | Error | Recoverable | Action |
 |-------|-------------|--------|
-| `ENV_MISSING` (Anthropic key) | No | Print error, abort pipeline |
-| `HTML_URL_EXPIRED` (403/410) | Yes | Ask user to re-run Phase 3 for that page or paste HTML |
-| `ROUTE_CONFLICT` | Yes | D-10: show both options, user decides replace/merge/skip |
-| `FILE_EXISTS` (page file conflict) | Yes | D-10: checkFileConflict + user decides replace/merge/skip |
-| `GH_CLI_MISSING` | Yes | Print manual PR instructions |
-| `TRANSLATION_FAILED` | Yes | Retry translation once; escalate if second attempt fails |
-| Database write error | Yes | Log warning; do NOT block pipeline |
+| ENV_MISSING (AI_INTEGRATIONS_ANTHROPIC_API_KEY) | No | Print error, abort pipeline |
+| HTML_URL_EXPIRED (403/410 from htmlUrl) | Yes | Skip page, notify user to re-run Phase 3 or paste HTML |
+| ROUTE_CONFLICT | Yes | D-10: show options, user decides replace/merge/skip |
+| FILE_EXISTS | Yes | D-10: checkFileConflict + user decides replace/merge/skip |
+| GH_CLI_MISSING | Yes | Print manual `git push` + PR creation instructions |
+| TRANSLATION_FAILED | Yes | Retry once with stricter prompt, then escalate to user |
+| SHADCN_INSTALL_FAILED | Yes | Log warning, continue — component may still render |
+| SIDEBAR_ANCHOR_MISSING | No | Halt page integration, report sidebar.tsx needs manual inspection |
+| APP_TSX_ANCHOR_MISSING | No | Halt page integration, report App.tsx needs manual inspection |
 
-## Decision Reference
+## Database Operations
 
-Key decisions applied by this skill:
-
-| Decision | Summary |
-|----------|---------|
-| D-01 | Translate PageSpec directly into Stitch prompt — spec-faithful |
-| D-03 | ensureShadcnComponents checks existence before install to avoid interactive prompts |
-| D-04 | Translation uses Claude Sonnet with system prompt for shadcn/ui fidelity |
-| D-05 | writePage creates page files under client/src/pages/ with kebab-case naming |
-| D-07 | ProtectedRoute wraps all authenticated pages in App.tsx |
-| D-08 | CompanyGate wraps non-standalone pages (auth/onboarding excluded) |
-| D-09 | Sidebar nav items use remixicon ri-* icon classes — never Lucide |
-| D-10 | Route and file conflict detection runs before any write; user resolves via replace/merge/skip |
-| D-11 | auditBrownfield runs once before loop — provides ground truth for conflict detection |
-| D-12 | Inventory updated incrementally per page within the loop — subsequent pages see prior writes |
-| D-13 | pushAndCreatePR runs after all pages complete — one PR per integration session |
-| D-14 | commitPage creates one atomic commit per page: "feat(ui): integrate {pageName} page" |
-| D-15 | gh pr create --title and --body populated from completed page names |
-| D-16 | detectBaseBranch: "main" if company-guard.tsx exists, else "feature/company-system" if branch exists, else "main" fallback |
-
-## Database Schema Reference
-
-Tables used in this phase (from `shared/design-schema.ts`):
-
-- `pipelinePages` — pipeline execution state per page (read phase="ui-gen" status="complete", write phase="integration")
-
-```typescript
-import { pipelinePages, insertPipelinePageSchema } from "@shared/design-schema.js";
+**Read:**
+```sql
+SELECT * FROM pipeline_pages
+WHERE project_id = $projectId
+  AND phase = 'ui-gen'
+  AND status = 'complete';
 ```
+
+**Write (per page):**
+```typescript
+INSERT INTO pipeline_pages (project_id, page_name, phase, status, output)
+VALUES ($projectId, $pageName, 'integration', 'complete', $integrationOutput);
+```
+
+`output` is JSON-encoded `IntegrationPhaseOutput` (from `lib/code-integrator/types.ts`).
