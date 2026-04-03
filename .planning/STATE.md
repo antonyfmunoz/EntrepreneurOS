@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 03-ui-generation 03-06-PLAN.md
-last_updated: "2026-03-31T09:07:14.459Z"
-last_activity: 2026-03-31
+status: executing
+stopped_at: Completed 04-code-integration 04-03-PLAN.md
+last_updated: "2026-04-03T03:49:37.402Z"
+last_activity: 2026-04-03
 progress:
   total_phases: 6
   completed_phases: 5
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** One system that takes a SaaS product from spec document to deployed, tested, hosted application — page by page, with human oversight at critical points and autonomous execution everywhere else.
-**Current focus:** Phase 06 — analytics-delivery
+**Current focus:** Phase 04 — code-integration
 
 ## Current Position
 
-Phase: 04
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-03-31
+Phase: 04 (code-integration) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-04-03
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -70,6 +70,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 06-analytics-delivery P04 | 6 | 2 tasks | 3 files |
 | Phase 03-ui-generation P04 | 1083 | 2 tasks | 9 files |
 | Phase 03-ui-generation P06 | 81 | 2 tasks | 6 files |
+| Phase 04-code-integration P03 | 9 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -128,6 +129,9 @@ Recent decisions affecting current work:
 - [Phase 03-ui-generation]: dualReview uses Promise.all for parallel Claude+Gemini execution -- Gemini failure never blocks Claude
 - [Phase 03-ui-generation]: combineScores uses Math.min per dimension as worst-of-both strategy with reviewer-labeled findings
 - [Phase 03-ui-generation]: Targeted component refinement via 21st.dev MCP documented as SKILL.md orchestration pattern not a library module -- avoids overscope flagged by reviewers
+- [Phase 04-code-integration]: route-injector uses string-based insertion anchored on NotFound route — App.tsx structure is stable
+- [Phase 04-code-integration]: git-workflow uses injectable execFn parameter for clean test isolation (same pattern as deploy-runner)
+- [Phase 04-code-integration]: detectBaseBranch checks company-guard.tsx existence for D-16 base branch decision
 
 ### Pending Todos
 
@@ -139,6 +143,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-31T08:59:23.583Z
-Stopped at: Completed 03-ui-generation 03-06-PLAN.md
+Last session: 2026-04-03T03:49:37.396Z
+Stopped at: Completed 04-code-integration 04-03-PLAN.md
 Resume file: None
