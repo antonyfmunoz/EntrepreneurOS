@@ -10,6 +10,16 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Dummy env vars so lib/env.ts helpers don't throw during tests that mock
+    // the underlying SDK. Tests that need the real value override these.
+    env: {
+      ANTHROPIC_API_KEY: "test-anthropic-key",
+      AI_INTEGRATIONS_ANTHROPIC_API_KEY: "test-anthropic-key",
+      AI_INTEGRATIONS_ANTHROPIC_BASE_URL: "https://api.anthropic.com",
+      STITCH_API_KEY: "test-stitch-key",
+      STITCH_PROJECT_ID: "test-stitch-project",
+      DATABASE_URL: "postgresql://test:test@localhost/test",
+    },
     include: [
       "tests/unit/**/*.test.ts",
       "tests/integration/**/*.test.ts",
