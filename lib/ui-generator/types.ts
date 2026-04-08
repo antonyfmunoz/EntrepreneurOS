@@ -156,6 +156,14 @@ export interface DualReviewScore {
   reviewerCount: 1 | 2;
 }
 
+// ─── SECTION 15a: Skill Enrichment ──────────────────────────────────────────
+
+export interface SkillEnrichment {
+  designGuidance: string | null;             // from frontend-design skill (Anthropic API)
+  uxGuidance: { palette?: string; fonts?: string };  // from ui-ux-pro-max skill
+  timestamp: Date;
+}
+
 // ─── SECTION 14: Component Discovery ────────────────────────────────────────
 
 export interface ComponentReference {

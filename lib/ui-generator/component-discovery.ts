@@ -1,31 +1,11 @@
 import type { ComponentDiscoveryResult, ComponentReference } from "./types.js";
 
-// Components complex enough to benefit from registry lookup.
-// Simple components (Button, Input, Badge) are standard shadcn -- Stitch handles them fine.
-export const COMPLEX_COMPONENT_PATTERNS = [
-  "DataTable", "Table", "KanbanBoard", "Kanban",
-  "Calendar", "DatePicker", "DateRangePicker",
-  "Chart", "BarChart", "LineChart", "PieChart", "AreaChart",
-  "Timeline", "Gantt",
-  "CommandPalette", "CommandMenu", "Combobox",
-  "FileUpload", "DragAndDrop",
-  "RichTextEditor", "MarkdownEditor",
-  "TreeView", "Accordion",
-  "Carousel", "ImageGallery",
-  "Stepper", "Wizard",
-  "ColorPicker",
-  "Dashboard", "Analytics",
-] as const;
+// Per Plan 03-07: query registries for ALL components, not just "complex" ones.
+// Button/Input/Card deserve production-grade shadcn/MagicUI references too — Stitch
+// generates better output when it has concrete examples for every component.
 
 // Max chars per individual code snippet -- prevents one component from dominating prompt
 const MAX_SNIPPET_CHARS = 500;
-
-function isComplexComponent(name: string): boolean {
-  const normalized = name.toLowerCase();
-  return COMPLEX_COMPONENT_PATTERNS.some(
-    (pattern) => normalized.includes(pattern.toLowerCase())
-  );
-}
 
 /**
  * Discovers production-ready component implementations from multiple registries.
@@ -46,11 +26,6 @@ export async function discoverComponents(
   const skippedComponents: string[] = [];
 
   for (const name of componentNames) {
-    if (!isComplexComponent(name)) {
-      skippedComponents.push(name);
-      continue;
-    }
-
     queriedComponents.push(name);
 
     if (!mcpInvoke) {
