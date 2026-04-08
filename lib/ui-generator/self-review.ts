@@ -5,6 +5,7 @@ import { ReviewScoreSchema, MAX_HTML_FOR_REVIEW } from "./types.js";
 import type { ReviewScore, DmTokenRow, DualReviewScore } from "./types.js";
 import type { PageSpecFull } from "@shared/spec-schema.js";
 import { geminiReview } from "./gemini-reviewer.js";
+import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 
 // ─── SelfReviewInput ──────────────────────────────────────────────────────────
 
@@ -25,8 +26,8 @@ export interface SelfReviewInput {
 
 function getClient(): Anthropic {
   return new Anthropic({
-    apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-    baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+    apiKey: getAnthropicApiKey(),
+    baseURL: getAnthropicBaseUrl(),
   });
 }
 

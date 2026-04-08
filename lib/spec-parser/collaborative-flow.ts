@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { SpecOutputSchema } from "@shared/spec-schema.js";
 import type { SpecOutput } from "@shared/spec-schema.js";
 import { extractJsonFromResponse } from "./restructure-spec.js";
+import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 
 // ─── Question Sequence ────────────────────────────────────────────────────────
 
@@ -166,8 +167,8 @@ export async function extractSpecFromConversation(
   messages: Array<{ role: "user" | "assistant"; content: string }>
 ): Promise<SpecOutput> {
   const client = new Anthropic({
-    apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-    baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+    apiKey: getAnthropicApiKey(),
+    baseURL: getAnthropicBaseUrl(),
   });
 
   const systemPrompt = `You are a SaaS product spec extractor. You have been given the full transcript of a collaborative spec creation conversation. Your job is to extract all gathered information into a precise SpecOutput JSON object.

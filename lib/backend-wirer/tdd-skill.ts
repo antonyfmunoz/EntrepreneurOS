@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { BackendSpec } from "./types.js";
+import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 
 /**
  * superpowers:test-driven-development skill wrapper (Plan 05-05).
@@ -13,8 +14,8 @@ const MODEL = "claude-sonnet-4-5";
 
 function getClient(): Anthropic {
   return new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY ?? process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-    ...(process.env.ANTHROPIC_API_KEY ? {} : { baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL }),
+    apiKey: getAnthropicApiKey(),
+    baseURL: getAnthropicBaseUrl(),
   });
 }
 

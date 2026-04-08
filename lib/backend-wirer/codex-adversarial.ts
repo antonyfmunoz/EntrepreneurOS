@@ -3,6 +3,7 @@ import type {
   RouteCodeBlock,
   SchemaCodeBlock,
 } from "./types.js";
+import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 
 /**
  * Codex adversarial security review for backend code (Plan 05-05).
@@ -47,8 +48,8 @@ const MODEL = "claude-sonnet-4-5";
 
 function getClient(): Anthropic {
   return new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY ?? process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-    ...(process.env.ANTHROPIC_API_KEY ? {} : { baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL }),
+    apiKey: getAnthropicApiKey(),
+    baseURL: getAnthropicBaseUrl(),
   });
 }
 

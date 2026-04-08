@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import pRetry from "p-retry";
 import { SpecOutputSchema } from "@shared/spec-schema.js";
 import type { SpecOutput } from "@shared/spec-schema.js";
+import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 
 /**
  * Strips markdown fences (```json...``` or ```...```) and parses JSON.
@@ -140,8 +141,8 @@ Return ONLY the JSON object. No other text.`;
  */
 export async function restructureSpec(rawInput: string): Promise<SpecOutput> {
   const client = new Anthropic({
-    apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-    baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+    apiKey: getAnthropicApiKey(),
+    baseURL: getAnthropicBaseUrl(),
   });
 
   return pRetry(

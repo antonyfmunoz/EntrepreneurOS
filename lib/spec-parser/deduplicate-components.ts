@@ -3,6 +3,7 @@ import pRetry from "p-retry";
 import { SharedComponentSpec } from "@shared/spec-schema.js";
 import type { PageSpecFull } from "@shared/spec-schema.js";
 import { extractJsonFromResponse } from "./restructure-spec.js";
+import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 
 /**
  * System prompt for AI-powered semantic deduplication of shared components.
@@ -98,8 +99,8 @@ export async function deduplicateComponents(
   }
 
   const client = new Anthropic({
-    apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-    baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+    apiKey: getAnthropicApiKey(),
+    baseURL: getAnthropicBaseUrl(),
   });
 
   return pRetry(

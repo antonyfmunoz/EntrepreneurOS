@@ -1,6 +1,7 @@
 import { StitchToolClient } from "@google/stitch-sdk";
 import type { McpInvokeFn } from "./types.js";
 import { StitchWrapperError } from "./types.js";
+import { getStitchApiKey } from "../env.js";
 
 /**
  * Single source of truth for constructing the Stitch MCP client.
@@ -22,8 +23,10 @@ let sharedClient: StitchToolClient | null = null;
  */
 export function getStitchToolClient(): StitchToolClient {
   if (sharedClient) return sharedClient;
-  const apiKey = process.env.STITCH_API_KEY;
-  if (!apiKey) {
+  let apiKey: string;
+  try {
+    apiKey = getStitchApiKey();
+  } catch {
     throw new StitchWrapperError(
       "STITCH_API_KEY environment variable is not set. Get your key from stitch.withgoogle.com account settings.",
       false,

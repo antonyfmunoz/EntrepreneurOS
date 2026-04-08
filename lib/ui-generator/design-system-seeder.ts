@@ -4,13 +4,14 @@ import { z } from "zod";
 import { extractJsonFromResponse } from "../spec-parser/restructure-spec.js";
 import type { DesignSystemSeed, DmTokenRow } from "./types.js";
 import { DEFAULT_DESIGN_SEED } from "./types.js";
+import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 
 // ─── Anthropic client (lazy — same pattern as extract-tokens.ts and self-review.ts) ──
 
 function getClient(): Anthropic {
   return new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY ?? process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-    ...(process.env.ANTHROPIC_API_KEY ? {} : { baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL }),
+    apiKey: getAnthropicApiKey(),
+    baseURL: getAnthropicBaseUrl(),
   });
 }
 

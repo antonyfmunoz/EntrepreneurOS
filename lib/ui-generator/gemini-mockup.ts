@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { PageSpecFull } from "@shared/spec-schema.js";
 import type { DmTokenRow, MockupResult } from "./types.js";
+import { getGeminiApiKey } from "../env.js";
 
 /**
  * Generates a reference mockup image via Gemini 2.0 Flash.
@@ -14,7 +15,7 @@ export async function generateReferenceMockup(input: {
   tokens: Partial<DmTokenRow> | null;
   deviceType?: string;
 }): Promise<MockupResult | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = getGeminiApiKey();
   if (!apiKey) {
     return null;
   }
