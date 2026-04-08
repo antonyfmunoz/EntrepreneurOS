@@ -168,12 +168,15 @@ export function chunkRawText(
 
   for (const section of sections) {
     if (section.length > maxChunkSize) {
-      // Single section too large — split at paragraph boundaries
+      // Single section too large — split at paragraph boundaries, but only
+      // at boundaries that are NOT inside a JSON object/array or fenced code
+      // block. Splitting inside a structure would break JSON parsing in the
+      // downstream restructure step.
       if (currentChunk.length > 0) {
         chunks.push(currentChunk);
         currentChunk = "";
       }
-      const paragraphChunks = splitAtParagraphs(section, maxChunkSize);
+      const paragraphChunks = splitSafely(section, maxChunkSize);
       chunks.push(...paragraphChunks);
     } else if (currentChunk.length + section.length > maxChunkSize) {
       // Adding this section would exceed the limit — flush current chunk
@@ -195,26 +198,97 @@ export function chunkRawText(
 }
 
 /**
- * Fallback: splits a single large section at paragraph boundaries (double newlines).
- * Used when a markdown section itself exceeds maxChunkSize.
+ * Tracks whether the parser cursor is currently inside a JSON object/array or
+ * a fenced code block. Used to refuse splits at unsafe boundaries.
  */
-function splitAtParagraphs(text: string, maxChunkSize: number): string[] {
-  const paragraphs = text.split(/\n\n+/);
+interface StructureDepth {
+  brace: number;   // {
+  bracket: number; // [
+  fence: boolean;  // inside ```...```
+}
+
+function updateDepth(depth: StructureDepth, line: string): StructureDepth {
+  let brace = depth.brace;
+  let bracket = depth.bracket;
+  let fence = depth.fence;
+
+  // Toggle fenced code blocks first — content inside them is opaque to JSON
+  // tracking (a stray { in prose-mode markdown should not lock the parser).
+  if (/^\s*```/.test(line)) {
+    fence = !fence;
+    return { brace, bracket, fence };
+  }
+  if (fence) return { brace, bracket, fence };
+
+  // Walk the line counting top-level structure tokens. Skip what's inside
+  // string literals (rough heuristic: ignore everything between unescaped
+  // double quotes on a single line).
+  let inString = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"' && line[i - 1] !== "\\") {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === "{") brace++;
+    else if (ch === "}") brace = Math.max(0, brace - 1);
+    else if (ch === "[") bracket++;
+    else if (ch === "]") bracket = Math.max(0, bracket - 1);
+  }
+  return { brace, bracket, fence };
+}
+
+function isAtSafeBoundary(depth: StructureDepth): boolean {
+  return depth.brace === 0 && depth.bracket === 0 && !depth.fence;
+}
+
+/**
+ * JSON/markdown-aware splitter. Walks the input line-by-line, tracks structural
+ * depth, and only flushes a chunk when the cursor is at a safe boundary (no
+ * open braces/brackets, not inside a fenced code block) AND a paragraph break
+ * has just been seen.
+ *
+ * If a single structural unit exceeds maxChunkSize, the entire input is
+ * returned as one oversized chunk with a warning logged. Splitting mid-JSON
+ * is never acceptable — better to send one oversized chunk than corrupt
+ * structure that downstream Zod validation will reject anyway.
+ */
+function splitSafely(text: string, maxChunkSize: number): string[] {
+  const lines = text.split("\n");
   const chunks: string[] = [];
   let currentChunk = "";
+  let depth: StructureDepth = { brace: 0, bracket: 0, fence: false };
+  let lastFlushIdx = 0;
 
-  for (const paragraph of paragraphs) {
-    const separator = currentChunk.length > 0 ? "\n\n" : "";
-    if (currentChunk.length + separator.length + paragraph.length > maxChunkSize && currentChunk.length > 0) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    depth = updateDepth(depth, line);
+    currentChunk += line + "\n";
+
+    const overBudget = currentChunk.length >= maxChunkSize;
+    const sawParagraphBreak =
+      i + 1 < lines.length && lines[i + 1].trim() === "";
+    const safeHere = isAtSafeBoundary(depth);
+
+    if (overBudget && safeHere && sawParagraphBreak) {
       chunks.push(currentChunk);
-      currentChunk = paragraph;
-    } else {
-      currentChunk += separator + paragraph;
+      currentChunk = "";
+      lastFlushIdx = i + 1;
     }
   }
 
-  if (currentChunk.length > 0) {
-    chunks.push(currentChunk);
+  if (currentChunk.length > 0) chunks.push(currentChunk);
+
+  // If we couldn't safely split at all (single oversized structural unit),
+  // emit a warning and return the whole thing as one chunk. The downstream
+  // LLM call will deal with the oversize — better than corrupting JSON.
+  if (chunks.length === 1 && chunks[0].length > maxChunkSize) {
+    console.warn(
+      `[chunk-spec] Could not split a ${chunks[0].length}-char section without ` +
+        `breaking JSON/code structure. Passing through whole. ` +
+        `(maxChunkSize=${maxChunkSize}, lastSafeBoundary=line ${lastFlushIdx})`,
+    );
   }
 
   return chunks;
