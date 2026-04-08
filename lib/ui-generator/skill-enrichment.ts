@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { SkillEnrichment } from "./types.js";
+import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 
 /**
  * Skill enrichment layer (Plan 03-07).
@@ -16,8 +17,8 @@ import type { SkillEnrichment } from "./types.js";
 
 function getClient(): Anthropic {
   return new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY ?? process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-    ...(process.env.ANTHROPIC_API_KEY ? {} : { baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL }),
+    apiKey: getAnthropicApiKey(),
+    baseURL: getAnthropicBaseUrl(),
   });
 }
 

@@ -4,13 +4,14 @@ import { z } from "zod";
 import { extractJsonFromResponse } from "../spec-parser/restructure-spec.js";
 import type { TokenExtractionResult, DmTokenRow } from "./types.js";
 import { MAX_HTML_FOR_EXTRACTION } from "./types.js";
+import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 
 // ─── Anthropic client (lazy — instantiated per call) ─────────────────────────
 
 function getClient(): Anthropic {
   return new Anthropic({
-    apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-    baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+    apiKey: getAnthropicApiKey(),
+    baseURL: getAnthropicBaseUrl(),
   });
 }
 

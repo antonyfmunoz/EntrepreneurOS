@@ -3,6 +3,7 @@ import pRetry from "p-retry";
 import { BackendSpecSchema } from "@shared/spec-schema.js";
 import type { BackendSpec, PageSpecFull } from "@shared/spec-schema.js";
 import { extractJsonFromResponse } from "./restructure-spec.js";
+import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 
 /**
  * System prompt instructing Claude to derive a BackendSpec from a PageSpecFull[]
@@ -75,8 +76,8 @@ Return ONLY the JSON object. No other text.`;
  */
 export async function deriveBackendSpec(pages: PageSpecFull[]): Promise<BackendSpec> {
   const client = new Anthropic({
-    apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-    baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+    apiKey: getAnthropicApiKey(),
+    baseURL: getAnthropicBaseUrl(),
   });
 
   return pRetry(

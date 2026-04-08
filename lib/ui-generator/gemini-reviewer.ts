@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ReviewScoreSchema } from "./types.js";
 import type { ReviewScore, DmTokenRow } from "./types.js";
 import type { PageSpecFull } from "@shared/spec-schema.js";
+import { getGeminiApiKey } from "../env.js";
 
 export interface GeminiReviewInput {
   screenshotUrls: string[];
@@ -25,7 +26,7 @@ export interface GeminiReviewInput {
 export async function geminiReview(
   input: GeminiReviewInput
 ): Promise<ReviewScore | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = getGeminiApiKey();
   if (!apiKey) {
     return null;
   }

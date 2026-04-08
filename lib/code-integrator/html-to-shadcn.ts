@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import pRetry from "p-retry";
 import type { TranslationInput, TranslationResult } from "./types.js";
+import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 
 // ─── Anthropic client (lazy — instantiated once, same pattern as extract-tokens.ts) ──
 
@@ -8,15 +9,9 @@ let _client: Anthropic | null = null;
 
 function getClient(): Anthropic {
   if (!_client) {
-    const apiKey = process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      throw new Error(
-        "AI_INTEGRATIONS_ANTHROPIC_API_KEY is required for HTML-to-shadcn translation"
-      );
-    }
     _client = new Anthropic({
-      apiKey,
-      baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL || undefined,
+      apiKey: getAnthropicApiKey(),
+      baseURL: getAnthropicBaseUrl(),
     });
   }
   return _client;
