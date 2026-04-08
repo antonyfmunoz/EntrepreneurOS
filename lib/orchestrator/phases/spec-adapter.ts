@@ -1,0 +1,85 @@
+// lib/orchestrator/phases/spec-adapter.ts
+// Phase 1: spec
+//
+// prepare(): locate the project's PRD/spec source file (no LLM call — read-only).
+//   Search order: .planning/REQUIREMENTS.md → .planning/PRD.md → newest .planning/specs/*.md
+//   Throws with all paths checked if nothing is found.
+//
+// runPage(): call restructureSpec() with the raw text, returning a validated SpecOutput.
+//   The full SpecOutput is JSON-serialized into pipeline_pages.output by phase-runner.
+
+import fs from "node:fs";
+import path from "node:path";
+import { restructureSpec } from "../../spec-parser/restructure-spec.js";
+import { deriveBackendSpec } from "../../spec-parser/derive-backend-spec.js";
+import type { SpecOutput } from "@shared/spec-schema.js";
+import type { ProjectConfig } from "../../../shared/design-schema.js";
+import type { PhaseImplementation, PageWorkUnit } from "../phase-runner.js";
+
+interface SpecRunInput {
+  rawSpecText: string;
+  sourcePath: string;
+}
+
+function findSpecSource(projectRoot: string): { rawText: string; sourcePath: string } {
+  const candidates = [
+    path.join(projectRoot, ".planning", "REQUIREMENTS.md"),
+    path.join(projectRoot, ".planning", "PRD.md"),
+  ];
+
+  // Newest *.md under .planning/specs/
+  const specsDir = path.join(projectRoot, ".planning", "specs");
+  if (fs.existsSync(specsDir)) {
+    const mdFiles = fs
+      .readdirSync(specsDir)
+      .filter((f) => f.endsWith(".md"))
+      .map((f) => path.join(specsDir, f));
+    mdFiles.sort(
+      (a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs,
+    );
+    if (mdFiles.length > 0) candidates.push(mdFiles[0]);
+  }
+
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      return { rawText: fs.readFileSync(p, "utf-8"), sourcePath: p };
+    }
+  }
+
+  throw new Error(
+    `Phase "spec": no source file found. Looked at:\n` +
+      candidates.map((p) => `  - ${p}`).join("\n") +
+      `\nCreate one of these files with your product spec and re-run.`,
+  );
+}
+
+export const specPhaseImplementation: PhaseImplementation = {
+  async prepare(config: ProjectConfig): Promise<PageWorkUnit[]> {
+    const projectRoot = path.resolve(config.repoPath);
+    const { rawText, sourcePath } = findSpecSource(projectRoot);
+    const input: SpecRunInput = { rawSpecText: rawText, sourcePath };
+    return [
+      {
+        pageName: "spec",
+        pageIndex: 0,
+        input,
+      },
+    ];
+  },
+
+  async runPage(rawInput: unknown, _config: ProjectConfig): Promise<SpecOutput> {
+    const input = rawInput as SpecRunInput;
+    const spec = await restructureSpec(input.rawSpecText);
+
+    // If restructureSpec didn't fill in the backend layer, derive it.
+    if (!spec.backendSpec || spec.backendSpec.endpoints.length === 0) {
+      try {
+        spec.backendSpec = await deriveBackendSpec(spec.pages);
+      } catch {
+        // Backend derivation is best-effort. Pages still get the rest of the spec.
+      }
+    }
+
+    return spec;
+  },
+};
