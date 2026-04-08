@@ -131,6 +131,32 @@ describe("buildSystemPromptForStage", () => {
     const lower = prompt.toLowerCase();
     expect(lower).toMatch(/error|auth|empty|loading|implied/);
   });
+
+  it("returns a non-empty string for every stage in QUESTION_SEQUENCE", async () => {
+    const { buildSystemPromptForStage, QUESTION_SEQUENCE } = await import(
+      "../../../lib/spec-parser/collaborative-flow.js"
+    );
+    for (const stage of QUESTION_SEQUENCE) {
+      const prompt = buildSystemPromptForStage(stage, "");
+      expect(typeof prompt).toBe("string");
+      expect(prompt.length).toBeGreaterThan(0);
+      // Must not fall through to the exhaustiveness default branch
+      expect(prompt.toLowerCase()).not.toContain("unknown stage");
+    }
+  });
+
+  it("reflects priorContext in the prompt for every stage so prior answers aren't re-asked", async () => {
+    const { buildSystemPromptForStage, QUESTION_SEQUENCE } = await import(
+      "../../../lib/spec-parser/collaborative-flow.js"
+    );
+    const priorContext = "SENTINEL_PRIOR_CTX_abc987";
+    for (const stage of QUESTION_SEQUENCE) {
+      const withCtx = buildSystemPromptForStage(stage, priorContext);
+      const withoutCtx = buildSystemPromptForStage(stage, "");
+      expect(withCtx).toContain(priorContext);
+      expect(withCtx.length).toBeGreaterThan(withoutCtx.length);
+    }
+  });
 });
 
 // ─── isFlowComplete ───────────────────────────────────────────────────────────
