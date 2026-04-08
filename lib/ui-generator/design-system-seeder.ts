@@ -9,8 +9,8 @@ import { DEFAULT_DESIGN_SEED } from "./types.js";
 
 function getClient(): Anthropic {
   return new Anthropic({
-    apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-    baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+    apiKey: process.env.ANTHROPIC_API_KEY ?? process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
+    ...(process.env.ANTHROPIC_API_KEY ? {} : { baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL }),
   });
 }
 
@@ -110,5 +110,6 @@ export function seedToTokens(seed: DesignSystemSeed): Partial<DmTokenRow> {
     typeFontFamily: seed.fontPairing.body,
     spacingUnit: String(seed.spacingSystem.unit),
     borderRadius: String(seed.spacingSystem.borderRadius),
+    componentDirection: seed.componentDirection,
   } as Partial<DmTokenRow>;
 }

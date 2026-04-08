@@ -1,5 +1,5 @@
 import type { PageSpecFull } from "@shared/spec-schema.js";
-import type { DmTokenRow } from "./types.js";
+import type { DmTokenRow, SkillEnrichment } from "./types.js";
 import { MAX_PROMPT_TOTAL_CHARS } from "./types.js";
 
 // ─── buildStitchPrompt ───────────────────────────────────────────────────────
@@ -13,15 +13,30 @@ import { MAX_PROMPT_TOTAL_CHARS } from "./types.js";
  * @param priorScreenshotUrl  URL of a previously approved screenshot for style reference
  * @param componentDirection  Optional component style direction from DesignSystemSeed
  * @param componentReferences Formatted component registry references from discovery layer (optional)
+ * @param enrichment          Session-level skill enrichment (frontend-design + ui-ux-pro-max), optional
  */
 export function buildStitchPrompt(
   spec: PageSpecFull,
   tokens: DmTokenRow | null,
   priorScreenshotUrl?: string,
   componentDirection?: string,
-  componentReferences?: string
+  componentReferences?: string,
+  enrichment?: SkillEnrichment
 ): string {
   const parts: string[] = [];
+
+  // 0. Skill enrichment — production-grade design guidance, injected first so
+  //    Stitch reads it before per-page constraints. Fail-open: skipped if absent.
+  if (enrichment?.designGuidance) {
+    parts.push("## Production Design Guidance");
+    parts.push(enrichment.designGuidance);
+  }
+  if (enrichment?.uxGuidance.palette) {
+    parts.push(`## Recommended Palette\n${enrichment.uxGuidance.palette}`);
+  }
+  if (enrichment?.uxGuidance.fonts) {
+    parts.push(`## Recommended Fonts\n${enrichment.uxGuidance.fonts}`);
+  }
 
   // 1. Page description
   parts.push(`Design a ${spec.name} page for a SaaS application.`);
