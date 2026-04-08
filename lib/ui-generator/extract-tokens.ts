@@ -35,19 +35,62 @@ const TOKEN_FIELDS = [
 type TokenField = (typeof TOKEN_FIELDS)[number];
 
 // ─── Validation schema for Claude extraction response ─────────────────────────
+//
+// Token field schemas. The LLM is instructed to return null when it cannot
+// confidently extract a value. Anything non-null must be in the right shape:
+//   - colors: 6-digit hex (#RRGGBB), case-insensitive
+//   - typeFontFamily: non-empty string
+//   - numeric fields: positive numbers in plausible UI ranges
+//   - shadowStyle: non-empty CSS string
+// Anything else is a Claude hallucination — we throw rather than poison the
+// downstream prompt builder with malformed values.
+
+const HEX_RE = /^#[0-9A-Fa-f]{6}$/;
+const HexOrNull = z
+  .union([
+    z.string().regex(HEX_RE, { message: "expected #RRGGBB" }),
+    z.null(),
+  ])
+  .nullable();
+
+const NumericOrNull = (min: number, max: number) =>
+  z.union([z.number().min(min).max(max), z.null()]).nullable();
+
+const StringOrNull = z.union([z.string().min(1), z.null()]).nullable();
+
+const TokensSchema = z.object({
+  colorPrimary: HexOrNull,
+  colorSecondary: HexOrNull,
+  colorBackground: HexOrNull,
+  colorSurface: HexOrNull,
+  colorText: HexOrNull,
+  colorAccent: HexOrNull,
+  typeFontFamily: StringOrNull,
+  typeSizeBase: NumericOrNull(8, 32),       // px
+  typeScaleRatio: NumericOrNull(1, 2),       // typographic scale
+  spacingUnit: NumericOrNull(2, 16),         // px
+  borderRadius: NumericOrNull(0, 64),        // px
+  shadowStyle: StringOrNull,
+});
+
+type ExtractedTokens = z.infer<typeof TokensSchema>;
+
+const PatternSchema = z.object({
+  name: z.string(),
+  variant: z.string().optional(),
+  propsShape: z.string().optional(),
+  usageContext: z.string().optional(),
+  shadcnComponent: z.string().optional(),
+});
+
+type ExtractedPattern = z.infer<typeof PatternSchema>;
 
 const ExtractionResponseSchema = z.object({
-  tokens: z.record(z.union([z.string(), z.number(), z.null()])),
-  patterns: z.array(
-    z.object({
-      name: z.string(),
-      variant: z.string().optional(),
-      propsShape: z.string().optional(),
-      usageContext: z.string().optional(),
-      shadcnComponent: z.string().optional(),
-    })
-  ),
+  tokens: TokensSchema,
+  patterns: z.array(PatternSchema),
 });
+
+type ExtractionResponse = z.infer<typeof ExtractionResponseSchema>;
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
@@ -92,22 +135,28 @@ Return valid JSON only — no markdown, no explanation.`;
 // New non-null values from extracted take precedence over prior null values.
 export function mergeTokens(
   prior: Partial<DmTokenRow> | null,
-  extracted: Record<string, string | number | null>
-): Record<string, string | number | null> {
-  const result: Record<string, string | number | null> = {};
+  extracted: ExtractedTokens,
+): ExtractedTokens {
+  const result = {} as Record<TokenField, string | number | null>;
   for (const field of TOKEN_FIELDS) {
-    // nullish coalescing: use extracted value if non-null, else fall back to prior, else null
     const extractedVal = extracted[field] ?? null;
-    const priorVal = prior?.[field as keyof DmTokenRow] ?? null;
+    const priorVal = (prior?.[field as keyof DmTokenRow] as
+      | string
+      | number
+      | null
+      | undefined) ?? null;
     result[field] = extractedVal !== null ? extractedVal : priorVal;
   }
-  return result;
+  return result as unknown as ExtractedTokens;
 }
 
 // ─── extractTokensFromHtml: Claude API call ───────────────────────────────────
 
 // Calls Claude with truncated HTML content, extracts tokens and patterns,
 // merges extracted tokens with prior tokens using nullish coalescing.
+//
+// Throws if Claude returns malformed token shapes. The downstream Stitch
+// prompt builder and design memory tables both depend on well-formed values.
 export async function extractTokensFromHtml(input: {
   htmlContent: string;
   projectId: string;
@@ -122,7 +171,7 @@ export async function extractTokensFromHtml(input: {
 
   const userMessage = `Analyze this HTML and extract design tokens and component patterns:\n\n${truncated}`;
 
-  const validated = await pRetry(
+  const validated: ExtractionResponse = await pRetry(
     async () => {
       const client = getClient();
       const response = await client.messages.create({
@@ -135,15 +184,24 @@ export async function extractTokensFromHtml(input: {
       const text =
         response.content[0].type === "text" ? response.content[0].text : "";
       const parsed = extractJsonFromResponse(text);
-      return ExtractionResponseSchema.parse(parsed);
+      const result = ExtractionResponseSchema.safeParse(parsed);
+      if (!result.success) {
+        const detail = result.error.errors
+          .map((e) => `${e.path.join(".")}: ${e.message}`)
+          .join("; ");
+        throw new Error(
+          `extractTokensFromHtml: Claude returned malformed tokens. ${detail}`,
+        );
+      }
+      return result.data;
     },
-    { retries: 2, minTimeout: 1000, factor: 2 }
+    { retries: 2, minTimeout: 1000, factor: 2 },
   );
 
   const mergedTokens = mergeTokens(priorTokens, validated.tokens);
 
   return {
-    tokens: mergedTokens,
+    tokens: mergedTokens as unknown as Record<string, string | number | null>,
     patterns: validated.patterns,
   };
 }
