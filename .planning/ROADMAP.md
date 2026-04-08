@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Infrastructure schemas, state contracts, Stitch SDK wrapper, Vitest setup, and framework detection (completed 2026-03-27)
 - [x] **Phase 2: Spec Layer** - Spec ingestion (paste or collaborate) producing validated PageSpec[] output (completed 2026-03-28)
-- [ ] **Phase 3: UI Generation** - Stitch integration with design memory, confidence-calibrated approval gates, and enhanced pre-generation + review pipeline
+- [x] **Phase 3: UI Generation** - Stitch integration with design memory, confidence-calibrated approval gates, skill enrichment (frontend-design + ui-ux-pro-max), DESIGN.md workflow, and screen management (completed 2026-04-07)
 - [x] **Phase 4: Code Integration** - Brownfield-aware frontend integration with git workflow (completed 2026-03-29)
 - [x] **Phase 5: Backend + Quality** - Backend wiring against actual UI contracts with autonomous test fix loop (completed 2026-03-29)
 - [x] **Phase 6: Analytics + Delivery** - PostHog instrumentation and full deployment automation (completed 2026-03-31)
@@ -70,7 +70,7 @@ Plans:
   7. Component registries (shadcn, 21st.dev, MagicUI) are queried for production-ready implementations before Stitch calls
   8. Dual reviewer (Claude + Gemini) combines text and vision review for more reliable scoring
   9. Targeted component refinement attempts focused fixes before full Stitch re-calls on rejection
-**Plans**: 6 plans
+**Plans**: 9 plans
 **UI hint**: yes
 
 Plans:
@@ -80,6 +80,9 @@ Plans:
 - [x] 03-04-PLAN.md — Design system seeder, Gemini mockup, and HTML sanitizer (security)
 - [x] 03-05-PLAN.md — Component discovery layer with prompt size budgeting
 - [x] 03-06-PLAN.md — Dual reviewer (Claude + Gemini) with fail-closed scoring
+- [x] 03-07-PLAN.md — Skill enrichment layer (frontend-design + ui-ux-pro-max), componentDirection persistence, full component-discovery
+- [x] 03-08-PLAN.md — DESIGN.md export/import workflow + dm_design_md schema
+- [x] 03-09-PLAN.md — Stitch screen management (delete rejected screens before retry)
 
 ### Phase 4: Code Integration
 **Goal**: Approved Stitch output becomes real, working React files in the existing repo — integrated into routing, navigation, and layout — with every change tracked in git
@@ -90,13 +93,15 @@ Plans:
   2. Stitch HTML output is translated to use existing shadcn/ui components and design system conventions before any file is written
   3. New pages are navigable in the running app — routes are added to App.tsx, pages appear in navigation, and existing auth-protected routes remain intact
   4. Each phase's work lives on its own feature branch with incremental commits at phase boundaries, and the branch is pushed to remote in PR-ready state
-**Plans**: 3 plans
+**Plans**: 5 plans
 **UI hint**: yes
 
 Plans:
 - [x] 04-01-PLAN.md — Phase 4 type contracts and brownfield audit module
 - [x] 04-02-PLAN.md — HTML-to-shadcn Claude AI translation and page file writer
 - [x] 04-03-PLAN.md — Route/nav injectors, git workflow, and integrator SKILL.md
+- [x] 04-04-PLAN.md — Gap closure: push feature/company-system + open PR
+- [x] 04-05-PLAN.md — Codex code review integration (codex-review + skill-reviews)
 
 ### Phase 5: Backend + Quality
 **Goal**: The backend serves exactly what the integrated UI requests, tests verify what was built, and nothing ships until the test suite passes
@@ -108,13 +113,14 @@ Plans:
   3. Integration tests are written against spec requirements (not just unit tests) before implementation is marked complete
   4. System runs tests autonomously, parses failures, fixes the implementation (never the tests), re-runs, and either passes or escalates after 3 cycles
   5. No deployment gate is reachable with a failing test suite
-**Plans**: 4 plans
+**Plans**: 5 plans
 
 Plans:
 - [x] 05-01-PLAN.md — Phase 5 type contracts and backend brownfield audit
 - [x] 05-02-PLAN.md — Route, schema, storage, and hook code generators
 - [x] 05-03-PLAN.md — Integration test generator, transaction isolation, and fix loop
 - [x] 05-04-PLAN.md — Wiring applier (file mutations) and backend-wirer SKILL.md
+- [x] 05-05-PLAN.md — Codex adversarial security review + TDD skill wrapper
 
 ### Phase 6: Analytics + Delivery
 **Goal**: The finished, tested app is instrumented with meaningful analytics and deployed to the target host with explicit user confirmation at the deployment gate
@@ -143,7 +149,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/3 | Complete   | 2026-03-27 |
 | 2. Spec Layer | 3/3 | Complete   | 2026-03-28 |
-| 3. UI Generation | 3/6 | In Progress | — |
-| 4. Code Integration | 2/3 | In Progress|  |
-| 5. Backend + Quality | 4/4 | Complete   | 2026-03-29 |
+| 3. UI Generation | 9/9 | Complete   | 2026-04-07 |
+| 4. Code Integration | 5/5 | Complete   | 2026-04-07 |
+| 5. Backend + Quality | 5/5 | Complete   | 2026-04-07 |
 | 6. Analytics + Delivery | 4/4 | Complete   | 2026-03-31 |
