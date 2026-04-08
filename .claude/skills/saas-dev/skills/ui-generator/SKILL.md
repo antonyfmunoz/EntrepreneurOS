@@ -785,3 +785,40 @@ Key decisions applied by this skill:
 | D-16 | Auto-approved pages show one-line notice only |
 | Enhancement | Dual reviewer (Claude + Gemini) -- combined worst-of-both per dimension |
 | Enhancement | Targeted component refinement via 21st.dev MCP as orchestration pattern |
+
+## Limitations of the Stitch MCP server
+
+These are server-side gaps in stitch.googleapis.com — not bugs in this skill.
+Surface them to the user; do not pretend they don't exist.
+
+### 1. No `delete_screen` tool
+
+The Stitch MCP server exposes generation, project listing, and screen
+inspection — but **no delete operation**. Once a screen is generated, it
+lives in the Stitch project forever.
+
+Implications:
+- Rejected screens accumulate in the Stitch UI as orphaned junk.
+- The only cleanup path is the Stitch web app (stitch.withgoogle.com), one
+  screen at a time, by hand.
+- The skill must NEVER claim a screen was "deleted" or "discarded". On
+  rejection, log it locally and warn the user that the orphaned screen
+  remains in their Stitch project.
+
+### 2. No `import_design_system` / DESIGN.md import
+
+The MCP server has no tool for pushing a project's design tokens, DESIGN.md,
+or any other design system contract into Stitch as a first-class constraint.
+
+Implications:
+- Multi-page coherence relies entirely on **token carry-forward** in each
+  generation prompt: the orchestrator extracts tokens from approved page 1
+  and re-injects them in the prompt for page 2, page 3, etc.
+- `priorScreenshotUrl` references give Stitch a visual anchor, but there is
+  no server-side memory of the design system between calls.
+- Every generation effectively starts fresh — drift is corrected at the
+  prompt layer, not the server layer.
+- Do not claim the design system is "loaded" or "remembered" by Stitch. It
+  is not.
+
+The same warnings live as a comment block at the top of `lib/stitch/client.ts`.

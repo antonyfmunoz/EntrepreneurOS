@@ -1,3 +1,23 @@
+// ─── Known Stitch MCP limitations ────────────────────────────────────────────
+//
+// 1. deleteScreen() — the Stitch MCP server exposes NO delete tool. Once a
+//    screen is generated, it lives in the project forever. If a user rejects
+//    a screen, it remains in the Stitch project as orphaned junk; the only
+//    cleanup path is manually deleting screens through stitch.withgoogle.com.
+//    Any wrapper that pretends to delete is lying — surface the limitation
+//    to the user instead of swallowing it.
+//
+// 2. DESIGN.md / design system import — the MCP server has NO
+//    `import_design_system` tool. There is no way to push a project's design
+//    tokens or DESIGN.md content into Stitch as a first-class constraint.
+//    Multi-page coherence depends entirely on the orchestrator carrying
+//    tokens forward in each generation prompt (token carry-forward) and on
+//    `priorScreenshotUrl` references. There is NO server-side "remember this
+//    design system" capability — every generation starts fresh.
+//
+// Both of these are server-side limitations, not bugs in this client. Do not
+// hide them. The ui-generator SKILL.md documents the same in user-facing form.
+
 import { StitchError } from "@google/stitch-sdk";
 import pRetry, { AbortError } from "p-retry";
 import type { StitchGenerateRequest, StitchGenerateResult } from "./types.js";
