@@ -43,7 +43,7 @@ describe("generateIntegrationTest", () => {
     // 200 test for authenticated GET
     expect(content).toContain("expect(res.status).toBe(200)");
     // auth mock middleware
-    expect(content).toContain("req.isAuthenticated");
+    expect(content).toContain(".isAuthenticated = () => true");
     // registerRoutes import
     expect(content).toContain("registerRoutes");
   });

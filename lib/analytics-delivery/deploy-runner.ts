@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execSync, type ExecSyncOptions, type ExecSyncOptionsWithStringEncoding } from "child_process";
 import type { HostingTarget, DeployRunnerResult, DeployOutcome, PreflightResult } from "./types.js";
 
 // ─── CLI metadata per target ──────────────────────────────────────────────────
@@ -50,7 +50,7 @@ export function checkCLIAvailable(
   const whichCmd = process.platform === "win32" ? `where ${binary}` : `which ${binary}`;
 
   try {
-    execFn(whichCmd, { stdio: "ignore" } as any);
+    execFn(whichCmd, { stdio: "ignore" } satisfies ExecSyncOptions);
     return true;
   } catch {
     return false;
@@ -145,12 +145,13 @@ export function runDeploy(
 
   // Execute the deploy command
   try {
-    const output = execFn(command, {
+    const execOpts: ExecSyncOptionsWithStringEncoding = {
       cwd: options?.cwd,
       env: { ...process.env, ...options?.env } as NodeJS.ProcessEnv,
       stdio: "pipe",
-      encoding: "utf-8" as BufferEncoding,
-    } as any) as string;
+      encoding: "utf-8",
+    };
+    const output = execFn(command, execOpts).toString();
 
     return { target, outcome: "deployed", confirmed: true, executed: true, output };
   } catch (error) {

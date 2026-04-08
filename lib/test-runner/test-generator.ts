@@ -82,7 +82,7 @@ export function generateIntegrationTest(
   if (endpoint.authRequired) {
     content = `import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
-import express from "express";
+import express, { type Request, type Response, type NextFunction } from "express";
 import { registerRoutes } from "../../../server/routes.js";
 
 describe("${endpoint.method} ${endpoint.path}", () => {
@@ -92,9 +92,9 @@ describe("${endpoint.method} ${endpoint.path}", () => {
     app = express();
     app.use(express.json());
     // Auth mock middleware — unauthenticated, injected before routes
-    app.use((req: any, _res: any, next: any) => {
-      req.isAuthenticated = () => false;
-      req.user = null;
+    app.use((req: Request, _res: Response, next: NextFunction) => {
+      (req as Request & { isAuthenticated: () => boolean; user: unknown }).isAuthenticated = () => false;
+      (req as Request & { user: unknown }).user = null;
       next();
     });
     await registerRoutes(app);
@@ -109,9 +109,9 @@ describe("${endpoint.method} ${endpoint.path}", () => {
     // Override auth for this test — injects authenticated user before routes
     const authApp = express();
     authApp.use(express.json());
-    authApp.use((req: any, _res: any, next: any) => {
-      req.isAuthenticated = () => true;
-      req.user = { id: "test-user-id" };
+    authApp.use((req: Request, _res: Response, next: NextFunction) => {
+      (req as Request & { isAuthenticated: () => boolean; user: unknown }).isAuthenticated = () => true;
+      (req as Request & { user: unknown }).user = { id: "test-user-id" };
       next();
     });
     await registerRoutes(authApp);

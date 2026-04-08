@@ -1,4 +1,8 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, type Part, type InlineDataPart } from "@google/generative-ai";
+
+function isInlineDataPart(part: Part): part is InlineDataPart {
+  return (part as InlineDataPart).inlineData !== undefined;
+}
 import type { PageSpecFull } from "@shared/spec-schema.js";
 import type { DmTokenRow, MockupResult } from "./types.js";
 import { getGeminiApiKey } from "../env.js";
@@ -47,12 +51,12 @@ export async function generateReferenceMockup(input: {
       generationConfig: { responseMimeType: "image/png" },
     });
 
-    const parts = result.response.candidates?.[0]?.content?.parts ?? [];
+    const parts: Part[] = result.response.candidates?.[0]?.content?.parts ?? [];
     for (const part of parts) {
-      if ((part as any).inlineData) {
+      if (isInlineDataPart(part)) {
         return {
-          imageBase64: (part as any).inlineData.data,
-          mimeType: (part as any).inlineData.mimeType ?? "image/png",
+          imageBase64: part.inlineData.data,
+          mimeType: part.inlineData.mimeType ?? "image/png",
         };
       }
     }
