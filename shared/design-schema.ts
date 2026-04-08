@@ -31,10 +31,20 @@ export const dmTokens = pgTable("dm_tokens", {
   spacingUnit: numeric("spacing_unit"),
   borderRadius: numeric("border_radius"),
   shadowStyle: text("shadow_style"),
+  componentDirection: text("component_direction"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   projectVersionIdx: uniqueIndex("dm_tokens_project_version_idx").on(table.projectId, table.version),
 }));
+
+// DESIGN.md export storage — one row per export, immutable, versioned per project (D-08)
+export const dmDesignMd = pgTable("dm_design_md", {
+  id: serial("id").primaryKey(),
+  projectId: text("project_id").notNull(),
+  version: integer("version").notNull(),
+  content: text("content").notNull(),
+  exportedAt: timestamp("exported_at").notNull().defaultNow(),
+});
 
 export const dmPages = pgTable("dm_pages", {
   id: serial("id").primaryKey(),
@@ -98,6 +108,7 @@ export const insertDmProjectSchema = createInsertSchema(dmProjects);
 export const insertDmTokenSchema = createInsertSchema(dmTokens);
 export const insertDmPageSchema = createInsertSchema(dmPages);
 export const insertDmPatternSchema = createInsertSchema(dmPatterns);
+export const insertDmDesignMdSchema = createInsertSchema(dmDesignMd);
 export const insertPipelineRunSchema = createInsertSchema(pipelineRuns);
 export const insertPipelinePageSchema = createInsertSchema(pipelinePages);
 
