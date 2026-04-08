@@ -41,11 +41,18 @@ describe("toKebabCase", () => {
   });
 
   it("handles all-caps abbreviations", () => {
-    expect(toKebabCase("CRM")).toBe("c-r-m");
+    expect(toKebabCase("CRM")).toBe("crm");
+    expect(toKebabCase("CRMPage")).toBe("crm-page");
+    expect(toKebabCase("APIKeys")).toBe("api-keys");
+    expect(toKebabCase("URLShortener")).toBe("url-shortener");
   });
 
   it("does not double-kebab already kebab-like input", () => {
     expect(toKebabCase("MyPage")).toBe("my-page");
+  });
+
+  it("handles lowercase single word", () => {
+    expect(toKebabCase("simple")).toBe("simple");
   });
 });
 

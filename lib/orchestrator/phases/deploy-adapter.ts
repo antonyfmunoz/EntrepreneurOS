@@ -1,12 +1,21 @@
 // lib/orchestrator/phases/deploy-adapter.ts
 // Phase 5: deploy
 //
-// Generates PostHog analytics injection metadata for every page in the spec
-// that has events declared. Each page is one work unit. Per orchestrator
-// scoping rules, this adapter does NOT auto-edit client/src/pages/* — it
-// writes injection blueprints to .planning/output/analytics/<page>.json so
-// the user can paste the import/hook/capture blocks into the matching page
-// component.
+// Generates PostHog analytics injection metadata AND injects it directly into
+// the matching page component at client/src/pages/{kebab(pageName)}-page.tsx.
+//
+// Injection is idempotent:
+//   - importCode is inserted after the last existing import line, skipped if
+//     `posthog-js` is already imported.
+//   - hookCode is inserted at the top of the component function body, skipped
+//     if `usePostHog()` is already present.
+//   - captureCode is placed between the sentinel markers
+//     `// __POSTHOG_CAPTURES__` and `// __POSTHOG_CAPTURES_END__`. Subsequent
+//     runs replace the content between markers.
+//
+// A review blueprint is still written to
+// .planning/output/analytics/<page>.injection.json so manualCaptures can be
+// wired into their event handlers by hand.
 //
 // Verifies VITE_POSTHOG_API_KEY exists in the project's .env at prepare time.
 // Without it, the PostHog provider would no-op at runtime — that's a
@@ -23,6 +32,82 @@ import type { SpecOutput, PageSpecFull } from "@shared/spec-schema.js";
 import type { PhaseImplementation, PageWorkUnit } from "../phase-runner.js";
 import { getOrchestratorDb } from "../db.js";
 import { generateAnalyticsInjections } from "../../analytics-delivery/analytics-injector.js";
+import { toKebabCase } from "../../code-integrator/page-writer.js";
+
+const CAPTURE_START = "// __POSTHOG_CAPTURES__";
+const CAPTURE_END = "// __POSTHOG_CAPTURES_END__";
+
+function resolvePageFilePath(projectRoot: string, pageName: string): string {
+  const kebab = toKebabCase(pageName);
+  const fileName = kebab.endsWith("-page") ? `${kebab}.tsx` : `${kebab}-page.tsx`;
+  return path.join(projectRoot, "client", "src", "pages", fileName);
+}
+
+function injectImport(source: string, importCode: string): string {
+  if (source.includes("posthog-js")) return source;
+  const lines = source.split("\n");
+  let lastImportIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*import\s/.test(lines[i])) lastImportIdx = i;
+  }
+  if (lastImportIdx === -1) {
+    return `${importCode}\n${source}`;
+  }
+  lines.splice(lastImportIdx + 1, 0, importCode);
+  return lines.join("\n");
+}
+
+function injectHook(source: string, hookCode: string): string {
+  if (source.includes("usePostHog()")) return source;
+  const lines = source.split("\n");
+  // Find first `export default function Name(...) {` or `function Name(...) {`
+  const fnRegex = /^(\s*)(export\s+default\s+function|export\s+function|function)\s+\w+\s*\([^)]*\)\s*(:\s*[^{]+)?\s*\{/;
+  for (let i = 0; i < lines.length; i++) {
+    if (fnRegex.test(lines[i])) {
+      const indentMatch = lines[i].match(/^(\s*)/);
+      const indent = (indentMatch ? indentMatch[1] : "") + "  ";
+      lines.splice(i + 1, 0, `${indent}${hookCode}`);
+      return lines.join("\n");
+    }
+  }
+  throw new Error(
+    `deploy-adapter: could not locate component function body to inject PostHog hook.`,
+  );
+}
+
+function injectCaptures(source: string, captureCode: string): string {
+  if (!captureCode) return source;
+  const startIdx = source.indexOf(CAPTURE_START);
+  const endIdx = source.indexOf(CAPTURE_END);
+
+  const block = [CAPTURE_START, captureCode, CAPTURE_END].join("\n");
+
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    // Replace existing block
+    return (
+      source.slice(0, startIdx) +
+      block +
+      source.slice(endIdx + CAPTURE_END.length)
+    );
+  }
+
+  // First injection: place right after the hookCode / at top of function body.
+  const lines = source.split("\n");
+  const hookIdx = lines.findIndex((l) => l.includes("usePostHog()"));
+  if (hookIdx === -1) {
+    throw new Error(
+      `deploy-adapter: could not locate usePostHog() hook for capture injection.`,
+    );
+  }
+  const indentMatch = lines[hookIdx].match(/^(\s*)/);
+  const indent = indentMatch ? indentMatch[1] : "  ";
+  const indentedBlock = block
+    .split("\n")
+    .map((l) => (l.length ? indent + l : l))
+    .join("\n");
+  lines.splice(hookIdx + 1, 0, indentedBlock);
+  return lines.join("\n");
+}
 
 interface DeployRunInput {
   page: PageSpecFull;
@@ -110,13 +195,16 @@ export const deployPhaseImplementation: PhaseImplementation = {
       properties: e.properties ?? [],
     }));
 
-    // filePath is the page's expected location after integration. Used by
-    // the user to know where to paste the injection blocks.
-    const expectedPagePath = path.join(
-      config.clientSrcPath,
-      "pages",
-      `${page.name.toLowerCase()}-page.tsx`,
-    );
+    const projectRoot = path.resolve(config.repoPath);
+    const expectedPagePath = resolvePageFilePath(projectRoot, page.name);
+
+    if (!fs.existsSync(expectedPagePath)) {
+      throw new Error(
+        `Phase "deploy": page file not found for "${page.name}". ` +
+          `Expected at: ${expectedPagePath}. ` +
+          `Run the code-integration phase first so the page component exists.`,
+      );
+    }
 
     const injections = generateAnalyticsInjections([
       { name: page.name, filePath: expectedPagePath, events },
@@ -131,9 +219,18 @@ export const deployPhaseImplementation: PhaseImplementation = {
     }
 
     const injection = injections[0];
+
+    // Inject into real page file (idempotent).
+    let source = fs.readFileSync(expectedPagePath, "utf-8");
+    source = injectImport(source, injection.importCode);
+    source = injectHook(source, injection.hookCode);
+    source = injectCaptures(source, injection.captureCode);
+    fs.writeFileSync(expectedPagePath, source, "utf-8");
+
+    // Also emit the review blueprint so manualCaptures can be wired by hand.
     const blueprintFile = path.join(
       outputDir,
-      `${page.name.toLowerCase()}.injection.json`,
+      `${toKebabCase(page.name)}.injection.json`,
     );
     fs.writeFileSync(blueprintFile, JSON.stringify(injection, null, 2), "utf-8");
 
@@ -144,7 +241,7 @@ export const deployPhaseImplementation: PhaseImplementation = {
       loadEvents: injection.captureCode ? injection.captureCode.split("\n").length : 0,
       manualCaptures: injection.manualCaptures.length,
       events: injection.events,
-      note: "Generated as a review artifact. Paste importCode + hookCode + captureCode into the page component, and wire manualCaptures into their event handlers.",
+      note: "Injected importCode + hookCode + captureCode directly into the page file. Wire manualCaptures into their event handlers by hand using the blueprint.",
     };
   },
 };
