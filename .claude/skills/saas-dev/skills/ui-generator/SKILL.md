@@ -390,6 +390,8 @@ try {
 }
 ```
 
+**Note:** As of `@google/stitch-sdk` v0.0.3, the `delete_screen` MCP tool does not exist. `deleteScreen()` is a fail-open stub that returns `{ deleted: false, error: ... }`. The pipeline continues normally — rejected screens remain in the Stitch project but don't influence future generations when the DESIGN.md workflow is active. See `.planning/stitch-mcp-research.md` for the full tool inventory and drift-watch workflow (`npm run check:stitch-tools`).
+
 ##### Targeted Component Refinement (Orchestration Pattern)
 
 Before re-calling Stitch for the full page, check if the issue is component-level:
