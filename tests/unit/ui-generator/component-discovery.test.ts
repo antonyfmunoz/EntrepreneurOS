@@ -2,43 +2,37 @@ import { describe, it, expect, vi } from "vitest";
 import {
   discoverComponents,
   formatDiscoveryForPrompt,
-  COMPLEX_COMPONENT_PATTERNS,
 } from "../../../lib/ui-generator/component-discovery.js";
 import type { ComponentDiscoveryResult } from "../../../lib/ui-generator/types.js";
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
-
-describe("COMPLEX_COMPONENT_PATTERNS", () => {
-  it("Test 6: includes DataTable, KanbanBoard, Calendar, Chart, Timeline, CommandPalette", () => {
-    const required = ["DataTable", "KanbanBoard", "Calendar", "Chart", "Timeline", "CommandPalette"];
-    for (const name of required) {
-      expect(COMPLEX_COMPONENT_PATTERNS).toContain(name);
-    }
-  });
-});
+//
+// NOTE: Per Plan 03-07, component-discovery now queries ALL components — the
+// "simple vs complex" distinction was removed. Stitch generates better output
+// when every component (Button, Input, Badge included) has concrete registry
+// references attached. The tests below were updated to match the new contract.
 
 describe("discoverComponents", () => {
-  it("Test 1: complex components are queried and simple ones are skipped", async () => {
+  it("Test 1: every component is recorded in queriedComponents (no skip list)", async () => {
     const mockMcp = vi.fn().mockResolvedValue(null);
 
     const result = await discoverComponents(["DataTable", "Button"], mockMcp);
 
     expect(result.queriedComponents).toContain("DataTable");
-    expect(result.skippedComponents).toContain("Button");
-    expect(result.queriedComponents).not.toContain("Button");
-    expect(result.skippedComponents).not.toContain("DataTable");
+    expect(result.queriedComponents).toContain("Button");
+    expect(result.skippedComponents).toHaveLength(0);
   });
 
-  it("Test 2: simple components (Button, Input, Badge) are skipped, not queried", async () => {
+  it("Test 2: simple components are queried, not skipped", async () => {
     const mockMcp = vi.fn().mockResolvedValue(null);
 
     const result = await discoverComponents(["Button", "Input", "Badge"], mockMcp);
 
-    expect(result.queriedComponents).toHaveLength(0);
-    expect(result.skippedComponents).toHaveLength(3);
-    expect(result.skippedComponents).toContain("Button");
-    expect(result.skippedComponents).toContain("Input");
-    expect(result.skippedComponents).toContain("Badge");
+    expect(result.queriedComponents).toHaveLength(3);
+    expect(result.queriedComponents).toContain("Button");
+    expect(result.queriedComponents).toContain("Input");
+    expect(result.queriedComponents).toContain("Badge");
+    expect(result.skippedComponents).toHaveLength(0);
   });
 
   it("Test 5: handles MCP tool errors gracefully — returns partial results, never throws", async () => {
