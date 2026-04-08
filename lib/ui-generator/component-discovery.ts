@@ -1,3 +1,5 @@
+import { readFileSync, existsSync } from "node:fs";
+import { resolve } from "node:path";
 import type { ComponentDiscoveryResult, ComponentReference } from "./types.js";
 
 // Per Plan 03-07: query registries for ALL components, not just "complex" ones.
@@ -6,6 +8,73 @@ import type { ComponentDiscoveryResult, ComponentReference } from "./types.js";
 
 // Max chars per individual code snippet -- prevents one component from dominating prompt
 const MAX_SNIPPET_CHARS = 500;
+
+// Cache-and-replay: MCPs (mcp__magicui__*, mcp__magic21__*) only exist inside the
+// Claude Code harness. Headless `tsx` runs cannot reach them. So we cache real MCP
+// output into component-cache.json from an interactive session, and read it here.
+const CACHE_PATH = resolve(process.cwd(), "lib/ui-generator/component-cache.json");
+
+interface CachedComponent {
+  name: string;
+  description: string;
+  registry: string;
+}
+
+interface ComponentCacheFile {
+  generated_at: string;
+  source: string;
+  components: CachedComponent[];
+}
+
+let cachedComponentsMemo: CachedComponent[] | null | undefined;
+function loadComponentCache(): CachedComponent[] {
+  if (cachedComponentsMemo !== undefined) return cachedComponentsMemo ?? [];
+  try {
+    if (!existsSync(CACHE_PATH)) {
+      cachedComponentsMemo = null;
+      return [];
+    }
+    const parsed = JSON.parse(readFileSync(CACHE_PATH, "utf8")) as ComponentCacheFile;
+    cachedComponentsMemo = parsed.components ?? [];
+    return cachedComponentsMemo;
+  } catch {
+    cachedComponentsMemo = null;
+    return [];
+  }
+}
+
+function matchCachedComponents(
+  componentNames: string[]
+): ComponentReference[] {
+  const cached = loadComponentCache();
+  if (cached.length === 0) return [];
+
+  const refs: ComponentReference[] = [];
+  const lowerNames = componentNames.map((n) => n.toLowerCase());
+
+  for (const entry of cached) {
+    const entryLower = entry.name.toLowerCase();
+    const matchedSpecName = lowerNames.find(
+      (n) => entryLower.includes(n) || n.includes(entryLower)
+    );
+    if (!matchedSpecName) continue;
+
+    const sourceLower = entry.registry.toLowerCase();
+    const source: ComponentReference["source"] = sourceLower.includes("magicui")
+      ? "magicui"
+      : sourceLower.includes("21st")
+        ? "21st-dev"
+        : "shadcn";
+
+    refs.push({
+      componentName: matchedSpecName,
+      source,
+      description: `${entry.name} (${entry.registry}) — ${entry.description}`,
+    });
+  }
+
+  return refs;
+}
 
 /**
  * Discovers production-ready component implementations from multiple registries.
@@ -29,6 +98,7 @@ export async function discoverComponents(
     queriedComponents.push(name);
 
     if (!mcpInvoke) {
+      // Headless path: fall through to cache lookup after the loop.
       continue;
     }
 
@@ -93,6 +163,14 @@ export async function discoverComponents(
       }
     } catch {
       // MagicUI MCP not available -- continue gracefully
+    }
+  }
+
+  // Headless fallback: if no live MCPs produced any references, replay from cache.
+  if (references.length === 0) {
+    const cachedRefs = matchCachedComponents(componentNames);
+    if (cachedRefs.length > 0) {
+      references.push(...cachedRefs);
     }
   }
 

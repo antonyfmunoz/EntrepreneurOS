@@ -1,0 +1,72 @@
+{
+  "generated_at": "2026-04-08T00:00:00Z",
+  "source": "Claude Code MCP queries — mcp__magicui__searchRegistryItems + mcp__magic21__21st_magic_component_inspiration",
+  "note": "Refresh by re-running the cache-build prompt inside an interactive Claude Code session. Headless tsx runs cannot regenerate this file.",
+  "components": [
+    {
+      "name": "Button",
+      "registry": "shadcn/ui",
+      "description": "Accessible button primitive with cva variants (default, destructive, outline, secondary, ghost, link) and sizes (sm, default, lg, icon). Uses Radix Slot for asChild composition. Base: inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:ring-2."
+    },
+    {
+      "name": "Input",
+      "registry": "shadcn/ui",
+      "description": "Text input with rounded-lg border, bg-background, subtle shadow-sm shadow-black/5, focus-visible:ring-[3px] ring-ring/20. Height h-9, px-3 py-2. Supports search/file type variants via cn()."
+    },
+    {
+      "name": "Label",
+      "registry": "shadcn/ui",
+      "description": "Radix LabelPrimitive wrapper. text-sm font-medium leading-none, peer-disabled:opacity-70. Always pair with form inputs via htmlFor."
+    },
+    {
+      "name": "Card",
+      "registry": "shadcn/ui",
+      "description": "Composable surface: Card (rounded-lg border bg-card shadow-sm), CardHeader (flex flex-col space-y-1.5 p-6), CardTitle (text-2xl font-semibold tracking-tight), CardDescription (text-sm text-muted-foreground), CardContent (p-6 pt-0), CardFooter (flex items-center p-6 pt-0)."
+    },
+    {
+      "name": "Checkbox",
+      "registry": "shadcn/ui",
+      "description": "Radix CheckboxPrimitive. peer h-4 w-4 shrink-0 rounded-sm border border-primary, data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground. Check icon from lucide-react inside Indicator."
+    },
+    {
+      "name": "Separator",
+      "registry": "shadcn/ui",
+      "description": "Radix SeparatorPrimitive. Horizontal: h-[1px] w-full bg-border. Use with absolute-positioned label span for 'or continue with' dividers."
+    },
+    {
+      "name": "Form",
+      "registry": "21st.dev (Login01 pattern)",
+      "description": "Auth form pattern: Label → Input (mt-2) → full-width primary Button (mt-4 w-full). Separator divider with centered 'or with' text. Outline Button with Google SVG icon for OAuth. Terms/privacy microcopy below."
+    },
+    {
+      "name": "Link",
+      "registry": "shadcn/ui",
+      "description": "Use Button variant='link' for CTA-style links (text-primary underline-offset-4 hover:underline). Inline text links: text-primary font-medium hover:underline."
+    },
+    {
+      "name": "GoogleOAuthButton",
+      "registry": "21st.dev (Login01 pattern)",
+      "description": "Outline variant Button, full-width, inline-flex justify-center space-x-2. Google 'G' SVG icon (viewBox 0 0 24 24, single-path currentColor or multi-color #4285F4/#34A853/#FBBC05/#EA4335) at size-5. Text 'Sign in with Google' or 'Continue with Google'."
+    },
+    {
+      "name": "magic-card",
+      "registry": "MagicUI",
+      "description": "Spotlight effect card that follows mouse cursor and highlights borders on hover. Useful for featured surfaces but NOT for auth forms where stability matters. Use only for marketing-adjacent sections."
+    },
+    {
+      "name": "border-beam",
+      "registry": "MagicUI",
+      "description": "Animated beam of light traveling along container border. Subtle premium accent for CTA cards. Compatible with glassmorphism — apply to the outer Card wrapper."
+    },
+    {
+      "name": "animated-gradient-text",
+      "registry": "MagicUI",
+      "description": "Text with animated gradient background transitioning between colors. Use for headline/brand wordmarks only. For EntrepreneurOS: lock gradient to #6a37d4 → #ae8dff to match design system."
+    },
+    {
+      "name": "animated-beam",
+      "registry": "MagicUI",
+      "description": "Animated beam of light along an SVG path. Showcases integration/connection. NOT for auth page — reserve for dashboard/integration surfaces."
+    }
+  ]
+}
