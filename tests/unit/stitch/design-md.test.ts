@@ -50,10 +50,28 @@ describe("parseDesignMD", () => {
     expect(parsed.componentDirection).toBe("tactical luxury cards");
   });
 
-  it("ignores 'not set' placeholders", () => {
-    const md = "## Colors\n- Primary: not set\n";
+  it("ignores 'not set' placeholders in a complete document", () => {
+    const md = generateDesignMDFromTokens({
+      ...fullTokens,
+      colorPrimary: null,
+    } as unknown as DmTokenRow);
     const parsed = parseDesignMD(md);
     expect(parsed.colorPrimary).toBeUndefined();
+    // other fields still parse
+    expect(parsed.colorAccent).toBe("#6366f1");
+  });
+
+  it("throws DesignMDFormatError when required sections are missing", () => {
+    const md = "## Colors\n- Primary: #ff0000\n";
+    expect(() => parseDesignMD(md)).toThrow(/missing sections/);
+  });
+
+  it("throws DesignMDFormatError when a color value is not in hex format", () => {
+    const md = generateDesignMDFromTokens({
+      ...fullTokens,
+      colorPrimary: "rebeccapurple",
+    } as unknown as DmTokenRow);
+    expect(() => parseDesignMD(md)).toThrow(/invalid color values/);
   });
 });
 
