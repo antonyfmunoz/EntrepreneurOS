@@ -24,6 +24,20 @@ import type { StitchGenerateRequest, StitchGenerateResult } from "./types.js";
 import { STITCH_MCP_TOOLS, StitchWrapperError } from "./types.js";
 import { getStitchToolClient } from "./mcp-invoker.js";
 
+// Narrow shape of the MCP tool's raw response — only the fields this code reads.
+interface StitchRawScreen {
+  id?: string;
+  name?: string;
+  htmlCode?: { downloadUrl?: string };
+  screenshot?: { downloadUrl?: string };
+}
+interface StitchRawComponent {
+  design?: { screens?: StitchRawScreen[] };
+}
+interface StitchRawResponse {
+  outputComponents?: StitchRawComponent[];
+}
+
 /**
  * Generate a UI screen via the Stitch API with automatic retry on transient errors.
  *
@@ -46,18 +60,18 @@ export async function generateScreen(
         const client = getStitchToolClient();
 
         // Call the MCP tool directly to avoid SDK's buggy indexing
-        const raw: any = await client.callTool(STITCH_MCP_TOOLS.GENERATE_SCREEN_FROM_TEXT, {
+        const raw = (await client.callTool(STITCH_MCP_TOOLS.GENERATE_SCREEN_FROM_TEXT, {
           projectId,
           prompt: request.prompt,
           deviceType: request.deviceType,
-        });
+        })) as StitchRawResponse;
 
         // Find the design component with screens (not always at index 0)
         const designComponent = raw.outputComponents?.find(
-          (comp: any) => comp.design?.screens?.length > 0
+          (comp) => (comp.design?.screens?.length ?? 0) > 0
         );
 
-        if (!designComponent) {
+        if (!designComponent || !designComponent.design?.screens?.[0]) {
           throw new StitchWrapperError(
             "Stitch response missing design component with screens",
             false,

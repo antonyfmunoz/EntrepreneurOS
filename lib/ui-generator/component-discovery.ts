@@ -26,6 +26,14 @@ interface ComponentCacheFile {
   components: CachedComponent[];
 }
 
+// Narrow shape of fields this module reads off MCP tool results.
+// MCPs return untyped JSON; cast once at the boundary.
+interface McpRegistryResult {
+  code?: unknown;
+  description?: unknown;
+  url?: unknown;
+}
+
 let cachedComponentsMemo: CachedComponent[] | null | undefined;
 function loadComponentCache(): CachedComponent[] {
   if (cachedComponentsMemo !== undefined) return cachedComponentsMemo ?? [];
@@ -104,16 +112,16 @@ export async function discoverComponents(
 
     // Query shadcn registry
     try {
-      const shadcnResult = await mcpInvoke("shadcn_search", { query: name });
+      const shadcnResult = (await mcpInvoke("shadcn_search", { query: name })) as McpRegistryResult | null;
       if (shadcnResult && typeof shadcnResult === "object") {
         references.push({
           componentName: name,
           source: "shadcn",
-          codeSnippet: typeof (shadcnResult as any).code === "string"
-            ? ((shadcnResult as any).code as string).slice(0, MAX_SNIPPET_CHARS)
+          codeSnippet: typeof shadcnResult.code === "string"
+            ? shadcnResult.code.slice(0, MAX_SNIPPET_CHARS)
             : undefined,
-          description: typeof (shadcnResult as any).description === "string"
-            ? (shadcnResult as any).description as string
+          description: typeof shadcnResult.description === "string"
+            ? shadcnResult.description
             : undefined,
         });
       }
@@ -123,19 +131,19 @@ export async function discoverComponents(
 
     // Query 21st.dev for visual inspiration
     try {
-      const inspirationResult = await mcpInvoke(
+      const inspirationResult = (await mcpInvoke(
         "mcp__magic21__21st_magic_component_inspiration",
         { message: `${name} component for SaaS application` }
-      );
+      )) as McpRegistryResult | null;
       if (inspirationResult && typeof inspirationResult === "object") {
         references.push({
           componentName: name,
           source: "21st-dev",
-          description: typeof (inspirationResult as any).description === "string"
-            ? (inspirationResult as any).description as string
+          description: typeof inspirationResult.description === "string"
+            ? inspirationResult.description
             : undefined,
-          visualRef: typeof (inspirationResult as any).url === "string"
-            ? (inspirationResult as any).url as string
+          visualRef: typeof inspirationResult.url === "string"
+            ? inspirationResult.url
             : undefined,
         });
       }
@@ -145,19 +153,19 @@ export async function discoverComponents(
 
     // Query MagicUI for animated component examples
     try {
-      const magicResult = await mcpInvoke(
+      const magicResult = (await mcpInvoke(
         "mcp__magicui__searchRegistryItems",
         { query: name }
-      );
+      )) as McpRegistryResult | null;
       if (magicResult && typeof magicResult === "object") {
         references.push({
           componentName: name,
           source: "magicui",
-          description: typeof (magicResult as any).description === "string"
-            ? (magicResult as any).description as string
+          description: typeof magicResult.description === "string"
+            ? magicResult.description
             : undefined,
-          codeSnippet: typeof (magicResult as any).code === "string"
-            ? ((magicResult as any).code as string).slice(0, MAX_SNIPPET_CHARS)
+          codeSnippet: typeof magicResult.code === "string"
+            ? magicResult.code.slice(0, MAX_SNIPPET_CHARS)
             : undefined,
         });
       }

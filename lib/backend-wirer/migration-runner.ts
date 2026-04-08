@@ -73,11 +73,12 @@ export async function runMigration(
       stdio: ["pipe", "pipe", "pipe"],
     });
     return { success: true, output: output?.toString() ?? "Migration complete" };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const e = err as { message?: unknown; stdout?: { toString(): string }; stderr?: { toString(): string } };
     const output = [
-      err.message ?? "",
-      err.stdout?.toString() ?? "",
-      err.stderr?.toString() ?? "",
+      typeof e.message === "string" ? e.message : err instanceof Error ? err.message : String(err),
+      e.stdout?.toString() ?? "",
+      e.stderr?.toString() ?? "",
     ]
       .filter(Boolean)
       .join("\n");
