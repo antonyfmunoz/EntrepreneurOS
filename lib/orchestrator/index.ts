@@ -39,6 +39,7 @@ const PHASE_ORDER: Phase[] = [
 ];
 
 const DESTRUCTIVE_PHASES = new Set<Phase>([
+  "ui-gen",      // generates Stitch screens that cannot be deleted (no MCP delete tool)
   "integration", // writes files into client/src
   "backend",     // writes routes + DB migrations
   "deploy",      // pushes, instruments, deploys
