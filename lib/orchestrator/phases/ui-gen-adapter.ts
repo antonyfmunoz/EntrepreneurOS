@@ -9,7 +9,7 @@
 //   then dualReview the result. Returns a UiGenPhaseOutput-shaped record.
 
 import path from "node:path";
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import {
   dmTokens,
   pipelinePages,
@@ -29,6 +29,8 @@ interface UiGenRunInput {
   pageIndex: number;
   tokens: DmTokenRow | null;
   designSystemPath: string;
+  /** screenshotUrl from page N-1, or null for page 0 (D-12 multi-page inheritance) */
+  priorScreenshotUrl: string | null;
 }
 
 async function loadLatestSpec(projectId: string): Promise<SpecOutput> {
@@ -66,6 +68,40 @@ async function loadLatestTokens(projectId: string): Promise<DmTokenRow | null> {
   return (rows[0] as DmTokenRow | undefined) ?? null;
 }
 
+/**
+ * Returns a map of pageIndex → screenshotUrl for every previously completed
+ * ui-gen page in this project. The runner uses the entry at index N-1 to seed
+ * the prior-screenshot reference for page N (multi-page visual inheritance).
+ */
+async function loadPriorScreenshotsByIndex(
+  projectId: string,
+): Promise<Map<number, string>> {
+  const db = getOrchestratorDb();
+  const rows = await db
+    .select()
+    .from(pipelinePages)
+    .where(
+      and(
+        eq(pipelinePages.projectId, projectId),
+        eq(pipelinePages.phase, "ui-gen"),
+        eq(pipelinePages.status, "complete"),
+      ),
+    )
+    .orderBy(asc(pipelinePages.pageIndex));
+
+  const map = new Map<number, string>();
+  for (const row of rows) {
+    if (!row.output) continue;
+    try {
+      const out = JSON.parse(row.output) as { screenshotUrl?: string };
+      if (out.screenshotUrl) map.set(row.pageIndex, out.screenshotUrl);
+    } catch {
+      // skip malformed rows; they'll be regenerated
+    }
+  }
+  return map;
+}
+
 export const uiGenPhaseImplementation: PhaseImplementation = {
   async prepare(config: ProjectConfig): Promise<PageWorkUnit[]> {
     if (!config.stitchProjectId) {
@@ -76,6 +112,7 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
 
     const spec = await loadLatestSpec(config.projectId);
     const tokens = await loadLatestTokens(config.projectId);
+    const priorByIndex = await loadPriorScreenshotsByIndex(config.projectId);
     const designSystemPath = path.resolve(
       config.repoPath,
       config.designSystemPath,
@@ -89,20 +126,24 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
         pageIndex: idx,
         tokens,
         designSystemPath,
+        // Carry forward the screenshot from page N-1 so Stitch has visual
+        // context for inheritance. Page 0 has no prior reference.
+        priorScreenshotUrl: idx > 0 ? priorByIndex.get(idx - 1) ?? null : null,
       } satisfies UiGenRunInput,
     }));
   },
 
   async runPage(rawInput: unknown, config: ProjectConfig): Promise<unknown> {
     const input = rawInput as UiGenRunInput;
-    const { page, tokens, designSystemPath } = input;
+    const { page, tokens, designSystemPath, priorScreenshotUrl } = input;
 
     // Build prompt — design-system.md is the single source of truth, no
-    // hardcoded brand values.
+    // hardcoded brand values. priorScreenshotUrl gives Stitch visual context
+    // from the previously approved page (multi-page inheritance).
     const prompt = buildStitchPrompt(
       page,
       tokens,
-      undefined, // priorScreenshotUrl — wired in a later iteration
+      priorScreenshotUrl ?? undefined,
       tokens?.componentDirection ?? undefined,
       undefined, // componentReferences
       undefined, // enrichment
