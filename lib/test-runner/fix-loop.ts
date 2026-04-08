@@ -1,6 +1,27 @@
 import { execSync } from "child_process";
 import type { FixLoopResult } from "./types.js";
 
+/**
+ * Default wall-clock cap on the entire fix loop (5 minutes). The 3-cycle cap
+ * still applies independently — both limits halt the loop, whichever fires
+ * first.
+ */
+const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+
+export class FixLoopTimeoutError extends Error {
+  constructor(
+    public readonly cyclesAttempted: number,
+    public readonly timeoutMs: number,
+    public readonly lastError: string,
+  ) {
+    super(
+      `runWithFixLoop exceeded ${timeoutMs}ms after ${cyclesAttempted} cycle(s). ` +
+        `Last error: ${lastError.slice(0, 200)}`,
+    );
+    this.name = "FixLoopTimeoutError";
+  }
+}
+
 // ─── Internal Helpers ─────────────────────────────────────────────────────────
 
 /**
@@ -79,17 +100,35 @@ function generateHypothesis(attemptsLog: string[]): string {
  * @param options.fixFn        - Called with (output, cycle) to attempt a fix;
  *                               returns true if a fix was applied, false to escalate early
  * @param options.maxCycles    - Override default of 3
+ * @param options.timeoutMs    - Wall-clock cap on the entire loop. Defaults to
+ *                               5 minutes. When elapsed time exceeds this cap
+ *                               between cycles, the loop throws FixLoopTimeoutError
+ *                               with the cycles attempted and the last error.
  */
 export async function runWithFixLoop(options: {
   projectRoot: string;
   testGlob: string;
   fixFn: (output: string, cycle: number) => Promise<boolean>;
   maxCycles?: number;
+  timeoutMs?: number;
 }): Promise<FixLoopResult> {
   const MAX_CYCLES = options.maxCycles ?? 3;
+  const TIMEOUT_MS = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const attemptsLog: string[] = [];
+  const startedAt = Date.now();
 
   for (let cycle = 1; cycle <= MAX_CYCLES; cycle++) {
+    // Wall-clock cap fires BEFORE running the next cycle. The 3-cycle cap
+    // still applies independently — both limits halt the loop.
+    const elapsed = Date.now() - startedAt;
+    if (elapsed > TIMEOUT_MS) {
+      throw new FixLoopTimeoutError(
+        cycle - 1,
+        TIMEOUT_MS,
+        attemptsLog[attemptsLog.length - 1] ?? "no cycles completed",
+      );
+    }
+
     let output = "";
     try {
       // Run vitest with the specific test glob
@@ -108,9 +147,10 @@ export async function runWithFixLoop(options: {
         cycles: cycle,
         lastOutput: output,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       // execSync throws on non-zero exit — capture stdout+stderr
-      output = (err.stdout ?? "") + (err.stderr ?? "");
+      const e = err as { stdout?: string | Buffer; stderr?: string | Buffer };
+      output = String(e.stdout ?? "") + String(e.stderr ?? "");
       const summary = parseFailingSummary(output);
       attemptsLog.push(`Cycle ${cycle}: ${summary}`);
 
