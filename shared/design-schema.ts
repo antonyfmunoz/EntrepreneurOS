@@ -129,6 +129,13 @@ export const ProjectConfigSchema = z.object({
   repoPath: z.string().min(1),
   framework: z.enum(["react-vite-tailwind-shadcn"]),
   stitchProjectId: z.string().optional(),
+  // Path overrides — defaults work for the standard project layout
+  designSystemPath: z.string().default(".planning/design-system.md"),
+  outputPath: z.string().default(".planning/output"),
+  clientSrcPath: z.string().default("client/src"),
+  serverPath: z.string().default("server"),
+  defaultBranch: z.string().default("main"),
+  featureBranchPrefix: z.string().default("feature/"),
 });
 
 export const PipelineRunSchema = z.object({

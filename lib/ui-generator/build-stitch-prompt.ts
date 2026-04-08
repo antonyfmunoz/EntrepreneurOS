@@ -1,6 +1,20 @@
+import { readFileSync, existsSync } from "node:fs";
 import type { PageSpecFull } from "@shared/spec-schema.js";
 import type { DmTokenRow, SkillEnrichment } from "./types.js";
 import { MAX_PROMPT_TOTAL_CHARS } from "./types.js";
+
+// The design system markdown is the single source of truth. When a path is
+// passed, the file is read and injected verbatim — no project-specific brand
+// rules, color values, or validation checklists are baked into this module.
+function loadDesignSystemDoc(path: string | undefined): string | null {
+  if (!path) return null;
+  try {
+    if (existsSync(path)) return readFileSync(path, "utf8");
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 // ─── buildStitchPrompt ───────────────────────────────────────────────────────
 
@@ -14,6 +28,11 @@ import { MAX_PROMPT_TOTAL_CHARS } from "./types.js";
  * @param componentDirection  Optional component style direction from DesignSystemSeed
  * @param componentReferences Formatted component registry references from discovery layer (optional)
  * @param enrichment          Session-level skill enrichment (frontend-design + ui-ux-pro-max), optional
+ * @param designSystemPath    Absolute path to the project's design-system.md (optional). When
+ *                            provided, the file is loaded and injected verbatim as the single
+ *                            source of truth for visual rules. No brand-specific values are
+ *                            hardcoded in this module — every color, font, and rule lives in
+ *                            the project's design system file.
  */
 export function buildStitchPrompt(
   spec: PageSpecFull,
@@ -21,12 +40,22 @@ export function buildStitchPrompt(
   priorScreenshotUrl?: string,
   componentDirection?: string,
   componentReferences?: string,
-  enrichment?: SkillEnrichment
+  enrichment?: SkillEnrichment,
+  designSystemPath?: string
 ): string {
   const parts: string[] = [];
 
-  // 0. Skill enrichment — production-grade design guidance, injected first so
-  //    Stitch reads it before per-page constraints. Fail-open: skipped if absent.
+  // 0a. Project design system — injected verbatim from the path the caller
+  //     resolved against project config. The file content is the entire contract;
+  //     this module adds no brand-specific overrides.
+  const designSystemDoc = loadDesignSystemDoc(designSystemPath);
+  if (designSystemDoc) {
+    parts.push("# DESIGN SYSTEM — single source of truth, follow exactly:");
+    parts.push(designSystemDoc);
+  }
+
+  // 0b. Skill enrichment — production-grade design guidance, injected after the
+  //     official design system. Fail-open: skipped if absent.
   if (enrichment?.designGuidance) {
     parts.push("## Production Design Guidance");
     parts.push(enrichment.designGuidance);

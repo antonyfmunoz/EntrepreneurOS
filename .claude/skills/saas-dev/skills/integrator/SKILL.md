@@ -46,15 +46,26 @@ Determine the correct base branch and create the integration branch.
 
 ```typescript
 import { detectBaseBranch, createBranch } from "../../lib/code-integrator/git-workflow.js";
+import { loadProjectConfig } from "../../lib/project-config.js";
 
-// D-16: detect base branch from file system state
-const baseBranch = await detectBaseBranch(projectRoot);
-// Returns "main" when client/src/lib/company-guard.tsx exists
-// Returns "feature/company-system" when absent and that branch exists
-// Falls back to "main" otherwise
+const config = loadProjectConfig(projectRoot);
 
-await createBranch(baseBranch);
-// Runs: git checkout {baseBranch} && git checkout -b feature/ui-integration
+// D-16: detect base branch from project config + filesystem markers.
+// markerFiles and fallbackBranch are project-specific and live in caller code,
+// not in git-workflow itself. Example below shows the EntrepreneurOS-style
+// gating; other projects pass their own markers (or none).
+const baseBranch = await detectBaseBranch(projectRoot, {
+  markerFiles: [
+    "client/src/lib/company-guard.tsx",
+    "client/src/hooks/use-company.ts",
+  ],
+  fallbackBranch: "feature/company-system",
+  defaultBranch: config.defaultBranch,
+});
+
+const featureBranch = `${config.featureBranchPrefix}ui-integration`;
+await createBranch(baseBranch, featureBranch);
+// Runs: git checkout {baseBranch} && git checkout -b {featureBranch}
 ```
 
 Then load pages to integrate from the database:
@@ -388,14 +399,15 @@ import { pushAndCreatePR } from "../../lib/code-integrator/git-workflow.js";
 
 try {
   const prUrl = await pushAndCreatePR(
+    featureBranch,
     integratedPages.map((p) => p.pageName),
   );
   console.log(`PR created: ${prUrl}`);
 } catch (err) {
   // gh CLI unavailable — print manual instructions
   console.log("gh CLI not available. Create PR manually:");
-  console.log(`  git push -u origin feature/ui-integration`);
-  console.log(`  Then open a PR from feature/ui-integration -> ${baseBranch}`);
+  console.log(`  git push -u origin ${featureBranch}`);
+  console.log(`  Then open a PR from ${featureBranch} -> ${baseBranch}`);
 }
 ```
 
@@ -460,10 +472,18 @@ Do not run the install command if the component is already present — it trigge
 confirmation prompt that blocks execution.
 
 ### Pitfall 6: Base Branch Selection (D-16)
-`detectBaseBranch` checks whether `client/src/lib/company-guard.tsx` exists on the current branch.
-- If present: base is `main` (company-guard work is already merged)
-- If absent: base is `feature/company-system` (company-guard work still in that branch)
-- If `feature/company-system` doesn't exist either: fall back to `main`
+`detectBaseBranch` is fully config-driven. Callers pass `markerFiles`,
+`fallbackBranch`, and `defaultBranch`. The function checks whether all marker
+files exist on the current working tree:
+- If yes: returns `defaultBranch` (the dependency work is already in place)
+- If no, and the fallback branch exists: returns `fallbackBranch` (dependency
+  work still lives there)
+- Otherwise: returns `defaultBranch`
+
+The marker files and fallback branch shown above (`company-guard.tsx`,
+`feature/company-system`) are an example from EntrepreneurOS. Other projects
+pass their own — or pass `{ defaultBranch: config.defaultBranch }` alone to
+skip the marker dance entirely.
 
 ### Pitfall 7: Sidebar Uses remixicon Not Lucide
 The sidebar uses `<i className="ri-*">` elements from the remixicon library.

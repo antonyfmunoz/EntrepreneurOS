@@ -26,19 +26,19 @@ function makeExecFn(
 }
 
 describe("createBranch", () => {
-  it("runs git checkout main then git checkout -b feature/ui-integration (default base)", async () => {
+  it("runs git checkout <base> then git checkout -b <feature>", async () => {
     const { execFn, calls } = makeExecFn({});
 
-    await createBranch("main", execFn);
+    await createBranch("main", "feature/ui-integration", execFn);
 
     expect(calls[0]).toContain("git checkout main");
     expect(calls[1]).toContain("git checkout -b feature/ui-integration");
   });
 
-  it("uses custom base branch when provided", async () => {
+  it("uses caller-supplied base and feature branch names", async () => {
     const { execFn, calls } = makeExecFn({});
 
-    await createBranch("feature/company-system", execFn);
+    await createBranch("feature/company-system", "feature/ui-integration", execFn);
 
     expect(calls[0]).toContain("git checkout feature/company-system");
     expect(calls[1]).toContain("git checkout -b feature/ui-integration");
@@ -87,12 +87,12 @@ describe("commitPage", () => {
 });
 
 describe("pushAndCreatePR", () => {
-  it("runs git push -u origin feature/ui-integration and gh pr create", async () => {
+  it("runs git push -u origin <featureBranch> and gh pr create", async () => {
     const { execFn, calls } = makeExecFn({
       "gh pr create": { stdout: "https://github.com/user/repo/pull/42" },
     });
 
-    await pushAndCreatePR(["Reports", "Analytics"], execFn);
+    await pushAndCreatePR("feature/ui-integration", ["Reports", "Analytics"], execFn);
 
     expect(calls.some((c) => c.includes("git push -u origin feature/ui-integration"))).toBe(true);
     expect(calls.some((c) => c.includes("gh pr create"))).toBe(true);
@@ -103,7 +103,7 @@ describe("pushAndCreatePR", () => {
       "gh pr create": { stdout: "https://github.com/user/repo/pull/42\n" },
     });
 
-    const url = await pushAndCreatePR(["Reports"], execFn);
+    const url = await pushAndCreatePR("feature/ui-integration", ["Reports"], execFn);
 
     expect(url).toBe("https://github.com/user/repo/pull/42");
   });
@@ -120,40 +120,56 @@ describe("detectBaseBranch", () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  it("returns 'main' when company-guard.tsx and use-company.ts exist", async () => {
-    // Create directory structure with both files
+  const eosOptions = {
+    markerFiles: [
+      "client/src/lib/company-guard.tsx",
+      "client/src/hooks/use-company.ts",
+    ],
+    fallbackBranch: "feature/company-system",
+    defaultBranch: "main",
+  };
+
+  it("returns defaultBranch when all marker files exist", async () => {
     await mkdir(join(tmpDir, "client/src/lib"), { recursive: true });
     await mkdir(join(tmpDir, "client/src/hooks"), { recursive: true });
     await writeFile(join(tmpDir, "client/src/lib/company-guard.tsx"), "export {};", "utf-8");
     await writeFile(join(tmpDir, "client/src/hooks/use-company.ts"), "export {};", "utf-8");
 
-    // execFn won't be called since files exist
     const { execFn } = makeExecFn({});
-    const result = await detectBaseBranch(tmpDir, execFn);
+    const result = await detectBaseBranch(tmpDir, eosOptions, execFn);
 
     expect(result).toBe("main");
   });
 
-  it("returns 'feature/company-system' when files absent and branch exists", async () => {
-    // No company-guard.tsx or use-company.ts in tmpDir
+  it("returns fallbackBranch when markers absent and the fallback branch exists", async () => {
     const { execFn } = makeExecFn({
       "git branch --list feature/company-system": { stdout: "  feature/company-system\n" },
     });
 
-    const result = await detectBaseBranch(tmpDir, execFn);
+    const result = await detectBaseBranch(tmpDir, eosOptions, execFn);
 
     expect(result).toBe("feature/company-system");
   });
 
-  it("returns 'main' when files absent and feature/company-system branch missing", async () => {
-    // No company-guard.tsx or use-company.ts in tmpDir
-    // execFn returns empty output (branch does not exist)
+  it("returns defaultBranch when markers absent and fallback branch missing", async () => {
     const { execFn } = makeExecFn({
       "git branch --list feature/company-system": { stdout: "" },
     });
 
-    const result = await detectBaseBranch(tmpDir, execFn);
+    const result = await detectBaseBranch(tmpDir, eosOptions, execFn);
 
     expect(result).toBe("main");
+  });
+
+  it("returns defaultBranch immediately when no markers and no fallback are configured", async () => {
+    const { execFn, calls } = makeExecFn({});
+    const result = await detectBaseBranch(
+      tmpDir,
+      { defaultBranch: "main" },
+      execFn,
+    );
+
+    expect(result).toBe("main");
+    expect(calls).toHaveLength(0);
   });
 });
