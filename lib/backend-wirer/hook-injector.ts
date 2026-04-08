@@ -130,7 +130,7 @@ function generateMutationHook(
   const hookCode = [
     `const queryClient = useQueryClient();`,
     `const ${mutationName}Mutation = useMutation({`,
-    `  mutationFn: (data: any) => apiRequest("${endpoint.path}", { method: "${endpoint.method}", body: JSON.stringify(data) }),`,
+    `  mutationFn: (data: Record<string, unknown>) => apiRequest("${endpoint.path}", { method: "${endpoint.method}", body: JSON.stringify(data) }),`,
     `  onSuccess: () => queryClient.invalidateQueries({ queryKey: ["${relatedGetPath}"] }),`,
     `});`,
   ].join("\n");
