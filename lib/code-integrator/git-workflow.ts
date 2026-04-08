@@ -7,17 +7,16 @@ export type ExecFn = (cmd: string) => Promise<{ stdout: string; stderr: string }
 
 const defaultExec: ExecFn = promisify(exec);
 
-const BRANCH_NAME = "feature/ui-integration";
-
-// Checks out the base branch then creates feature/ui-integration from it.
-// baseBranch defaults to "main" but can be overridden (per D-16).
-// execFn is injectable for testing — defaults to promisify(child_process.exec).
+// Checks out the base branch then creates the feature integration branch from it.
+// Both branch names are required — no project-specific defaults.
+// execFn is injectable for testing.
 export async function createBranch(
-  baseBranch: string = "main",
+  baseBranch: string,
+  featureBranch: string,
   execFn: ExecFn = defaultExec,
 ): Promise<void> {
   await execFn(`git checkout ${baseBranch}`);
-  await execFn(`git checkout -b ${BRANCH_NAME}`);
+  await execFn(`git checkout -b ${featureBranch}`);
 }
 
 // Stages the specified files, commits with the standard message format, and returns the short commit hash.
@@ -37,13 +36,15 @@ export async function commitPage(
 }
 
 // Pushes the integration branch to origin and creates a PR via gh CLI.
+// featureBranch is required — no hardcoded branch name.
 // Returns the PR URL from gh stdout.
 // execFn is injectable for testing.
 export async function pushAndCreatePR(
+  featureBranch: string,
   pagesSummary: string[],
   execFn: ExecFn = defaultExec,
 ): Promise<string> {
-  await execFn(`git push -u origin ${BRANCH_NAME}`);
+  await execFn(`git push -u origin ${featureBranch}`);
   const body = `## Pages Integrated\\n\\n${pagesSummary.map((p) => `- ${p}`).join("\\n")}`;
   const title = "feat(ui): integrate generated pages";
   const { stdout } = await execFn(
@@ -52,30 +53,53 @@ export async function pushAndCreatePR(
   return stdout.trim();
 }
 
-// D-16: Determine base branch based on CompanyGate dependency.
-// Returns "main" when company-guard.tsx exists in projectRoot (files exist on current branch).
-// Returns "feature/company-system" when absent and that branch exists.
-// Falls back to "main" when both conditions are false.
-// execFn is injectable for testing.
+/**
+ * Selects a base branch by checking for marker files in the project root, with
+ * a fallback feature branch when the markers are absent. No project-specific
+ * defaults — every branch name and marker is supplied by the caller from
+ * project config. (D-16, generalized.)
+ *
+ * Logic:
+ *   1. If `markerFiles` is non-empty AND every marker exists → return `defaultBranch`
+ *   2. Else if `fallbackBranch` is set AND `git branch --list <fallback>` is non-empty → return `fallbackBranch`
+ *   3. Else → return `defaultBranch`
+ *
+ * @param projectRoot     Absolute path to the project root
+ * @param options         Marker files, fallback feature branch, and the default branch name
+ * @param execFn          Injectable exec for testing
+ */
 export async function detectBaseBranch(
   projectRoot: string,
+  options: {
+    markerFiles?: string[];
+    fallbackBranch?: string;
+    defaultBranch: string;
+  },
   execFn: ExecFn = defaultExec,
 ): Promise<string> {
-  try {
-    await access(join(projectRoot, "client/src/lib/company-guard.tsx"));
-    await access(join(projectRoot, "client/src/hooks/use-company.ts"));
-    // Both files present — we are already on a branch that includes company-guard work
-    return "main";
-  } catch {
-    // Files not found — check if feature/company-system branch exists
+  const markerFiles = options.markerFiles ?? [];
+  const fallbackBranch = options.fallbackBranch;
+  const defaultBranch = options.defaultBranch;
+
+  if (markerFiles.length > 0) {
     try {
-      const { stdout } = await execFn("git branch --list feature/company-system");
-      if (stdout.trim()) {
-        return "feature/company-system";
+      for (const f of markerFiles) {
+        await access(join(projectRoot, f));
       }
-      return "main";
+      return defaultBranch;
     } catch {
-      return "main";
+      // fall through to fallback check
     }
   }
+
+  if (fallbackBranch) {
+    try {
+      const { stdout } = await execFn(`git branch --list ${fallbackBranch}`);
+      if (stdout.trim()) return fallbackBranch;
+    } catch {
+      // fall through to default
+    }
+  }
+
+  return defaultBranch;
 }
