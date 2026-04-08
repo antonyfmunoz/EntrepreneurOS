@@ -8,13 +8,17 @@ const execAsync = promisify(exec);
 
 // ─── toKebabCase ──────────────────────────────────────────────────────────────
 
-// Converts PascalCase or camelCase to kebab-case
-// "ReportsPage" -> "reports-page"
-// "UserSettings" -> "user-settings"
-// "CRM" -> "c-r-m"
+// Converts PascalCase or camelCase to kebab-case, handling acronyms correctly.
+// "ReportsPage"    -> "reports-page"
+// "UserSettings"   -> "user-settings"
+// "CRMPage"        -> "crm-page"
+// "APIKeys"        -> "api-keys"
+// "URLShortener"   -> "url-shortener"
+// "CRM"            -> "crm"
 export function toKebabCase(name: string): string {
   return name
-    .replace(/([A-Z])/g, "-$1")
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
     .toLowerCase()
     .replace(/^-/, "");
 }
