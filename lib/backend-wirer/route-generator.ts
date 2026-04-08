@@ -78,7 +78,7 @@ export function generateRouteCode(
 
   const lines: string[] = [];
 
-  lines.push(`app.${method}("${endpoint.path}", async (req, res) => {`);
+  lines.push(`app.${method}("${endpoint.path}", async (req: Request, res: Response) => {`);
 
   // Auth check
   if (endpoint.authRequired) {
@@ -88,7 +88,7 @@ export function generateRouteCode(
   lines.push(`  try {`);
 
   if (endpoint.authRequired) {
-    lines.push(`    const userId = (req.user as any).id;`);
+    lines.push(`    const userId = (req.user as { id: string }).id;`);
   }
 
   // Method-specific logic
@@ -202,11 +202,7 @@ export function generateStorageCode(endpoint: BackendEndpointSpec): StorageCodeB
       break;
 
     default:
-      code = [
-        `  async ${functionName}(): Promise<void> {`,
-        `    // TODO: implement`,
-        `  }`,
-      ].join("\n");
+      throw new Error(`Unknown HTTP method: ${endpoint.method}`);
   }
 
   return {
