@@ -14,6 +14,7 @@ import { restructureSpec } from "../../spec-parser/restructure-spec.js";
 import { deriveBackendSpec } from "../../spec-parser/derive-backend-spec.js";
 import { analyzeGaps, hasBlockingGaps } from "../../spec-parser/gap-analyzer.js";
 import { formatGapReport } from "../../spec-parser/spec-approval.js";
+import { SpecOutputSchema } from "@shared/spec-schema.js";
 import type { SpecOutput } from "@shared/spec-schema.js";
 import type { ProjectConfig } from "../../../shared/design-schema.js";
 import type { PhaseImplementation, PageWorkUnit } from "../phase-runner.js";
@@ -30,16 +31,48 @@ export class SpecBlockedByGapsError extends Error {
 interface SpecRunInput {
   rawSpecText: string;
   sourcePath: string;
+  /** When set, the spec is already validated JSON — skip LLM restructuring. */
+  prevalidatedSpec?: SpecOutput;
 }
 
-function findSpecSource(projectRoot: string): { rawText: string; sourcePath: string } {
+/**
+ * Locate the spec source. Priority:
+ * 1. Pre-validated JSON spec in .planning/specs/*.json (newest first)
+ * 2. PRD.md (authoritative product doc)
+ * 3. REQUIREMENTS.md (legacy fallback)
+ * 4. Newest .md in .planning/specs/
+ */
+function findSpecSource(projectRoot: string): { rawText: string; sourcePath: string; prevalidatedSpec?: SpecOutput } {
+  // Check for pre-validated JSON specs first
+  const specsDir = path.join(projectRoot, ".planning", "specs");
+  if (fs.existsSync(specsDir)) {
+    const jsonFiles = fs
+      .readdirSync(specsDir)
+      .filter((f) => f.endsWith(".json"))
+      .map((f) => path.join(specsDir, f));
+    jsonFiles.sort(
+      (a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs,
+    );
+    for (const jsonPath of jsonFiles) {
+      try {
+        const raw = fs.readFileSync(jsonPath, "utf-8");
+        const parsed = JSON.parse(raw);
+        const result = SpecOutputSchema.safeParse(parsed);
+        if (result.success) {
+          return { rawText: raw, sourcePath: jsonPath, prevalidatedSpec: result.data };
+        }
+      } catch {
+        // Invalid JSON or schema — skip to next candidate
+      }
+    }
+  }
+
+  // Fall back to markdown sources for LLM restructuring
   const candidates = [
     path.join(projectRoot, ".planning", "PRD.md"),
     path.join(projectRoot, ".planning", "REQUIREMENTS.md"),
   ];
 
-  // Newest *.md under .planning/specs/
-  const specsDir = path.join(projectRoot, ".planning", "specs");
   if (fs.existsSync(specsDir)) {
     const mdFiles = fs
       .readdirSync(specsDir)
@@ -67,8 +100,8 @@ function findSpecSource(projectRoot: string): { rawText: string; sourcePath: str
 export const specPhaseImplementation: PhaseImplementation = {
   async prepare(config: ProjectConfig): Promise<PageWorkUnit[]> {
     const projectRoot = path.resolve(config.repoPath);
-    const { rawText, sourcePath } = findSpecSource(projectRoot);
-    const input: SpecRunInput = { rawSpecText: rawText, sourcePath };
+    const { rawText, sourcePath, prevalidatedSpec } = findSpecSource(projectRoot);
+    const input: SpecRunInput = { rawSpecText: rawText, sourcePath, prevalidatedSpec };
     return [
       {
         pageName: "spec",
@@ -80,7 +113,11 @@ export const specPhaseImplementation: PhaseImplementation = {
 
   async runPage(rawInput: unknown, config: ProjectConfig): Promise<SpecOutput> {
     const input = rawInput as SpecRunInput;
-    const spec = await restructureSpec(input.rawSpecText);
+
+    // Fast path: use pre-validated JSON spec directly — skip LLM restructuring
+    const spec = input.prevalidatedSpec
+      ? input.prevalidatedSpec
+      : await restructureSpec(input.rawSpecText);
 
     // If restructureSpec didn't fill in the backend layer, derive it.
     if (!spec.backendSpec || spec.backendSpec.endpoints.length === 0) {
