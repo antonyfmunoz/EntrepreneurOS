@@ -136,5 +136,5 @@ export function formatApprovalGateDisplay(input: {
  * Returns a one-line summary for pages that passed all dimensions automatically (D-16).
  */
 export function formatAutoApproveNotice(pageName: string, pageIndex: number): string {
-  return `Page ${pageIndex + 1} (${pageName}) auto-approved -- all dimensions 90%+`;
+  return `Page ${pageIndex + 1} (${pageName}) auto-approved -- all dimensions ${Math.round(CONFIDENCE_THRESHOLD * 100)}%+`;
 }

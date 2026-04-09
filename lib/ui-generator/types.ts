@@ -5,7 +5,10 @@ import { dmTokens } from "@shared/design-schema.js";
 // ─── SECTION 1: Confidence Threshold ────────────────────────────────────────
 
 // All four review dimensions must meet this threshold for auto-approval (D-10, UIGEN-07)
-export const CONFIDENCE_THRESHOLD = 0.9;
+export const CONFIDENCE_THRESHOLD = 0.7;
+
+// Below this threshold, the page is considered unrecoverable — no regeneration attempted
+export const REGENERATION_THRESHOLD = 0.5;
 
 // ─── SECTION 2: Review Score Schema ─────────────────────────────────────────
 
@@ -34,6 +37,43 @@ export function allDimensionsPass(score: ReviewScore): boolean {
     score.structuralCompleteness.score >= CONFIDENCE_THRESHOLD &&
     score.contentQuality.score >= CONFIDENCE_THRESHOLD
   );
+}
+
+// Returns the lowest score across all four dimensions
+export function lowestDimensionScore(score: ReviewScore): number {
+  return Math.min(
+    score.specCompliance.score,
+    score.visualConsistency.score,
+    score.structuralCompleteness.score,
+    score.contentQuality.score,
+  );
+}
+
+// Returns true if any dimension falls below REGENERATION_THRESHOLD (unrecoverable)
+export function belowRegenerationThreshold(score: ReviewScore): boolean {
+  return lowestDimensionScore(score) < REGENERATION_THRESHOLD;
+}
+
+// Formats a ReviewScore as a compact summary string for logs and PLAN.md
+export function formatScoreSummary(score: ReviewScore): string {
+  const dims = [
+    `spec=${score.specCompliance.score.toFixed(2)}`,
+    `visual=${score.visualConsistency.score.toFixed(2)}`,
+    `structure=${score.structuralCompleteness.score.toFixed(2)}`,
+    `content=${score.contentQuality.score.toFixed(2)}`,
+  ];
+  return dims.join(" | ");
+}
+
+// Collects all findings from a ReviewScore into a single feedback string
+export function collectReviewFeedback(score: ReviewScore): string {
+  const allFindings: string[] = [
+    ...score.specCompliance.findings,
+    ...score.visualConsistency.findings,
+    ...score.structuralCompleteness.findings,
+    ...score.contentQuality.findings,
+  ];
+  return allFindings.join("\n");
 }
 
 // ─── SECTION 4: Approval Gate ────────────────────────────────────────────────

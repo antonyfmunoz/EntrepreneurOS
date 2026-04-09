@@ -57,7 +57,7 @@ describe("evaluateApprovalGate", () => {
 
   it("Test 4: pageIndex 1 with one failing score escalates with failedDimensions", () => {
     const score = makeReviewScore({
-      specCompliance: { score: 0.7, findings: ["Missing chart component"] },
+      specCompliance: { score: 0.6, findings: ["Missing chart component"] },
     });
     const result = evaluateApprovalGate(1, score);
 
@@ -76,7 +76,7 @@ describe("evaluateApprovalGate", () => {
 
   it("Test 6: multiple failing dimensions all appear in failedDimensions array", () => {
     const score = makeReviewScore({
-      specCompliance: { score: 0.7, findings: ["Missing sidebar"] },
+      specCompliance: { score: 0.6, findings: ["Missing sidebar"] },
       visualConsistency: { score: 0.5, findings: ["Wrong colors"] },
     });
     const result = evaluateApprovalGate(2, score);
@@ -123,11 +123,11 @@ describe("formatApprovalGateDisplay", () => {
 // ─── formatAutoApproveNotice test ─────────────────────────────────────────────
 
 describe("formatAutoApproveNotice", () => {
-  it("returns one-line notice with page name and 90%+ mention", () => {
+  it("returns one-line notice with page name and threshold mention", () => {
     const result = formatAutoApproveNotice("Settings", 2);
 
     expect(result).toContain("Settings");
-    expect(result).toContain("90%");
+    expect(result).toContain("70%");
     expect(result).toContain("auto-approved");
     // Should be a single line (no newlines)
     expect(result.split("\n").length).toBe(1);

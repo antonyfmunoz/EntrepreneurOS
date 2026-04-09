@@ -26,7 +26,14 @@ import {
   validateCacheFreshness,
 } from "../../ui-generator/component-discovery.js";
 import { dualReview } from "../../ui-generator/self-review.js";
-import { allDimensionsPass, type DmTokenRow } from "../../ui-generator/types.js";
+import {
+  allDimensionsPass,
+  belowRegenerationThreshold,
+  lowestDimensionScore,
+  formatScoreSummary,
+  collectReviewFeedback,
+  type DmTokenRow,
+} from "../../ui-generator/types.js";
 import { generateScreen } from "../../stitch/client.js";
 import { loadBrandVoice } from "../../spec-parser/brand-voice-inferrer.js";
 
@@ -207,13 +214,58 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
       priorPatterns: [],
     });
 
-    const approved = allDimensionsPass(review.combined);
+    let bestResult = { stitchResult, htmlContent, review };
+    let approved = allDimensionsPass(review.combined);
+
+    // Regeneration: if score is below CONFIDENCE_THRESHOLD but above
+    // REGENERATION_THRESHOLD, regenerate once with review feedback injected.
+    // Use whichever version scored higher.
+    if (!approved && !belowRegenerationThreshold(review.combined)) {
+      const feedback = collectReviewFeedback(review.combined);
+      const regenPrompt = buildStitchPrompt(
+        page,
+        tokens,
+        priorScreenshotUrl ?? undefined,
+        tokens?.componentDirection ?? undefined,
+        componentReferences || undefined,
+        undefined,
+        designSystemPath,
+        brandVoice ?? undefined,
+      ) + `\n\n## Review Feedback (fix these issues):\n${feedback}`;
+
+      const regenStitch = await generateScreen(config.stitchProjectId!, {
+        prompt: regenPrompt,
+        deviceType: "DESKTOP",
+      });
+
+      const regenHtmlResp = await fetch(regenStitch.htmlUrl);
+      if (regenHtmlResp.ok) {
+        const regenHtml = await regenHtmlResp.text();
+        const regenReview = await dualReview({
+          htmlContent: regenHtml,
+          screenshotUrls: [regenStitch.screenshotUrl],
+          spec: page,
+          tokens,
+          priorPatterns: [],
+        });
+
+        // Pick whichever version scored higher (lowest dimension as tiebreaker)
+        if (lowestDimensionScore(regenReview.combined) > lowestDimensionScore(review.combined)) {
+          bestResult = { stitchResult: regenStitch, htmlContent: regenHtml, review: regenReview };
+          approved = allDimensionsPass(regenReview.combined);
+        }
+      }
+    }
+
+    const scoreSummary = formatScoreSummary(bestResult.review.combined);
+    console.log(`[ui-gen] ${page.name}: ${scoreSummary} | approved=${approved}`);
 
     return UiGenPhaseOutputSchema.parse({
-      htmlUrl: stitchResult.htmlUrl,
-      screenshotUrl: stitchResult.screenshotUrl,
+      htmlUrl: bestResult.stitchResult.htmlUrl,
+      screenshotUrl: bestResult.stitchResult.screenshotUrl,
       tokenVersion: tokens?.version ?? 0,
       approved,
+      scoreSummary,
     });
   },
 };

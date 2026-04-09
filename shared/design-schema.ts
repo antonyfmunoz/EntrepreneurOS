@@ -161,6 +161,7 @@ export const UiGenPhaseOutputSchema = z.object({
   screenshotUrl: z.string().url(),
   tokenVersion: z.number().int(),
   approved: z.boolean(),
+  scoreSummary: z.string().optional(),
 });
 
 // ─── SECTION 5: Type Exports ──────────────────────────────────────────────────
