@@ -31,7 +31,10 @@ export class PerplexityService implements AIServiceInterface {
         content: msg.content
       }));
       
-      const response = await this.client.chat.completions.create({
+      // Perplexity extends the OpenAI-compatible API with extra parameters
+      // (search_domain_filter, return_images, etc.) that aren't in the
+      // OpenAI SDK types, so we cast the request body here.
+      const response = (await this.client.chat.completions.create({
         model: modelName,
         messages: perplexityMessages,
         temperature: temperature,
@@ -43,13 +46,13 @@ export class PerplexityService implements AIServiceInterface {
         search_recency_filter: "month",
         top_k: 0,
         presence_penalty: 0,
-        frequency_penalty: 1
-      });
-      
+        frequency_penalty: 1,
+      } as Parameters<typeof this.client.chat.completions.create>[0])) as { choices: Array<{ message: { content: string | null } }> };
+
       return response.choices[0].message.content || "No response generated";
     } catch (error) {
       console.error("Error generating Perplexity response:", error);
-      throw new Error(`Failed to generate response from Perplexity: ${error.message}`);
+      throw new Error(`Failed to generate response from Perplexity: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

@@ -1,0 +1,11 @@
+{
+  "projectId": "entrepreneur-os",
+  "repoPath": ".",
+  "framework": "react-vite-tailwind-shadcn",
+  "designSystemPath": ".planning/design-system.md",
+  "outputPath": ".planning/output",
+  "clientSrcPath": "client/src",
+  "serverPath": "server",
+  "defaultBranch": "main",
+  "featureBranchPrefix": "feature/"
+}

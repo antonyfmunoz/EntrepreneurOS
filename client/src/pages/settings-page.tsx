@@ -13,7 +13,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { sendEmailVerification, Auth } from "firebase/auth";
 import { auth as firebaseAuth, isFirebaseConfigured } from "@/lib/firebase";
-
 export default function SettingsPage() {
   const { user, firebaseUser, isFirebaseReady, enrollMFA, verifyMFAEnrollment, resetPassword } = useAuth();
   const { toast } = useToast();

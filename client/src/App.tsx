@@ -1,7 +1,8 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
+import { Loader2 } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import TaskBoardPage from "@/pages/task-board-page";
@@ -15,45 +16,186 @@ import TutorialsPage from "@/pages/tutorials-page";
 import SupportPage from "@/pages/support-page";
 import CRMPage from "@/pages/crm-page";
 import DocumentsPage from "@/pages/documents-page";
-
+import CompanySetupPage from "@/pages/company-setup-page";
 
 import AuthPage from "@/pages/auth-page";
-import { AuthProvider } from "@/hooks/use-auth";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { useCompany } from "@/hooks/use-company";
 import { ProtectedRoute } from "@/lib/protected-route";
+import { CompanyGate } from "@/lib/company-guard";
+import Login from "@/pages/login-page";
+import Signup from "@/pages/signup-page";
+import ForgotPassword from "@/pages/forgot-password-page";
+import ResetPassword from "@/pages/reset-password-page";
+import DashboardPage from "@/pages/dashboard-page";
+import AdminDashboard from "@/pages/admin-dashboard-page";
+
+function RootRedirect() {
+  const { user, isLoading } = useAuth();
+  const { hasCompany, isLoading: companyLoading } = useCompany();
+
+  if (isLoading || companyLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-border" />
+      </div>
+    );
+  }
+
+  if (!user) return <Redirect to="/auth" />;
+  if (!hasCompany) return <Redirect to="/company-setup" />;
+  return <Redirect to="/home" />;
+}
 
 function Router() {
   return (
     <Switch>
-      <ProtectedRoute path="/" component={Dashboard} />
-      <ProtectedRoute path="/tasks" component={TaskBoardPage} />
+      <Route path="/" component={RootRedirect} />
+
+      <ProtectedRoute path="/home">
+        {() => (
+          <CompanyGate>
+            <Dashboard />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/tasks">
+        {() => (
+          <CompanyGate>
+            <TaskBoardPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/company-setup" component={CompanySetupPage} />
+
       <ProtectedRoute path="/chat/:agentId">
-        {(params) => <AgentChat params={params as {agentId: string}} />}
+        {(params) => (
+          <CompanyGate>
+            <AgentChat params={params as { agentId: string }} />
+          </CompanyGate>
+        )}
       </ProtectedRoute>
+
       <ProtectedRoute path="/agent-chat/:agentId">
-        {(params) => <AgentChat params={params as {agentId: string}} />}
+        {(params) => (
+          <CompanyGate>
+            <AgentChat params={params as { agentId: string }} />
+          </CompanyGate>
+        )}
       </ProtectedRoute>
-      {/* Legacy route kept for compatibility */}
-      <Route path="/agent/:agentId/program">
-        {(params) => <AgentProgramming agentId={params.agentId} />}
-      </Route>
-      {/* New agent programming route with agentId parameter */}
+
+      <ProtectedRoute path="/agent/:agentId/program">
+        {(params) => (
+          <CompanyGate>
+            <AgentProgramming agentId={params.agentId} />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
       <ProtectedRoute path="/agent-programming/:agentId">
-        {(params) => <AgentProgramming agentId={params.agentId} />}
+        {(params) => (
+          <CompanyGate>
+            <AgentProgramming agentId={params.agentId} />
+          </CompanyGate>
+        )}
       </ProtectedRoute>
-      {/* Generic agent programming route */}
+
       <ProtectedRoute path="/agent-programming">
-        {() => <AgentProgramming />}
+        {() => (
+          <CompanyGate>
+            <AgentProgramming />
+          </CompanyGate>
+        )}
       </ProtectedRoute>
-      <ProtectedRoute path="/integrations" component={IntegrationsPage} />
-      <ProtectedRoute path="/analytics" component={AnalyticsPage} />
-      <ProtectedRoute path="/crm" component={CRMPage} />
-      <ProtectedRoute path="/documents" component={DocumentsPage} />
-      <ProtectedRoute path="/settings" component={SettingsPage} />
-      <ProtectedRoute path="/notifications" component={NotificationsPage} />
-      <ProtectedRoute path="/support" component={SupportPage} />
-      <ProtectedRoute path="/tutorials" component={TutorialsPage} />
+
+      <ProtectedRoute path="/integrations">
+        {() => (
+          <CompanyGate>
+            <IntegrationsPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/analytics">
+        {() => (
+          <CompanyGate>
+            <AnalyticsPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/crm">
+        {() => (
+          <CompanyGate>
+            <CRMPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/documents">
+        {() => (
+          <CompanyGate>
+            <DocumentsPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/settings">
+        {() => (
+          <CompanyGate>
+            <SettingsPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/notifications">
+        {() => (
+          <CompanyGate>
+            <NotificationsPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/support">
+        {() => (
+          <CompanyGate>
+            <SupportPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
+      <ProtectedRoute path="/tutorials">
+        {() => (
+          <CompanyGate>
+            <TutorialsPage />
+          </CompanyGate>
+        )}
+      </ProtectedRoute>
+
       <Route path="/auth" component={AuthPage} />
+
+          <ProtectedRoute path="/login" component={Login} />
+          <ProtectedRoute path="/signup" component={Signup} />
+          <ProtectedRoute path="/forgot-password" component={ForgotPassword} />
+          <ProtectedRoute path="/reset-password" component={ResetPassword} />
+          <ProtectedRoute path="/dashboard">
+            {() => (
+              <CompanyGate>
+                <DashboardPage />
+              </CompanyGate>
+            )}
+          </ProtectedRoute>
+          <ProtectedRoute path="/admin">
+            {() => (
+              <CompanyGate>
+                <AdminDashboard />
+              </CompanyGate>
+            )}
+          </ProtectedRoute>
       <Route component={NotFound} />
+
     </Switch>
   );
 }

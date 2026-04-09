@@ -73,6 +73,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Navigation</h2>
           
           <ul className="space-y-2">
+            {/* Home → dashboard */}
             <li>
               <Link href="/">
                 <div className={cn(
@@ -81,12 +82,58 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                     ? "bg-blue-50 text-primary font-medium" 
                     : "hover:bg-gray-100 text-gray-700"
                 )}>
-                  <i className="ri-dashboard-line"></i>
-                  <span>Dashboard</span>
+                  <i className="ri-home-4-line"></i>
+                  <span>Home</span>
                 </div>
               </Link>
             </li>
 
+            {/* Company → CRM (company/customer profile) */}
+            <li>
+              <Link href="/crm">
+                <div className={cn(
+                  "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+                  location === "/crm" 
+                    ? "bg-blue-50 text-primary font-medium" 
+                    : "hover:bg-gray-100 text-gray-700"
+                )}>
+                  <i className="ri-building-line"></i>
+                  <span>Company</span>
+                </div>
+              </Link>
+            </li>
+
+            {/* Roles → agent programming */}
+            <li>
+              <Link href="/agent-programming">
+                <div className={cn(
+                  "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+                  location.startsWith("/agent-programming") 
+                    ? "bg-blue-50 text-primary font-medium" 
+                    : "hover:bg-gray-100 text-gray-700"
+                )}>
+                  <i className="ri-user-settings-line"></i>
+                  <span>Roles</span>
+                </div>
+              </Link>
+            </li>
+
+            {/* Workflows → analytics (workflow-like dashboard) */}
+            <li>
+              <Link href="/analytics">
+                <div className={cn(
+                  "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+                  location === "/analytics" 
+                    ? "bg-blue-50 text-primary font-medium" 
+                    : "hover:bg-gray-100 text-gray-700"
+                )}>
+                  <i className="ri-flow-chart"></i>
+                  <span>Workflows</span>
+                </div>
+              </Link>
+            </li>
+
+            {/* Tasks → task board */}
             <li>
               <Link href="/tasks">
                 <div className={cn(
@@ -96,37 +143,12 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                     : "hover:bg-gray-100 text-gray-700"
                 )}>
                   <i className="ri-task-line"></i>
-                  <span>Task Board</span>
+                  <span>Tasks</span>
                 </div>
               </Link>
             </li>
 
-            <li>
-              {agents.length > 0 ? (
-                <div className="flex items-center">
-                  <Link href={`/chat/${agents[0].id}`}>
-                    <div className={cn(
-                      "flex items-center space-x-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 text-gray-700",
-                      location.startsWith("/chat") && "bg-blue-50 text-primary font-medium",
-                      "flex-grow"
-                    )}>
-                      <i className="ri-chat-3-line"></i>
-                      <span>Agent Chat</span>
-                    </div>
-                  </Link>
-
-                </div>
-              ) : (
-                <div 
-                  className="flex items-center space-x-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 text-gray-500"
-                  onClick={() => setIsModalOpen(true)}
-                >
-                  <i className="ri-chat-3-line"></i>
-                  <span>Agent Chat</span>
-                </div>
-              )}
-            </li>
-
+            {/* Docs → documents */}
             <li>
               <Link href="/documents">
                 <div className={cn(
@@ -136,37 +158,38 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                     : "hover:bg-gray-100 text-gray-700"
                 )}>
                   <i className="ri-file-list-3-line"></i>
-                  <span>Document Vault</span>
+                  <span>Docs</span>
                 </div>
               </Link>
             </li>
+
+            {/* AI → agent chat */}
             <li>
-              <Link href="/analytics">
-                <div className={cn(
-                  "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
-                  location === "/analytics" 
-                    ? "bg-blue-50 text-primary font-medium" 
-                    : "hover:bg-gray-100 text-gray-700"
-                )}>
-                  <i className="ri-bar-chart-line"></i>
-                  <span>Analytics</span>
+              {agents.length > 0 ? (
+                <div className="flex items-center">
+                  <Link href={`/chat/${agents[0].id}`}>
+                    <div className={cn(
+                      "flex items-center space-x-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 text-gray-700",
+                      location.startsWith("/chat") && "bg-blue-50 text-primary font-medium",
+                      "flex-grow"
+                    )}>
+                      <i className="ri-robot-2-line"></i>
+                      <span>AI</span>
+                    </div>
+                  </Link>
                 </div>
-              </Link>
-            </li>
-            <li>
-              <Link href="/crm">
-                <div className={cn(
-                  "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
-                  location === "/crm" 
-                    ? "bg-blue-50 text-primary font-medium" 
-                    : "hover:bg-gray-100 text-gray-700"
-                )}>
-                  <i className="ri-user-star-line"></i>
-                  <span>CRM</span>
+              ) : (
+                <div 
+                  className="flex items-center space-x-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 text-gray-500"
+                  onClick={() => setIsModalOpen(true)}
+                >
+                  <i className="ri-robot-2-line"></i>
+                  <span>AI</span>
                 </div>
-              </Link>
+              )}
             </li>
-            {/* Integrations page removed from sidebar - now accessible only via Settings */}
+
+            {/* Settings → settings */}
             <li>
               <Link href="/settings">
                 <div className={cn(
@@ -180,9 +203,33 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                 </div>
               </Link>
             </li>
+        <li>
+          <Link href="/dashboard">
+            <div className={cn(
+              "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+              location === "/dashboard"
+                ? "bg-blue-50 text-primary font-medium"
+                : "hover:bg-gray-100 text-gray-700"
+            )}>
+              <i className="ri-dashboard-line"></i>
+              <span>Dashboard</span>
+            </div>
+          </Link>
+        </li>
+        <li>
+          <Link href="/admin">
+            <div className={cn(
+              "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+              location === "/admin"
+                ? "bg-blue-50 text-primary font-medium"
+                : "hover:bg-gray-100 text-gray-700"
+            )}>
+              <i className="ri-dashboard-line"></i>
+              <span>AdminDashboard</span>
+            </div>
+          </Link>
+        </li>
           </ul>
-
-          {/* Agents section removed from navigation sidebar */}
         </nav>
 
         <div className="p-4 border-t border-gray-200">

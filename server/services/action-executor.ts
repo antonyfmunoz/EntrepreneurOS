@@ -85,6 +85,7 @@ async function executeCreateTask(action: AgentAction): Promise<any> {
     description: params.description || "",
     status: params.status || "todo",
     priority: params.priority || "medium",
+    taskType: params.taskType || "standard",
     agentId: action.agentId,
     dueDate: params.dueDate,
   });
