@@ -13,13 +13,17 @@
 // catches the error, shows the user the formatted prompt, and re-invokes
 // resumePipeline() with `approved: <phase>` once the user agrees.
 
+import { and, eq } from "drizzle-orm";
 import {
   createRun,
   updateRun,
   getLastIncompleteRun,
+  getOrchestratorDb,
   type Phase,
   type PipelineRunRow,
 } from "./db.js";
+import { pipelinePages } from "../../shared/design-schema.js";
+import type { SpecOutput } from "@shared/spec-schema.js";
 import { detectContext, type PipelineContext } from "./context-detector.js";
 import {
   ApprovalRequiredError,
@@ -246,6 +250,18 @@ async function executeFromPhase(
     completedAt: new Date(),
   });
 
+  // End-of-pipeline summary — pages, routes, functional vs scaffold, next steps.
+  try {
+    const summaryText = await buildEndOfRunSummary(config.projectId);
+    // eslint-disable-next-line no-console
+    console.log(summaryText);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[orchestrator] could not render end-of-run summary: ${(err as Error).message}`,
+    );
+  }
+
   const { completed, pending } = splitPhases("complete");
   return {
     runId: run.id,
@@ -283,6 +299,149 @@ function describeAction(phase: Phase): string {
     default:
       return phase;
   }
+}
+
+// ─── End-of-run summary ──────────────────────────────────────────────────────
+//
+// Pulls the completed spec out of pipeline_pages and renders a human-friendly
+// summary: pages + routes, functional vs scaffold breakdown, dev command, and
+// next steps. Called from executeFromPhase once every phase is complete.
+
+export async function buildEndOfRunSummary(projectId: string): Promise<string> {
+  const db = getOrchestratorDb();
+
+  // Spec is the source of truth for declared pages + routes.
+  const specRows = await db
+    .select()
+    .from(pipelinePages)
+    .where(
+      and(
+        eq(pipelinePages.projectId, projectId),
+        eq(pipelinePages.phase, "spec"),
+        eq(pipelinePages.status, "complete"),
+      ),
+    )
+    .limit(1);
+
+  const spec: SpecOutput | null =
+    specRows.length > 0 && specRows[0].output
+      ? (JSON.parse(specRows[0].output) as SpecOutput)
+      : null;
+
+  // Which pages actually completed each downstream phase? A page is
+  // "functional" when integration + deploy both succeeded for it.
+  const integrationRows = await db
+    .select()
+    .from(pipelinePages)
+    .where(
+      and(
+        eq(pipelinePages.projectId, projectId),
+        eq(pipelinePages.phase, "integration"),
+        eq(pipelinePages.status, "complete"),
+      ),
+    );
+  const deployRows = await db
+    .select()
+    .from(pipelinePages)
+    .where(
+      and(
+        eq(pipelinePages.projectId, projectId),
+        eq(pipelinePages.phase, "deploy"),
+        eq(pipelinePages.status, "complete"),
+      ),
+    );
+  const integratedNames = new Set(integrationRows.map((r) => r.pageName));
+  const deployedNames = new Set(deployRows.map((r) => r.pageName));
+
+  const pages = spec?.pages ?? [];
+  const endpoints = spec?.backendSpec?.endpoints ?? [];
+
+  const functional: Array<{ name: string; route: string }> = [];
+  const scaffold: Array<{ name: string; route: string; reason: string }> = [];
+
+  for (const page of pages) {
+    const entry = { name: page.name, route: page.route };
+    if (integratedNames.has(page.name) && deployedNames.has(page.name)) {
+      functional.push(entry);
+    } else {
+      const missing: string[] = [];
+      if (!integratedNames.has(page.name)) missing.push("integration");
+      if (!deployedNames.has(page.name)) missing.push("analytics");
+      scaffold.push({
+        ...entry,
+        reason: missing.length > 0 ? `missing: ${missing.join(", ")}` : "scaffold only",
+      });
+    }
+  }
+
+  // Format.
+  const lines: string[] = [];
+  const bar = "━".repeat(64);
+  lines.push("");
+  lines.push(bar);
+  lines.push("  ✓ PIPELINE COMPLETE");
+  lines.push(bar);
+  lines.push("");
+
+  lines.push("APP PREVIEW");
+  lines.push("  Run the dev server:");
+  lines.push("    $ npm run dev");
+  lines.push("  Then open:");
+  lines.push("    http://localhost:5000");
+  lines.push("");
+
+  lines.push(`GENERATED PAGES (${pages.length})`);
+  if (pages.length === 0) {
+    lines.push("  (no pages in spec)");
+  } else {
+    const nameWidth = Math.max(
+      ...pages.map((p) => p.name.length),
+      10,
+    );
+    for (const p of pages) {
+      const marker =
+        integratedNames.has(p.name) && deployedNames.has(p.name) ? "✓" : "•";
+      lines.push(`  ${marker} ${p.name.padEnd(nameWidth)}  ${p.route}`);
+    }
+  }
+  lines.push("");
+
+  lines.push("FUNCTIONAL vs SCAFFOLD");
+  lines.push(`  ✓ Functional (routed + analytics wired): ${functional.length}`);
+  for (const f of functional) {
+    lines.push(`      ${f.route}  →  ${f.name}`);
+  }
+  lines.push(`  • Scaffold only:                         ${scaffold.length}`);
+  for (const s of scaffold) {
+    lines.push(`      ${s.route}  →  ${s.name}  (${s.reason})`);
+  }
+  lines.push("");
+
+  if (endpoints.length > 0) {
+    lines.push(`BACKEND ENDPOINTS (${endpoints.length})`);
+    lines.push("  Generated under server/generated/ — any endpoint whose derived");
+    lines.push("  storage method does not exist on the real IStorage interface is");
+    lines.push("  stubbed with a 501 TODO until you implement it.");
+    for (const ep of endpoints) {
+      lines.push(`    ${ep.method.padEnd(6)} ${ep.path}`);
+    }
+    lines.push("");
+  }
+
+  lines.push("NEXT STEPS");
+  lines.push("  1. Start the dev server (npm run dev) and click through the routes");
+  lines.push("     listed above to visually review the generated pages.");
+  lines.push("  2. Replace any 501 TODO storage stubs in server/generated/routes");
+  lines.push("     with real implementations on DatabaseStorage.");
+  lines.push("  3. Wire manualCaptures from .planning/output/analytics/*.injection.json");
+  lines.push("     into their click/submit handlers by hand.");
+  lines.push("  4. Run `npm test && npx tsc --noEmit` before committing.");
+  lines.push("  5. Commit the run's artifacts and open a PR for review.");
+  lines.push("");
+  lines.push(bar);
+  lines.push("");
+
+  return lines.join("\n");
 }
 
 // ─── Re-exports ──────────────────────────────────────────────────────────────
