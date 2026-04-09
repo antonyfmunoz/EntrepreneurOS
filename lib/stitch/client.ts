@@ -128,3 +128,33 @@ export async function generateScreen(
     }
   );
 }
+
+/**
+ * Attempt to export a Stitch project to Figma.
+ * Returns the Figma URL if the MCP server exposes a figma_export tool,
+ * or null if the tool doesn't exist or the export fails.
+ * Never throws, never prints errors — completely silent on failure.
+ */
+export async function attemptFigmaExport(
+  projectId: string,
+): Promise<string | null> {
+  try {
+    const client = getStitchToolClient();
+    // Probe for figma_export or export_to_figma — neither is documented
+    // in the SDK as of 0.0.3, but we check at runtime in case it's added.
+    const toolNames = ["figma_export", "export_to_figma"];
+    for (const toolName of toolNames) {
+      try {
+        const result = await client.callTool(toolName, { projectId });
+        const parsed = result as { url?: string; figmaUrl?: string } | null;
+        const url = parsed?.url ?? parsed?.figmaUrl;
+        if (url && typeof url === "string") return url;
+      } catch {
+        // Tool doesn't exist or failed — try next
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}

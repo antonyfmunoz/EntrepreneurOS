@@ -35,8 +35,10 @@ import {
   collectReviewFeedback,
   type DmTokenRow,
 } from "../../ui-generator/types.js";
-import { generateScreen } from "../../stitch/client.js";
+import { generateScreen, attemptFigmaExport } from "../../stitch/client.js";
 import { loadBrandVoice } from "../../spec-parser/brand-voice-inferrer.js";
+import { startPreviewServer } from "../../ui-generator/preview-server.js";
+import { printPageReview } from "../../ui-generator/terminal-links.js";
 
 interface UiGenRunInput {
   page: PageSpecFull;
@@ -272,7 +274,7 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
 
   async onPageComplete(
     context: PageCompleteContext,
-    _config: ProjectConfig,
+    config: ProjectConfig,
   ): Promise<PageDecision> {
     const output = context.output as {
       screenshotUrl?: string;
@@ -281,27 +283,35 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
       approved?: boolean;
     };
 
-    // Display review block
-    console.log("");
-    console.log(`─── Page Review: ${context.pageName} (${context.pageIndex + 1}) ───`);
-    if (output.scoreSummary) {
-      console.log(`Scores: ${output.scoreSummary}`);
-    }
-    if (output.screenshotUrl) {
-      console.log(`Screenshot: ${output.screenshotUrl}`);
-    }
-    if (output.htmlUrl) {
-      console.log(`HTML: ${output.htmlUrl}`);
-    }
-    console.log(`Auto-approved: ${output.approved ?? false}`);
-    console.log("");
-    console.log("  [y] Approve and continue");
-    console.log("  [n] Reject with feedback (retry once)");
-    console.log("  [s] Skip this page");
-    console.log("");
+    // Start preview server (fetches HTML, serves locally)
+    const preview = output.htmlUrl
+      ? await startPreviewServer(output.htmlUrl)
+      : null;
+
+    // Attempt Figma export silently — null if unavailable
+    const figmaUrl = config.stitchProjectId
+      ? await attemptFigmaExport(config.stitchProjectId)
+      : null;
+
+    // Print review block with OSC 8 clickable links
+    printPageReview({
+      pageName: context.pageName,
+      pageIndex: context.pageIndex,
+      scoreSummary: output.scoreSummary,
+      approved: output.approved,
+      localUrl: preview?.localUrl,
+      screenshotUrl: output.screenshotUrl,
+      htmlUrl: output.htmlUrl,
+      figmaUrl,
+    });
 
     const answer = await promptStdin("Decision (y/n/s): ");
     const normalized = answer.trim().toLowerCase();
+
+    // Shut down preview server after user makes their decision
+    if (preview) {
+      await preview.shutdown();
+    }
 
     if (normalized === "n") {
       const feedback = await promptStdin("Feedback for retry: ");
