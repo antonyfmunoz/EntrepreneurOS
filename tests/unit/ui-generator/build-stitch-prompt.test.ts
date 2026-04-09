@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { buildStitchPrompt } from "../../../lib/ui-generator/build-stitch-prompt.js";
 import type { PageSpecFull } from "@shared/spec-schema";
+import { resolve } from "node:path";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const designSystemPath = resolve(process.cwd(), ".planning/design-system.md");
 
 function makeSpec(overrides: Partial<PageSpecFull> = {}): PageSpecFull {
   return {
@@ -51,7 +54,7 @@ function makeTokens(overrides: Record<string, string | number | null> = {}): Rec
 describe("buildStitchPrompt", () => {
   it("Test 1: minimal spec with null tokens includes all core spec fields", () => {
     const spec = makeSpec();
-    const result = buildStitchPrompt(spec, null);
+    const result = buildStitchPrompt(spec, null, undefined, undefined, undefined, undefined, designSystemPath);
 
     expect(result).toContain("Dashboard");
     expect(result).toContain("Main view");
@@ -63,7 +66,7 @@ describe("buildStitchPrompt", () => {
   it("Test 2: with tokens injects constraint text with token values", () => {
     const spec = makeSpec();
     const tokens = makeTokens();
-    const result = buildStitchPrompt(spec, tokens as any);
+    const result = buildStitchPrompt(spec, tokens as any, undefined, undefined, undefined, undefined, designSystemPath);
 
     expect(result).toContain("#1a1a2e");
     expect(result).toContain("Inter");
@@ -73,7 +76,7 @@ describe("buildStitchPrompt", () => {
 
   it("Test 3: null tokens does NOT include visual constraints section", () => {
     const spec = makeSpec();
-    const result = buildStitchPrompt(spec, null);
+    const result = buildStitchPrompt(spec, null, undefined, undefined, undefined, undefined, designSystemPath);
 
     expect(result).not.toContain("Visual constraints");
     expect(result).not.toContain("must be followed");
@@ -81,22 +84,43 @@ describe("buildStitchPrompt", () => {
 
   it("Test 4: emptyState is included when provided", () => {
     const spec = makeSpec({ emptyState: "No projects yet" });
-    const result = buildStitchPrompt(spec, null);
+    const result = buildStitchPrompt(spec, null, undefined, undefined, undefined, undefined, designSystemPath);
 
     expect(result).toContain("No projects yet");
   });
 
   it("Test 5: priorScreenshotUrl triggers reference screenshot instruction", () => {
     const spec = makeSpec();
-    const result = buildStitchPrompt(spec, null, "https://example.com/screenshot.png");
+    const result = buildStitchPrompt(spec, null, "https://example.com/screenshot.png", undefined, undefined, undefined, designSystemPath);
 
     expect(result).toContain("Reference the visual style from the previously approved page screenshot.");
   });
 
   it("Test 6: authLevel=public does NOT include authentication text", () => {
     const spec = makeSpec({ authLevel: "public" });
-    const result = buildStitchPrompt(spec, null);
+    const result = buildStitchPrompt(spec, null, undefined, undefined, undefined, undefined, designSystemPath);
 
     expect(result).not.toContain("authentication");
+  });
+
+  it("Test 7: designSystemPath injects design system as first section", () => {
+    const spec = makeSpec();
+    const result = buildStitchPrompt(spec, null, undefined, undefined, undefined, undefined, designSystemPath);
+
+    expect(result).toContain("DESIGN SYSTEM");
+    expect(result).toContain("single source of truth");
+    // Design system should appear before the page spec
+    const dsIndex = result.indexOf("DESIGN SYSTEM");
+    const specIndex = result.indexOf("Dashboard");
+    expect(dsIndex).toBeLessThan(specIndex);
+  });
+
+  it("Test 8: missing designSystemPath does not inject design system section", () => {
+    const spec = makeSpec();
+    const result = buildStitchPrompt(spec, null);
+
+    expect(result).not.toContain("DESIGN SYSTEM");
+    // Core spec fields still present
+    expect(result).toContain("Dashboard");
   });
 });

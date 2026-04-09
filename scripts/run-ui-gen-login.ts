@@ -13,6 +13,7 @@ import { dualReview } from "../lib/ui-generator/self-review.js";
 import { evaluateApprovalGate, formatApprovalGateDisplay } from "../lib/ui-generator/approval-gate.js";
 import { discoverComponents, formatDiscoveryForPrompt } from "../lib/ui-generator/component-discovery.js";
 import { enrichOnce, extractIndustry } from "../lib/ui-generator/skill-enrichment.js";
+import { resolve } from "node:path";
 import { validateDesignSystem } from "../lib/ui-generator/validate-design-system.js";
 import { generateReferenceMockup } from "../lib/ui-generator/gemini-mockup.js";
 import { MAX_HTML_FOR_REVIEW, MAX_HTML_FOR_EXTRACTION } from "../lib/ui-generator/types.js";
@@ -156,6 +157,7 @@ async function run() {
   }
 
   // ─── Step 2a: Build Stitch Prompt ─────────────────────────────────────────
+  const designSystemPath = resolve(process.cwd(), ".planning/design-system.md");
   const prompt = buildStitchPrompt(
     loginPageSpec,
     currentTokens,
@@ -163,6 +165,7 @@ async function run() {
     seed.componentDirection,
     componentReferences,
     enrichment,
+    designSystemPath,
   );
 
   console.log(`  Prompt built: ${prompt.length} chars`);
