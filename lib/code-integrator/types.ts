@@ -55,6 +55,18 @@ export interface RouteInjectionInput {
   routePath: string;
   wrapCompanyGate: boolean;
   isStandalone: boolean;
+  // Bug 6: absolute path to the generated page file on disk. When provided
+  // and a collision with an existing App.tsx import identifier is detected,
+  // injectRoute will rename the component in both App.tsx and the page file
+  // itself (appending a "Page" suffix).
+  pageFilePath?: string;
+}
+
+// Result of a route injection — reports the final component name used so
+// callers that chose to resolve a collision can report the rename.
+export interface RouteInjectionResult {
+  componentName: string;
+  renamed: boolean;
 }
 
 // ─── SECTION 4: Nav Injection Types ──────────────────────────────────────────
