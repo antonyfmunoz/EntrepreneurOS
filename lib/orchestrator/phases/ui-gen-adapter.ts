@@ -104,9 +104,13 @@ async function loadPriorScreenshotsByIndex(
 
 export const uiGenPhaseImplementation: PhaseImplementation = {
   async prepare(config: ProjectConfig): Promise<PageWorkUnit[]> {
+    // Allow env fallback so users can keep project IDs out of checked-in config.
+    if (!config.stitchProjectId && process.env.STITCH_PROJECT_ID) {
+      config.stitchProjectId = process.env.STITCH_PROJECT_ID;
+    }
     if (!config.stitchProjectId) {
       throw new Error(
-        `Phase "ui-gen": config.stitchProjectId is required. Set it in .planning/project.config.json.`,
+        `Phase "ui-gen": stitchProjectId is required. Set it in .planning/project.config.json or as STITCH_PROJECT_ID in .env.`,
       );
     }
 

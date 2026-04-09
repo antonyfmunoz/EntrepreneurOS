@@ -196,7 +196,7 @@ export async function restructureSpec(rawInput: string): Promise<SpecOutput> {
 
       const response = await client.messages.create({
         model: "claude-sonnet-4-5",
-        max_tokens: 8192,
+        max_tokens: 32000,
         system: RESTRUCTURE_SYSTEM_PROMPT,
         messages,
       });
@@ -232,7 +232,7 @@ export async function restructureSpec(rawInput: string): Promise<SpecOutput> {
       while (correctionAttempts < 2) {
         const correctionResponse = await client.messages.create({
           model: "claude-sonnet-4-5",
-          max_tokens: 8192,
+          max_tokens: 32000,
           system: RESTRUCTURE_SYSTEM_PROMPT,
           messages: correctionMessages,
         });
