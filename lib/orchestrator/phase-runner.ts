@@ -27,6 +27,14 @@ export interface PageWorkUnit {
   input: unknown;
 }
 
+export type PageDecision = "continue" | "retry" | "skip";
+
+export interface PageCompleteContext {
+  pageName: string;
+  pageIndex: number;
+  output: unknown;
+}
+
 export interface PhaseImplementation {
   /** Compute the work units for this phase from the project state. */
   prepare(
@@ -46,6 +54,21 @@ export interface PhaseImplementation {
    * string that gets appended to the approval message.
    */
   previewForApproval?(config: ProjectConfig): Promise<string>;
+
+  /**
+   * Optional. Called after each page completes successfully. Returns a
+   * PageDecision controlling what happens next:
+   * - "continue": proceed to next page (default if hook absent)
+   * - "retry": re-run this page (implementation should inject user feedback)
+   * - "skip": mark page as skipped and move on
+   *
+   * The hook receives the page context and output so it can display review
+   * information to the user (e.g. screenshots, scores, preview links).
+   */
+  onPageComplete?(
+    context: PageCompleteContext,
+    config: ProjectConfig,
+  ): Promise<PageDecision>;
 }
 
 export interface PhaseRunResult {
@@ -107,7 +130,33 @@ export async function runPhase(
     });
 
     try {
-      const output = await impl.runPage(unit.input, config);
+      let output = await impl.runPage(unit.input, config);
+      let decision: PageDecision = "continue";
+
+      if (impl.onPageComplete) {
+        decision = await impl.onPageComplete(
+          { pageName: unit.pageName, pageIndex: unit.pageIndex, output },
+          config,
+        );
+
+        if (decision === "retry") {
+          // Re-run the page once with the assumption that the implementation
+          // has captured user feedback and will adjust its approach.
+          output = await impl.runPage(unit.input, config);
+          // After retry, always continue — no infinite loops.
+        }
+
+        if (decision === "skip") {
+          await updatePage(row.id, {
+            status: "complete",
+            output: JSON.stringify({ skipped: true }),
+            completedAt: new Date(),
+          });
+          completed++;
+          continue;
+        }
+      }
+
       await updatePage(row.id, {
         status: "complete",
         output: JSON.stringify(output ?? null),

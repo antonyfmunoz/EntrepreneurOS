@@ -9,6 +9,7 @@
 //   then dualReview the result. Returns a UiGenPhaseOutput-shaped record.
 
 import path from "node:path";
+import readline from "node:readline";
 import { and, asc, desc, eq } from "drizzle-orm";
 import {
   dmTokens,
@@ -17,7 +18,7 @@ import {
   UiGenPhaseOutputSchema,
 } from "../../../shared/design-schema.js";
 import type { SpecOutput, PageSpecFull } from "@shared/spec-schema.js";
-import type { PhaseImplementation, PageWorkUnit } from "../phase-runner.js";
+import type { PhaseImplementation, PageWorkUnit, PageCompleteContext, PageDecision } from "../phase-runner.js";
 import { getOrchestratorDb } from "../db.js";
 import { buildStitchPrompt } from "../../ui-generator/build-stitch-prompt.js";
 import {
@@ -268,4 +269,67 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
       scoreSummary,
     });
   },
+
+  async onPageComplete(
+    context: PageCompleteContext,
+    _config: ProjectConfig,
+  ): Promise<PageDecision> {
+    const output = context.output as {
+      screenshotUrl?: string;
+      htmlUrl?: string;
+      scoreSummary?: string;
+      approved?: boolean;
+    };
+
+    // Display review block
+    console.log("");
+    console.log(`─── Page Review: ${context.pageName} (${context.pageIndex + 1}) ───`);
+    if (output.scoreSummary) {
+      console.log(`Scores: ${output.scoreSummary}`);
+    }
+    if (output.screenshotUrl) {
+      console.log(`Screenshot: ${output.screenshotUrl}`);
+    }
+    if (output.htmlUrl) {
+      console.log(`HTML: ${output.htmlUrl}`);
+    }
+    console.log(`Auto-approved: ${output.approved ?? false}`);
+    console.log("");
+    console.log("  [y] Approve and continue");
+    console.log("  [n] Reject with feedback (retry once)");
+    console.log("  [s] Skip this page");
+    console.log("");
+
+    const answer = await promptStdin("Decision (y/n/s): ");
+    const normalized = answer.trim().toLowerCase();
+
+    if (normalized === "n") {
+      const feedback = await promptStdin("Feedback for retry: ");
+      if (feedback.trim()) {
+        console.log(`[ui-gen] Retrying ${context.pageName} with feedback: ${feedback.trim()}`);
+      }
+      return "retry";
+    }
+
+    if (normalized === "s") {
+      console.log(`[ui-gen] Skipping ${context.pageName}`);
+      return "skip";
+    }
+
+    // Default to continue (approve) for 'y' or any other input
+    return "continue";
+  },
 };
+
+function promptStdin(question: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
