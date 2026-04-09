@@ -41,7 +41,8 @@ export function buildStitchPrompt(
   componentDirection?: string,
   componentReferences?: string,
   enrichment?: SkillEnrichment,
-  designSystemPath?: string
+  designSystemPath?: string,
+  brandVoice?: string,
 ): string {
   const parts: string[] = [];
 
@@ -65,6 +66,13 @@ export function buildStitchPrompt(
   }
   if (enrichment?.uxGuidance.fonts) {
     parts.push(`## Recommended Fonts\n${enrichment.uxGuidance.fonts}`);
+  }
+
+  // 0c. Brand voice — inferred from PRD, injected after design system and enrichment.
+  //     Fail-open: omitted entirely when not available.
+  if (brandVoice) {
+    parts.push("## Brand Voice");
+    parts.push(brandVoice);
   }
 
   // 1. Page description

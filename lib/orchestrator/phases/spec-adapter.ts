@@ -14,6 +14,7 @@ import { restructureSpec } from "../../spec-parser/restructure-spec.js";
 import { deriveBackendSpec } from "../../spec-parser/derive-backend-spec.js";
 import { analyzeGaps, hasBlockingGaps } from "../../spec-parser/gap-analyzer.js";
 import { formatGapReport } from "../../spec-parser/spec-approval.js";
+import { inferBrandVoice } from "../../spec-parser/brand-voice-inferrer.js";
 import { SpecOutputSchema } from "@shared/spec-schema.js";
 import type { SpecOutput } from "@shared/spec-schema.js";
 import type { ProjectConfig } from "../../../shared/design-schema.js";
@@ -149,6 +150,16 @@ export const specPhaseImplementation: PhaseImplementation = {
       if (hasBlockingGaps(gaps)) {
         throw new SpecBlockedByGapsError(report);
       }
+    }
+
+    // Brand voice inference — run after spec locks, fail-open.
+    // Reads the PRD source and writes .planning/BRAND-VOICE.md for downstream
+    // injection into Stitch prompts via build-stitch-prompt.ts.
+    const planningDir = path.join(projectRoot, ".planning");
+    const prdPath = path.join(planningDir, "PRD.md");
+    if (fs.existsSync(prdPath)) {
+      const prdText = fs.readFileSync(prdPath, "utf-8");
+      await inferBrandVoice(prdText, planningDir);
     }
 
     return spec;

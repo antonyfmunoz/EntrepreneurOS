@@ -28,6 +28,7 @@ import {
 import { dualReview } from "../../ui-generator/self-review.js";
 import { allDimensionsPass, type DmTokenRow } from "../../ui-generator/types.js";
 import { generateScreen } from "../../stitch/client.js";
+import { loadBrandVoice } from "../../spec-parser/brand-voice-inferrer.js";
 
 interface UiGenRunInput {
   page: PageSpecFull;
@@ -36,6 +37,8 @@ interface UiGenRunInput {
   designSystemPath: string;
   /** screenshotUrl from page N-1, or null for page 0 (D-12 multi-page inheritance) */
   priorScreenshotUrl: string | null;
+  /** Brand voice markdown inferred from PRD, or null if unavailable */
+  brandVoice: string | null;
 }
 
 async function loadLatestSpec(projectId: string): Promise<SpecOutput> {
@@ -126,6 +129,8 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
       config.repoPath,
       config.designSystemPath,
     );
+    const planningDir = path.resolve(config.repoPath, ".planning");
+    const brandVoice = loadBrandVoice(planningDir);
 
     // Validate component cache freshness before any generation.
     // The cache is populated by /saas-dev:warm-cache inside a Claude Code session.
@@ -150,13 +155,14 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
         // Carry forward the screenshot from page N-1 so Stitch has visual
         // context for inheritance. Page 0 has no prior reference.
         priorScreenshotUrl: idx > 0 ? priorByIndex.get(idx - 1) ?? null : null,
+        brandVoice,
       } satisfies UiGenRunInput,
     }));
   },
 
   async runPage(rawInput: unknown, config: ProjectConfig): Promise<unknown> {
     const input = rawInput as UiGenRunInput;
-    const { page, tokens, designSystemPath, priorScreenshotUrl } = input;
+    const { page, tokens, designSystemPath, priorScreenshotUrl, brandVoice } = input;
 
     // Discover component references from the warm cache.
     const discoveryResult = discoverComponents(page.components);
@@ -173,6 +179,7 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
       componentReferences || undefined,
       undefined, // enrichment — wired separately via skill-enrichment layer
       designSystemPath,
+      brandVoice ?? undefined,
     );
 
     // Generate the desktop screen via Stitch.

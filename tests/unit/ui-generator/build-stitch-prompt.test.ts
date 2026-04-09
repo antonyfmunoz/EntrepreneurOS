@@ -123,4 +123,28 @@ describe("buildStitchPrompt", () => {
     // Core spec fields still present
     expect(result).toContain("Dashboard");
   });
+
+  it("Test 9: brandVoice is injected when provided", () => {
+    const spec = makeSpec();
+    const result = buildStitchPrompt(spec, null, undefined, undefined, undefined, undefined, designSystemPath, "Bold, authoritative, tactical luxury.");
+
+    expect(result).toContain("Brand Voice");
+    expect(result).toContain("Bold, authoritative, tactical luxury.");
+  });
+
+  it("Test 10: brandVoice is omitted when undefined", () => {
+    const spec = makeSpec();
+    const result = buildStitchPrompt(spec, null, undefined, undefined, undefined, undefined, designSystemPath);
+
+    expect(result).not.toContain("Brand Voice");
+  });
+
+  it("Test 11: brandVoice appears before page description", () => {
+    const spec = makeSpec();
+    const result = buildStitchPrompt(spec, null, undefined, undefined, undefined, undefined, designSystemPath, "Minimalist tone.");
+
+    const voiceIndex = result.indexOf("Brand Voice");
+    const specIndex = result.indexOf("Design a Dashboard");
+    expect(voiceIndex).toBeLessThan(specIndex);
+  });
 });
