@@ -114,6 +114,24 @@ describe("injectNavItem", () => {
     expect(result).toContain('location === "/reports"');
   });
 
+  it("Phase A idempotency: re-running with same href is a no-op", async () => {
+    const input: NavInjectionInput = {
+      sidebarPath,
+      label: "Reports",
+      href: "/reports",
+      iconClass: "ri-bar-chart-line",
+    };
+
+    await injectNavItem(input);
+    const after1 = await readFile(sidebarPath, "utf-8");
+    await injectNavItem(input);
+    const after2 = await readFile(sidebarPath, "utf-8");
+
+    expect(after2).toBe(after1);
+    const matches = after2.match(/href="\/reports"/g) ?? [];
+    expect(matches.length).toBe(1);
+  });
+
   it("preserves all existing nav items after injection", async () => {
     const input: NavInjectionInput = {
       sidebarPath,

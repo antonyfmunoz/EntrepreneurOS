@@ -100,6 +100,27 @@ describe("injectRoute", () => {
     expect(result).not.toContain("<CompanyGate>");
   });
 
+  it("Phase A idempotency: re-running with same route+import is a no-op", async () => {
+    const input: RouteInjectionInput = {
+      appTsxPath,
+      componentName: "ReportsPage",
+      importPath: "@/pages/reports-page",
+      routePath: "/reports",
+      wrapCompanyGate: true,
+      isStandalone: false,
+    };
+
+    await injectRoute(input);
+    const after1 = await readFile(appTsxPath, "utf-8");
+    await injectRoute(input);
+    const after2 = await readFile(appTsxPath, "utf-8");
+
+    expect(after2).toBe(after1);
+    // Only one ProtectedRoute for /reports — no duplication.
+    const matches = after2.match(/<ProtectedRoute path="\/reports">/g) ?? [];
+    expect(matches.length).toBe(1);
+  });
+
   it("preserves all existing content after injection", async () => {
     const input: RouteInjectionInput = {
       appTsxPath,

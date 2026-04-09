@@ -7,6 +7,16 @@ import type { NavInjectionInput } from "./types.js";
 export async function injectNavItem(input: NavInjectionInput): Promise<void> {
   let content = await readFile(input.sidebarPath, "utf-8");
 
+  // Idempotency: if a Link with this href is already wired into the sidebar,
+  // skip the injection. Re-running integration must be a no-op for any nav
+  // item that is already in place.
+  const existingHrefRe = new RegExp(
+    `<Link\\s+href=["']${input.href.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`,
+  );
+  if (existingHrefRe.test(content)) {
+    return;
+  }
+
   // Build nav item JSX following the exact existing sidebar.tsx pattern:
   // Link > div with cn() > i.ri-icon-class > span
   const navItemJsx = `        <li>

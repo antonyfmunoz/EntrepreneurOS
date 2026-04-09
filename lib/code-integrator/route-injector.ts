@@ -22,6 +22,33 @@ export async function injectRoute(
 ): Promise<RouteInjectionResult> {
   let content = await readFile(input.appTsxPath, "utf-8");
 
+  // Phase A idempotency: if a ProtectedRoute or Route is already wired to
+  // this exact path AND the importPath is already imported, this is a re-run
+  // and we no-op. We do NOT compare component identifiers — a route may have
+  // been wired previously by hand under a different name, and replacing it
+  // is a brownfield-planner concern, not the injector's.
+  const escapedRoute = input.routePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escapedImport = input.importPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const existingRouteRe = new RegExp(
+    `(?:ProtectedRoute|Route)\\s+path=["']${escapedRoute}["']`,
+  );
+  const existingImportRe = new RegExp(
+    `import\\s+\\w+\\s+from\\s+["']${escapedImport}["']`,
+  );
+  if (existingRouteRe.test(content) && existingImportRe.test(content)) {
+    // Pull the already-wired component name out so callers see something
+    // useful in the result.
+    const match = content.match(
+      new RegExp(
+        `import\\s+(\\w+)\\s+from\\s+["']${escapedImport}["']`,
+      ),
+    );
+    return {
+      componentName: match ? match[1] : input.componentName,
+      renamed: false,
+    };
+  }
+
   // Bug 6: collision-aware naming. If the generated component identifier
   // clashes with an existing default import in App.tsx, append a "Page"
   // suffix and rewrite the generated page file's export to match.
