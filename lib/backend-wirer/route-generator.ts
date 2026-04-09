@@ -76,6 +76,27 @@ export function generateRouteCode(
   const resource = pathToResource(endpoint.path);
   const hasBody = ["POST", "PUT", "PATCH"].includes(endpoint.method) && endpoint.requestBody.length > 0;
 
+  // Bug 2: if inventory lists real storage methods and this endpoint's derived
+  // name is not among them, emit a 501 TODO placeholder instead of a broken
+  // call to a method that does not exist on the real storage class.
+  const realMethods = inventory.existingStorageFunctions;
+  const methodIsReal =
+    realMethods.length === 0 || realMethods.includes(functionName);
+  if (!methodIsReal) {
+    const todoLines = [
+      `app.${method}("${endpoint.path}", async (_req: Request, res: Response) => {`,
+      `  // TODO: implement storage.${functionName} — no matching method exists on the real storage interface`,
+      `  res.status(501).json({ message: "Not implemented: storage.${functionName}" });`,
+      `});`,
+    ];
+    return {
+      method,
+      path: endpoint.path,
+      code: todoLines.join("\n"),
+      zodSchemaCode: undefined,
+    };
+  }
+
   const lines: string[] = [];
 
   lines.push(`app.${method}("${endpoint.path}", async (req: Request, res: Response) => {`);
@@ -160,7 +181,9 @@ export function generateStorageCode(endpoint: BackendEndpointSpec): StorageCodeB
   const functionName = deriveStorageFunctionName(endpoint);
   const single = singularize(resource);
   const tableName = resource;
-  const tableVar = `${resource}Table`;
+  // Generated Drizzle tables in shared/schema.ts are exported with the
+  // plain resource name (no "Table" suffix) — match that export exactly.
+  const tableVar = resource;
 
   let code: string;
 
