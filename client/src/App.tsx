@@ -23,6 +23,12 @@ import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { useCompany } from "@/hooks/use-company";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { CompanyGate } from "@/lib/company-guard";
+import Login from "@/pages/login-page";
+import Signup from "@/pages/signup-page";
+import ForgotPassword from "@/pages/forgot-password-page";
+import ResetPassword from "@/pages/reset-password-page";
+import DashboardPage from "@/pages/dashboard-page";
+import AdminDashboard from "@/pages/admin-dashboard-page";
 
 function RootRedirect() {
   const { user, isLoading } = useAuth();
@@ -170,6 +176,24 @@ function Router() {
 
       <Route path="/auth" component={AuthPage} />
 
+          <ProtectedRoute path="/login" component={Login} />
+          <ProtectedRoute path="/signup" component={Signup} />
+          <ProtectedRoute path="/forgot-password" component={ForgotPassword} />
+          <ProtectedRoute path="/reset-password" component={ResetPassword} />
+          <ProtectedRoute path="/dashboard">
+            {() => (
+              <CompanyGate>
+                <DashboardPage />
+              </CompanyGate>
+            )}
+          </ProtectedRoute>
+          <ProtectedRoute path="/admin">
+            {() => (
+              <CompanyGate>
+                <AdminDashboard />
+              </CompanyGate>
+            )}
+          </ProtectedRoute>
       <Route component={NotFound} />
 
     </Switch>
