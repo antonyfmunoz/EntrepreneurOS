@@ -115,7 +115,50 @@ function selectIconClass(pageName: string): string {
   return "ri-layout-line";
 }
 
+// ─── Preview helpers (Phase C) ───────────────────────────────────────────────
+
+/**
+ * Build the brownfield plan WITHOUT making any LLM calls or network fetches,
+ * so the orchestrator can render it inside the approval gate before the user
+ * decides whether to authorize the destructive phase.
+ */
+async function buildIntegrationPreview(config: ProjectConfig): Promise<string> {
+  const projectRoot = path.resolve(config.repoPath);
+  const spec = await loadLatestSpec(config.projectId);
+  const uiGenRows = await loadUiGenOutputs(config.projectId);
+  if (uiGenRows.length === 0) {
+    return "(no completed ui-gen pages — preview unavailable)";
+  }
+
+  const inventory = await auditBrownfield(projectRoot);
+  const pagesDir = path.join(projectRoot, config.clientSrcPath, "pages");
+  const pageSources: Record<string, string> = {};
+  for (const ep of inventory.existingPages) {
+    try {
+      pageSources[ep.fileName] = fs.readFileSync(path.join(pagesDir, ep.fileName), "utf-8");
+    } catch {
+      // best-effort
+    }
+  }
+
+  const onlySpecPagesWithUiGen = uiGenRows
+    .map((row) => spec.pages[row.pageIndex])
+    .filter((p): p is PageSpecFull => Boolean(p));
+
+  const plan = planBrownfieldIntegration({
+    specPages: onlySpecPagesWithUiGen,
+    inventory,
+    pageSources,
+  });
+
+  return renderIntegrationPlanMarkdown(plan);
+}
+
 export const integrationPhaseImplementation: PhaseImplementation = {
+  async previewForApproval(config: ProjectConfig): Promise<string> {
+    return buildIntegrationPreview(config);
+  },
+
   async prepare(config: ProjectConfig): Promise<PageWorkUnit[]> {
     const projectRoot = path.resolve(config.repoPath);
     const spec = await loadLatestSpec(config.projectId);

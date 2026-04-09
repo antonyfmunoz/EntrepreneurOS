@@ -213,10 +213,24 @@ async function executeFromPhase(
     if (DESTRUCTIVE_PHASES.has(phase) && !approved.has(phase)) {
       const { completed, pending } = splitPhases(phase);
       const summary = formatApprovalSummary(completed, pending);
+
+      // Phase C: let the phase preview itself so the user sees the plan
+      // (e.g. integration's brownfield PLAN.md) inside the approval message.
+      let preview = "";
+      const impl = PHASE_IMPLEMENTATIONS[phase];
+      if (impl.previewForApproval) {
+        try {
+          preview = await impl.previewForApproval(config);
+        } catch (err) {
+          preview = `(preview unavailable: ${(err as Error).message})`;
+        }
+      }
+
+      const details = preview ? `${summary}\n\n${preview}` : summary;
       const message = formatApprovalRequest(
         phase,
         describeAction(phase),
-        summary,
+        details,
       );
       await updateRun(run.id, { phase, status: "paused" });
       throw new ApprovalRequiredError(message, phase, describeAction(phase));

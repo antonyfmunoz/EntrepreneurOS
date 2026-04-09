@@ -37,6 +37,15 @@ export interface PhaseImplementation {
    *  pipeline_pages.output column. Throw on failure — phase-runner will mark
    *  the page failed and surface the error. */
   runPage(input: unknown, config: ProjectConfig): Promise<unknown>;
+
+  /**
+   * Optional. Called by the orchestrator BEFORE the destructive-phase
+   * approval gate so the user can see exactly what the phase intends to do.
+   * Should be cheap (no LLM, no network) and side-effect free aside from
+   * writing planning artifacts the user can re-read. Return a human-readable
+   * string that gets appended to the approval message.
+   */
+  previewForApproval?(config: ProjectConfig): Promise<string>;
 }
 
 export interface PhaseRunResult {
