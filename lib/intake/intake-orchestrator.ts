@@ -1,0 +1,303 @@
+// lib/intake/intake-orchestrator.ts
+// Unified intake phase — collects everything needed before any generation starts.
+// Produces a ProjectBrief that all downstream phases consume.
+//
+// Three modes:
+//   A. Greenfield: no code, no docs — structured conversation
+//   B. Docs-only: PRD/design-system/specs present — scan, gap-fill, synthesize
+//   C. Existing codebase: scan code + docs, synthesize, ask about gaps
+
+import fs from "node:fs";
+import path from "node:path";
+import { SpecOutputSchema } from "@shared/spec-schema.js";
+import type { SpecOutput } from "@shared/spec-schema.js";
+import { restructureSpec } from "../spec-parser/restructure-spec.js";
+import { deriveBackendSpec } from "../spec-parser/derive-backend-spec.js";
+import { analyzeGaps, hasBlockingGaps } from "../spec-parser/gap-analyzer.js";
+import { formatGapReport } from "../spec-parser/spec-approval.js";
+import { inferBrandVoice, loadBrandVoice } from "../spec-parser/brand-voice-inferrer.js";
+import { detectIntakeMode } from "./mode-detector.js";
+import { scanPlanningDocs, identifyMissingDocs, type ScannedDocs } from "./doc-scanner.js";
+import { scanCodebase, formatCodebaseSummary } from "./codebase-scanner.js";
+import {
+  ProjectBriefSchema,
+  TechStackSchema,
+  type ProjectBrief,
+  type IntakeMode,
+} from "./types.js";
+import type { ProjectConfig } from "../../shared/design-schema.js";
+
+export { type IntakeMode } from "./types.js";
+
+export interface IntakeResult {
+  brief: ProjectBrief;
+  mode: IntakeMode;
+  gapReport: string | null;
+}
+
+/**
+ * Run the intake phase for a project.
+ * Detects mode automatically and collects everything needed.
+ *
+ * For greenfield mode (no docs, no code), this returns a minimal ProjectBrief
+ * with empty spec — the caller (skill) must run a conversation to fill it.
+ *
+ * For docs-only and existing-codebase modes, this synthesizes a ProjectBrief
+ * from available materials.
+ */
+export async function runIntake(
+  config: ProjectConfig,
+): Promise<IntakeResult> {
+  const projectRoot = path.resolve(config.repoPath);
+  const mode = detectIntakeMode(projectRoot);
+
+  switch (mode) {
+    case "greenfield":
+      return runGreenfieldIntake(config, projectRoot);
+    case "docs-only":
+      return runDocsOnlyIntake(config, projectRoot);
+    case "existing-codebase":
+      return runExistingCodebaseIntake(config, projectRoot);
+  }
+}
+
+async function runGreenfieldIntake(
+  _config: ProjectConfig,
+  _projectRoot: string,
+): Promise<IntakeResult> {
+  // Greenfield mode produces a skeleton brief. The spec field needs a valid
+  // SpecOutput — use a minimal placeholder that the collaborative flow will
+  // replace once the conversation completes.
+  const brief = ProjectBriefSchema.parse({
+    productName: "Untitled Project",
+    productDescription: "No description yet — run collaborative intake to define.",
+    productVision: "",
+    targetUsers: [],
+    jobsToBeDone: [],
+    brandVoice: "",
+    designSystem: "",
+    techStack: TechStackSchema.parse({}),
+    authProvider: "firebase",
+    dbProvider: "neon",
+    deployTarget: "vps",
+    spec: { pages: [{ name: "Placeholder", route: "/", purpose: "Placeholder for greenfield intake", components: [], authLevel: "public", priority: 1, dependsOn: [], specVersion: 1, source: "inferred", dataRequirements: [], apiEndpoints: [], validationRules: [], events: [], featureFlagCandidates: [] }] },
+    isGreenfield: true,
+    existingCodeScanned: false,
+    sourceDocs: [],
+  });
+
+  return { brief, mode: "greenfield", gapReport: null };
+}
+
+async function runDocsOnlyIntake(
+  config: ProjectConfig,
+  projectRoot: string,
+): Promise<IntakeResult> {
+  const docs = scanPlanningDocs(projectRoot);
+  const planningDir = path.join(projectRoot, ".planning");
+
+  // Try to load or produce the spec
+  const spec = await resolveSpec(docs, planningDir);
+
+  // Run gap analysis
+  let gapReport: string | null = null;
+  const skipGaps = process.env.SKIP_GAP_ANALYSIS === "true";
+  if (!skipGaps) {
+    const gaps = await analyzeGaps(spec, { skipLlm: false });
+    gapReport = formatGapReport(spec, gaps);
+    persistGapReport(projectRoot, gapReport);
+    if (hasBlockingGaps(gaps)) {
+      console.warn("[intake] Blocking gaps found — see GAP-ANALYSIS.md. Brief still produced for review.");
+    }
+  }
+
+  // Infer brand voice if missing
+  let brandVoice = docs.brandVoice ?? "";
+  if (!brandVoice && docs.prd) {
+    const result = await inferBrandVoice(docs.prd, planningDir);
+    brandVoice = result?.content ?? "";
+  }
+
+  // Derive backend spec if missing
+  if (!spec.backendSpec || spec.backendSpec.endpoints.length === 0) {
+    try {
+      spec.backendSpec = await deriveBackendSpec(spec.pages);
+    } catch {
+      // Best-effort
+    }
+  }
+
+  // Extract product metadata from PRD or spec
+  const productMeta = extractProductMeta(docs);
+
+  const brief = ProjectBriefSchema.parse({
+    ...productMeta,
+    brandVoice,
+    designSystem: docs.designSystem ?? "",
+    techStack: TechStackSchema.parse({}),
+    authProvider: detectAuthFromSpec(spec),
+    dbProvider: "neon",
+    deployTarget: "vps",
+    spec,
+    isGreenfield: false,
+    existingCodeScanned: false,
+    sourceDocs: docs.sourceDocs,
+  });
+
+  return { brief, mode: "docs-only", gapReport };
+}
+
+async function runExistingCodebaseIntake(
+  config: ProjectConfig,
+  projectRoot: string,
+): Promise<IntakeResult> {
+  const docs = scanPlanningDocs(projectRoot);
+  const codeScan = scanCodebase(projectRoot);
+  const planningDir = path.join(projectRoot, ".planning");
+
+  console.log(`[intake] Codebase scan:\n${formatCodebaseSummary(codeScan)}`);
+
+  // Try to load or produce the spec
+  const spec = await resolveSpec(docs, planningDir);
+
+  // Gap analysis
+  let gapReport: string | null = null;
+  const skipGaps = process.env.SKIP_GAP_ANALYSIS === "true";
+  if (!skipGaps) {
+    const gaps = await analyzeGaps(spec, { skipLlm: false });
+    gapReport = formatGapReport(spec, gaps);
+    persistGapReport(projectRoot, gapReport);
+  }
+
+  // Brand voice
+  let brandVoice = docs.brandVoice ?? "";
+  if (!brandVoice && docs.prd) {
+    const result = await inferBrandVoice(docs.prd, planningDir);
+    brandVoice = result?.content ?? "";
+  }
+
+  // Backend spec
+  if (!spec.backendSpec || spec.backendSpec.endpoints.length === 0) {
+    try {
+      spec.backendSpec = await deriveBackendSpec(spec.pages);
+    } catch {
+      // Best-effort
+    }
+  }
+
+  const productMeta = extractProductMeta(docs);
+
+  // Detect auth/db from actual dependencies
+  const authProvider = codeScan.hasAuth ? "firebase" : "none";
+  const dbProvider = codeScan.hasDatabase ? "neon" : "other";
+
+  const brief = ProjectBriefSchema.parse({
+    ...productMeta,
+    brandVoice,
+    designSystem: docs.designSystem ?? "",
+    techStack: {
+      frontend: codeScan.framework.detected.react ? "react" : "unknown",
+      buildTool: codeScan.framework.detected.vite ? "vite" : "unknown",
+      styling: codeScan.framework.detected.tailwind ? "tailwind" : "unknown",
+      componentLib: codeScan.framework.detected.shadcn ? "shadcn/ui" : "unknown",
+      language: "typescript",
+    },
+    authProvider,
+    dbProvider,
+    deployTarget: "vps",
+    spec,
+    isGreenfield: false,
+    existingCodeScanned: true,
+    sourceDocs: docs.sourceDocs,
+  });
+
+  return { brief, mode: "existing-codebase", gapReport };
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+async function resolveSpec(docs: ScannedDocs, planningDir: string): Promise<SpecOutput> {
+  // Try pre-validated JSON spec first
+  for (const specFile of docs.specFiles) {
+    if (specFile.path.endsWith(".json")) {
+      try {
+        const parsed = JSON.parse(specFile.content);
+        const result = SpecOutputSchema.safeParse(parsed);
+        if (result.success) return result.data;
+      } catch {
+        // Invalid — try next
+      }
+    }
+  }
+
+  // Fall back to LLM restructuring from PRD or requirements
+  const rawText = docs.prd ?? docs.requirements ?? docs.specFiles[0]?.content;
+  if (!rawText) {
+    throw new Error(
+      "[intake] No spec source found. Provide PRD.md, REQUIREMENTS.md, or a spec file in .planning/specs/.",
+    );
+  }
+  return restructureSpec(rawText);
+}
+
+function extractProductMeta(docs: ScannedDocs): {
+  productName: string;
+  productDescription: string;
+  productVision: string;
+  targetUsers: string[];
+  jobsToBeDone: string[];
+} {
+  const text = docs.prd ?? docs.requirements ?? "";
+  // Extract product name from first heading
+  const nameMatch = text.match(/^#\s+(.+?)(?:\s*[-—]|$)/m);
+  const productName = nameMatch?.[1]?.trim() ?? "Untitled Project";
+
+  // Extract description from executive summary or first paragraph
+  const summaryMatch = text.match(/##\s*(?:\d+\.\s*)?Executive Summary\s*\n+([\s\S]*?)(?=\n##|\n---)/i);
+  const productDescription = summaryMatch?.[1]?.trim() ?? text.slice(0, 500).trim();
+
+  // Extract vision
+  const visionMatch = text.match(/##\s*(?:\d+\.\s*)?Product Vision\s*\n+([\s\S]*?)(?=\n##|\n---)/i);
+  const productVision = visionMatch?.[1]?.trim() ?? "";
+
+  // Extract target users
+  const usersMatch = text.match(/##\s*(?:\d+\.\s*)?Target Users[^#]*?\n+([\s\S]*?)(?=\n##|\n---)/i);
+  const targetUsers = usersMatch
+    ? usersMatch[1].split("\n").filter((l) => l.trim().startsWith("-") || l.trim().startsWith("*"))
+      .map((l) => l.replace(/^[\s*-]+/, "").trim()).filter(Boolean).slice(0, 5)
+    : [];
+
+  return { productName, productDescription, productVision, targetUsers, jobsToBeDone: [] };
+}
+
+function detectAuthFromSpec(spec: SpecOutput): "firebase" | "supabase" | "custom" | "none" {
+  const hasAuthPages = spec.pages.some(
+    (p) => p.authLevel === "authenticated" || p.authLevel === "admin",
+  );
+  return hasAuthPages ? "firebase" : "none";
+}
+
+function persistGapReport(projectRoot: string, report: string): void {
+  const outputDir = path.join(projectRoot, ".planning", "output", "spec");
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+  fs.writeFileSync(path.join(outputDir, "GAP-ANALYSIS.md"), report, "utf-8");
+}
+
+/**
+ * Load a previously stored ProjectBrief from pipeline_runs.config.
+ * Returns null if the config doesn't contain a brief.
+ */
+export function loadBriefFromConfig(configJson: string): ProjectBrief | null {
+  try {
+    const parsed = JSON.parse(configJson);
+    if (parsed.brief) {
+      const result = ProjectBriefSchema.safeParse(parsed.brief);
+      return result.success ? result.data : null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}

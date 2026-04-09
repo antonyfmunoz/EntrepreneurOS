@@ -9,7 +9,12 @@ Orchestrates the complete SaaS development pipeline. Currently a skeleton -- pha
 
 ## Pipeline Phases
 
-1. spec -- Parse or collaboratively create a page spec, routes to saas-dev:spec-parser (Phase 2)
+0. **intake** -- Unified intake: collect everything upfront before generation starts. Produces a `ProjectBrief` consumed by all downstream phases. Three modes:
+   - **Greenfield** (no code, no docs): structured conversation collecting product, pages, tech stack, brand, auth, deployment
+   - **Docs-only** (PRD/design-system present): scan .planning/, gap-fill missing info, synthesize brief
+   - **Existing codebase**: scan code + docs, detect framework/auth/db, synthesize brief with brownfield context
+   See `lib/intake/intake-orchestrator.ts` for implementation.
+1. spec -- Parse or collaboratively create a page spec, routes to saas-dev:spec-parser (Phase 2). Spec is now produced BY intake for docs-only and existing-codebase modes. Spec-parser is still used internally by intake for restructuring and gap analysis.
 2. ui-gen -- Generate UI via Stitch with design memory, routes to saas-dev:ui-generator (Phase 3)
 3. integration -- Integrate generated code into existing repo, routes to saas-dev:integrator (Phase 4)
 4. backend -- Wire backend routes and schemas, routes to saas-dev:backend-wirer (Phase 5)

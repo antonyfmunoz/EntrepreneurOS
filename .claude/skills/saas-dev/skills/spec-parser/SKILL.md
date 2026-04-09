@@ -242,6 +242,12 @@ Gap analysis report is saved to `.planning/output/spec/GAP-ANALYSIS.md` regardle
 - `lib/spec-parser/spec-approval.ts` — gap report formatting (formatGapReport, hasBlockingGaps re-export)
 - `shared/spec-schema.ts` — all Zod contracts including SpecItemSource, SpecOutputSchema, PageSpecFull
 
+## Relationship to Intake Phase
+
+As of the unified intake system, spec is now produced BY `lib/intake/intake-orchestrator.ts` for docs-only and existing-codebase modes. The intake orchestrator calls `restructureSpec()`, `deriveBackendSpec()`, and `analyzeGaps()` internally. Spec-parser modules remain the building blocks — intake is the new entry point that wraps them with product metadata, brand voice, tech stack, and deployment context into a complete `ProjectBrief`.
+
+For greenfield projects (no docs, no code), the collaborative flow in `collaborative-flow.ts` is still the primary interaction path, called from within the intake conversation.
+
 ## Sub-Skill Of
 
-`saas-dev:orchestrator` (phase: spec)
+`saas-dev:orchestrator` (phase: spec, intake)
