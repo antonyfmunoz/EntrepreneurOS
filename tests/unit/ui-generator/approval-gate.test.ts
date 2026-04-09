@@ -127,7 +127,7 @@ describe("formatAutoApproveNotice", () => {
     const result = formatAutoApproveNotice("Settings", 2);
 
     expect(result).toContain("Settings");
-    expect(result).toContain("70%");
+    expect(result).toContain("90%");
     expect(result).toContain("auto-approved");
     // Should be a single line (no newlines)
     expect(result.split("\n").length).toBe(1);

@@ -5,10 +5,7 @@ import { dmTokens } from "@shared/design-schema.js";
 // ─── SECTION 1: Confidence Threshold ────────────────────────────────────────
 
 // All four review dimensions must meet this threshold for auto-approval (D-10, UIGEN-07)
-export const CONFIDENCE_THRESHOLD = 0.7;
-
-// Below this threshold, the page is considered unrecoverable — no regeneration attempted
-export const REGENERATION_THRESHOLD = 0.5;
+export const CONFIDENCE_THRESHOLD = 0.9;
 
 // ─── SECTION 2: Review Score Schema ─────────────────────────────────────────
 
@@ -47,11 +44,6 @@ export function lowestDimensionScore(score: ReviewScore): number {
     score.structuralCompleteness.score,
     score.contentQuality.score,
   );
-}
-
-// Returns true if any dimension falls below REGENERATION_THRESHOLD (unrecoverable)
-export function belowRegenerationThreshold(score: ReviewScore): boolean {
-  return lowestDimensionScore(score) < REGENERATION_THRESHOLD;
 }
 
 // Formats a ReviewScore as a compact summary string for logs and PLAN.md

@@ -1,10 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   CONFIDENCE_THRESHOLD,
-  REGENERATION_THRESHOLD,
   allDimensionsPass,
   lowestDimensionScore,
-  belowRegenerationThreshold,
   formatScoreSummary,
   collectReviewFeedback,
 } from "../../../lib/ui-generator/types.js";
@@ -19,38 +17,34 @@ function makeScore(scores: {
   content?: number;
 } = {}): ReviewScore {
   return {
-    specCompliance: { score: scores.spec ?? 0.8, findings: ["spec ok"] },
-    visualConsistency: { score: scores.visual ?? 0.8, findings: ["visual ok"] },
-    structuralCompleteness: { score: scores.structure ?? 0.8, findings: ["structure ok"] },
-    contentQuality: { score: scores.content ?? 0.8, findings: ["content ok"] },
+    specCompliance: { score: scores.spec ?? 0.95, findings: ["spec ok"] },
+    visualConsistency: { score: scores.visual ?? 0.95, findings: ["visual ok"] },
+    structuralCompleteness: { score: scores.structure ?? 0.95, findings: ["structure ok"] },
+    contentQuality: { score: scores.content ?? 0.95, findings: ["content ok"] },
   };
 }
 
 // ─── Threshold constants ─────────────────────────────────────────────────────
 
 describe("threshold constants", () => {
-  it("CONFIDENCE_THRESHOLD is 0.7", () => {
-    expect(CONFIDENCE_THRESHOLD).toBe(0.7);
-  });
-
-  it("REGENERATION_THRESHOLD is 0.5", () => {
-    expect(REGENERATION_THRESHOLD).toBe(0.5);
+  it("CONFIDENCE_THRESHOLD is 0.9", () => {
+    expect(CONFIDENCE_THRESHOLD).toBe(0.9);
   });
 });
 
 // ─── allDimensionsPass ───────────────────────────────────────────────────────
 
 describe("allDimensionsPass", () => {
-  it("passes when all dimensions >= 0.7", () => {
-    expect(allDimensionsPass(makeScore({ spec: 0.7, visual: 0.7, structure: 0.7, content: 0.7 }))).toBe(true);
+  it("passes when all dimensions >= 0.9", () => {
+    expect(allDimensionsPass(makeScore({ spec: 0.9, visual: 0.9, structure: 0.9, content: 0.9 }))).toBe(true);
   });
 
-  it("fails when any dimension < 0.7", () => {
-    expect(allDimensionsPass(makeScore({ spec: 0.69 }))).toBe(false);
+  it("fails when any dimension < 0.9", () => {
+    expect(allDimensionsPass(makeScore({ spec: 0.89 }))).toBe(false);
   });
 
   it("passes with high scores", () => {
-    expect(allDimensionsPass(makeScore({ spec: 0.95, visual: 0.92, structure: 0.88, content: 0.9 }))).toBe(true);
+    expect(allDimensionsPass(makeScore({ spec: 0.95, visual: 0.92, structure: 0.91, content: 0.9 }))).toBe(true);
   });
 });
 
@@ -63,22 +57,6 @@ describe("lowestDimensionScore", () => {
 
   it("returns the score when all dimensions are equal", () => {
     expect(lowestDimensionScore(makeScore({ spec: 0.75, visual: 0.75, structure: 0.75, content: 0.75 }))).toBe(0.75);
-  });
-});
-
-// ─── belowRegenerationThreshold ──────────────────────────────────────────────
-
-describe("belowRegenerationThreshold", () => {
-  it("returns true when any dimension < 0.5", () => {
-    expect(belowRegenerationThreshold(makeScore({ visual: 0.49 }))).toBe(true);
-  });
-
-  it("returns false when all dimensions >= 0.5", () => {
-    expect(belowRegenerationThreshold(makeScore({ spec: 0.5, visual: 0.5, structure: 0.5, content: 0.5 }))).toBe(false);
-  });
-
-  it("returns false for passing scores", () => {
-    expect(belowRegenerationThreshold(makeScore())).toBe(false);
   });
 });
 
