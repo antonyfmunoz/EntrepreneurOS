@@ -25,6 +25,7 @@ import {
   writePage,
   ensureShadcnComponents,
   toKebabCase,
+  checkFileConflict,
 } from "../../code-integrator/page-writer.js";
 import { injectRoute } from "../../code-integrator/route-injector.js";
 import { injectNavItem } from "../../code-integrator/nav-injector.js";
@@ -168,6 +169,23 @@ export const integrationPhaseImplementation: PhaseImplementation = {
   async runPage(rawInput: unknown, _config: ProjectConfig): Promise<unknown> {
     const input = rawInput as IntegrationRunInput;
     const { page, htmlContent, installedComponents, projectRoot, appTsxPath, sidebarPath } = input;
+
+    // 0. Brownfield conflict check (D-10). If the target page file already
+    // exists in the repo, the app already has this page — skip translation,
+    // write, route, and nav injection. Route and nav injectors are idempotent
+    // so re-running them would be a no-op anyway, but skipping the LLM
+    // translation call saves time + Anthropic spend.
+    const conflict = await checkFileConflict({ projectRoot, pageName: page.name });
+    if (conflict.exists) {
+      return {
+        pageFile: conflict.existingPath,
+        routeInjected: false,
+        navInjected: false,
+        installedShadcn: [],
+        skipped: true,
+        skipReason: "page file already exists in brownfield repo",
+      };
+    }
 
     // 1. HTML → TSX
     const translation = await translateHtmlToShadcn({
