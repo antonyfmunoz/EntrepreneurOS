@@ -7,5 +7,6 @@
   "clientSrcPath": "client/src",
   "serverPath": "server",
   "defaultBranch": "main",
-  "featureBranchPrefix": "feature/"
+  "featureBranchPrefix": "feature/",
+  "stitchProjectId": "15573060895262835357"
 }
