@@ -520,3 +520,161 @@ export const insertWorkflowSchema = z.object({
 
 export type InsertWorkflow = z.infer<typeof insertWorkflowSchema>;
 export type Workflow = typeof workflows.$inferSelect;
+
+// __ORCHESTRATOR_GENERATED_SCHEMAS__
+
+export const login = pgTable("login", {
+  id: text("id").primaryKey(),
+  email: text("email"),
+  password: text("password"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertLoginSchema = z.object({
+  email: z.string(),
+  password: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Login = typeof login.$inferSelect;
+export type InsertLogin = z.infer<typeof insertLoginSchema>;
+
+export const signup = pgTable("signup", {
+  id: text("id").primaryKey(),
+  email: text("email"),
+  password: text("password"),
+  name: text("name"),
+  terms_accepted: text("terms_accepted"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertSignupSchema = z.object({
+  email: z.string(),
+  password: z.string(),
+  name: z.string(),
+  terms_accepted: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Signup = typeof signup.$inferSelect;
+export type InsertSignup = z.infer<typeof insertSignupSchema>;
+
+export const forgotPassword = pgTable("forgotPassword", {
+  id: text("id").primaryKey(),
+  email: text("email"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertForgotPasswordSchema = z.object({
+  email: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type ForgotPassword = typeof forgotPassword.$inferSelect;
+export type InsertForgotPassword = z.infer<typeof insertForgotPasswordSchema>;
+
+export const resetPassword = pgTable("resetPassword", {
+  id: text("id").primaryKey(),
+  token: text("token"),
+  new_password: text("new_password"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertResetPasswordSchema = z.object({
+  token: z.string(),
+  new_password: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type ResetPassword = typeof resetPassword.$inferSelect;
+export type InsertResetPassword = z.infer<typeof insertResetPasswordSchema>;
+
+export const metrics = pgTable("metrics", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertMetricSchema = z.object({
+  name: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Metric = typeof metrics.$inferSelect;
+export type InsertMetric = z.infer<typeof insertMetricSchema>;
+
+export const recentActivity = pgTable("recentActivity", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertRecentActivitySchema = z.object({
+  name: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type RecentActivity = typeof recentActivity.$inferSelect;
+export type InsertRecentActivity = z.infer<typeof insertRecentActivitySchema>;
+
+export const profile = pgTable("profile", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertProfileSchema = z.object({
+  name: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Profile = typeof profile.$inferSelect;
+export type InsertProfile = z.infer<typeof insertProfileSchema>;
+
+export const security = pgTable("security", {
+  id: text("id").primaryKey(),
+  current_password: text("current_password"),
+  new_password: text("new_password"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertSecuritySchema = z.object({
+  current_password: z.string(),
+  new_password: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Security = typeof security.$inferSelect;
+export type InsertSecurity = z.infer<typeof insertSecuritySchema>;
+
+export const config = pgTable("config", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertConfigSchema = z.object({
+  name: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Config = typeof config.$inferSelect;
+export type InsertConfig = z.infer<typeof insertConfigSchema>;
