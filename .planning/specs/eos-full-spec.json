@@ -784,6 +784,30 @@
         { "name": "password_reset_completed", "trigger": "User successfully resets password", "properties": [], "source": "explicit" }
       ],
       "featureFlagCandidates": []
+    },
+    {
+      "name": "NotFound",
+      "route": "/*",
+      "purpose": "404 not found handler. Displays a friendly error when users navigate to a route that does not exist in the application.",
+      "components": ["NotFoundIllustration", "ErrorMessage", "BackToHomeButton"],
+      "authLevel": "public",
+      "priority": 5,
+      "dependsOn": [],
+      "specVersion": 1,
+      "source": "inferred",
+      "layoutHint": "Centered single-column layout with illustration, message, and action button stacked vertically.",
+      "emptyState": "Not applicable — content is always static.",
+      "loadingState": "Not applicable — no data to load.",
+      "errorState": "Not applicable — this page IS the error state.",
+      "mobileConsiderations": "Full-width centered layout. Illustration scales down on small screens. Button remains full-width and tappable.",
+      "dataRequirements": [],
+      "apiEndpoints": [],
+      "validationRules": [],
+      "events": [
+        { "name": "not_found_viewed", "trigger": "User lands on a non-existent route", "properties": ["attemptedRoute"], "source": "inferred" },
+        { "name": "not_found_home_clicked", "trigger": "User clicks back to home button", "properties": [], "source": "inferred" }
+      ],
+      "featureFlagCandidates": []
     }
   ],
   "sharedComponents": [
@@ -848,7 +872,8 @@
     "/login",
     "/signup",
     "/forgot-password",
-    "/reset-password"
+    "/reset-password",
+    "/*"
   ],
   "backendSpec": {
     "endpoints": [
