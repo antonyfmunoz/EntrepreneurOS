@@ -15,6 +15,7 @@ MCP tools (shadcn-ui, MagicUI, 21st.dev Magic) only exist inside the Claude Code
 
 - Running inside a Claude Code session (MCPs must be available)
 - Phase 2 (spec) complete: a SpecOutput must exist in `pipeline_pages`
+- **Spec approved (no blocking gaps):** If `.planning/output/spec/GAP-ANALYSIS.md` exists and contains blocking issues, warm-cache refuses to run. Resolve blocking gaps in the spec first.
 - `DATABASE_URL` configured in .env
 
 ## Arguments
@@ -23,6 +24,26 @@ MCP tools (shadcn-ui, MagicUI, 21st.dev Magic) only exist inside the Claude Code
 - `--project-id <id>` — override project ID (default: read from `.planning/project.config.json`)
 
 ## Flow
+
+### Step 0 — Check Spec Approval
+
+Before doing anything, check if the spec has blocking gaps:
+
+```typescript
+import { readFileSync, existsSync } from "node:fs";
+import { resolve } from "node:path";
+
+const gapReportPath = resolve(process.cwd(), ".planning/output/spec/GAP-ANALYSIS.md");
+if (existsSync(gapReportPath)) {
+  const report = readFileSync(gapReportPath, "utf-8");
+  if (report.includes("Blocking Issues")) {
+    throw new Error(
+      "Spec has blocking gaps — resolve them before warming the cache.\n" +
+      "See: .planning/output/spec/GAP-ANALYSIS.md"
+    );
+  }
+}
+```
 
 ### Step 1 — Load Spec
 

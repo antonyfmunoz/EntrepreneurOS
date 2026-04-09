@@ -12,9 +12,20 @@ import fs from "node:fs";
 import path from "node:path";
 import { restructureSpec } from "../../spec-parser/restructure-spec.js";
 import { deriveBackendSpec } from "../../spec-parser/derive-backend-spec.js";
+import { analyzeGaps, hasBlockingGaps } from "../../spec-parser/gap-analyzer.js";
+import { formatGapReport } from "../../spec-parser/spec-approval.js";
 import type { SpecOutput } from "@shared/spec-schema.js";
 import type { ProjectConfig } from "../../../shared/design-schema.js";
 import type { PhaseImplementation, PageWorkUnit } from "../phase-runner.js";
+
+export class SpecBlockedByGapsError extends Error {
+  constructor(
+    public readonly report: string,
+  ) {
+    super("Spec blocked by gap analysis — resolve blocking issues before proceeding.");
+    this.name = "SpecBlockedByGapsError";
+  }
+}
 
 interface SpecRunInput {
   rawSpecText: string;
@@ -67,7 +78,7 @@ export const specPhaseImplementation: PhaseImplementation = {
     ];
   },
 
-  async runPage(rawInput: unknown, _config: ProjectConfig): Promise<SpecOutput> {
+  async runPage(rawInput: unknown, config: ProjectConfig): Promise<SpecOutput> {
     const input = rawInput as SpecRunInput;
     const spec = await restructureSpec(input.rawSpecText);
 
@@ -77,6 +88,29 @@ export const specPhaseImplementation: PhaseImplementation = {
         spec.backendSpec = await deriveBackendSpec(spec.pages);
       } catch {
         // Backend derivation is best-effort. Pages still get the rest of the spec.
+      }
+    }
+
+    // Gap analysis — challenge the spec before locking
+    const skipGaps = process.env.SKIP_GAP_ANALYSIS === "true";
+    if (!skipGaps) {
+      const gaps = await analyzeGaps(spec);
+      const report = formatGapReport(spec, gaps);
+
+      // Persist gap analysis report
+      const projectRoot = path.resolve(config.repoPath);
+      const outputDir = path.join(projectRoot, ".planning", "output", "spec");
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
+      fs.writeFileSync(
+        path.join(outputDir, "GAP-ANALYSIS.md"),
+        report,
+        "utf-8",
+      );
+
+      if (hasBlockingGaps(gaps)) {
+        throw new SpecBlockedByGapsError(report);
       }
     }
 

@@ -175,6 +175,52 @@ When user requests a spec edit after initial confirmation:
 5. Update `pipeline_pages` status to `"spec-changed"` for the edited page (D-19)
 6. Pages with no relationship to the change are untouched (D-18)
 
+## Gap Analysis (Spec Intelligence)
+
+After the spec is restructured and before it is locked, a gap analyzer challenges the spec:
+
+```typescript
+import { analyzeGaps, hasBlockingGaps } from "lib/spec-parser/gap-analyzer.ts";
+import { formatGapReport } from "lib/spec-parser/spec-approval.ts";
+
+const gaps = await analyzeGaps(spec);
+const report = formatGapReport(spec, gaps);
+
+if (hasBlockingGaps(gaps)) {
+  // Pipeline stops — user must resolve blocking gaps
+  throw new SpecBlockedByGapsError(report);
+}
+// Non-blocking gaps are logged but don't halt the pipeline
+```
+
+### Severity Levels
+
+| Severity | Meaning | Pipeline behavior |
+|----------|---------|-------------------|
+| **blocking** | Must fix before proceeding | Pipeline throws `SpecBlockedByGapsError` |
+| **recommended** | Should fix, but won't halt | Logged in GAP-ANALYSIS.md, pipeline continues |
+| **optional** | Nice to have | Logged only |
+
+### What Gets Checked
+
+- **Missing onboarding**: signup exists but no onboarding/welcome page → blocking
+- **Auth gaps**: authenticated pages + signup but no password reset → blocking
+- **Orphaned routes**: page depends on a route not in the spec → blocking
+- **Missing 404**: no not-found page → recommended
+- **Missing profile/settings**: authenticated app with no account page → recommended
+- **Missing empty states**: pages with data but no emptyState → recommended per page
+- **Missing error states**: pages with APIs but no errorState → recommended per page
+- **Missing mobile considerations**: complex layouts with no mobile notes → optional
+- **LLM contextual analysis**: Claude reviews the spec and suggests missing flows for this product type → optional
+
+### Override
+
+Set `SKIP_GAP_ANALYSIS=true` in `.env` to bypass gap analysis entirely. Not recommended — the checks exist to catch real gaps before they become expensive rework downstream.
+
+### Output
+
+Gap analysis report is saved to `.planning/output/spec/GAP-ANALYSIS.md` regardless of severity.
+
 ## Contracts
 
 - **Input:** raw text (any format) OR collaborative conversation
@@ -192,6 +238,8 @@ When user requests a spec edit after initial confirmation:
 - `lib/spec-parser/derive-backend-spec.ts` — backend spec auto-derivation (with provenance propagation)
 - `lib/spec-parser/deduplicate-components.ts` — shared component dedup (with provenance preservation)
 - `lib/spec-parser/chunk-spec.ts` — large spec chunking: chunkRawText (pre-chunking raw text before AI calls) and chunkSpecByDomain (post-parse page chunking for large specs)
+- `lib/spec-parser/gap-analyzer.ts` — static + LLM gap detection (analyzeGaps, hasBlockingGaps)
+- `lib/spec-parser/spec-approval.ts` — gap report formatting (formatGapReport, hasBlockingGaps re-export)
 - `shared/spec-schema.ts` — all Zod contracts including SpecItemSource, SpecOutputSchema, PageSpecFull
 
 ## Sub-Skill Of
