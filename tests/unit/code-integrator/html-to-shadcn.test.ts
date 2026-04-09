@@ -142,7 +142,7 @@ export default function ReportsPage() {
 
     // Verify model and max_tokens
     expect(callArg.model).toBe("claude-sonnet-4-5");
-    expect(callArg.max_tokens).toBe(4096);
+    expect(callArg.max_tokens).toBe(8192);
 
     // Verify user message contains key info
     const userMessage = callArg.messages[0].content;
