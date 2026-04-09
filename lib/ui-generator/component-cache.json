@@ -61,7 +61,7 @@
     {
       "name": "animated-gradient-text",
       "registry": "MagicUI",
-      "description": "Text with animated gradient background transitioning between colors. Use for headline/brand wordmarks only. For EntrepreneurOS: lock gradient to #6a37d4 → #ae8dff to match design system."
+      "description": "Text with animated gradient background transitioning between colors. Use for headline/brand wordmarks only. Lock gradient colors to the project's design system tokens."
     },
     {
       "name": "animated-beam",
