@@ -10,6 +10,7 @@
 //   write the page file, inject the route into App.tsx, inject the nav item.
 //   Returns the list of files touched.
 
+import fs from "node:fs";
 import path from "node:path";
 import { and, asc, eq } from "drizzle-orm";
 import {
@@ -29,6 +30,11 @@ import {
 } from "../../code-integrator/page-writer.js";
 import { injectRoute } from "../../code-integrator/route-injector.js";
 import { injectNavItem } from "../../code-integrator/nav-injector.js";
+import {
+  planBrownfieldIntegration,
+  renderIntegrationPlanMarkdown,
+  type IntegrationPlanEntry,
+} from "../../code-integrator/brownfield-planner.js";
 
 interface IntegrationRunInput {
   page: PageSpecFull;
@@ -37,6 +43,7 @@ interface IntegrationRunInput {
   projectRoot: string;
   appTsxPath: string;
   sidebarPath: string;
+  planEntry: IntegrationPlanEntry;
 }
 
 async function loadLatestSpec(projectId: string): Promise<SpecOutput> {
@@ -134,10 +141,80 @@ export const integrationPhaseImplementation: PhaseImplementation = {
       "sidebar.tsx",
     );
 
+    // ── Phase B: brownfield planner ────────────────────────────────────────
+    // Read every existing page's source (best-effort) so the planner can
+    // detect behavior worth preserving (Firebase auth, custom data fetching).
+    const pagesDir = path.join(projectRoot, config.clientSrcPath, "pages");
+    const pageSources: Record<string, string> = {};
+    for (const ep of inventory.existingPages) {
+      try {
+        pageSources[ep.fileName] = fs.readFileSync(
+          path.join(pagesDir, ep.fileName),
+          "utf-8",
+        );
+      } catch {
+        // Best-effort; non-fatal.
+      }
+    }
+
+    const onlySpecPagesWithUiGen = uiGenRows
+      .map((row) => spec.pages[row.pageIndex])
+      .filter((p): p is PageSpecFull => Boolean(p));
+
+    const plan = planBrownfieldIntegration({
+      specPages: onlySpecPagesWithUiGen,
+      inventory,
+      pageSources,
+    });
+
+    // Write PLAN.md so the user can audit decisions before/after the run.
+    const planDir = path.join(projectRoot, config.outputPath, "integration");
+    fs.mkdirSync(planDir, { recursive: true });
+    const planFile = path.join(planDir, "PLAN.md");
+    fs.writeFileSync(planFile, renderIntegrationPlanMarkdown(plan), "utf-8");
+
+    // Refuse to proceed if any entry needs human merge review. The user has
+    // to resolve those by hand (edit PLAN.md and rerun, or fix the spec).
+    const blockers = plan.entries.filter((e) => e.needsReview);
+    if (blockers.length > 0) {
+      const list = blockers
+        .map((b) => `  - ${b.pageName} (${b.route}): ${b.rationale}`)
+        .join("\n");
+      throw new Error(
+        `Phase "integration": ${blockers.length} page(s) need human merge ` +
+          `review before integration can proceed. See ${planFile}\n${list}`,
+      );
+    }
+
+    // Index plan entries by page name for runPage lookup.
+    const planByName = new Map(plan.entries.map((e) => [e.pageName, e]));
+
     const work: PageWorkUnit[] = [];
     for (const row of uiGenRows) {
       const page = spec.pages[row.pageIndex];
       if (!page) continue;
+
+      const planEntry = planByName.get(page.name);
+      if (!planEntry) continue;
+
+      // skip-mode pages still produce a work unit so the run is auditable,
+      // but the LLM call + Stitch fetch are skipped to save cost/time.
+      if (planEntry.mode === "skip") {
+        work.push({
+          pageName: page.name,
+          pageIndex: row.pageIndex,
+          input: {
+            page,
+            htmlContent: "",
+            installedComponents: installed,
+            projectRoot,
+            appTsxPath,
+            sidebarPath,
+            planEntry,
+          } satisfies IntegrationRunInput,
+        });
+        continue;
+      }
 
       const resp = await fetch(row.output.htmlUrl);
       if (!resp.ok) {
@@ -159,6 +236,7 @@ export const integrationPhaseImplementation: PhaseImplementation = {
           projectRoot,
           appTsxPath,
           sidebarPath,
+          planEntry,
         } satisfies IntegrationRunInput,
       });
     }
@@ -168,23 +246,51 @@ export const integrationPhaseImplementation: PhaseImplementation = {
 
   async runPage(rawInput: unknown, _config: ProjectConfig): Promise<unknown> {
     const input = rawInput as IntegrationRunInput;
-    const { page, htmlContent, installedComponents, projectRoot, appTsxPath, sidebarPath } = input;
+    const { page, htmlContent, installedComponents, projectRoot, appTsxPath, sidebarPath, planEntry } = input;
 
-    // 0. Brownfield conflict check (D-10). If the target page file already
-    // exists in the repo, the app already has this page — skip translation,
-    // write, route, and nav injection. Route and nav injectors are idempotent
-    // so re-running them would be a no-op anyway, but skipping the LLM
-    // translation call saves time + Anthropic spend.
-    const conflict = await checkFileConflict({ projectRoot, pageName: page.name });
-    if (conflict.exists) {
+    // ── Mode dispatch (Phase B) ────────────────────────────────────────────
+    // The planner already decided what to do with this page. runPage is just
+    // the executor — it never re-classifies and never silently skips on a
+    // file conflict.
+
+    if (planEntry.mode === "skip") {
       return {
-        pageFile: conflict.existingPath,
-        routeInjected: false,
-        navInjected: false,
-        installedShadcn: [],
-        skipped: true,
-        skipReason: "page file already exists in brownfield repo",
+        pageFile: planEntry.existingFile,
+        mode: "skip",
+        rationale: planEntry.rationale,
       };
+    }
+
+    // create / replace / supplement all need a translated TSX file. Only the
+    // overwrite + delete-old-file behavior differs.
+    if (planEntry.mode === "merge") {
+      // Defensive: prepare() should already have blocked this. If we got
+      // here, refuse to touch the page rather than guess.
+      throw new Error(
+        `integration: page "${page.name}" is mode=merge and requires human review`,
+      );
+    }
+
+    // For replace mode, we sanity-check the existing file is actually present
+    // (the inventory may be stale if a hand edit removed it between phases).
+    const overwrite = planEntry.mode === "replace";
+    if (overwrite && planEntry.existingFile) {
+      // Note: we are about to overwrite — record the old path so the result
+      // surfaces it for the audit log.
+    }
+
+    // For create mode, surface a hard error if the target file mysteriously
+    // already exists (the planner thought it didn't). That's a real conflict
+    // worth stopping for, not a silent skip.
+    if (planEntry.mode === "create") {
+      const conflict = await checkFileConflict({ projectRoot, pageName: page.name });
+      if (conflict.exists) {
+        throw new Error(
+          `integration: planner said create for "${page.name}" but ` +
+            `${conflict.existingPath} already exists. Stale inventory? Re-run ` +
+            `the integration phase or change the spec page name.`,
+        );
+      }
     }
 
     // 1. HTML → TSX
@@ -203,24 +309,29 @@ export const integrationPhaseImplementation: PhaseImplementation = {
       installedComponents,
     });
 
-    // 3. Write the page file (overwrite=false; rerun fails loudly on conflict)
+    // 3. Write the page file. Overwrite for replace mode; fresh write
+    // otherwise.
     const pageFile = await writePage({
       projectRoot,
       pageName: page.name,
       tsxContent: translation.tsxContent,
+      overwrite,
     });
 
-    // 4. Inject route
+    // 4. Inject route (idempotent — Phase A). For replace mode, the existing
+    // route entry stays in place if it already points at the same import
+    // path; otherwise the injector adds the new route alongside.
     const componentName = page.name;
     const importPath = `@/pages/${toKebabCase(page.name)}-page`;
     const isStandalone = page.authLevel === "public";
-    await injectRoute({
+    const routeResult = await injectRoute({
       appTsxPath,
       componentName,
       importPath,
       routePath: page.route,
       wrapCompanyGate: !isStandalone,
       isStandalone,
+      pageFilePath: pageFile,
     });
 
     // 5. Inject nav item (only for authenticated, non-standalone pages)
@@ -237,6 +348,10 @@ export const integrationPhaseImplementation: PhaseImplementation = {
 
     return {
       pageFile,
+      mode: planEntry.mode,
+      replacedFile: overwrite ? planEntry.existingFile : null,
+      componentName: routeResult.componentName,
+      renamedToAvoidCollision: routeResult.renamed,
       routeInjected: true,
       navInjected,
       installedShadcn: installed,
