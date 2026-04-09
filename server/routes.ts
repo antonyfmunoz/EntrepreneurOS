@@ -2521,6 +2521,14 @@ Only propose actions when the user explicitly asks you to do something actionabl
     }
   });
 
+  // __ORCHESTRATOR_GENERATED_ROUTES__ (do not remove this marker)
+  // NOTE: generated routes are disabled — they reference storage methods and
+  // schema types that don't exist yet. See .planning/OPEN_QUESTIONS.md.
+  // {
+  //   const { registerGeneratedRoutes } = await import("./generated/index.js");
+  //   await registerGeneratedRoutes(app);
+  // }
+
   const httpServer = createServer(app);
   return httpServer;
 }
