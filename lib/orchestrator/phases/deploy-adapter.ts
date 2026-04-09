@@ -43,17 +43,53 @@ function resolvePageFilePath(projectRoot: string, pageName: string): string {
   return path.join(projectRoot, "client", "src", "pages", fileName);
 }
 
-function injectImport(source: string, importCode: string): string {
+// Bug 4: Inject an import after the LAST import statement, respecting
+// multi-line import blocks. Previously we split on newline and inserted after
+// the `import` keyword line — which corrupted blocks like:
+//   import {
+//     Foo,
+//     Bar,
+//   } from "lucide-react";
+// by wedging the new import between `import {` and its members.
+//
+// The fix walks lines forward, and for each `^\s*import\s` line advances
+// until the statement actually ends (closing `"...";` after balanced braces),
+// then remembers the *end* of that statement as the insertion point.
+export function injectImport(source: string, importCode: string): string {
   if (source.includes("posthog-js")) return source;
   const lines = source.split("\n");
-  let lastImportIdx = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (/^\s*import\s/.test(lines[i])) lastImportIdx = i;
+  let lastImportEndIdx = -1;
+
+  let i = 0;
+  while (i < lines.length) {
+    if (/^\s*import\s/.test(lines[i])) {
+      // Walk forward until the statement terminates with a line ending in `;`
+      // that is outside any open brace group. Most imports are single-line,
+      // but `import { a, b, c } from "x";` can be split across many lines.
+      let j = i;
+      let braceDepth = 0;
+      while (j < lines.length) {
+        const ln = lines[j];
+        for (const ch of ln) {
+          if (ch === "{") braceDepth++;
+          else if (ch === "}") braceDepth--;
+        }
+        if (braceDepth <= 0 && /;\s*$/.test(ln)) {
+          break;
+        }
+        j++;
+      }
+      lastImportEndIdx = j;
+      i = j + 1;
+      continue;
+    }
+    i++;
   }
-  if (lastImportIdx === -1) {
+
+  if (lastImportEndIdx === -1) {
     return `${importCode}\n${source}`;
   }
-  lines.splice(lastImportIdx + 1, 0, importCode);
+  lines.splice(lastImportEndIdx + 1, 0, importCode);
   return lines.join("\n");
 }
 
