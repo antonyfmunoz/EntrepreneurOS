@@ -9,11 +9,54 @@ import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
  * Returns the parsed object, throws on invalid JSON.
  */
 export function extractJsonFromResponse(text: string): unknown {
-  // Strip markdown fences if present
-  const fencePattern = /^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/;
-  const match = text.trim().match(fencePattern);
-  const jsonText = match ? match[1] : text.trim();
-  return JSON.parse(jsonText);
+  let s = text.trim();
+
+  // 1. Strip a leading ```json / ``` fence and the matching closing fence,
+  //    even if there's preamble/trailing text around them.
+  const fenceOpen = s.match(/```(?:json)?\s*\n?/);
+  if (fenceOpen && fenceOpen.index !== undefined) {
+    const after = s.slice(fenceOpen.index + fenceOpen[0].length);
+    const closeIdx = after.lastIndexOf("```");
+    s = closeIdx === -1 ? after : after.slice(0, closeIdx);
+    s = s.trim();
+  }
+
+  // 2. Direct parse attempt.
+  try {
+    return JSON.parse(s);
+  } catch {
+    // fall through
+  }
+
+  // 3. Fallback: extract the outermost balanced JSON object/array by scanning
+  //    for the first { or [ and matching braces, skipping strings/escapes.
+  const firstObj = s.indexOf("{");
+  const firstArr = s.indexOf("[");
+  const start =
+    firstObj === -1 ? firstArr : firstArr === -1 ? firstObj : Math.min(firstObj, firstArr);
+  if (start === -1) {
+    throw new Error(`No JSON object or array found in response: ${text.slice(0, 200)}`);
+  }
+  const open = s[start];
+  const close = open === "{" ? "}" : "]";
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i];
+    if (escape) { escape = false; continue; }
+    if (ch === "\\") { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === open) depth++;
+    else if (ch === close) {
+      depth--;
+      if (depth === 0) {
+        return JSON.parse(s.slice(start, i + 1));
+      }
+    }
+  }
+  throw new Error(`Unbalanced JSON in response: ${text.slice(0, 200)}`);
 }
 
 /**
