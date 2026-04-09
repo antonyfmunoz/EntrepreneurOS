@@ -80,10 +80,22 @@ const mockSpecOutput = {
 
 const mockCreate = vi.fn();
 
+// Turn the create() mock's resolved value into a fake stream whose
+// finalMessage() returns the same payload. This keeps existing tests
+// that call mockCreate.mockResolvedValue({ content: [...] }) working
+// after the streaming refactor.
+const mockStream = vi.fn((...args: unknown[]) => {
+  const resultPromise = mockCreate(...args);
+  return {
+    finalMessage: () => resultPromise,
+  };
+});
+
 vi.mock("@anthropic-ai/sdk", () => ({
   default: vi.fn().mockImplementation(() => ({
     messages: {
       create: mockCreate,
+      stream: mockStream,
     },
   })),
 }));

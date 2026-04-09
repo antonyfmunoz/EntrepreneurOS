@@ -188,25 +188,32 @@ export async function restructureSpec(rawInput: string): Promise<SpecOutput> {
     baseURL: getAnthropicBaseUrl(),
   });
 
+  // Stream long responses — Anthropic SDK refuses non-streaming calls that
+  // may exceed 10 minutes (triggered at high max_tokens). We accumulate text
+  // deltas and then feed the full text through the JSON extractor.
+  async function callOnce(msgs: Anthropic.MessageParam[]): Promise<string> {
+    const stream = client.messages.stream({
+      model: "claude-sonnet-4-5",
+      max_tokens: 32000,
+      system: RESTRUCTURE_SYSTEM_PROMPT,
+      messages: msgs,
+    });
+    const finalMessage = await stream.finalMessage();
+    const firstContent = finalMessage.content[0];
+    if (!firstContent || firstContent.type !== "text") {
+      throw new Error("Unexpected response type from Anthropic API");
+    }
+    return firstContent.text;
+  }
+
   return pRetry(
     async () => {
       const messages: Anthropic.MessageParam[] = [
         { role: "user", content: rawInput },
       ];
 
-      const response = await client.messages.create({
-        model: "claude-sonnet-4-5",
-        max_tokens: 32000,
-        system: RESTRUCTURE_SYSTEM_PROMPT,
-        messages,
-      });
-
-      const firstContent = response.content[0];
-      if (firstContent.type !== "text") {
-        throw new Error("Unexpected response type from Anthropic API");
-      }
-
-      const parsed = extractJsonFromResponse(firstContent.text);
+      const firstText = await callOnce(messages);
+      const parsed = extractJsonFromResponse(firstText);
 
       // Attempt Zod validation — on failure, ask Claude to self-correct
       const validationResult = SpecOutputSchema.safeParse(parsed);
@@ -221,7 +228,7 @@ export async function restructureSpec(rawInput: string): Promise<SpecOutput> {
 
       const correctionMessages: Anthropic.MessageParam[] = [
         { role: "user", content: rawInput },
-        { role: "assistant", content: firstContent.text },
+        { role: "assistant", content: firstText },
         {
           role: "user",
           content: `The JSON you returned failed validation. Please fix these errors and return the corrected JSON only:\n\n${errorDetails}`,
@@ -230,19 +237,9 @@ export async function restructureSpec(rawInput: string): Promise<SpecOutput> {
 
       let correctionAttempts = 0;
       while (correctionAttempts < 2) {
-        const correctionResponse = await client.messages.create({
-          model: "claude-sonnet-4-5",
-          max_tokens: 32000,
-          system: RESTRUCTURE_SYSTEM_PROMPT,
-          messages: correctionMessages,
-        });
+        const correctionText = await callOnce(correctionMessages);
 
-        const correctionContent = correctionResponse.content[0];
-        if (correctionContent.type !== "text") {
-          throw new Error("Unexpected response type from Anthropic API");
-        }
-
-        const correctedParsed = extractJsonFromResponse(correctionContent.text);
+        const correctedParsed = extractJsonFromResponse(correctionText);
         const correctionResult = SpecOutputSchema.safeParse(correctedParsed);
         if (correctionResult.success) {
           return correctionResult.data;
@@ -250,7 +247,7 @@ export async function restructureSpec(rawInput: string): Promise<SpecOutput> {
 
         // Update messages for next correction round
         correctionMessages.push(
-          { role: "assistant", content: correctionContent.text },
+          { role: "assistant", content: correctionText },
           {
             role: "user",
             content: `Still invalid. Fix these errors:\n\n${correctionResult.error.errors
