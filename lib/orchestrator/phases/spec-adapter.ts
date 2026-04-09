@@ -34,8 +34,8 @@ interface SpecRunInput {
 
 function findSpecSource(projectRoot: string): { rawText: string; sourcePath: string } {
   const candidates = [
-    path.join(projectRoot, ".planning", "REQUIREMENTS.md"),
     path.join(projectRoot, ".planning", "PRD.md"),
+    path.join(projectRoot, ".planning", "REQUIREMENTS.md"),
   ];
 
   // Newest *.md under .planning/specs/
