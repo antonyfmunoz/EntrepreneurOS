@@ -2,41 +2,14 @@
 import type { Express } from "express";
 
 // __GENERATED_ROUTE_IMPORTS__
-import { registerPostApiAuthLoginRoutes } from "./routes/post_api_auth_login.js";
-import { registerPostApiAuthSignupRoutes } from "./routes/post_api_auth_signup.js";
-import { registerPostApiAuthForgotPasswordRoutes } from "./routes/post_api_auth_forgot-password.js";
-import { registerPostApiAuthResetPasswordRoutes } from "./routes/post_api_auth_reset-password.js";
-import { registerGetApiDashboardMetricsRoutes } from "./routes/get_api_dashboard_metrics.js";
-import { registerGetApiDashboardRecentActivityRoutes } from "./routes/get_api_dashboard_recent-activity.js";
-import { registerGetApiUserProfileRoutes } from "./routes/get_api_user_profile.js";
-import { registerPutApiUserProfileRoutes } from "./routes/put_api_user_profile.js";
-import { registerPostApiUserSecurityRoutes } from "./routes/post_api_user_security.js";
-import { registerGetApiUserNotificationsRoutes } from "./routes/get_api_user_notifications.js";
-import { registerPutApiUserNotificationsRoutes } from "./routes/put_api_user_notifications.js";
-import { registerGetApiAdminUsersRoutes } from "./routes/get_api_admin_users.js";
-import { registerPatchApiAdminUsersUserIdRoutes } from "./routes/patch_api_admin_users_userId.js";
-import { registerGetApiAdminMetricsRoutes } from "./routes/get_api_admin_metrics.js";
-import { registerGetApiAdminConfigRoutes } from "./routes/get_api_admin_config.js";
-import { registerPutApiAdminConfigRoutes } from "./routes/put_api_admin_config.js";
 // __GENERATED_ROUTE_IMPORTS_END__
 
-export function registerGeneratedRoutes(app: Express): void {
+// The route/storage files under ./routes and ./storage are stale output from
+// an earlier generator run that predates the Bug 1/Bug 2 fixes. They are not
+// imported here (and are left on disk so a future pipeline run can overwrite
+// them idempotently). Re-running the backend phase will rebuild this file
+// with real imports + registrations.
+export function registerGeneratedRoutes(_app: Express): void {
   // __GENERATED_ROUTE_REGISTRATIONS__
-registerPostApiAuthLoginRoutes(app);
-registerPostApiAuthSignupRoutes(app);
-registerPostApiAuthForgotPasswordRoutes(app);
-registerPostApiAuthResetPasswordRoutes(app);
-registerGetApiDashboardMetricsRoutes(app);
-registerGetApiDashboardRecentActivityRoutes(app);
-registerGetApiUserProfileRoutes(app);
-registerPutApiUserProfileRoutes(app);
-registerPostApiUserSecurityRoutes(app);
-registerGetApiUserNotificationsRoutes(app);
-registerPutApiUserNotificationsRoutes(app);
-registerGetApiAdminUsersRoutes(app);
-registerPatchApiAdminUsersUserIdRoutes(app);
-registerGetApiAdminMetricsRoutes(app);
-registerGetApiAdminConfigRoutes(app);
-registerPutApiAdminConfigRoutes(app);
-// __GENERATED_ROUTE_REGISTRATIONS_END__
+  // __GENERATED_ROUTE_REGISTRATIONS_END__
 }

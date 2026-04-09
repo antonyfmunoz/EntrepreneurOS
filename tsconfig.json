@@ -1,6 +1,6 @@
 {
   "include": ["client/src/**/*", "shared/**/*", "server/**/*"],
-  "exclude": ["node_modules", "build", "dist", "**/*.test.ts", "server/generated", "server/replit_integrations/chat"],
+  "exclude": ["node_modules", "build", "dist", "**/*.test.ts", "server/generated/routes", "server/generated/storage", "server/replit_integrations/chat"],
   "compilerOptions": {
     "incremental": true,
     "tsBuildInfoFile": "./node_modules/typescript/tsbuildinfo",
