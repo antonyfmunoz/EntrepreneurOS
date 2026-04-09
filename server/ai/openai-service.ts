@@ -42,7 +42,7 @@ export class OpenAIService implements AIServiceInterface {
       return response.choices[0].message.content || "No response generated";
     } catch (error) {
       console.error("Error generating OpenAI response:", error);
-      throw new Error(`Failed to generate response: ${error.message}`);
+      throw new Error(`Failed to generate response: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   
@@ -60,10 +60,10 @@ export class OpenAIService implements AIServiceInterface {
         quality: "standard",
       });
       
-      return response.data[0].url || "";
+      return response.data?.[0]?.url || "";
     } catch (error) {
       console.error("Error generating image:", error);
-      throw new Error(`Failed to generate image: ${error.message}`);
+      throw new Error(`Failed to generate image: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   
@@ -98,7 +98,7 @@ export class OpenAIService implements AIServiceInterface {
       return visionResponse.choices[0].message.content || "No analysis generated";
     } catch (error) {
       console.error("Error analyzing image:", error);
-      throw new Error(`Failed to analyze image: ${error.message}`);
+      throw new Error(`Failed to analyze image: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }
