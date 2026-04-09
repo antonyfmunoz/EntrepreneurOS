@@ -1,0 +1,68 @@
+{
+  "pageFilePath": "C:\\Users\\antonys beast pc\\dev\\EntrepreneurOS\\client\\src\\pages\\admin-dashboard-page.tsx",
+  "pageName": "AdminDashboard",
+  "importCode": "import { usePostHog } from \"posthog-js/react\";\nimport { useEffect, useRef } from \"react\";",
+  "hookCode": "const posthog = usePostHog();",
+  "captureCode": "",
+  "manualCaptures": [
+    {
+      "eventName": "admin_dashboard_viewed",
+      "trigger": "page load",
+      "captureSnippet": "posthog?.capture(\"admin_dashboard_viewed\", { admin_user_id: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "properties": [
+        "admin_user_id",
+        "timestamp"
+      ]
+    },
+    {
+      "eventName": "user_role_changed",
+      "trigger": "admin changes user role",
+      "captureSnippet": "posthog?.capture(\"user_role_changed\", { admin_user_id: undefined /* TODO: wire */, target_user_id: undefined /* TODO: wire */, new_role: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "properties": [
+        "admin_user_id",
+        "target_user_id",
+        "new_role",
+        "timestamp"
+      ]
+    },
+    {
+      "eventName": "system_config_updated",
+      "trigger": "admin updates system configuration",
+      "captureSnippet": "posthog?.capture(\"system_config_updated\", { admin_user_id: undefined /* TODO: wire */, config_key: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "properties": [
+        "admin_user_id",
+        "config_key",
+        "timestamp"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "admin_dashboard_viewed",
+      "trigger": "page load",
+      "properties": [
+        "admin_user_id",
+        "timestamp"
+      ]
+    },
+    {
+      "name": "user_role_changed",
+      "trigger": "admin changes user role",
+      "properties": [
+        "admin_user_id",
+        "target_user_id",
+        "new_role",
+        "timestamp"
+      ]
+    },
+    {
+      "name": "system_config_updated",
+      "trigger": "admin updates system configuration",
+      "properties": [
+        "admin_user_id",
+        "config_key",
+        "timestamp"
+      ]
+    }
+  ]
+}

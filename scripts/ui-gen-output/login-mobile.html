@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EntrepreneurOS | Sign In</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "outline-variant": "#cbc3d7",
+                    "surface-tint": "#6d3bd7",
+                    "error": "#ba1a1a",
+                    "primary-fixed-dim": "#d0bcff",
+                    "on-tertiary-container": "#ffc9a6",
+                    "tertiary": "#6e3400",
+                    "surface-bright": "#f8f9fa",
+                    "secondary-container": "#ab8ffe",
+                    "on-error-container": "#93000a",
+                    "inverse-on-surface": "#eff1f2",
+                    "primary-fixed": "#e9ddff",
+                    "surface-variant": "#e1e3e4",
+                    "on-primary-fixed": "#23005c",
+                    "surface-container-low": "#f2f4f5",
+                    "on-primary-fixed-variant": "#5516bf",
+                    "tertiary-fixed": "#ffdcc6",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-lowest": "#ffffff",
+                    "surface-container-highest": "#e1e3e4",
+                    "on-secondary-fixed": "#21005e",
+                    "secondary-fixed": "#e8ddff",
+                    "on-error": "#ffffff",
+                    "surface-container-high": "#e7e8e9",
+                    "error-container": "#ffdad6",
+                    "outline": "#7b7486",
+                    "inverse-surface": "#2e3132",
+                    "primary": "#5210bc",
+                    "surface-container": "#eceeef",
+                    "surface-dim": "#d8dadb",
+                    "on-tertiary-fixed": "#311400",
+                    "on-primary": "#ffffff",
+                    "on-secondary-container": "#3f1e8b",
+                    "primary-container": "#6a37d4",
+                    "on-primary-container": "#dcccff",
+                    "tertiary-container": "#914700",
+                    "on-background": "#191c1d",
+                    "secondary": "#674bb5",
+                    "on-secondary-fixed-variant": "#4f319c",
+                    "on-secondary": "#ffffff",
+                    "background": "#f8f9fa",
+                    "surface": "#f8f9fa",
+                    "on-surface-variant": "#494454",
+                    "on-surface": "#191c1d",
+                    "secondary-fixed-dim": "#cebdff",
+                    "inverse-primary": "#d0bcff",
+                    "tertiary-fixed-dim": "#ffb786",
+                    "on-tertiary-fixed-variant": "#723600"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Inter"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        .purple-shadow {
+            box-shadow: 0 8px 32px rgba(106, 55, 212, 0.08);
+        }
+        .primary-gradient {
+            background: linear-gradient(135deg, #6a37d4 0%, #ae8dff 100%);
+        }
+        .floating-label-input:focus-within label,
+        .floating-label-input input:not(:placeholder-shown) + label {
+            transform: translateY(-1.5rem) scale(0.85);
+            color: #5210bc;
+        }
+        .ghost-border {
+            outline: 1px solid rgba(203, 195, 215, 0.2);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface-container-lowest text-on-surface min-h-screen flex flex-col items-center justify-center p-6">
+<!-- Top Navigation Suppression (Transactional Page) -->
+<main class="w-full max-w-sm flex flex-col items-center gap-12">
+<!-- Header Section -->
+<header class="flex flex-col items-center text-center gap-4">
+<div class="w-16 h-16 rounded-xl bg-surface-container-low flex items-center justify-center purple-shadow">
+<span class="material-symbols-outlined text-4xl text-on-surface">smart_toy</span>
+</div>
+<div class="space-y-1">
+<h1 class="text-3xl font-extrabold tracking-[-0.02em] text-on-surface">EntrepreneurOS</h1>
+<p class="text-sm font-medium text-on-surface-variant/70 tracking-tight">Your AI operating system for business</p>
+</div>
+</header>
+<!-- Auth Card -->
+<div class="w-full glass-panel purple-shadow rounded-xl p-8 flex flex-col gap-6">
+<!-- Form Group -->
+<form class="flex flex-col gap-6">
+<!-- Email Input -->
+<div class="relative floating-label-input group">
+<input autocomplete="email" class="peer w-full bg-surface-container-low border-0 rounded-xl px-4 pt-6 pb-2 text-on-surface focus:ring-2 focus:ring-primary/20 transition-all outline-none" id="email" placeholder=" " type="email"/>
+<label class="absolute left-4 top-4 text-on-surface-variant/50 pointer-events-none transition-all duration-200 origin-left" for="email">Email (you@company.com)</label>
+</div>
+<!-- Password Input -->
+<div class="relative floating-label-input group">
+<input autocomplete="current-password" class="peer w-full bg-surface-container-low border-0 rounded-xl px-4 pt-6 pb-2 text-on-surface focus:ring-2 focus:ring-primary/20 transition-all outline-none" id="password" placeholder=" " type="password"/>
+<label class="absolute left-4 top-4 text-on-surface-variant/50 pointer-events-none transition-all duration-200 origin-left" for="password">Password</label>
+</div>
+<!-- Sign In Button -->
+<button class="primary-gradient text-white font-semibold py-4 rounded-xl text-md active:scale-95 transition-all purple-shadow" type="submit">
+                    Sign In
+                </button>
+</form>
+<!-- Divider (Tonal Shift) -->
+<div class="flex items-center gap-4">
+<div class="h-[1px] flex-1 bg-surface-container-high"></div>
+<span class="text-[10px] font-bold uppercase tracking-[0.05em] text-on-surface-variant/40">or</span>
+<div class="h-[1px] flex-1 bg-surface-container-high"></div>
+</div>
+<!-- Google Login -->
+<button class="w-full ghost-border bg-transparent text-on-surface font-medium py-4 rounded-xl flex items-center justify-center gap-3 hover:bg-surface-container-low transition-colors active:scale-95">
+<svg height="18" viewbox="0 0 18 18" width="18">
+<path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"></path>
+<path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"></path>
+<path d="M3.964 10.711c-.18-.54-.282-1.117-.282-1.711 0-.594.102-1.17.282-1.711V4.957H.957C.347 6.173 0 7.548 0 9s.347 2.827.957 4.043l3.007-2.332z" fill="#FBBC05"></path>
+<path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.957l3.007 2.332c.708-2.127 2.692-3.711 5.036-3.711z" fill="#EA4335"></path>
+</svg>
+                Continue with Google
+            </button>
+</div>
+<!-- Footer Actions -->
+<footer class="flex flex-col items-center gap-4">
+<nav class="flex flex-col items-center gap-2">
+<a class="text-sm font-semibold text-primary hover:opacity-80 transition-opacity" href="#">Create account</a>
+<a class="text-sm font-medium text-on-surface-variant/60 hover:text-primary transition-colors" href="#">Forgot password?</a>
+</nav>
+<p class="text-[10px] uppercase tracking-[0.05em] font-medium text-on-surface-variant/40 mt-8">
+                © 2024 EntrepreneurOS. Built for Performance.
+            </p>
+</footer>
+</main>
+<!-- Subtle Background Element for "Ethereal" feel -->
+<div class="fixed top-0 right-0 -z-10 w-64 h-64 bg-primary/5 blur-[120px] rounded-full"></div>
+<div class="fixed bottom-0 left-0 -z-10 w-96 h-96 bg-secondary/5 blur-[120px] rounded-full"></div>
+</body></html>

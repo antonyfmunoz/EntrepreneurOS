@@ -1,69 +1,134 @@
+import { createHash } from "node:crypto";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { ComponentDiscoveryResult, ComponentReference } from "./types.js";
 
-// Per Plan 03-07: query registries for ALL components, not just "complex" ones.
-// Button/Input/Card deserve production-grade shadcn/MagicUI references too — Stitch
-// generates better output when it has concrete examples for every component.
-
 // Max chars per individual code snippet -- prevents one component from dominating prompt
 const MAX_SNIPPET_CHARS = 500;
 
-// Cache-and-replay: MCPs (mcp__magicui__*, mcp__magic21__*) only exist inside the
-// Claude Code harness. Headless `tsx` runs cannot reach them. So we cache real MCP
-// output into component-cache.json from an interactive session, and read it here.
+// Default TTL when cache file omits it
+const DEFAULT_TTL_HOURS = 24;
+
+// Cache path — written by the saas-dev:warm-cache skill inside a Claude Code
+// session (where MCPs are live), read here by headless orchestrator/scripts.
 const CACHE_PATH = resolve(process.cwd(), "lib/ui-generator/component-cache.json");
 
 interface CachedComponent {
   name: string;
   description: string;
   registry: string;
+  code_snippet?: string;
 }
 
 interface ComponentCacheFile {
   generated_at: string;
+  ttl_hours: number;
+  project_id: string;
+  spec_hash: string;
   source: string;
   components: CachedComponent[];
 }
 
-// Narrow shape of fields this module reads off MCP tool results.
-// MCPs return untyped JSON; cast once at the boundary.
-interface McpRegistryResult {
-  code?: unknown;
-  description?: unknown;
-  url?: unknown;
+export interface CacheFreshnessResult {
+  fresh: boolean;
+  reason?: string;
 }
 
-let cachedComponentsMemo: CachedComponent[] | null | undefined;
-function loadComponentCache(): CachedComponent[] {
-  if (cachedComponentsMemo !== undefined) return cachedComponentsMemo ?? [];
+// ─── Spec Hash ──────────────────────────────────────────────────────────────
+
+/**
+ * Compute a deterministic hash from component names so we can detect when the
+ * spec has changed since the cache was built.
+ */
+export function computeSpecHash(componentNames: string[]): string {
+  const normalized = Array.from(new Set(componentNames.map((n) => n.toLowerCase()))).sort();
+  return createHash("sha256").update(normalized.join("\n")).digest("hex");
+}
+
+// ─── Cache Freshness ────────────────────────────────────────────────────────
+
+let cachedFile: ComponentCacheFile | null | undefined;
+
+function loadCacheFile(): ComponentCacheFile | null {
+  if (cachedFile !== undefined) return cachedFile;
   try {
     if (!existsSync(CACHE_PATH)) {
-      cachedComponentsMemo = null;
-      return [];
+      cachedFile = null;
+      return null;
     }
-    const parsed = JSON.parse(readFileSync(CACHE_PATH, "utf8")) as ComponentCacheFile;
-    cachedComponentsMemo = parsed.components ?? [];
-    return cachedComponentsMemo;
+    cachedFile = JSON.parse(readFileSync(CACHE_PATH, "utf8")) as ComponentCacheFile;
+    return cachedFile;
   } catch {
-    cachedComponentsMemo = null;
-    return [];
+    cachedFile = null;
+    return null;
   }
 }
 
+/**
+ * Validate that the component cache is fresh enough for the current spec.
+ * Three checks: file exists, TTL not expired, spec hash matches.
+ */
+export function validateCacheFreshness(
+  specComponentNames: string[],
+): CacheFreshnessResult {
+  const cache = loadCacheFile();
+
+  if (!cache) {
+    return {
+      fresh: false,
+      reason: "No component cache found. Run /saas-dev:warm-cache to populate.",
+    };
+  }
+
+  // TTL check
+  const generatedAt = new Date(cache.generated_at).getTime();
+  const ttlMs = (cache.ttl_hours ?? DEFAULT_TTL_HOURS) * 60 * 60 * 1000;
+  const ageMs = Date.now() - generatedAt;
+  if (ageMs > ttlMs) {
+    const ageHours = Math.round(ageMs / (60 * 60 * 1000));
+    return {
+      fresh: false,
+      reason:
+        `Cache expired (generated ${ageHours}h ago, TTL is ${cache.ttl_hours ?? DEFAULT_TTL_HOURS}h). ` +
+        `Run /saas-dev:warm-cache to refresh.`,
+    };
+  }
+
+  // Spec hash check
+  const currentHash = computeSpecHash(specComponentNames);
+  if (cache.spec_hash !== currentHash) {
+    const cachedNames = new Set(cache.components.map((c) => c.name.toLowerCase()));
+    const currentNames = specComponentNames.map((n) => n.toLowerCase());
+    const newNames = currentNames.filter((n) => !cachedNames.has(n));
+    const detail = newNames.length > 0
+      ? ` (new components: ${newNames.join(", ")})`
+      : "";
+    return {
+      fresh: false,
+      reason:
+        `Spec changed since cache was built${detail}. ` +
+        `Run /saas-dev:warm-cache to refresh.`,
+    };
+  }
+
+  return { fresh: true };
+}
+
+// ─── Component Discovery (cache-only) ───────────────────────────────────────
+
 function matchCachedComponents(
-  componentNames: string[]
+  componentNames: string[],
 ): ComponentReference[] {
-  const cached = loadComponentCache();
-  if (cached.length === 0) return [];
+  const cache = loadCacheFile();
+  if (!cache || cache.components.length === 0) return [];
 
   const refs: ComponentReference[] = [];
   const lowerNames = componentNames.map((n) => n.toLowerCase());
 
-  for (const entry of cached) {
+  for (const entry of cache.components) {
     const entryLower = entry.name.toLowerCase();
     const matchedSpecName = lowerNames.find(
-      (n) => entryLower.includes(n) || n.includes(entryLower)
+      (n) => entryLower.includes(n) || n.includes(entryLower),
     );
     if (!matchedSpecName) continue;
 
@@ -78,6 +143,7 @@ function matchCachedComponents(
       componentName: matchedSpecName,
       source,
       description: `${entry.name} (${entry.registry}) — ${entry.description}`,
+      codeSnippet: entry.code_snippet?.slice(0, MAX_SNIPPET_CHARS),
     });
   }
 
@@ -85,118 +151,34 @@ function matchCachedComponents(
 }
 
 /**
- * Discovers production-ready component implementations from multiple registries.
+ * Discover component references from the local cache.
  *
- * Uses MCP tools when available. All registry calls are wrapped in try/catch --
- * missing tools, network errors, or malformed responses never crash the pipeline.
+ * The cache is populated by the saas-dev:warm-cache skill which runs inside
+ * a Claude Code session where MCP tools are available. This function is a
+ * pure cache reader — no network calls, no MCP invocations.
  *
- * @param componentNames - Component names from PageSpec.components
- * @param mcpInvoke - Injectable MCP tool invocation function for testing.
- *   In production, wired to Claude tool_use. In tests, a mock.
+ * Call validateCacheFreshness() before this to ensure the cache is current.
  */
-export async function discoverComponents(
+export function discoverComponents(
   componentNames: string[],
-  mcpInvoke?: (toolName: string, args: Record<string, unknown>) => Promise<unknown>
-): Promise<ComponentDiscoveryResult> {
-  const references: ComponentReference[] = [];
-  const queriedComponents: string[] = [];
-  const skippedComponents: string[] = [];
+): ComponentDiscoveryResult {
+  const references = matchCachedComponents(componentNames);
 
-  for (const name of componentNames) {
-    queriedComponents.push(name);
-
-    if (!mcpInvoke) {
-      // Headless path: fall through to cache lookup after the loop.
-      continue;
-    }
-
-    // Query shadcn registry
-    try {
-      const shadcnResult = (await mcpInvoke("shadcn_search", { query: name })) as McpRegistryResult | null;
-      if (shadcnResult && typeof shadcnResult === "object") {
-        references.push({
-          componentName: name,
-          source: "shadcn",
-          codeSnippet: typeof shadcnResult.code === "string"
-            ? shadcnResult.code.slice(0, MAX_SNIPPET_CHARS)
-            : undefined,
-          description: typeof shadcnResult.description === "string"
-            ? shadcnResult.description
-            : undefined,
-        });
-      }
-    } catch {
-      // shadcn MCP not available -- continue gracefully
-    }
-
-    // Query 21st.dev for visual inspiration
-    try {
-      const inspirationResult = (await mcpInvoke(
-        "mcp__magic21__21st_magic_component_inspiration",
-        { message: `${name} component for SaaS application` }
-      )) as McpRegistryResult | null;
-      if (inspirationResult && typeof inspirationResult === "object") {
-        references.push({
-          componentName: name,
-          source: "21st-dev",
-          description: typeof inspirationResult.description === "string"
-            ? inspirationResult.description
-            : undefined,
-          visualRef: typeof inspirationResult.url === "string"
-            ? inspirationResult.url
-            : undefined,
-        });
-      }
-    } catch {
-      // 21st.dev MCP not available -- continue gracefully
-    }
-
-    // Query MagicUI for animated component examples
-    try {
-      const magicResult = (await mcpInvoke(
-        "mcp__magicui__searchRegistryItems",
-        { query: name }
-      )) as McpRegistryResult | null;
-      if (magicResult && typeof magicResult === "object") {
-        references.push({
-          componentName: name,
-          source: "magicui",
-          description: typeof magicResult.description === "string"
-            ? magicResult.description
-            : undefined,
-          codeSnippet: typeof magicResult.code === "string"
-            ? magicResult.code.slice(0, MAX_SNIPPET_CHARS)
-            : undefined,
-        });
-      }
-    } catch {
-      // MagicUI MCP not available -- continue gracefully
-    }
-  }
-
-  // Headless fallback: if no live MCPs produced any references, replay from cache.
-  if (references.length === 0) {
-    const cachedRefs = matchCachedComponents(componentNames);
-    if (cachedRefs.length > 0) {
-      references.push(...cachedRefs);
-    }
-  }
-
-  return { references, queriedComponents, skippedComponents };
+  return {
+    references,
+    queriedComponents: [...componentNames],
+    skippedComponents: [],
+  };
 }
 
 /**
  * Formats discovery results into a prompt section for Stitch.
  * Returns empty string if no references found.
  * Truncates total output to maxChars to prevent prompt bloat.
- *
- * @param result - ComponentDiscoveryResult from discoverComponents
- * @param maxChars - Maximum characters for the formatted output (default 8000).
- *   This leaves room for spec + tokens + direction within the MAX_PROMPT_TOTAL_CHARS budget.
  */
 export function formatDiscoveryForPrompt(
   result: ComponentDiscoveryResult,
-  maxChars: number = 8000
+  maxChars: number = 8000,
 ): string {
   if (result.references.length === 0) {
     return "";
@@ -211,14 +193,15 @@ export function formatDiscoveryForPrompt(
     byComponent.set(ref.componentName, existing);
   }
 
-  for (const [name, refs] of byComponent) {
+  for (const [name, refs] of Array.from(byComponent.entries())) {
     lines.push(`\n${name}:`);
     for (const ref of refs) {
       lines.push(`  [${ref.source}]${ref.description ? ` ${ref.description}` : ""}`);
       if (ref.codeSnippet) {
-        const snippet = ref.codeSnippet.length > MAX_SNIPPET_CHARS
-          ? ref.codeSnippet.slice(0, MAX_SNIPPET_CHARS) + "..."
-          : ref.codeSnippet;
+        const snippet =
+          ref.codeSnippet.length > MAX_SNIPPET_CHARS
+            ? ref.codeSnippet.slice(0, MAX_SNIPPET_CHARS) + "..."
+            : ref.codeSnippet;
         lines.push(`  Code example:\n${snippet}`);
       }
     }

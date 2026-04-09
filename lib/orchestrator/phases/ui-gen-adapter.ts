@@ -20,6 +20,11 @@ import type { SpecOutput, PageSpecFull } from "@shared/spec-schema.js";
 import type { PhaseImplementation, PageWorkUnit } from "../phase-runner.js";
 import { getOrchestratorDb } from "../db.js";
 import { buildStitchPrompt } from "../../ui-generator/build-stitch-prompt.js";
+import {
+  discoverComponents,
+  formatDiscoveryForPrompt,
+  validateCacheFreshness,
+} from "../../ui-generator/component-discovery.js";
 import { dualReview } from "../../ui-generator/self-review.js";
 import { allDimensionsPass, type DmTokenRow } from "../../ui-generator/types.js";
 import { generateScreen } from "../../stitch/client.js";
@@ -122,6 +127,18 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
       config.designSystemPath,
     );
 
+    // Validate component cache freshness before any generation.
+    // The cache is populated by /saas-dev:warm-cache inside a Claude Code session.
+    const allComponentNames = Array.from(
+      new Set(spec.pages.flatMap((p) => p.components)),
+    );
+    const freshness = validateCacheFreshness(allComponentNames);
+    if (!freshness.fresh) {
+      throw new Error(
+        `Phase "ui-gen": component cache is stale. ${freshness.reason}`,
+      );
+    }
+
     return spec.pages.map((page, idx) => ({
       pageName: page.name,
       pageIndex: idx,
@@ -141,6 +158,10 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
     const input = rawInput as UiGenRunInput;
     const { page, tokens, designSystemPath, priorScreenshotUrl } = input;
 
+    // Discover component references from the warm cache.
+    const discoveryResult = discoverComponents(page.components);
+    const componentReferences = formatDiscoveryForPrompt(discoveryResult);
+
     // Build prompt — design-system.md is the single source of truth, no
     // hardcoded brand values. priorScreenshotUrl gives Stitch visual context
     // from the previously approved page (multi-page inheritance).
@@ -149,8 +170,8 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
       tokens,
       priorScreenshotUrl ?? undefined,
       tokens?.componentDirection ?? undefined,
-      undefined, // componentReferences
-      undefined, // enrichment
+      componentReferences || undefined,
+      undefined, // enrichment — wired separately via skill-enrichment layer
       designSystemPath,
     );
 

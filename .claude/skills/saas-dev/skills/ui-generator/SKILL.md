@@ -36,7 +36,7 @@ All modules live under `lib/ui-generator/` and `lib/stitch/`:
 | `lib/ui-generator/design-system-seeder.ts` | `seedDesignSystem`, `seedToTokens` | Generate initial design system from project spec |
 | `lib/ui-generator/gemini-mockup.ts` | `generateReferenceMockup` | Generate reference mockup via Gemini |
 | `lib/ui-generator/html-sanitizer.ts` | `sanitizeHtmlForModel` | Sanitize HTML before LLM input (security) |
-| `lib/ui-generator/component-discovery.ts` | `discoverComponents`, `formatDiscoveryForPrompt` | Multi-registry component lookup for prompt enrichment |
+| `lib/ui-generator/component-discovery.ts` | `discoverComponents`, `formatDiscoveryForPrompt`, `validateCacheFreshness`, `computeSpecHash` | Cache-based component lookup for prompt enrichment (cache warmed by `/saas-dev:warm-cache`) |
 | `lib/ui-generator/gemini-reviewer.ts` | `geminiReview` | Gemini vision-based secondary reviewer |
 | `lib/ui-generator/skill-enrichment.ts` | `queryFrontendDesignSkill`, `queryUXProSkill`, `enrichOnce`, `extractIndustry` | Session-level design skill enrichment via Anthropic API (Plan 03-07) |
 | `lib/stitch/design-md.ts` | `exportDesignMD`, `generateDesignMDFromTokens`, `parseDesignMD`, `importDesignMD` | DESIGN.md export/import for cross-page design stability (Plan 03-08) |
@@ -176,19 +176,22 @@ Iterate over `pageOrder`. Track `pageIndex` (0-based).
 
 #### Step 2a — Build Stitch Prompt
 
-##### Component Discovery (Plan 03-07 update — query ALL components)
+##### Component Discovery (cache-based)
 
-Before building the prompt, query component registries for **every** component in the page spec — not just "complex" ones. Button, Input, and Card deserve production-grade shadcn/MagicUI references too.
+Component references come from a pre-warmed local cache, NOT from live MCP calls. The cache is populated by running `/saas-dev:warm-cache` inside a Claude Code session before the pipeline starts. MCP tools only exist inside the Claude Code harness — headless `tsx` cannot reach them.
+
+**Freshness gate (runs once in `prepare()`):** The orchestrator validates cache freshness before any page generation. Three checks must pass: file exists, TTL not expired, spec hash matches current spec's components. If any check fails, the pipeline throws with a message telling the user to run `/saas-dev:warm-cache`.
+
+**Per-page discovery (runs in `runPage()`):**
 
 ```typescript
 import { discoverComponents, formatDiscoveryForPrompt } from "../../lib/ui-generator/component-discovery.js";
 
-const discoveryResult = await discoverComponents(pageSpec.components);
+const discoveryResult = discoverComponents(pageSpec.components);
 const componentReferences = formatDiscoveryForPrompt(discoveryResult);
 
-if (discoveryResult.queriedComponents.length > 0) {
-  console.log(`  Component discovery: queried ${discoveryResult.queriedComponents.join(", ")}`);
-  console.log(`  Found ${discoveryResult.references.length} references from registries`);
+if (discoveryResult.references.length > 0) {
+  console.log(`  Component discovery: ${discoveryResult.references.length} cached references for ${pageSpec.components.join(", ")}`);
 }
 ```
 
@@ -201,13 +204,13 @@ const prompt = buildStitchPrompt(
   pageSpec,
   currentTokens,
   priorScreenshotUrl,
-  currentTokens?.componentDirection ?? undefined,  // load from DB, not local var
-  componentReferences,
+  currentTokens?.componentDirection ?? undefined,
+  componentReferences || undefined,
   enrichment ?? undefined,                          // from Step 1.5
 );
 ```
 
-Component discovery is best-effort. If MCP tools (`shadcn`, `magic21`, `magicui` from `.mcp.json`) are not available, the pipeline continues with standard prompts. The total prompt is capped at MAX_PROMPT_TOTAL_CHARS (30,000 chars) to prevent unbounded growth.
+The total prompt is capped at MAX_PROMPT_TOTAL_CHARS (30,000 chars) to prevent unbounded growth.
 
 #### Step 2a-5 — Import DESIGN.md (Page 2+ only, Plan 03-08)
 

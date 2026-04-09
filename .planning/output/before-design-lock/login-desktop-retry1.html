@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed-variant": "#004395",
+                        "secondary": "#4cd7f6",
+                        "on-surface-variant": "#c2c6d6",
+                        "on-primary-fixed": "#001a42",
+                        "surface-variant": "#353534",
+                        "on-background": "#e5e2e1",
+                        "error-container": "#93000a",
+                        "on-tertiary-fixed": "#23005c",
+                        "primary-container": "#4d8eff",
+                        "on-primary": "#002e6a",
+                        "error": "#ffb4ab",
+                        "primary": "#adc6ff",
+                        "background": "#131313",
+                        "tertiary-container": "#a078ff",
+                        "surface-tint": "#adc6ff",
+                        "primary-fixed": "#d8e2ff",
+                        "outline-variant": "#424754",
+                        "on-secondary-fixed-variant": "#004e5c",
+                        "on-tertiary-container": "#340080",
+                        "surface-container-low": "#1c1b1b",
+                        "primary-fixed-dim": "#adc6ff",
+                        "on-secondary": "#003640",
+                        "surface-container-lowest": "#0e0e0e",
+                        "secondary-container": "#03b5d3",
+                        "on-error": "#690005",
+                        "surface-container-high": "#2a2a2a",
+                        "on-primary-container": "#00285d",
+                        "secondary-fixed-dim": "#4cd7f6",
+                        "surface-container": "#201f1f",
+                        "on-tertiary": "#3c0091",
+                        "surface-dim": "#131313",
+                        "inverse-surface": "#e5e2e1",
+                        "outline": "#8c909f",
+                        "tertiary-fixed-dim": "#d0bcff",
+                        "surface-container-highest": "#353534",
+                        "on-secondary-container": "#00424e",
+                        "secondary-fixed": "#acedff",
+                        "on-tertiary-fixed-variant": "#5516be",
+                        "on-surface": "#e5e2e1",
+                        "inverse-on-surface": "#313030",
+                        "on-error-container": "#ffdad6",
+                        "on-secondary-fixed": "#001f26",
+                        "tertiary-fixed": "#e9ddff",
+                        "inverse-primary": "#005ac2",
+                        "surface": "#131313",
+                        "surface-bright": "#3a3939",
+                        "tertiary": "#d0bcff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.375rem",
+                        "lg": "0.375rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #131313;
+            font-family: 'Inter', sans-serif;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom scrollbar for tactical feel */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #131313;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #424754;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen items-center justify-center selection:bg-primary-container selection:text-on-primary-container">
+<!-- Hero Background Texture (Subtle Tonal Shift) -->
+<div aria-hidden="true" class="fixed inset-0 z-0 pointer-events-none opacity-20">
+<div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,_#1c1b1b_0%,_transparent_50%)]"></div>
+</div>
+<main class="relative z-10 w-full max-w-md px-6">
+<!-- Auth Card -->
+<div class="bg-surface-container-low p-10 rounded-lg shadow-2xl border border-outline-variant/10">
+<!-- Brand Identity -->
+<header class="mb-10">
+<h1 class="text-4xl font-extrabold tracking-tighter text-on-surface mb-2">EntrepreneurOS</h1>
+<p class="text-outline text-sm tracking-wide font-medium">Your AI operating system for business</p>
+</header>
+<!-- Login Form -->
+<form action="#" class="space-y-6" method="POST">
+<!-- Email Field -->
+<div class="space-y-2">
+<label class="block text-[10px] uppercase tracking-widest font-bold text-outline" for="email">Email Address</label>
+<div class="relative">
+<input aria-describedby="email-hint" class="w-full bg-surface-container-lowest border-none ring-1 ring-outline-variant/30 text-on-surface text-sm rounded px-4 py-3 focus:ring-2 focus:ring-primary-container transition-all outline-none placeholder:text-outline-variant" id="email" name="email" placeholder="founder@company.com" required="" type="email"/>
+<p class="hidden text-error text-xs mt-1" id="email-hint">Please enter a valid email address.</p>
+</div>
+</div>
+<!-- Password Field -->
+<div class="space-y-2">
+<div class="flex justify-between items-center">
+<label class="block text-[10px] uppercase tracking-widest font-bold text-outline" for="password">Password</label>
+<a class="text-[10px] uppercase tracking-widest font-bold text-secondary hover:text-primary transition-colors duration-200" href="#">Forgot?</a>
+</div>
+<div class="relative">
+<input aria-describedby="password-hint" class="w-full bg-surface-container-lowest border-none ring-1 ring-outline-variant/30 text-on-surface text-sm rounded px-4 py-3 focus:ring-2 focus:ring-primary-container transition-all outline-none placeholder:text-outline-variant" id="password" name="password" placeholder="••••••••" required="" type="password"/>
+<button aria-label="Toggle password visibility" class="absolute right-3 top-1/2 -translate-y-1/2 text-outline-variant hover:text-on-surface transition-colors duration-200" type="button">
+<span class="material-symbols-outlined text-[20px]" data-icon="visibility">visibility</span>
+</button>
+<p class="hidden text-error text-xs mt-1" id="password-hint">Password must be at least 8 characters.</p>
+</div>
+</div>
+<!-- Primary Action -->
+<div class="pt-2">
+<button class="w-full bg-primary-container text-on-primary-container font-bold py-3.5 px-4 rounded text-sm tracking-tight hover:brightness-110 active:scale-[0.98] transition-all duration-200 shadow-lg shadow-primary-container/10" type="submit">
+                        Sign In
+                    </button>
+</div>
+</form>
+<!-- Supplementary Action -->
+<div class="mt-8 pt-8 border-t border-outline-variant/10 text-center">
+<p class="text-on-surface-variant text-xs">
+                    New to the system? 
+                    <a class="text-secondary font-bold ml-1 hover:underline underline-offset-4" href="#">Create Account</a>
+</p>
+</div>
+</div>
+<!-- Secondary Support Area -->
+<div class="mt-8 flex justify-center gap-6">
+<button class="flex items-center gap-2 text-outline hover:text-on-surface transition-colors text-[10px] uppercase tracking-widest font-bold">
+<span class="material-symbols-outlined text-[16px]" data-icon="help">help</span>
+                Support
+            </button>
+<button class="flex items-center gap-2 text-outline hover:text-on-surface transition-colors text-[10px] uppercase tracking-widest font-bold">
+<span class="material-symbols-outlined text-[16px]" data-icon="security">security</span>
+                Trust Center
+            </button>
+</div>
+</main>
+<!-- Footer Component from Shared Components -->
+<footer class="fixed bottom-8 w-full flex justify-center items-center px-4">
+<div class="flex flex-col items-center gap-4">
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest text-[#8c909f] opacity-80 hover:opacity-100 transition-colors">
+                © EntrepreneurOS
+            </span>
+<div class="flex gap-4 opacity-40">
+<div class="w-1 h-1 rounded-full bg-[#8c909f]"></div>
+<div class="w-1 h-1 rounded-full bg-[#8c909f]"></div>
+<div class="w-1 h-1 rounded-full bg-[#8c909f]"></div>
+</div>
+</div>
+</footer>
+<!-- Decorative Texture elements -->
+<div class="fixed top-0 left-0 w-full h-full pointer-events-none z-[-1] overflow-hidden">
+<div class="absolute top-[10%] left-[5%] w-[400px] h-[400px] bg-primary/5 blur-[120px] rounded-full"></div>
+<div class="absolute bottom-[10%] right-[5%] w-[300px] h-[300px] bg-secondary/5 blur-[100px] rounded-full"></div>
+</div>
+</body></html>

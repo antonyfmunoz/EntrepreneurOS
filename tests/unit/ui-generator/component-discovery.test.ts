@@ -1,88 +1,82 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   discoverComponents,
   formatDiscoveryForPrompt,
+  computeSpecHash,
+  validateCacheFreshness,
 } from "../../../lib/ui-generator/component-discovery.js";
 import type { ComponentDiscoveryResult } from "../../../lib/ui-generator/types.js";
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 //
-// NOTE: Per Plan 03-07, component-discovery now queries ALL components — the
-// "simple vs complex" distinction was removed. Stitch generates better output
-// when every component (Button, Input, Badge included) has concrete registry
-// references attached. The tests below were updated to match the new contract.
+// component-discovery is a pure cache reader. The cache is populated by the
+// saas-dev:warm-cache skill inside a Claude Code session. These tests validate
+// cache matching, prompt formatting, spec hashing, and freshness validation.
+
+describe("computeSpecHash", () => {
+  it("produces deterministic hash for same components regardless of order", () => {
+    const hash1 = computeSpecHash(["Button", "Card", "Input"]);
+    const hash2 = computeSpecHash(["Input", "Button", "Card"]);
+    expect(hash1).toBe(hash2);
+  });
+
+  it("is case-insensitive", () => {
+    const hash1 = computeSpecHash(["Button", "CARD"]);
+    const hash2 = computeSpecHash(["button", "card"]);
+    expect(hash1).toBe(hash2);
+  });
+
+  it("deduplicates component names", () => {
+    const hash1 = computeSpecHash(["Button", "Button", "Card"]);
+    const hash2 = computeSpecHash(["Button", "Card"]);
+    expect(hash1).toBe(hash2);
+  });
+
+  it("returns a 64-char hex SHA-256 string", () => {
+    const hash = computeSpecHash(["Button"]);
+    expect(hash).toMatch(/^[a-f0-9]{64}$/);
+  });
+});
+
+describe("validateCacheFreshness", () => {
+  // These tests rely on the actual cache file on disk. Since the cache file
+  // has an empty spec_hash and a stale timestamp, freshness checks will fail
+  // as expected in CI/local — proving the gate works.
+
+  it("returns not fresh when cache spec_hash does not match", () => {
+    const result = validateCacheFreshness(["NonExistentComponent123"]);
+    expect(result.fresh).toBe(false);
+    expect(result.reason).toBeDefined();
+  });
+});
 
 describe("discoverComponents", () => {
-  it("Test 1: every component is recorded in queriedComponents (no skip list)", async () => {
-    const mockMcp = vi.fn().mockResolvedValue(null);
+  it("returns matched components from cache", () => {
+    const result = discoverComponents(["Button", "Card"]);
 
-    const result = await discoverComponents(["DataTable", "Button"], mockMcp);
-
-    expect(result.queriedComponents).toContain("DataTable");
     expect(result.queriedComponents).toContain("Button");
+    expect(result.queriedComponents).toContain("Card");
     expect(result.skippedComponents).toHaveLength(0);
   });
 
-  it("Test 2: simple components are queried, not skipped", async () => {
-    const mockMcp = vi.fn().mockResolvedValue(null);
+  it("returns empty references for components not in cache", () => {
+    const result = discoverComponents(["SomeUnknownWidget"]);
 
-    const result = await discoverComponents(["Button", "Input", "Badge"], mockMcp);
-
-    expect(result.queriedComponents).toHaveLength(3);
-    expect(result.queriedComponents).toContain("Button");
-    expect(result.queriedComponents).toContain("Input");
-    expect(result.queriedComponents).toContain("Badge");
-    expect(result.skippedComponents).toHaveLength(0);
-  });
-
-  it("Test 5: handles MCP tool errors gracefully — returns partial results, never throws", async () => {
-    const mockMcp = vi.fn().mockRejectedValue(new Error("MCP tool not available"));
-
-    // Should NOT throw
-    const result = await discoverComponents(["DataTable", "KanbanBoard"], mockMcp);
-
-    expect(result.queriedComponents).toContain("DataTable");
-    expect(result.queriedComponents).toContain("KanbanBoard");
-    // References may be empty because all calls failed
-    expect(result.references).toBeInstanceOf(Array);
-  });
-
-  it("Test - without mcpInvoke returns empty references but records queriedComponents", async () => {
-    const result = await discoverComponents(["DataTable", "Calendar"]);
-
-    expect(result.queriedComponents).toContain("DataTable");
-    expect(result.queriedComponents).toContain("Calendar");
+    expect(result.queriedComponents).toContain("SomeUnknownWidget");
     expect(result.references).toHaveLength(0);
   });
 
-  it("Test - with successful mock mcpInvoke returns references from all three sources", async () => {
-    const mockMcp = vi.fn().mockImplementation((toolName: string) => {
-      if (toolName === "shadcn_search") {
-        return Promise.resolve({ code: "const DataTable = ...", description: "shadcn data table" });
-      }
-      if (toolName === "mcp__magic21__21st_magic_component_inspiration") {
-        return Promise.resolve({ description: "visual data table", url: "https://21st.dev/example" });
-      }
-      if (toolName === "mcp__magicui__searchRegistryItems") {
-        return Promise.resolve({ description: "animated table", code: "const MagicTable = ..." });
-      }
-      return Promise.resolve(null);
-    });
-
-    const result = await discoverComponents(["DataTable"], mockMcp);
+  it("every component name is recorded in queriedComponents", () => {
+    const result = discoverComponents(["DataTable", "Button"]);
 
     expect(result.queriedComponents).toContain("DataTable");
-    expect(result.references.length).toBeGreaterThan(0);
-
-    const sources = result.references.map((r) => r.source);
-    expect(sources).toContain("shadcn");
-    expect(sources).toContain("21st-dev");
-    expect(sources).toContain("magicui");
+    expect(result.queriedComponents).toContain("Button");
+    expect(result.skippedComponents).toHaveLength(0);
   });
 });
 
 describe("formatDiscoveryForPrompt", () => {
-  it("Test 3: non-empty results returns string containing 'Component Implementation References:'", () => {
+  it("non-empty results returns string containing 'Component Implementation References:'", () => {
     const result: ComponentDiscoveryResult = {
       references: [
         {
@@ -102,11 +96,11 @@ describe("formatDiscoveryForPrompt", () => {
     expect(formatted).toContain("DataTable");
   });
 
-  it("Test 4: empty references returns empty string", () => {
+  it("empty references returns empty string", () => {
     const result: ComponentDiscoveryResult = {
       references: [],
       queriedComponents: [],
-      skippedComponents: ["Button"],
+      skippedComponents: [],
     };
 
     const formatted = formatDiscoveryForPrompt(result);
@@ -114,7 +108,7 @@ describe("formatDiscoveryForPrompt", () => {
     expect(formatted).toBe("");
   });
 
-  it("Test 7: truncates individual code snippets to 500 chars in the output", () => {
+  it("truncates individual code snippets to 500 chars in the output", () => {
     const longCode = "x".repeat(1000);
     const result: ComponentDiscoveryResult = {
       references: [
@@ -130,14 +124,11 @@ describe("formatDiscoveryForPrompt", () => {
 
     const formatted = formatDiscoveryForPrompt(result);
 
-    // The code section should not contain the full 1000-char string
-    // It should be truncated to 500 chars
     expect(formatted).not.toContain("x".repeat(501));
-    // But it should contain some of the code
     expect(formatted).toContain("x".repeat(10));
   });
 
-  it("Test 8: maxChars parameter truncates total output and appends truncation notice", () => {
+  it("maxChars parameter truncates total output and appends truncation notice", () => {
     const result: ComponentDiscoveryResult = {
       references: [
         { componentName: "DataTable", source: "shadcn", description: "A".repeat(200) },
@@ -150,7 +141,7 @@ describe("formatDiscoveryForPrompt", () => {
 
     const formatted = formatDiscoveryForPrompt(result, 100);
 
-    expect(formatted.length).toBeLessThanOrEqual(100 + 50); // buffer for truncation notice
+    expect(formatted.length).toBeLessThanOrEqual(100 + 50);
     expect(formatted).toContain("truncated");
   });
 });

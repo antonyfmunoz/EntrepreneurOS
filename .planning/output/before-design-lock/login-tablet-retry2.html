@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Login | EntrepreneurOS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #ffffff;
+            color: #2c2f30;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 8px 32px rgba(106, 55, 212, 0.08);
+        }
+        .primary-gradient {
+            background: linear-gradient(135deg, #6a37d4 0%, #ae8dff 100%);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-on-surface": "#9b9d9e",
+                        "on-tertiary-fixed-variant": "#4a00a4",
+                        "surface-bright": "#f5f6f7",
+                        "surface": "#f5f6f7",
+                        "inverse-primary": "#a078ff",
+                        "tertiary-fixed": "#c0a0ff",
+                        "on-error-container": "#510017",
+                        "surface-container-high": "#e0e3e4",
+                        "surface-container": "#e6e8ea",
+                        "surface-dim": "#d1d5d7",
+                        "inverse-surface": "#0c0f10",
+                        "primary-fixed-dim": "#a27cff",
+                        "surface-container-low": "#eff1f2",
+                        "outline-variant": "#abadae",
+                        "on-error": "#ffefef",
+                        "on-secondary": "#f7f0ff",
+                        "surface-variant": "#dadddf",
+                        "on-primary-fixed": "#000000",
+                        "on-surface-variant": "#595c5d",
+                        "on-primary-fixed-variant": "#370086",
+                        "on-tertiary-fixed": "#200051",
+                        "error-container": "#f74b6d",
+                        "on-background": "#2c2f30",
+                        "primary": "#6a37d4",
+                        "primary-dim": "#5e26c7",
+                        "primary-container": "#ae8dff",
+                        "on-primary": "#f8f0ff",
+                        "background": "#f5f6f7",
+                        "tertiary-container": "#c0a0ff",
+                        "surface-container-highest": "#dadddf",
+                        "tertiary-fixed-dim": "#b48fff",
+                        "on-surface": "#2c2f30",
+                        "on-secondary-container": "#4f329d",
+                        "secondary-fixed": "#d8caff",
+                        "on-secondary-fixed": "#3c1989",
+                        "tertiary-dim": "#6411d5",
+                        "tertiary": "#702ae1",
+                        "on-tertiary": "#f8f0ff",
+                        "on-primary-container": "#2b006e",
+                        "secondary-fixed-dim": "#ccbaff",
+                        "outline": "#757778",
+                        "primary-fixed": "#ae8dff",
+                        "surface-tint": "#6a37d4",
+                        "on-tertiary-container": "#3f008e",
+                        "on-secondary-fixed-variant": "#593ca6",
+                        "secondary-container": "#d8caff",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-dim": "#583ba5",
+                        "secondary": "#6448b2",
+                        "error-dim": "#a70138",
+                        "error": "#b41340"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background min-h-screen flex flex-col selection:bg-primary-container selection:text-on-primary-container">
+<!-- Background Decoration -->
+<div class="fixed inset-0 overflow-hidden -z-10 pointer-events-none">
+<div class="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-[120px]"></div>
+<div class="absolute top-[40%] -right-[5%] w-[30%] h-[30%] rounded-full bg-secondary/5 blur-[100px]"></div>
+</div>
+<main class="flex-grow flex items-center justify-center p-6 md:p-12">
+<div class="w-full max-w-[480px] space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+<!-- Logo & Brand Section -->
+<div class="text-center space-y-3">
+<div class="inline-flex items-center justify-center w-14 h-14 rounded-xl primary-gradient text-on-primary shadow-lg shadow-primary/20 mb-2">
+<span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">rocket_launch</span>
+</div>
+<h1 class="text-3xl font-extrabold tracking-tight text-on-surface">EntrepreneurOS</h1>
+<p class="text-on-surface-variant font-medium">Your AI operating system for business</p>
+</div>
+<!-- Auth Card -->
+<div class="glass-card rounded-[24px] p-8 md:p-10 border border-white/40">
+<form class="space-y-6">
+<!-- Email Field -->
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-on-surface tracking-wide uppercase opacity-70" for="email">
+                            Email address
+                        </label>
+<div class="relative">
+<input aria-describedby="email-error" class="w-full px-4 py-3.5 bg-surface-container-highest/30 border-none rounded-xl text-on-surface placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all outline-none" id="email" name="email" placeholder="you@company.com" type="email"/>
+</div>
+<!-- Validation State (Hidden) -->
+<p aria-live="polite" class="hidden text-error text-xs font-medium flex items-center gap-1" id="email-error">
+<span class="material-symbols-outlined text-sm">error</span>
+                            Please enter a valid email address
+                        </p>
+</div>
+<!-- Password Field -->
+<div class="space-y-2">
+<div class="flex justify-between items-center">
+<label class="block text-sm font-semibold text-on-surface tracking-wide uppercase opacity-70" for="password">
+                                Password
+                            </label>
+</div>
+<div class="relative group">
+<input aria-describedby="password-error" class="w-full px-4 py-3.5 bg-surface-container-highest/30 border-none rounded-xl text-on-surface placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all outline-none" id="password" name="password" placeholder="Enter your password" type="password"/>
+<button class="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary transition-colors" type="button">
+<span class="material-symbols-outlined text-[20px]">visibility</span>
+</button>
+</div>
+<!-- Validation State (Hidden) -->
+<p aria-live="polite" class="hidden text-error text-xs font-medium flex items-center gap-1" id="password-error">
+<span class="material-symbols-outlined text-sm">error</span>
+                            Password must be at least 8 characters
+                        </p>
+</div>
+<!-- Sign In Button -->
+<button class="w-full primary-gradient text-white font-semibold py-4 rounded-xl shadow-md hover:shadow-xl hover:shadow-primary/20 hover:-translate-y-0.5 transition-all active:scale-[0.98]" type="submit">
+                        Sign In
+                    </button>
+<!-- Divider -->
+<div class="relative flex items-center py-2">
+<div class="flex-grow border-t border-surface-variant"></div>
+<span class="flex-shrink mx-4 text-xs font-bold text-on-surface-variant/40 uppercase tracking-widest">or</span>
+<div class="flex-grow border-t border-surface-variant"></div>
+</div>
+<!-- Google Auth -->
+<button class="w-full flex items-center justify-center gap-3 px-4 py-3.5 bg-white border border-outline-variant/20 rounded-xl text-on-surface font-semibold hover:bg-surface-container-low transition-colors shadow-sm active:scale-[0.98]" type="button">
+<img alt="" class="w-5 h-5" data-alt="Google colorful G logo for social authentication" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD89AdVgJQKF2pPAu5Ai0pwWsNOD4cFNwuCRNkJ-wq5Yi8mYsCVmdA1_Fj8O2dfJcpS2cDWu8r72hlps12dLutMK1H2nUxosp26R8AnBw6c7HuAAFody6PKlNEQ91uoF1K_ka7xV0Q50JkNCHxuVsPuHlTVf2pfonyzJNI8nggML7w5_rP85MyQp5L4lzsC3SKAoLuWCeaf4zVypbzaxp9mtaFDJSxU76xMVDG2-68VnLAHTSZvLr3bO59xzNnBNjiCjbb22jBT9OxE"/>
+                        Continue with Google
+                    </button>
+</form>
+<!-- Action Links -->
+<div class="mt-10 flex flex-col gap-4 text-center">
+<a class="text-sm font-semibold text-primary hover:text-primary-dim transition-colors" href="#">
+                        Forgot password?
+                    </a>
+<div class="text-sm text-on-surface-variant">
+                        Don't have an account? 
+                        <a class="text-primary font-bold hover:underline underline-offset-4 ml-1" href="#">Create account</a>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer Component from Shared JSON -->
+<footer class="flex justify-center items-center w-full mt-auto w-full py-8 bg-transparent">
+<p class="font-['Inter'] text-sm tracking-wide text-slate-500/80 dark:text-slate-400/80">
+            © EntrepreneurOS
+        </p>
+</footer>
+</body></html>

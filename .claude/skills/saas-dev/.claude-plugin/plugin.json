@@ -1,0 +1,15 @@
+{
+  "name": "saas-dev",
+  "description": "SaaS development pipeline — spec to deployed app via Stitch UI generation, code integration, backend wiring, analytics, and deployment",
+  "version": "0.1.0",
+  "author": {
+    "name": "Antony F. Munoz"
+  },
+  "keywords": [
+    "saas",
+    "pipeline",
+    "stitch",
+    "ui-generation",
+    "deployment"
+  ]
+}

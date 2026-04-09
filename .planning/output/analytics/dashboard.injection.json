@@ -1,0 +1,45 @@
+{
+  "pageFilePath": "C:\\Users\\antonys beast pc\\dev\\EntrepreneurOS\\client\\src\\pages\\dashboard-page.tsx",
+  "pageName": "Dashboard",
+  "importCode": "import { usePostHog } from \"posthog-js/react\";\nimport { useEffect, useRef } from \"react\";",
+  "hookCode": "const posthog = usePostHog();",
+  "captureCode": "",
+  "manualCaptures": [
+    {
+      "eventName": "dashboard_viewed",
+      "trigger": "page load",
+      "captureSnippet": "posthog?.capture(\"dashboard_viewed\", { user_id: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "properties": [
+        "user_id",
+        "timestamp"
+      ]
+    },
+    {
+      "eventName": "quick_action_clicked",
+      "trigger": "user clicks a quick action button",
+      "captureSnippet": "posthog?.capture(\"quick_action_clicked\", { action_type: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "properties": [
+        "action_type",
+        "timestamp"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "dashboard_viewed",
+      "trigger": "page load",
+      "properties": [
+        "user_id",
+        "timestamp"
+      ]
+    },
+    {
+      "name": "quick_action_clicked",
+      "trigger": "user clicks a quick action button",
+      "properties": [
+        "action_type",
+        "timestamp"
+      ]
+    }
+  ]
+}

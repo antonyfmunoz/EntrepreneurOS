@@ -1,0 +1,62 @@
+{
+  "pageFilePath": "C:\\Users\\antonys beast pc\\dev\\EntrepreneurOS\\client\\src\\pages\\login-page.tsx",
+  "pageName": "Login",
+  "importCode": "import { usePostHog } from \"posthog-js/react\";\nimport { useEffect, useRef } from \"react\";",
+  "hookCode": "const posthog = usePostHog();",
+  "captureCode": "",
+  "manualCaptures": [
+    {
+      "eventName": "login_attempted",
+      "trigger": "user clicks login button",
+      "captureSnippet": "posthog?.capture(\"login_attempted\", { email: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "properties": [
+        "email",
+        "timestamp"
+      ]
+    },
+    {
+      "eventName": "login_succeeded",
+      "trigger": "successful authentication",
+      "captureSnippet": "posthog?.capture(\"login_succeeded\", { user_id: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "properties": [
+        "user_id",
+        "timestamp"
+      ]
+    },
+    {
+      "eventName": "login_failed",
+      "trigger": "authentication failure",
+      "captureSnippet": "posthog?.capture(\"login_failed\", { error_type: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "properties": [
+        "error_type",
+        "timestamp"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "login_attempted",
+      "trigger": "user clicks login button",
+      "properties": [
+        "email",
+        "timestamp"
+      ]
+    },
+    {
+      "name": "login_succeeded",
+      "trigger": "successful authentication",
+      "properties": [
+        "user_id",
+        "timestamp"
+      ]
+    },
+    {
+      "name": "login_failed",
+      "trigger": "authentication failure",
+      "properties": [
+        "error_type",
+        "timestamp"
+      ]
+    }
+  ]
+}

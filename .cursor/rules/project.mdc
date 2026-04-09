@@ -1,0 +1,80 @@
+---
+description: EntrepreneurOS project rules
+alwaysApply: true
+---
+
+# Project Overview
+
+This repository contains EntrepreneurOS.
+
+EntrepreneurOS is a SaaS platform for founders to manage companies using AI agents.
+
+Core architecture:
+
+Frontend
+- React
+- Typescript
+- React Query
+- Tailwind
+- ShadCN UI
+
+Backend
+- Node.js
+- Express
+- Drizzle ORM
+- Postgres (Neon)
+
+Auth
+- Session auth
+- Users table
+- Companies table
+
+Database structure
+users
+companies
+agents
+tasks
+messages
+notifications
+
+Routing rules
+
+Users must complete onboarding before accessing dashboard.
+
+Flow:
+
+register
+login
+check company
+if company exists → dashboard
+if no company → company setup
+
+Coding standards
+
+Frontend
+- Use React Query for API calls
+- Avoid raw fetch when possible
+- Use functional components
+- Use hooks
+
+Backend
+- API routes in server folder
+- Database access through drizzle
+- Return JSON responses
+
+Architecture rules
+
+Do not create duplicate API endpoints.
+
+Do not modify database schema without updating shared/schema.ts.
+
+Always maintain the onboarding flow:
+
+Auth → Company → Dashboard.
+
+When generating features prefer:
+
+agents
+tasks
+company operations
+AI workflow systems

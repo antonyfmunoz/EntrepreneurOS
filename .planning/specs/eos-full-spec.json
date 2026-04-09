@@ -1,0 +1,938 @@
+{
+  "pages": [
+    {
+      "name": "Auth",
+      "route": "/auth",
+      "purpose": "Login and registration page with tabbed interface supporting email/password authentication, Google OAuth, two-factor authentication, and password reset flow.",
+      "components": ["Tabs", "LoginForm", "RegisterForm", "MFAModal", "PasswordResetModal", "GoogleOAuthButton", "AlertBanner"],
+      "authLevel": "public",
+      "priority": 1,
+      "dependsOn": [],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Centered card layout with brand header, tabbed content area for login/register, and modal overlays for MFA and password reset.",
+      "emptyState": "Not applicable — form is always visible.",
+      "loadingState": "Submit buttons show spinner during authentication requests. OAuth button shows connecting state.",
+      "errorState": "Inline alert banner displays authentication errors (invalid credentials, account locked, network failure).",
+      "mobileConsiderations": "Full-width card on mobile. Tabs stack cleanly. Virtual keyboard does not obscure form fields. OAuth button prominently accessible.",
+      "dataRequirements": [
+        { "component": "LoginForm", "fields": ["email", "password"], "source": "user_input" },
+        { "component": "RegisterForm", "fields": ["username", "email", "password", "confirmPassword"], "source": "user_input" },
+        { "component": "MFAModal", "fields": ["verificationCode", "mfaResolver"], "source": "user_input" },
+        { "component": "PasswordResetModal", "fields": ["email"], "source": "user_input" },
+        { "component": "GoogleOAuthButton", "fields": ["firebaseToken"], "source": "firebase_sdk" }
+      ],
+      "apiEndpoints": [
+        { "endpoint": "POST /api/login", "source": "explicit" },
+        { "endpoint": "POST /api/register", "source": "explicit" },
+        { "endpoint": "POST /api/auth/firebase", "source": "explicit" },
+        { "endpoint": "POST /api/auth/google", "source": "explicit" }
+      ],
+      "validationRules": [
+        "Email must be valid format",
+        "Password minimum 8 characters",
+        "Confirm password must match password",
+        "Username required and non-empty",
+        "MFA code must be 6 digits"
+      ],
+      "events": [
+        { "name": "login_attempted", "trigger": "User clicks login button", "properties": ["method"], "source": "explicit" },
+        { "name": "login_succeeded", "trigger": "Server returns successful auth response", "properties": ["method", "userId"], "source": "explicit" },
+        { "name": "login_failed", "trigger": "Server returns auth error", "properties": ["method", "errorCode"], "source": "explicit" },
+        { "name": "register_attempted", "trigger": "User clicks register button", "properties": ["method"], "source": "explicit" },
+        { "name": "register_succeeded", "trigger": "Server returns successful registration", "properties": ["method", "userId"], "source": "explicit" },
+        { "name": "mfa_triggered", "trigger": "Server requires MFA verification", "properties": ["userId"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["google_oauth_enabled", "mfa_enrollment_prompt"]
+    },
+    {
+      "name": "CompanySetup",
+      "route": "/company-setup",
+      "purpose": "First-run onboarding flow where new users create their company profile with name, type, stage, offer description, target customer, and goals.",
+      "components": ["CompanyNameInput", "TypeInput", "StageInput", "OfferTextarea", "TargetCustomerTextarea", "GoalsTextarea", "SubmitButton"],
+      "authLevel": "authenticated",
+      "priority": 2,
+      "dependsOn": ["/auth"],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Centered single-column form layout with progressive disclosure. Brand header at top, step indicator optional.",
+      "emptyState": "All fields start empty — this is a creation form.",
+      "loadingState": "Submit button shows spinner during company creation API call.",
+      "errorState": "Inline field-level validation errors. Toast notification on server error.",
+      "mobileConsiderations": "Single-column layout works natively on mobile. Textareas should auto-expand. Submit button fixed at bottom on small screens.",
+      "dataRequirements": [
+        { "component": "CompanyNameInput", "fields": ["name"], "source": "user_input" },
+        { "component": "TypeInput", "fields": ["type"], "source": "user_input" },
+        { "component": "StageInput", "fields": ["stage"], "source": "user_input" },
+        { "component": "OfferTextarea", "fields": ["offerDescription"], "source": "user_input" },
+        { "component": "TargetCustomerTextarea", "fields": ["targetCustomer"], "source": "user_input" },
+        { "component": "GoalsTextarea", "fields": ["goals"], "source": "user_input" }
+      ],
+      "apiEndpoints": [
+        { "endpoint": "POST /api/company", "source": "explicit" }
+      ],
+      "validationRules": [
+        "Company name is required and non-empty",
+        "Company type must be selected",
+        "Stage must be selected",
+        "At least one of offer, target customer, or goals should be provided"
+      ],
+      "events": [
+        { "name": "company_created", "trigger": "User submits company form and server returns success", "properties": ["companyId", "companyType", "stage"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["onboarding_v2_flow"]
+    },
+    {
+      "name": "Dashboard",
+      "route": "/home",
+      "purpose": "Primary workspace displaying company overview, agent roster grid, active workflows, task board summary, and pending action approvals. Central hub for all navigation.",
+      "components": ["CompanyInfoCard", "WorkflowList", "AgentCardGrid", "TaskBoard", "ActionApprovalPanel", "AiFab"],
+      "authLevel": "authenticated",
+      "priority": 3,
+      "dependsOn": ["/company-setup"],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Multi-panel layout with sidebar navigation. Top section: company info card. Middle: agent grid and workflow list side by side. Bottom: task board summary. Floating AI FAB in bottom-right corner.",
+      "emptyState": "New company state shows onboarding prompts: 'Create your first agent', 'Set up a workflow', 'Add a task'.",
+      "loadingState": "Skeleton cards for agents, workflows, and tasks. Company info loads first.",
+      "errorState": "Toast notification for failed data fetches. Individual sections show retry buttons on failure.",
+      "mobileConsiderations": "Panels stack vertically on mobile. Agent grid becomes horizontal scroll. Task board collapses to list view. FAB remains floating.",
+      "dataRequirements": [
+        { "component": "CompanyInfoCard", "fields": ["name", "type", "stage", "offerDescription"], "source": "GET /api/company" },
+        { "component": "AgentCardGrid", "fields": ["id", "name", "role", "icon", "status"], "source": "GET /api/agents" },
+        { "component": "WorkflowList", "fields": ["id", "name", "status", "steps"], "source": "GET /api/workflows" },
+        { "component": "TaskBoard", "fields": ["id", "title", "status", "priority", "assignedAgentId"], "source": "GET /api/tasks" },
+        { "component": "ActionApprovalPanel", "fields": ["id", "type", "status", "agentId", "description"], "source": "GET /api/actions/pending" },
+        { "component": "AiFab", "fields": ["messages"], "source": "GET /api/ai-assistant/messages" }
+      ],
+      "apiEndpoints": [
+        { "endpoint": "GET /api/agents", "source": "explicit" },
+        { "endpoint": "GET /api/workflows", "source": "explicit" },
+        { "endpoint": "GET /api/company", "source": "explicit" },
+        { "endpoint": "GET /api/stats", "source": "explicit" },
+        { "endpoint": "GET /api/tasks", "source": "explicit" },
+        { "endpoint": "GET /api/actions/pending", "source": "explicit" },
+        { "endpoint": "GET /api/ai-assistant/messages", "source": "explicit" },
+        { "endpoint": "POST /api/ai-assistant/messages", "source": "explicit" }
+      ],
+      "validationRules": [],
+      "events": [
+        { "name": "dashboard_viewed", "trigger": "Page loads successfully", "properties": ["agentCount", "taskCount", "workflowCount"], "source": "explicit" },
+        { "name": "agent_selected", "trigger": "User clicks an agent card", "properties": ["agentId", "agentRole"], "source": "explicit" },
+        { "name": "workflow_started", "trigger": "User initiates a workflow", "properties": ["workflowId", "workflowName"], "source": "explicit" },
+        { "name": "action_approved", "trigger": "User approves a pending action", "properties": ["actionId", "actionType"], "source": "explicit" },
+        { "name": "action_rejected", "trigger": "User rejects a pending action", "properties": ["actionId", "actionType"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["ai_fab_enabled", "action_approval_panel", "workflow_automation"]
+    },
+    {
+      "name": "DashboardAlt",
+      "route": "/dashboard",
+      "purpose": "Secondary dashboard variant featuring a spec editor with live preview, validation panel, and AI assistant panel for development-oriented workflows.",
+      "components": ["NavBar", "Sidebar", "SpecEditor", "LivePreview", "ValidationPanel", "AIAssistantPanel"],
+      "authLevel": "authenticated",
+      "priority": 4,
+      "dependsOn": [],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Three-column layout: left sidebar for navigation, center for spec editor with live preview (split pane), right panel for validation and AI assistant.",
+      "emptyState": "Editor shows placeholder text with instructions. Preview shows blank canvas with 'Edit spec to see preview' message.",
+      "loadingState": "Editor loads with skeleton. Preview shows loading indicator while rendering.",
+      "errorState": "Validation panel highlights errors inline. Toast for save failures.",
+      "mobileConsiderations": "Panels collapse to tabbed view on mobile. Editor takes full width with toggle for preview and validation panels.",
+      "dataRequirements": [
+        { "component": "SpecEditor", "fields": ["specContent", "specId"], "source": "local_state" },
+        { "component": "LivePreview", "fields": ["renderedOutput"], "source": "derived_from_spec" },
+        { "component": "ValidationPanel", "fields": ["errors", "warnings"], "source": "derived_from_spec" },
+        { "component": "AIAssistantPanel", "fields": ["messages", "suggestions"], "source": "GET /api/ai-assistant/messages" }
+      ],
+      "apiEndpoints": [
+        { "endpoint": "POST /api/ai/generate", "source": "explicit" },
+        { "endpoint": "GET /api/ai-assistant/messages", "source": "explicit" },
+        { "endpoint": "POST /api/ai-assistant/messages", "source": "explicit" }
+      ],
+      "validationRules": [
+        "Spec content must be valid JSON or schema format"
+      ],
+      "events": [
+        { "name": "spec_edited", "trigger": "User modifies spec content in editor", "properties": ["specId", "changeType"], "source": "explicit" },
+        { "name": "preview_refreshed", "trigger": "Live preview updates after spec edit", "properties": ["specId", "renderTime"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["spec_editor_v2", "ai_assistant_panel"]
+    },
+    {
+      "name": "TaskBoard",
+      "route": "/tasks",
+      "purpose": "Full-page kanban-style task management board with drag-and-drop, task creation, filtering, subtask support, and agent assignment.",
+      "components": ["TaskBoard", "TaskCard", "TaskFilters", "CreateTaskButton", "TaskDetailModal", "SubtaskList"],
+      "authLevel": "authenticated",
+      "priority": 5,
+      "dependsOn": ["/home"],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Full-width kanban board with columns for each status (todo, in_progress, review, done). Filter bar at top. Create button in header. Task detail modal on card click.",
+      "emptyState": "Empty board shows 'No tasks yet' message with prominent 'Create your first task' call-to-action button.",
+      "loadingState": "Skeleton columns with placeholder cards. Column headers visible immediately.",
+      "errorState": "Toast notification on failed task operations. Drag-and-drop reverts on save failure.",
+      "mobileConsiderations": "Kanban columns become horizontal swipeable panels. Task cards show condensed view. Create button floats at bottom.",
+      "dataRequirements": [
+        { "component": "TaskBoard", "fields": ["id", "title", "status", "priority", "assignedAgentId", "dueDate", "tags"], "source": "GET /api/tasks" },
+        { "component": "TaskCard", "fields": ["id", "title", "status", "priority", "assignedAgentId", "subtaskCount"], "source": "GET /api/tasks" },
+        { "component": "TaskFilters", "fields": ["status", "priority", "assignedAgentId"], "source": "local_state" },
+        { "component": "CreateTaskButton", "fields": ["title", "description", "priority", "status", "assignedAgentId"], "source": "user_input" },
+        { "component": "SubtaskList", "fields": ["id", "title", "status", "parentTaskId"], "source": "GET /api/tasks/:id/subtasks" }
+      ],
+      "apiEndpoints": [
+        { "endpoint": "GET /api/tasks", "source": "explicit" },
+        { "endpoint": "GET /api/tasks/:id", "source": "explicit" },
+        { "endpoint": "POST /api/tasks", "source": "explicit" },
+        { "endpoint": "PATCH /api/tasks/:id", "source": "explicit" },
+        { "endpoint": "DELETE /api/tasks/:id", "source": "explicit" },
+        { "endpoint": "POST /api/tasks/:id/subtask", "source": "explicit" },
+        { "endpoint": "POST /api/tasks/:id/assign", "source": "explicit" },
+        { "endpoint": "GET /api/tasks/:id/subtasks", "source": "explicit" },
+        { "endpoint": "POST /api/tasks/:id/collaborators", "source": "explicit" },
+        { "endpoint": "GET /api/tasks/:id/messages", "source": "explicit" },
+        { "endpoint": "POST /api/tasks/:id/messages", "source": "explicit" }
+      ],
+      "validationRules": [
+        "Task title is required and non-empty",
+        "Priority must be one of: low, medium, high, critical",
+        "Status must be one of: todo, in_progress, review, done",
+        "Due date must be in the future when set",
+        "Assigned agent must exist in company"
+      ],
+      "events": [
+        { "name": "task_created", "trigger": "User submits new task form", "properties": ["taskId", "priority", "status"], "source": "explicit" },
+        { "name": "task_updated", "trigger": "User modifies task fields", "properties": ["taskId", "fieldsChanged"], "source": "explicit" },
+        { "name": "task_deleted", "trigger": "User deletes a task", "properties": ["taskId"], "source": "explicit" },
+        { "name": "task_assigned", "trigger": "User assigns task to an agent", "properties": ["taskId", "agentId"], "source": "explicit" },
+        { "name": "task_status_changed", "trigger": "User moves task to different column or changes status", "properties": ["taskId", "fromStatus", "toStatus"], "source": "explicit" },
+        { "name": "subtask_created", "trigger": "User adds a subtask", "properties": ["taskId", "subtaskId"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["task_drag_drop", "task_time_tracking", "task_bulk_actions"]
+    },
+    {
+      "name": "AgentChat",
+      "route": "/chat/:agentId",
+      "purpose": "Interactive conversational interface with AI agents. Supports model selection, conversation history sidebar, message streaming, and API key configuration.",
+      "components": ["AIModelSelector", "ChatMessageList", "MessageInput", "ConversationSidebar", "ApiKeyDialog", "CreateAgentModal"],
+      "authLevel": "authenticated",
+      "priority": 6,
+      "dependsOn": ["/home"],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Two-panel layout: left sidebar with conversation list and agent selector, right panel with chat messages and input. Model selector in header. API key dialog as modal overlay.",
+      "emptyState": "No messages state shows agent greeting with suggested prompts. Conversation sidebar shows 'No conversations yet'.",
+      "loadingState": "Typing indicator while agent generates response. Message list shows skeleton on initial load.",
+      "errorState": "Failed message shows retry button inline. API key errors show configuration dialog. Network errors show reconnect prompt.",
+      "mobileConsiderations": "Conversation sidebar becomes slide-out drawer. Message input sticks to bottom above keyboard. Model selector moves to overflow menu.",
+      "dataRequirements": [
+        { "component": "AIModelSelector", "fields": ["models", "selectedModel", "providerStatus"], "source": "GET /api/ai/models" },
+        { "component": "ChatMessageList", "fields": ["id", "role", "content", "timestamp", "model"], "source": "GET /api/agents/:id/messages" },
+        { "component": "MessageInput", "fields": ["content"], "source": "user_input" },
+        { "component": "ConversationSidebar", "fields": ["agentId", "agentName", "agentIcon", "messageCount"], "source": "GET /api/agents" },
+        { "component": "ApiKeyDialog", "fields": ["provider", "apiKey"], "source": "user_input" },
+        { "component": "CreateAgentModal", "fields": ["name", "role", "icon", "instructions"], "source": "user_input" }
+      ],
+      "apiEndpoints": [
+        { "endpoint": "GET /api/agents/:id", "source": "explicit" },
+        { "endpoint": "GET /api/agents/:id/messages", "source": "explicit" },
+        { "endpoint": "POST /api/agents/:id/chat", "source": "explicit" },
+        { "endpoint": "POST /api/agents/:id/clear-messages", "source": "explicit" },
+        { "endpoint": "GET /api/ai/models", "source": "explicit" },
+        { "endpoint": "GET /api/ai/provider-status", "source": "explicit" },
+        { "endpoint": "POST /api/keys/save", "source": "explicit" },
+        { "endpoint": "POST /api/agents", "source": "explicit" }
+      ],
+      "validationRules": [
+        "Message content must be non-empty",
+        "Agent ID must be valid",
+        "API key must be non-empty when saving",
+        "Model must be one of available models"
+      ],
+      "events": [
+        { "name": "message_sent", "trigger": "User sends a message to the agent", "properties": ["agentId", "model", "messageLength"], "source": "explicit" },
+        { "name": "model_switched", "trigger": "User changes AI model selection", "properties": ["fromModel", "toModel", "agentId"], "source": "explicit" },
+        { "name": "conversation_started", "trigger": "User opens a new conversation with an agent", "properties": ["agentId"], "source": "explicit" },
+        { "name": "conversation_cleared", "trigger": "User clears conversation history", "properties": ["agentId", "messageCount"], "source": "explicit" },
+        { "name": "api_key_saved", "trigger": "User saves an API key", "properties": ["provider"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["multi_model_chat", "streaming_responses", "agent_creation_from_chat"]
+    },
+    {
+      "name": "AgentProgramming",
+      "route": "/agent/:agentId/program",
+      "purpose": "Agent configuration interface for editing personality, behavioral instructions, knowledge base sources (files, URLs), and previewing agent behavior.",
+      "components": ["InstructionsTabs", "InstructionsTextarea", "KnowledgeSourceSelector", "FileUpload", "URLValidator", "AgentForm", "IconPicker", "AgentPreviewCard"],
+      "authLevel": "authenticated",
+      "priority": 7,
+      "dependsOn": ["/home"],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Two-column layout: left side with tabbed instruction editor and knowledge sources, right side with agent preview card showing live updates.",
+      "emptyState": "New agent shows template instructions with placeholder text. Knowledge base shows 'Add your first source' prompt.",
+      "loadingState": "Agent data loads with skeleton form. Preview card shows loading state.",
+      "errorState": "Save failure shows toast with retry. Invalid URL shows inline validation error. File upload failure shows error with retry.",
+      "mobileConsiderations": "Columns stack vertically. Preview card moves to top as collapsible summary. Tabs remain accessible. File upload uses native picker.",
+      "dataRequirements": [
+        { "component": "InstructionsTabs", "fields": ["personality", "instructions", "knowledgeBase"], "source": "GET /api/agents/:id" },
+        { "component": "InstructionsTextarea", "fields": ["content", "tabType"], "source": "GET /api/agents/:id" },
+        { "component": "KnowledgeSourceSelector", "fields": ["sourceType", "sourceUrl", "sourceFile"], "source": "user_input" },
+        { "component": "FileUpload", "fields": ["file", "fileName", "fileSize"], "source": "user_input" },
+        { "component": "URLValidator", "fields": ["url", "isValid"], "source": "user_input" },
+        { "component": "AgentForm", "fields": ["name", "role", "icon", "department", "roleLevel"], "source": "GET /api/agents/:id" },
+        { "component": "IconPicker", "fields": ["selectedIcon", "availableIcons"], "source": "static_data" },
+        { "component": "AgentPreviewCard", "fields": ["name", "role", "icon", "personality"], "source": "derived_from_form" }
+      ],
+      "apiEndpoints": [
+        { "endpoint": "GET /api/agents/:id", "source": "explicit" },
+        { "endpoint": "PATCH /api/agents/:id", "source": "explicit" }
+      ],
+      "validationRules": [
+        "Agent name is required",
+        "Role is required",
+        "Instructions must be non-empty",
+        "Knowledge source URLs must be valid format",
+        "Uploaded files must be under size limit"
+      ],
+      "events": [
+        { "name": "agent_instructions_updated", "trigger": "User saves updated instructions", "properties": ["agentId", "tabChanged", "contentLength"], "source": "explicit" },
+        { "name": "knowledge_source_changed", "trigger": "User adds or removes a knowledge source", "properties": ["agentId", "sourceType", "action"], "source": "explicit" },
+        { "name": "agent_tested", "trigger": "User tests agent with preview interaction", "properties": ["agentId"], "source": "explicit" },
+        { "name": "agent_icon_changed", "trigger": "User selects a different agent icon", "properties": ["agentId", "iconName"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["knowledge_base_urls", "agent_personality_templates", "agent_preview_chat"]
+    },
+    {
+      "name": "Analytics",
+      "route": "/analytics",
+      "purpose": "Performance analytics dashboard showing agent effectiveness, task completion trends, task distribution, and time-range filtering.",
+      "components": ["PerformanceAnalytics", "TimeRangeSelector", "AgentPerformanceChart", "TaskCompletionTrends", "TaskDistribution"],
+      "authLevel": "authenticated",
+      "priority": 8,
+      "dependsOn": ["/home"],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Dashboard grid layout with time range selector at top. Two charts side-by-side in first row (agent performance, task completion). Distribution chart full-width below.",
+      "emptyState": "No data state shows 'Complete some tasks to see analytics' with link to task board.",
+      "loadingState": "Chart areas show skeleton placeholders with loading spinners. Time range selector loads immediately.",
+      "errorState": "Failed chart shows 'Unable to load analytics' with retry button. Partial failures show available data with warning.",
+      "mobileConsiderations": "Charts stack vertically. Time range selector becomes dropdown. Charts resize responsively. Touch-friendly tooltips.",
+      "dataRequirements": [
+        { "component": "PerformanceAnalytics", "fields": ["agentMetrics", "taskMetrics", "timeRange"], "source": "GET /api/analytics" },
+        { "component": "TimeRangeSelector", "fields": ["selectedRange", "availableRanges"], "source": "local_state" },
+        { "component": "AgentPerformanceChart", "fields": ["agentId", "agentName", "tasksCompleted", "averageTime", "successRate"], "source": "GET /api/analytics" },
+        { "component": "TaskCompletionTrends", "fields": ["date", "completedCount", "createdCount"], "source": "GET /api/analytics" },
+        { "component": "TaskDistribution", "fields": ["status", "count", "percentage"], "source": "GET /api/analytics" }
+      ],
+      "apiEndpoints": [
+        { "endpoint": "GET /api/analytics?timeRange=7days", "source": "explicit" },
+        { "endpoint": "GET /api/stats", "source": "explicit" },
+        { "endpoint": "GET /api/agents/:id/metrics", "source": "explicit" }
+      ],
+      "validationRules": [],
+      "events": [
+        { "name": "analytics_viewed", "trigger": "Page loads with analytics data", "properties": ["timeRange", "agentCount"], "source": "explicit" },
+        { "name": "time_range_changed", "trigger": "User selects a different time range", "properties": ["fromRange", "toRange"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["advanced_analytics", "export_analytics_csv"]
+    },
+    {
+      "name": "CRM",
+      "route": "/crm",
+      "purpose": "Customer relationship management with tabbed views for contacts, deals, and activities. Full CRUD operations, search, and status management.",
+      "components": ["CRMTabs", "ContactList", "DealList", "ActivityList", "ContactForm", "DealForm", "ActivityForm", "StatusBadges", "SearchBar"],
+      "authLevel": "authenticated",
+      "priority": 9,
+      "dependsOn": ["/home"],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Tabbed layout with three tabs: Contacts, Deals, Activities. Each tab has search bar at top, list view below, and slide-out form for create/edit. Status badges inline on list items.",
+      "emptyState": "Each tab shows specific empty state: 'No contacts yet — add your first contact', 'No deals in pipeline', 'No activities logged'.",
+      "loadingState": "List shows skeleton rows. Tabs load independently. Search shows loading indicator.",
+      "errorState": "Failed CRUD operations show toast with error message. List shows retry button on fetch failure.",
+      "mobileConsiderations": "Tabs become scrollable horizontal strip. List items show condensed view. Forms open as full-screen modals. Search bar collapses to icon on scroll.",
+      "dataRequirements": [
+        { "component": "ContactList", "fields": ["id", "name", "email", "phone", "company", "status", "tags"], "source": "GET /api/crm/contacts" },
+        { "component": "DealList", "fields": ["id", "title", "value", "stage", "contactId", "probability", "closeDate"], "source": "GET /api/crm/deals" },
+        { "component": "ActivityList", "fields": ["id", "type", "description", "contactId", "dealId", "date", "duration"], "source": "GET /api/crm/activities" },
+        { "component": "ContactForm", "fields": ["name", "email", "phone", "company", "status", "notes", "tags"], "source": "user_input" },
+        { "component": "DealForm", "fields": ["title", "value", "stage", "contactId", "probability", "closeDate", "notes"], "source": "user_input" },
+        { "component": "ActivityForm", "fields": ["type", "description", "contactId", "dealId", "date", "duration", "notes"], "source": "user_input" },
+        { "component": "SearchBar", "fields": ["query"], "source": "user_input" }
+      ],
+      "apiEndpoints": [
+        { "endpoint": "GET /api/crm/contacts", "source": "explicit" },
+        { "endpoint": "GET /api/crm/contacts/:id", "source": "explicit" },
+        { "endpoint": "POST /api/crm/contacts", "source": "explicit" },
+        { "endpoint": "PATCH /api/crm/contacts/:id", "source": "explicit" },
+        { "endpoint": "GET /api/crm/deals", "source": "explicit" },
+        { "endpoint": "GET /api/crm/deals/:id", "source": "explicit" },
+        { "endpoint": "POST /api/crm/deals", "source": "explicit" },
+        { "endpoint": "PATCH /api/crm/deals/:id", "source": "explicit" },
+        { "endpoint": "GET /api/crm/activities", "source": "explicit" },
+        { "endpoint": "GET /api/crm/activities/:id", "source": "explicit" },
+        { "endpoint": "POST /api/crm/activities", "source": "explicit" },
+        { "endpoint": "PATCH /api/crm/activities/:id", "source": "explicit" }
+      ],
+      "validationRules": [
+        "Contact name is required",
+        "Contact email must be valid format when provided",
+        "Deal title is required",
+        "Deal value must be a positive number",
+        "Deal stage must be one of: lead, qualified, proposal, negotiation, closed_won, closed_lost",
+        "Activity type is required",
+        "Activity date is required"
+      ],
+      "events": [
+        { "name": "contact_created", "trigger": "User submits new contact form", "properties": ["contactId"], "source": "explicit" },
+        { "name": "contact_updated", "trigger": "User updates contact details", "properties": ["contactId", "fieldsChanged"], "source": "explicit" },
+        { "name": "deal_created", "trigger": "User submits new deal form", "properties": ["dealId", "value", "stage"], "source": "explicit" },
+        { "name": "deal_stage_changed", "trigger": "User changes deal pipeline stage", "properties": ["dealId", "fromStage", "toStage"], "source": "explicit" },
+        { "name": "activity_logged", "trigger": "User creates a new activity", "properties": ["activityId", "activityType", "contactId"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["crm_pipeline_view", "crm_import_export", "crm_email_integration"]
+    },
+    {
+      "name": "Documents",
+      "route": "/documents",
+      "purpose": "Document and folder management system with hierarchical navigation, tagging, search, and CRUD operations for documents and folders.",
+      "components": ["SearchBar", "FolderBreadcrumb", "DocumentList", "FolderList", "CreateDocumentDialog", "CreateFolderDialog", "TagBadges"],
+      "authLevel": "authenticated",
+      "priority": 10,
+      "dependsOn": ["/home"],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Single-column layout with search bar and breadcrumb navigation at top. Folder list above document list. Create buttons in header area. Tag badges inline on document items.",
+      "emptyState": "Root folder shows 'No documents yet' with create document and create folder buttons prominently displayed.",
+      "loadingState": "Skeleton rows for document and folder lists. Breadcrumb loads immediately. Search shows loading indicator.",
+      "errorState": "Toast notification for failed operations. Delete shows confirmation dialog. Failed fetch shows retry button.",
+      "mobileConsiderations": "List view optimized for touch. Breadcrumb truncates with ellipsis for deep paths. Create buttons in floating action button. Swipe gestures for delete/edit.",
+      "dataRequirements": [
+        { "component": "SearchBar", "fields": ["query"], "source": "user_input" },
+        { "component": "FolderBreadcrumb", "fields": ["folderId", "folderName", "parentPath"], "source": "GET /api/folders/:id" },
+        { "component": "DocumentList", "fields": ["id", "title", "content", "folderId", "tags", "createdAt", "updatedAt"], "source": "GET /api/documents" },
+        { "component": "FolderList", "fields": ["id", "name", "parentFolderId", "documentCount"], "source": "GET /api/folders" },
+        { "component": "CreateDocumentDialog", "fields": ["title", "content", "folderId", "tags"], "source": "user_input" },
+        { "component": "CreateFolderDialog", "fields": ["name", "parentFolderId"], "source": "user_input" },
+        { "component": "TagBadges", "fields": ["tags"], "source": "GET /api/documents" }
+      ],
+      "apiEndpoints": [
+        { "endpoint": "GET /api/documents", "source": "explicit" },
+        { "endpoint": "GET /api/documents/:id", "source": "explicit" },
+        { "endpoint": "POST /api/documents", "source": "explicit" },
+        { "endpoint": "PATCH /api/documents/:id", "source": "explicit" },
+        { "endpoint": "DELETE /api/documents/:id", "source": "explicit" },
+        { "endpoint": "GET /api/folders", "source": "explicit" },
+        { "endpoint": "GET /api/folders/:id", "source": "explicit" },
+        { "endpoint": "POST /api/folders", "source": "explicit" },
+        { "endpoint": "PATCH /api/folders/:id", "source": "explicit" },
+        { "endpoint": "DELETE /api/folders/:id", "source": "explicit" }
+      ],
+      "validationRules": [
+        "Document title is required",
+        "Folder name is required",
+        "Folder name must be unique within parent folder",
+        "Tags must be non-empty strings"
+      ],
+      "events": [
+        { "name": "document_created", "trigger": "User creates a new document", "properties": ["documentId", "folderId"], "source": "explicit" },
+        { "name": "document_updated", "trigger": "User edits a document", "properties": ["documentId", "fieldsChanged"], "source": "explicit" },
+        { "name": "document_deleted", "trigger": "User deletes a document", "properties": ["documentId"], "source": "explicit" },
+        { "name": "folder_created", "trigger": "User creates a new folder", "properties": ["folderId", "parentFolderId"], "source": "explicit" },
+        { "name": "folder_navigated", "trigger": "User navigates into a folder", "properties": ["folderId", "depth"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["document_versioning", "document_collaboration", "rich_text_editor"]
+    },
+    {
+      "name": "Integrations",
+      "route": "/integrations",
+      "purpose": "External tool connection management page. Currently supports Gmail OAuth integration with coming-soon placeholders for Notion, Slack, and other services.",
+      "components": ["GmailConnectButton", "IntegrationsList", "BenefitsList", "ComingSoonList"],
+      "authLevel": "authenticated",
+      "priority": 11,
+      "dependsOn": ["/settings"],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Single-column card layout. Active integrations at top with connect/disconnect buttons. Benefits section below. Coming soon section at bottom with greyed-out cards.",
+      "emptyState": "No integrations connected state shows benefits of connecting services with prominent Gmail connect button.",
+      "loadingState": "Integration status badges show loading spinner while checking connection status.",
+      "errorState": "OAuth failure shows error toast with retry. Disconnect failure shows confirmation with error message.",
+      "mobileConsiderations": "Cards stack full-width. Connect buttons are prominent and touch-friendly. Benefits list collapses to accordion.",
+      "dataRequirements": [
+        { "component": "GmailConnectButton", "fields": ["isConnected", "email", "authUrl"], "source": "GET /api/integrations/gmail/status" },
+        { "component": "IntegrationsList", "fields": ["id", "name", "type", "status", "connectedAt"], "source": "GET /api/integrations" },
+        { "component": "BenefitsList", "fields": ["title", "description", "icon"], "source": "static_data" },
+        { "component": "ComingSoonList", "fields": ["name", "icon", "description"], "source": "static_data" }
+      ],
+      "apiEndpoints": [
+        { "endpoint": "GET /api/integrations", "source": "explicit" },
+        { "endpoint": "POST /api/integrations/connect", "source": "explicit" },
+        { "endpoint": "GET /api/integrations/gmail/auth", "source": "explicit" },
+        { "endpoint": "GET /api/integrations/gmail/status", "source": "explicit" },
+        { "endpoint": "POST /api/integrations/gmail/disconnect", "source": "explicit" },
+        { "endpoint": "GET /api/auth/google/callback", "source": "explicit" }
+      ],
+      "validationRules": [],
+      "events": [
+        { "name": "integration_connected", "trigger": "User successfully connects an integration", "properties": ["integrationType", "integrationId"], "source": "explicit" },
+        { "name": "integration_disconnected", "trigger": "User disconnects an integration", "properties": ["integrationType", "integrationId"], "source": "explicit" },
+        { "name": "gmail_oauth_started", "trigger": "User clicks Gmail connect button", "properties": [], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["notion_integration", "slack_integration", "calendar_sync"]
+    },
+    {
+      "name": "Notifications",
+      "route": "/notifications",
+      "purpose": "Notification center with tabbed filtering (all, unread), mark-as-read, delete, and bulk operations for system and agent notifications.",
+      "components": ["NotificationTabs", "NotificationCard", "TypeIcons", "MarkAsReadButton", "DeleteButton", "EmptyState"],
+      "authLevel": "authenticated",
+      "priority": 12,
+      "dependsOn": [],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Single-column list layout with tabs at top (All, Unread). Each notification is a card with type icon, message, timestamp, and action buttons. Mark all read button in header.",
+      "emptyState": "No notifications shows bell icon with 'You're all caught up!' message.",
+      "loadingState": "Skeleton notification cards. Tab counts show loading indicator.",
+      "errorState": "Failed operations show toast. Mark-as-read failure reverts visual state.",
+      "mobileConsiderations": "Full-width notification cards. Swipe left to delete, swipe right to mark as read. Pull to refresh.",
+      "dataRequirements": [
+        { "component": "NotificationTabs", "fields": ["activeTab", "unreadCount"], "source": "GET /api/notifications/count" },
+        { "component": "NotificationCard", "fields": ["id", "type", "title", "message", "isRead", "createdAt", "metadata"], "source": "GET /api/notifications" },
+        { "component": "TypeIcons", "fields": ["type"], "source": "derived_from_notification" },
+        { "component": "MarkAsReadButton", "fields": ["notificationId"], "source": "local_state" },
+        { "component": "DeleteButton", "fields": ["notificationId"], "source": "local_state" }
+      ],
+      "apiEndpoints": [
+        { "endpoint": "GET /api/notifications", "source": "explicit" },
+        { "endpoint": "GET /api/notifications/count", "source": "explicit" },
+        { "endpoint": "POST /api/notifications/:id/read", "source": "explicit" },
+        { "endpoint": "POST /api/notifications/read-all", "source": "explicit" },
+        { "endpoint": "DELETE /api/notifications/:id", "source": "explicit" }
+      ],
+      "validationRules": [],
+      "events": [
+        { "name": "notification_read", "trigger": "User marks a notification as read", "properties": ["notificationId", "notificationType"], "source": "explicit" },
+        { "name": "notification_deleted", "trigger": "User deletes a notification", "properties": ["notificationId", "notificationType"], "source": "explicit" },
+        { "name": "all_notifications_read", "trigger": "User clicks mark all as read", "properties": ["count"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["push_notifications", "notification_preferences", "notification_grouping"]
+    },
+    {
+      "name": "Settings",
+      "route": "/settings",
+      "purpose": "User account and application settings with tabs for appearance (dark mode, compact view), account info, security (MFA enrollment, password reset, email verification), and notification preferences.",
+      "components": ["SettingsTabs", "DarkModeToggle", "CompactViewToggle", "AccountInfoFields", "EmailVerificationStatus", "MFAEnrollment", "MFAVerification", "PasswordResetButton", "NotificationToggles", "IntegrationLink"],
+      "authLevel": "authenticated",
+      "priority": 13,
+      "dependsOn": [],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Tabbed layout with sections: Appearance, Account, Security, Notifications. Each tab is a vertical form layout with grouped settings. Integration link at bottom.",
+      "emptyState": "Not applicable — settings always have default values.",
+      "loadingState": "Settings load with current values. Toggle states resolve after Firebase SDK loads.",
+      "errorState": "Failed save shows toast with error. MFA enrollment failure shows inline error with retry.",
+      "mobileConsiderations": "Tabs become vertical accordion on mobile. Toggle switches are touch-friendly. MFA QR code scales to screen width.",
+      "dataRequirements": [
+        { "component": "SettingsTabs", "fields": ["activeTab"], "source": "local_state" },
+        { "component": "DarkModeToggle", "fields": ["isDarkMode"], "source": "local_storage" },
+        { "component": "CompactViewToggle", "fields": ["isCompactView"], "source": "local_storage" },
+        { "component": "AccountInfoFields", "fields": ["username", "email", "createdAt"], "source": "GET /api/user" },
+        { "component": "EmailVerificationStatus", "fields": ["isVerified", "email"], "source": "firebase_sdk" },
+        { "component": "MFAEnrollment", "fields": ["isEnrolled", "qrCodeUrl", "verificationCode"], "source": "firebase_sdk" },
+        { "component": "MFAVerification", "fields": ["verificationCode"], "source": "user_input" },
+        { "component": "PasswordResetButton", "fields": ["email"], "source": "firebase_sdk" },
+        { "component": "NotificationToggles", "fields": ["emailNotifications", "pushNotifications", "taskAlerts", "agentAlerts"], "source": "local_storage" },
+        { "component": "IntegrationLink", "fields": [], "source": "static_data" }
+      ],
+      "apiEndpoints": [
+        { "endpoint": "GET /api/user", "source": "inferred" }
+      ],
+      "validationRules": [
+        "MFA verification code must be 6 digits"
+      ],
+      "events": [
+        { "name": "settings_changed", "trigger": "User modifies any setting", "properties": ["settingName", "newValue"], "source": "explicit" },
+        { "name": "dark_mode_toggled", "trigger": "User toggles dark mode", "properties": ["enabled"], "source": "explicit" },
+        { "name": "mfa_enrolled", "trigger": "User successfully enrolls in MFA", "properties": [], "source": "explicit" },
+        { "name": "email_verified", "trigger": "User completes email verification", "properties": [], "source": "explicit" },
+        { "name": "password_reset_requested", "trigger": "User clicks reset password button", "properties": [], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["dark_mode", "compact_view", "notification_preferences_v2"]
+    },
+    {
+      "name": "Support",
+      "route": "/support",
+      "purpose": "Support request submission form with contact information sidebar and FAQ section. Shows success card on submission.",
+      "components": ["SupportForm", "ContactInfoSidebar", "FAQSection", "FileAttachment", "SuccessCard"],
+      "authLevel": "authenticated",
+      "priority": 14,
+      "dependsOn": [],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Two-column layout: left column with support form and file attachment, right column with contact info sidebar. FAQ section below the form. Success card replaces form on submission.",
+      "emptyState": "Form starts empty with placeholder text in fields.",
+      "loadingState": "Submit button shows spinner during form submission.",
+      "errorState": "Failed submission shows toast with error. File attachment failure shows inline error.",
+      "mobileConsiderations": "Columns stack vertically. Contact info moves below form. FAQ becomes accordion. File upload uses native file picker.",
+      "dataRequirements": [
+        { "component": "SupportForm", "fields": ["subject", "category", "description", "priority"], "source": "user_input" },
+        { "component": "ContactInfoSidebar", "fields": ["email", "phone", "hours"], "source": "static_data" },
+        { "component": "FAQSection", "fields": ["question", "answer"], "source": "static_data" },
+        { "component": "FileAttachment", "fields": ["file", "fileName", "fileSize"], "source": "user_input" },
+        { "component": "SuccessCard", "fields": ["ticketId", "estimatedResponse"], "source": "api_response" }
+      ],
+      "apiEndpoints": [],
+      "validationRules": [
+        "Subject is required",
+        "Category must be selected",
+        "Description is required and minimum 20 characters",
+        "File attachment must be under 10MB"
+      ],
+      "events": [
+        { "name": "support_request_submitted", "trigger": "User submits the support form", "properties": ["category", "priority", "hasAttachment"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["live_chat_support", "knowledge_base_search"]
+    },
+    {
+      "name": "Tutorials",
+      "route": "/tutorials",
+      "purpose": "Educational resource library with categorized tutorial cards, duration and difficulty level indicators, and tabbed category navigation.",
+      "components": ["TutorialTabs", "TutorialCard", "DurationBadge", "LevelBadge"],
+      "authLevel": "authenticated",
+      "priority": 15,
+      "dependsOn": [],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Tabbed category navigation at top. Grid of tutorial cards below. Each card shows title, description, duration badge, and level badge.",
+      "emptyState": "Category with no tutorials shows 'More tutorials coming soon' message.",
+      "loadingState": "Skeleton cards in grid layout.",
+      "errorState": "Failed to load tutorials shows retry button.",
+      "mobileConsiderations": "Card grid becomes single column. Tabs become horizontally scrollable. Cards show full width with adequate touch targets.",
+      "dataRequirements": [
+        { "component": "TutorialTabs", "fields": ["categories", "activeCategory"], "source": "static_data" },
+        { "component": "TutorialCard", "fields": ["id", "title", "description", "category", "duration", "level", "thumbnailUrl"], "source": "static_data" },
+        { "component": "DurationBadge", "fields": ["minutes"], "source": "derived_from_tutorial" },
+        { "component": "LevelBadge", "fields": ["level"], "source": "derived_from_tutorial" }
+      ],
+      "apiEndpoints": [],
+      "validationRules": [],
+      "events": [
+        { "name": "tutorial_viewed", "trigger": "User clicks on a tutorial card", "properties": ["tutorialId", "tutorialTitle", "category"], "source": "explicit" },
+        { "name": "tutorial_category_switched", "trigger": "User switches category tab", "properties": ["fromCategory", "toCategory"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["video_tutorials", "tutorial_progress_tracking"]
+    },
+    {
+      "name": "AdminDashboard",
+      "route": "/admin",
+      "purpose": "Administrative panel stub for system-wide management. Currently minimal with header and content placeholder for future admin features.",
+      "components": ["AdminHeader", "AdminContent"],
+      "authLevel": "admin",
+      "priority": 16,
+      "dependsOn": [],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Full-width layout with admin header bar and content area below. Placeholder for future admin panels.",
+      "emptyState": "Shows admin placeholder content with coming-soon features list.",
+      "loadingState": "Header loads immediately. Content area shows loading indicator.",
+      "errorState": "Access denied redirect for non-admin users.",
+      "mobileConsiderations": "Responsive admin header. Content area fills available width.",
+      "dataRequirements": [
+        { "component": "AdminHeader", "fields": ["adminName", "role"], "source": "GET /api/user" },
+        { "component": "AdminContent", "fields": [], "source": "static_data" }
+      ],
+      "apiEndpoints": [],
+      "validationRules": [],
+      "events": [
+        { "name": "admin_viewed", "trigger": "Admin user accesses admin panel", "properties": ["adminUserId"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["admin_user_management", "admin_system_health", "admin_audit_log"]
+    },
+    {
+      "name": "Login",
+      "route": "/login",
+      "purpose": "Standalone login page (secondary to /auth) with branding section, email/password form, Google and GitHub OAuth buttons, and forgot password link.",
+      "components": ["BrandingSection", "EmailInput", "PasswordInput", "ForgotPasswordLink", "SubmitButton", "GoogleOAuthButton", "GitHubOAuthButton", "Separator"],
+      "authLevel": "public",
+      "priority": 17,
+      "dependsOn": [],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Split layout: left side with branding and illustration, right side with login form. OAuth buttons below form separated by 'or' divider.",
+      "emptyState": "Not applicable — form is always visible.",
+      "loadingState": "Submit button shows spinner during authentication. OAuth buttons show connecting state.",
+      "errorState": "Inline error messages below form fields. Alert banner for server errors.",
+      "mobileConsiderations": "Branding section collapses to compact header. Form takes full width. OAuth buttons stack vertically.",
+      "dataRequirements": [
+        { "component": "BrandingSection", "fields": ["appName", "tagline", "logoUrl"], "source": "static_data" },
+        { "component": "EmailInput", "fields": ["email"], "source": "user_input" },
+        { "component": "PasswordInput", "fields": ["password"], "source": "user_input" },
+        { "component": "GoogleOAuthButton", "fields": ["firebaseToken"], "source": "firebase_sdk" },
+        { "component": "GitHubOAuthButton", "fields": ["authCode"], "source": "oauth_redirect" }
+      ],
+      "apiEndpoints": [
+        { "endpoint": "POST /api/login", "source": "explicit" },
+        { "endpoint": "POST /api/auth/firebase", "source": "explicit" }
+      ],
+      "validationRules": [
+        "Email must be valid format",
+        "Password is required"
+      ],
+      "events": [
+        { "name": "login_page_viewed", "trigger": "User lands on login page", "properties": ["referrer"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["github_oauth", "social_login_v2"]
+    },
+    {
+      "name": "Signup",
+      "route": "/signup",
+      "purpose": "Standalone signup page (secondary to /auth) with branding icon, full name, email, password with strength indicator, and sign-in link.",
+      "components": ["BrandingIcon", "FullNameInput", "EmailInput", "PasswordInput", "PasswordStrengthIndicator", "SubmitButton", "SignInLink"],
+      "authLevel": "public",
+      "priority": 18,
+      "dependsOn": [],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Centered card layout with branding icon at top, form fields vertically stacked, password strength bar below password field, submit button, and sign-in link at bottom.",
+      "emptyState": "Not applicable — form is always visible.",
+      "loadingState": "Submit button shows spinner during registration.",
+      "errorState": "Inline field-level validation errors. Server errors show alert banner.",
+      "mobileConsiderations": "Full-width card. Password strength indicator clearly visible. Virtual keyboard does not obscure fields.",
+      "dataRequirements": [
+        { "component": "BrandingIcon", "fields": ["iconUrl"], "source": "static_data" },
+        { "component": "FullNameInput", "fields": ["fullName"], "source": "user_input" },
+        { "component": "EmailInput", "fields": ["email"], "source": "user_input" },
+        { "component": "PasswordInput", "fields": ["password"], "source": "user_input" },
+        { "component": "PasswordStrengthIndicator", "fields": ["strength", "requirements"], "source": "derived_from_password" }
+      ],
+      "apiEndpoints": [
+        { "endpoint": "POST /api/register", "source": "explicit" }
+      ],
+      "validationRules": [
+        "Full name is required",
+        "Email must be valid format",
+        "Password minimum 8 characters",
+        "Password must contain uppercase, lowercase, number, and special character"
+      ],
+      "events": [
+        { "name": "signup_page_viewed", "trigger": "User lands on signup page", "properties": ["referrer"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": ["password_strength_requirements_v2"]
+    },
+    {
+      "name": "ForgotPassword",
+      "route": "/forgot-password",
+      "purpose": "Password recovery flow where users enter their email to receive a reset link. Shows success message after submission.",
+      "components": ["BotIcon", "EmailInput", "SendResetButton", "BackToLoginLink", "SuccessMessage"],
+      "authLevel": "public",
+      "priority": 19,
+      "dependsOn": [],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Centered card layout with bot icon at top, email input field, send reset button, and back-to-login link. Success message replaces form on submission.",
+      "emptyState": "Not applicable — form is always visible.",
+      "loadingState": "Send reset button shows spinner during API call.",
+      "errorState": "Invalid email shows inline error. Server error shows alert banner.",
+      "mobileConsiderations": "Full-width card. Email input and button are touch-friendly.",
+      "dataRequirements": [
+        { "component": "BotIcon", "fields": [], "source": "static_data" },
+        { "component": "EmailInput", "fields": ["email"], "source": "user_input" },
+        { "component": "SendResetButton", "fields": [], "source": "local_state" },
+        { "component": "SuccessMessage", "fields": ["email"], "source": "derived_from_form" }
+      ],
+      "apiEndpoints": [],
+      "validationRules": [
+        "Email must be valid format",
+        "Email is required"
+      ],
+      "events": [
+        { "name": "password_reset_requested", "trigger": "User submits email for password reset", "properties": ["email"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": []
+    },
+    {
+      "name": "ResetPassword",
+      "route": "/reset-password",
+      "purpose": "Password reset completion page after email verification. Allows user to set a new password using the reset token from email.",
+      "components": ["KeyIcon", "EmailInput", "AlertMessage", "SendResetButton", "BackToLoginButton", "HelpLinks"],
+      "authLevel": "public",
+      "priority": 20,
+      "dependsOn": [],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "Centered card layout with key icon at top, email input for confirmation, alert message area, reset button, back-to-login button, and help links at bottom.",
+      "emptyState": "Not applicable — form is always visible. Email may be pre-filled from reset link.",
+      "loadingState": "Reset button shows spinner during password reset API call.",
+      "errorState": "Expired or invalid token shows alert message with option to request new reset. Server errors show alert banner.",
+      "mobileConsiderations": "Full-width card. All buttons and inputs are touch-friendly. Help links clearly tappable.",
+      "dataRequirements": [
+        { "component": "KeyIcon", "fields": [], "source": "static_data" },
+        { "component": "EmailInput", "fields": ["email"], "source": "url_params" },
+        { "component": "AlertMessage", "fields": ["type", "message"], "source": "local_state" },
+        { "component": "SendResetButton", "fields": [], "source": "local_state" },
+        { "component": "BackToLoginButton", "fields": [], "source": "static_data" },
+        { "component": "HelpLinks", "fields": ["supportUrl", "faqUrl"], "source": "static_data" }
+      ],
+      "apiEndpoints": [],
+      "validationRules": [
+        "Email must be valid format",
+        "Reset token must be present in URL"
+      ],
+      "events": [
+        { "name": "password_reset_completed", "trigger": "User successfully resets password", "properties": [], "source": "explicit" }
+      ],
+      "featureFlagCandidates": []
+    }
+  ],
+  "sharedComponents": [
+    {
+      "id": "layout",
+      "name": "Layout",
+      "purpose": "Application shell with sidebar navigation, top header bar, and main content area. Wraps all authenticated pages with consistent navigation and branding.",
+      "usedByPages": ["/home", "/dashboard", "/tasks", "/chat/:agentId", "/agent/:agentId/program", "/analytics", "/crm", "/documents", "/integrations", "/notifications", "/settings", "/support", "/tutorials", "/admin"],
+      "props": ["children", "title", "showSidebar", "sidebarCollapsed"],
+      "source": "explicit"
+    },
+    {
+      "id": "task-board",
+      "name": "TaskBoard",
+      "purpose": "Kanban-style task board with drag-and-drop columns for task status management. Renders task cards in status columns with reorder support.",
+      "usedByPages": ["/home", "/tasks"],
+      "props": ["tasks", "onTaskUpdate", "onTaskCreate", "onTaskDelete", "onStatusChange", "compact"],
+      "source": "explicit"
+    },
+    {
+      "id": "agent-card",
+      "name": "AgentCard",
+      "purpose": "Card component displaying agent avatar/icon, name, role, status indicator, and quick action buttons. Used in agent grids and lists.",
+      "usedByPages": ["/home", "/chat/:agentId"],
+      "props": ["agent", "onClick", "onEdit", "compact", "showStatus"],
+      "source": "explicit"
+    },
+    {
+      "id": "create-agent-modal",
+      "name": "CreateAgentModal",
+      "purpose": "Modal dialog for creating a new AI agent with name, role, icon selection, and initial instructions.",
+      "usedByPages": ["/chat/:agentId", "/documents"],
+      "props": ["isOpen", "onClose", "onAgentCreated"],
+      "source": "explicit"
+    },
+    {
+      "id": "ai-fab",
+      "name": "AiFab",
+      "purpose": "Floating action button that opens an AI assistant chat overlay for quick interactions from any page.",
+      "usedByPages": ["/home"],
+      "props": ["position", "defaultOpen"],
+      "source": "explicit"
+    }
+  ],
+  "suggestedOrder": [
+    "/auth",
+    "/company-setup",
+    "/home",
+    "/dashboard",
+    "/tasks",
+    "/chat/:agentId",
+    "/agent/:agentId/program",
+    "/analytics",
+    "/crm",
+    "/documents",
+    "/integrations",
+    "/notifications",
+    "/settings",
+    "/support",
+    "/tutorials",
+    "/admin",
+    "/login",
+    "/signup",
+    "/forgot-password",
+    "/reset-password"
+  ],
+  "backendSpec": {
+    "endpoints": [
+      { "method": "POST", "path": "/api/login", "description": "Authenticate user with email and password via Passport.js local strategy" },
+      { "method": "POST", "path": "/api/register", "description": "Create new user account with username, email, and hashed password" },
+      { "method": "POST", "path": "/api/auth/firebase", "description": "Authenticate user via Firebase token (OAuth providers)" },
+      { "method": "POST", "path": "/api/auth/google", "description": "Authenticate user via Google OAuth token" },
+      { "method": "GET", "path": "/api/company", "description": "Get current user's company profile" },
+      { "method": "POST", "path": "/api/company", "description": "Create a new company for the authenticated user" },
+      { "method": "PATCH", "path": "/api/company/:id", "description": "Update company profile fields" },
+      { "method": "GET", "path": "/api/agents", "description": "List all agents for the user's company" },
+      { "method": "GET", "path": "/api/agents/:id", "description": "Get single agent details by ID" },
+      { "method": "POST", "path": "/api/agents", "description": "Create a new AI agent" },
+      { "method": "PATCH", "path": "/api/agents/:id", "description": "Update agent properties (name, instructions, knowledge base, etc.)" },
+      { "method": "GET", "path": "/api/agents/:id/messages", "description": "Get conversation history for an agent" },
+      { "method": "POST", "path": "/api/agents/:id/chat", "description": "Send message to agent and receive AI response" },
+      { "method": "POST", "path": "/api/agents/:id/clear-messages", "description": "Clear all messages for an agent conversation" },
+      { "method": "POST", "path": "/api/agents/:id/generate-response", "description": "Generate AI response for agent without user message context" },
+      { "method": "GET", "path": "/api/agents/:id/tasks", "description": "Get tasks assigned to a specific agent" },
+      { "method": "GET", "path": "/api/agents/:id/collaborative-tasks", "description": "Get collaborative tasks involving a specific agent" },
+      { "method": "GET", "path": "/api/agents/:id/metrics", "description": "Get performance metrics for an agent" },
+      { "method": "GET", "path": "/api/tasks", "description": "List all tasks for the company" },
+      { "method": "GET", "path": "/api/tasks/:id", "description": "Get single task details by ID" },
+      { "method": "POST", "path": "/api/tasks", "description": "Create a new task" },
+      { "method": "PATCH", "path": "/api/tasks/:id", "description": "Update task fields (status, priority, assignment, etc.)" },
+      { "method": "DELETE", "path": "/api/tasks/:id", "description": "Delete a task" },
+      { "method": "POST", "path": "/api/tasks/:id/subtask", "description": "Create a subtask under a parent task" },
+      { "method": "GET", "path": "/api/tasks/:id/subtasks", "description": "Get subtasks for a parent task" },
+      { "method": "POST", "path": "/api/tasks/:id/assign", "description": "Assign a task to an agent" },
+      { "method": "POST", "path": "/api/tasks/:id/collaborators", "description": "Add collaborators to a task" },
+      { "method": "GET", "path": "/api/tasks/:id/messages", "description": "Get messages/comments on a task" },
+      { "method": "POST", "path": "/api/tasks/:id/messages", "description": "Post a message/comment on a task" },
+      { "method": "GET", "path": "/api/workflows", "description": "List all workflows" },
+      { "method": "POST", "path": "/api/workflows", "description": "Create a new workflow" },
+      { "method": "GET", "path": "/api/stats", "description": "Get company-wide statistics (agent count, task counts, etc.)" },
+      { "method": "GET", "path": "/api/analytics", "description": "Get analytics data with time range filtering" },
+      { "method": "GET", "path": "/api/crm/contacts", "description": "List all CRM contacts" },
+      { "method": "GET", "path": "/api/crm/contacts/:id", "description": "Get single contact details" },
+      { "method": "POST", "path": "/api/crm/contacts", "description": "Create a new CRM contact" },
+      { "method": "PATCH", "path": "/api/crm/contacts/:id", "description": "Update a CRM contact" },
+      { "method": "GET", "path": "/api/crm/deals", "description": "List all CRM deals" },
+      { "method": "GET", "path": "/api/crm/deals/:id", "description": "Get single deal details" },
+      { "method": "POST", "path": "/api/crm/deals", "description": "Create a new CRM deal" },
+      { "method": "PATCH", "path": "/api/crm/deals/:id", "description": "Update a CRM deal" },
+      { "method": "GET", "path": "/api/crm/activities", "description": "List all CRM activities" },
+      { "method": "GET", "path": "/api/crm/activities/:id", "description": "Get single activity details" },
+      { "method": "POST", "path": "/api/crm/activities", "description": "Create a new CRM activity" },
+      { "method": "PATCH", "path": "/api/crm/activities/:id", "description": "Update a CRM activity" },
+      { "method": "GET", "path": "/api/documents", "description": "List documents with optional folder filtering" },
+      { "method": "GET", "path": "/api/documents/:id", "description": "Get single document details" },
+      { "method": "POST", "path": "/api/documents", "description": "Create a new document" },
+      { "method": "PATCH", "path": "/api/documents/:id", "description": "Update a document" },
+      { "method": "DELETE", "path": "/api/documents/:id", "description": "Delete a document" },
+      { "method": "GET", "path": "/api/folders", "description": "List folders with optional parent filtering" },
+      { "method": "GET", "path": "/api/folders/:id", "description": "Get single folder details" },
+      { "method": "POST", "path": "/api/folders", "description": "Create a new folder" },
+      { "method": "PATCH", "path": "/api/folders/:id", "description": "Update a folder" },
+      { "method": "DELETE", "path": "/api/folders/:id", "description": "Delete a folder" },
+      { "method": "GET", "path": "/api/notifications", "description": "List notifications with read/unread filtering" },
+      { "method": "GET", "path": "/api/notifications/count", "description": "Get unread notification count" },
+      { "method": "POST", "path": "/api/notifications/:id/read", "description": "Mark a notification as read" },
+      { "method": "POST", "path": "/api/notifications/read-all", "description": "Mark all notifications as read" },
+      { "method": "DELETE", "path": "/api/notifications/:id", "description": "Delete a notification" },
+      { "method": "GET", "path": "/api/integrations", "description": "List all configured integrations" },
+      { "method": "POST", "path": "/api/integrations/connect", "description": "Connect a new integration" },
+      { "method": "GET", "path": "/api/integrations/gmail/auth", "description": "Get Gmail OAuth authorization URL" },
+      { "method": "GET", "path": "/api/integrations/gmail/status", "description": "Check Gmail integration connection status" },
+      { "method": "POST", "path": "/api/integrations/gmail/disconnect", "description": "Disconnect Gmail integration" },
+      { "method": "GET", "path": "/api/auth/google/callback", "description": "Google OAuth callback handler" },
+      { "method": "GET", "path": "/api/ai/models", "description": "List available AI models across all providers" },
+      { "method": "GET", "path": "/api/ai/provider-status", "description": "Check which AI providers have valid API keys" },
+      { "method": "POST", "path": "/api/ai/generate", "description": "Generate AI response with specified model" },
+      { "method": "POST", "path": "/api/ai/multi-agent", "description": "Multi-agent collaboration endpoint" },
+      { "method": "POST", "path": "/api/keys/save", "description": "Save API keys for AI providers" },
+      { "method": "GET", "path": "/api/actions", "description": "List all agent actions" },
+      { "method": "GET", "path": "/api/actions/pending", "description": "List pending actions awaiting approval" },
+      { "method": "GET", "path": "/api/actions/:id", "description": "Get single action details" },
+      { "method": "POST", "path": "/api/actions/:id/approve", "description": "Approve a pending action" },
+      { "method": "POST", "path": "/api/actions/:id/reject", "description": "Reject a pending action" },
+      { "method": "GET", "path": "/api/conversations/:id", "description": "Get conversation details by ID" },
+      { "method": "GET", "path": "/api/ai-assistant/messages", "description": "Get AI assistant conversation messages" },
+      { "method": "POST", "path": "/api/ai-assistant/messages", "description": "Send message to AI assistant" },
+      { "method": "DELETE", "path": "/api/ai-assistant/messages", "description": "Clear AI assistant messages" },
+      { "method": "POST", "path": "/api/llm/chat", "description": "Direct LLM chat endpoint" }
+    ]
+  }
+}

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EntrepreneurOS | Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-tint": "#6d3bd7",
+                      "on-secondary-container": "#3f1e8b",
+                      "surface-dim": "#d8dadb",
+                      "surface-variant": "#e1e3e4",
+                      "on-background": "#191c1d",
+                      "tertiary-fixed": "#ffdcc6",
+                      "tertiary-fixed-dim": "#ffb786",
+                      "on-error-container": "#93000a",
+                      "secondary-fixed-dim": "#cebdff",
+                      "surface-container": "#eceeef",
+                      "inverse-surface": "#2e3132",
+                      "inverse-on-surface": "#eff1f2",
+                      "on-primary-fixed-variant": "#5516bf",
+                      "on-surface-variant": "#494454",
+                      "on-primary-container": "#dcccff",
+                      "primary-fixed-dim": "#d0bcff",
+                      "surface": "#f8f9fa",
+                      "surface-container-low": "#f2f4f5",
+                      "secondary-container": "#ab8ffe",
+                      "on-surface": "#191c1d",
+                      "outline": "#7b7486",
+                      "background": "#f8f9fa",
+                      "on-primary-fixed": "#23005c",
+                      "on-tertiary-container": "#ffc9a6",
+                      "on-tertiary-fixed": "#311400",
+                      "primary-container": "#6a37d4",
+                      "error-container": "#ffdad6",
+                      "on-secondary-fixed-variant": "#4f319c",
+                      "tertiary": "#6e3400",
+                      "tertiary-container": "#914700",
+                      "secondary-fixed": "#e8ddff",
+                      "secondary": "#674bb5",
+                      "surface-container-lowest": "#ffffff",
+                      "surface-container-high": "#e7e8e9",
+                      "primary-fixed": "#e9ddff",
+                      "error": "#ba1a1a",
+                      "primary": "#5210bc",
+                      "on-secondary": "#ffffff",
+                      "on-tertiary": "#ffffff",
+                      "on-secondary-fixed": "#21005e",
+                      "surface-container-highest": "#e1e3e4",
+                      "on-primary": "#ffffff",
+                      "outline-variant": "#cbc3d7",
+                      "surface-bright": "#f8f9fa",
+                      "on-error": "#ffffff",
+                      "inverse-primary": "#d0bcff",
+                      "on-tertiary-fixed-variant": "#723600"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "fontFamily": {
+                      "headline": ["Inter"],
+                      "body": ["Inter"],
+                      "label": ["Inter"]
+              }
+            },
+          },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        .ghost-border {
+            outline: 1px solid rgba(203, 195, 215, 0.15);
+        }
+        .purple-glow:focus-within {
+            box-shadow: 0 0 0 4px rgba(106, 55, 212, 0.15);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface antialiased overflow-hidden">
+<main class="flex min-h-screen w-full">
+<!-- Left Side: Login Form (40%) -->
+<section class="w-[40%] min-w-[400px] bg-surface-container-low flex flex-col px-12 py-16 relative z-10 shadow-[20px_0_60px_rgba(0,0,0,0.02)]">
+<!-- Logo Section -->
+<div class="flex items-center gap-2 mb-24">
+<span class="material-symbols-outlined text-[28px]" style="color: #2c2f30;">smart_toy</span>
+<span class="text-[20px] font-bold tracking-tighter" style="color: #2c2f30;">EntrepreneurOS</span>
+</div>
+<!-- Login Content -->
+<div class="max-w-[340px]">
+<h1 class="text-[28px] font-semibold tracking-[-0.02em] leading-tight mb-2 text-on-surface">Welcome back</h1>
+<p class="text-[15px] text-[#525252] mb-10">Access your workspace</p>
+<form class="space-y-6">
+<!-- Email Input -->
+<div class="relative group purple-glow rounded-xl">
+<input class="peer w-full bg-[#f5f6f7] ghost-border border-none rounded-xl px-4 pt-6 pb-2 text-on-surface focus:ring-0 transition-all duration-300" id="email" name="email" placeholder=" " type="email"/>
+<label class="absolute left-4 top-4 text-slate-400 text-sm transition-all duration-300 pointer-events-none peer-focus:text-xs peer-focus:top-2 peer-focus:text-primary peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:top-2" for="email">
+                            Email Address
+                        </label>
+</div>
+<!-- Password Input -->
+<div class="space-y-2">
+<div class="relative group purple-glow rounded-xl">
+<input class="peer w-full bg-[#f5f6f7] ghost-border border-none rounded-xl px-4 pt-6 pb-2 text-on-surface focus:ring-0 transition-all duration-300" id="password" name="password" placeholder=" " type="password"/>
+<label class="absolute left-4 top-4 text-slate-400 text-sm transition-all duration-300 pointer-events-none peer-focus:text-xs peer-focus:top-2 peer-focus:text-primary peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:top-2" for="password">
+                                Password
+                            </label>
+</div>
+<div class="flex justify-end">
+<a class="text-xs font-medium text-primary hover:opacity-80 transition-opacity" href="#">Forgot password?</a>
+</div>
+</div>
+<!-- Sign In Button -->
+<button class="w-full h-14 bg-gradient-to-br from-[#6a37d4] to-[#ae8dff] text-white font-semibold rounded-[12px] shadow-[0_8px_32px_rgba(106,55,212,0.2)] hover:scale-[1.01] active:scale-[0.98] transition-all" type="submit">
+                        Sign In
+                    </button>
+<!-- Divider -->
+<div class="flex items-center gap-4 py-2">
+<div class="h-[1px] flex-1 bg-outline-variant opacity-20"></div>
+<span class="text-[12px] font-bold text-slate-400 uppercase tracking-widest">OR</span>
+<div class="h-[1px] flex-1 bg-outline-variant opacity-20"></div>
+</div>
+<!-- SSO -->
+<button class="w-full h-14 bg-white ghost-border rounded-xl flex items-center justify-center gap-3 text-on-surface font-medium hover:bg-slate-50 transition-colors shadow-sm" type="button">
+<img alt="Google Logo" class="w-5 h-5" data-alt="Official Google multicolor G icon on a transparent background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQ0wu7hszmRjfY46gCCozr0J_xVxtLV9GCIFBMc5veLtUfb9wYb9txO-nVJu5YODYePKWIrquxFiUTFxqP_wfYc2nE2b34w66yLmcwf51ibID3yF2rDtoDrLBb_IgBtX4pK927LPI36RGOGlr3vd5eECjeuqXdtb2QIX37bVMVcWu9siOri_UzQeVG_HbI5PoohrHAJXlX-MP4LljNoCcjb7go8DRO7f1G4vGUKH8tKc4-MMgD0x2C4hJQgxPbqtDoKTGfufHRuRXd"/>
+                        Continue with Google
+                    </button>
+</form>
+<!-- Footer Link -->
+<div class="mt-12">
+<a class="text-[14px] font-medium text-on-surface-variant flex items-center gap-1 group" href="#">
+                        Don't have an account? <span class="text-primary group-hover:underline">Create one →</span>
+</a>
+</div>
+</div>
+<!-- Footer Small -->
+<div class="mt-auto pt-8">
+<p class="text-[11px] text-slate-400 tracking-wider uppercase font-semibold">© 2024 EntrepreneurOS</p>
+</div>
+</section>
+<!-- Right Side: Editorial Space (60%) -->
+<section class="w-[60%] bg-white flex items-center justify-center p-16 relative overflow-hidden">
+<!-- Abstract Architectural Background Elements -->
+<div class="absolute inset-0 opacity-40 pointer-events-none">
+<div class="absolute top-[-10%] right-[-10%] w-[80%] h-[80%] rounded-full bg-primary-container/10 blur-[120px]"></div>
+<div class="absolute bottom-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-secondary-container/10 blur-[100px]"></div>
+</div>
+<!-- Image/Visual Canvas -->
+<div class="relative w-full max-w-2xl h-full flex items-center justify-center">
+<div class="w-full aspect-[4/5] rounded-[2rem] overflow-hidden shadow-[0_32px_80px_rgba(106,55,212,0.12)] bg-surface-container-low relative">
+<img alt="Architectural Abstract" class="w-full h-full object-cover grayscale brightness-110" data-alt="Sophisticated monochrome architectural sketch of a futuristic minimalist building with sharp lines and clean geometric shapes under soft light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCoqHNc5HcJmLmbjElxxDd43wyQZBDAhNWNxxPsI_PQPxHy8yxbJono7mSduOKKSAlKpRZVg2_o9zo3y0i5ZQVFo3rLBvj64CUqz_O9BCBJo_27gwo1Ax7S4xjYc9b2EaG1-uUhBnSXU4jpwnJfFds9Lj0z9CP6tOUj3WZymOtM0Ad_zUJ2t8lBBawICfwpRMb0tgHBdzoeZ4YC9F5QkOp78DdLEMrFQZZIqWpnOSt2QF6KuLcS08BI91xL9df9EzRq_93IrkP0QM0U"/>
+<!-- Glassmorphism Card Overlay -->
+<div class="absolute inset-x-8 bottom-8 glass-panel p-10 rounded-2xl shadow-[0_8px_32px_rgba(106,55,212,0.08)]">
+<div class="mb-6">
+<span class="material-symbols-outlined text-primary text-[40px] leading-none" style="font-variation-settings: 'FILL' 1;">format_quote</span>
+</div>
+<h2 class="text-[32px] font-semibold leading-[1.1] tracking-[-0.03em] text-on-surface mb-6">
+                            Build your legacy with precision.
+                        </h2>
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-primary-fixed overflow-hidden">
+<img alt="Founder" class="w-full h-full object-cover" data-alt="Professional headshot of a visionary founder looking confidently into the distance with warm cinematic studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCWwSQ5XUIxXUVrVg2rLzqeDR14dj6ibt_F1EpYZRfEBa90SddFgLewBAEcriMAn8vLA2_CiLiR2I6CSdlaRu-FEjKcfER3vksJBthk9HKHiUns58lOMCj-Ho4d0DLQSJ8vC3r3jus0FwUGSUYRUvuA1O-EDCJsCmSucn3yPLN9APZyKS5M-DYX5osiirf9yUWmp2you4x6DnDinzMSyS56UQw916ufRqkyTmMZ6eq7vz2gu3Vf2GdNpPlEUSgVqeF3EGtERV7sa3ey"/>
+</div>
+<div>
+<p class="text-[14px] font-bold text-on-surface tracking-tight">The Lucid Architect</p>
+<p class="text-[12px] text-on-surface-variant font-medium">Founder &amp; CEO, EntrepreneurOS</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Subtle Decorative Brand Mark -->
+<div class="absolute bottom-12 right-12 flex flex-col items-end opacity-20">
+<span class="text-[80px] font-black tracking-tighter leading-none select-none">OS</span>
+<div class="w-24 h-[2px] bg-primary"></div>
+</div>
+</section>
+</main>
+</body></html>

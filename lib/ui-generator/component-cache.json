@@ -1,17 +1,21 @@
 {
-  "generated_at": "2026-04-08T00:00:00Z",
-  "source": "Claude Code MCP queries — mcp__magicui__searchRegistryItems + mcp__magic21__21st_magic_component_inspiration",
-  "note": "Refresh by re-running the cache-build prompt inside an interactive Claude Code session. Headless tsx runs cannot regenerate this file.",
+  "generated_at": "2026-04-09T18:45:00Z",
+  "ttl_hours": 24,
+  "project_id": "entrepreneuros",
+  "spec_hash": "19ef9aed1e3788820de81e8aa3108ac5fa65ce3d5f4a7b9bec9d816bb5698bca",
+  "source": "saas-dev:warm-cache skill — live MCP queries (shadcn, MagicUI, 21st.dev)",
   "components": [
     {
       "name": "Button",
       "registry": "shadcn/ui",
-      "description": "Accessible button primitive with cva variants (default, destructive, outline, secondary, ghost, link) and sizes (sm, default, lg, icon). Uses Radix Slot for asChild composition. Base: inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:ring-2."
+      "description": "Accessible button primitive with cva variants (default, destructive, outline, secondary, ghost, link) and sizes (sm, default, lg, icon). Uses Radix Slot for asChild composition. Base: inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:ring-2.",
+      "code_snippet": "const buttonVariants = cva(\n  \"inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium transition-colors outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0\",\n  { variants: { variant: { default: \"bg-primary text-primary-foreground shadow-sm hover:bg-primary/90\", outline: \"border border-input bg-background shadow-sm hover:bg-accent\" } } }\n);"
     },
     {
       "name": "Input",
       "registry": "shadcn/ui",
-      "description": "Text input with rounded-lg border, bg-background, subtle shadow-sm shadow-black/5, focus-visible:ring-[3px] ring-ring/20. Height h-9, px-3 py-2. Supports search/file type variants via cn()."
+      "description": "Text input with rounded-lg border, bg-background, subtle shadow-sm shadow-black/5, focus-visible:ring-[3px] ring-ring/20. Height h-9, px-3 py-2. Supports search/file type variants via cn().",
+      "code_snippet": "const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<\"input\">>(\n  ({ className, type, ...props }, ref) => (\n    <input type={type} className={cn(\"flex h-9 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm shadow-black/5 transition-shadow placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/20\", className)} ref={ref} {...props} />\n  )\n);"
     },
     {
       "name": "Label",
@@ -24,29 +28,55 @@
       "description": "Composable surface: Card (rounded-lg border bg-card shadow-sm), CardHeader (flex flex-col space-y-1.5 p-6), CardTitle (text-2xl font-semibold tracking-tight), CardDescription (text-sm text-muted-foreground), CardContent (p-6 pt-0), CardFooter (flex items-center p-6 pt-0)."
     },
     {
-      "name": "Checkbox",
-      "registry": "shadcn/ui",
-      "description": "Radix CheckboxPrimitive. peer h-4 w-4 shrink-0 rounded-sm border border-primary, data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground. Check icon from lucide-react inside Indicator."
-    },
-    {
       "name": "Separator",
       "registry": "shadcn/ui",
       "description": "Radix SeparatorPrimitive. Horizontal: h-[1px] w-full bg-border. Use with absolute-positioned label span for 'or continue with' dividers."
     },
     {
-      "name": "Form",
-      "registry": "21st.dev (Login01 pattern)",
-      "description": "Auth form pattern: Label → Input (mt-2) → full-width primary Button (mt-4 w-full). Separator divider with centered 'or with' text. Outline Button with Google SVG icon for OAuth. Terms/privacy microcopy below."
+      "name": "Checkbox",
+      "registry": "shadcn/ui",
+      "description": "Radix CheckboxPrimitive. peer h-4 w-4 shrink-0 rounded-sm border border-primary, data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground. Check icon from lucide-react inside Indicator."
     },
     {
-      "name": "Link",
-      "registry": "shadcn/ui",
-      "description": "Use Button variant='link' for CTA-style links (text-primary underline-offset-4 hover:underline). Inline text links: text-primary font-medium hover:underline."
+      "name": "Form",
+      "registry": "21st.dev (Login01 pattern)",
+      "description": "Auth form pattern from 21st.dev: Logo + heading above form. Label → Input (mt-2) → full-width primary Button (mt-4 w-full). Separator divider with centered 'or with' text. Outline Button with Google SVG icon for OAuth. Terms/privacy microcopy below. Card-based layout with CardHeader, CardContent, CardFooter composition."
+    },
+    {
+      "name": "Sign In button",
+      "registry": "21st.dev (AuthForm pattern)",
+      "description": "Full-width primary action Button (w-full) inside CardContent or form. Uses bg-primary text-primary-foreground with hover:bg-primary/90. Transition-transform hover:scale-[1.03] for premium feel. Submit type for form integration."
     },
     {
       "name": "GoogleOAuthButton",
       "registry": "21st.dev (Login01 pattern)",
-      "description": "Outline variant Button, full-width, inline-flex justify-center space-x-2. Google 'G' SVG icon (viewBox 0 0 24 24, single-path currentColor or multi-color #4285F4/#34A853/#FBBC05/#EA4335) at size-5. Text 'Sign in with Google' or 'Continue with Google'."
+      "description": "Outline variant Button, full-width, inline-flex justify-center space-x-2. Google 'G' SVG icon (viewBox 0 0 24 24, multi-color #4285F4/#34A853/#FBBC05/#EA4335 or single-path currentColor) at size-5. Text 'Sign in with Google' or 'Continue with Google'. Use Button variant='outline' with asChild wrapping an anchor tag."
+    },
+    {
+      "name": "Password input",
+      "registry": "21st.dev (Password Field pattern)",
+      "description": "Input type=password with show/hide toggle button. Relative wrapper with Input className='pe-9'. Toggle button absolute inset-y-0 end-0 with Eye/EyeOff icons from lucide-react at size=16. aria-label for accessibility. useState boolean for visibility toggle.",
+      "code_snippet": "<div className=\"relative\">\n  <Input id={id} className=\"pe-9\" placeholder=\"Password\" type={isVisible ? \"text\" : \"password\"} />\n  <button className=\"absolute inset-y-0 end-0 flex h-full w-9 items-center justify-center\" type=\"button\" onClick={toggleVisibility} aria-label={isVisible ? \"Hide password\" : \"Show password\"}>\n    {isVisible ? <EyeOff size={16} /> : <Eye size={16} />}\n  </button>\n</div>"
+    },
+    {
+      "name": "Link",
+      "registry": "shadcn/ui",
+      "description": "Use Button variant='link' for CTA-style links (text-primary underline-offset-4 hover:underline). Inline text links: text-primary font-medium hover:underline. For 'Create account' and 'Forgot password?' links."
+    },
+    {
+      "name": "Logo / Product name",
+      "registry": "21st.dev (AuthForm pattern)",
+      "description": "Brand logo rendered as img element or SVG inside a centered flex container above the form title. img className='h-12 w-12 object-contain rounded-[4px]'. Can use Material Symbols smart_toy robot icon for AI branding. Paired with CardTitle for product name below."
+    },
+    {
+      "name": "Tagline text",
+      "registry": "21st.dev (AuthForm pattern)",
+      "description": "CardDescription component below CardTitle. text-sm text-muted-foreground. Short descriptive text like 'Enter your credentials to access your account.' Centered in CardHeader."
+    },
+    {
+      "name": "pulsating-button",
+      "registry": "MagicUI",
+      "description": "An animated pulsating button useful for capturing attention of users. Subtle pulse animation on the primary CTA. Use sparingly — only for the main Sign In action, not secondary buttons."
     },
     {
       "name": "magic-card",
@@ -54,19 +84,19 @@
       "description": "Spotlight effect card that follows mouse cursor and highlights borders on hover. Useful for featured surfaces but NOT for auth forms where stability matters. Use only for marketing-adjacent sections."
     },
     {
+      "name": "neon-gradient-card",
+      "registry": "MagicUI",
+      "description": "A beautiful neon card effect with gradient border glow. Premium feel for hero cards. Compatible with glassmorphism aesthetic."
+    },
+    {
       "name": "border-beam",
       "registry": "MagicUI",
-      "description": "Animated beam of light traveling along container border. Subtle premium accent for CTA cards. Compatible with glassmorphism — apply to the outer Card wrapper."
+      "description": "An animated beam of light which travels along the border of its container. Subtle premium accent for CTA cards. Compatible with glassmorphism — apply to the outer Card wrapper."
     },
     {
       "name": "animated-gradient-text",
       "registry": "MagicUI",
-      "description": "Text with animated gradient background transitioning between colors. Use for headline/brand wordmarks only. Lock gradient colors to the project's design system tokens."
-    },
-    {
-      "name": "animated-beam",
-      "registry": "MagicUI",
-      "description": "Animated beam of light along an SVG path. Showcases integration/connection. NOT for auth page — reserve for dashboard/integration surfaces."
+      "description": "An animated gradient background which transitions between colors for text. Use for headline/brand wordmarks only. Lock gradient colors to the project's design system tokens."
     }
   ]
 }

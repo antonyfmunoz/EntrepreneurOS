@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(gsd:plan-phase)",
+      "Skill(gsd:plan-phase:*)",
+      "Skill(saas-dev:*)",
+      "Bash(npm run:*)",
+      "Bash(npx vitest:*)",
+      "Bash(node -e \"import\\('./dist/generated/src/tool-definitions.js'\\).then\\(m => { for \\(const t of m.toolDefinitions\\) { console.log\\('==', t.name\\); console.log\\(t.description\\); console.log\\(JSON.stringify\\(t.inputSchema?.properties ? Object.keys\\(t.inputSchema.properties\\) : t.inputSchema\\)\\); } }\\)\")",
+      "Bash(wc -l \"C:\\\\Users\\\\antonys beast pc\\\\dev\\\\EntrepreneurOS/lib/stitch\"/*.ts)",
+      "Bash(npx tsx:*)",
+      "Bash(npm test:*)",
+      "Bash(npx tsc:*)",
+      "Bash(tee /tmp/tsc1.log)",
+      "Bash(tee /tmp/tsc2.log)",
+      "Bash(tee /tmp/tsc3.log)",
+      "Bash(tee /tmp/tsc4.log)",
+      "Bash(tee /tmp/tsc5.log)",
+      "Bash(tee /tmp/tsc7.log)",
+      "Bash(tee /tmp/tsc8.log)",
+      "Bash(tee /tmp/tsc9.log)"
+    ]
+  }
+}

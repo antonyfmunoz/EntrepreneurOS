@@ -1,0 +1,62 @@
+{
+  "pageFilePath": "C:\\Users\\antonys beast pc\\dev\\EntrepreneurOS\\client\\src\\pages\\signup-page.tsx",
+  "pageName": "Signup",
+  "importCode": "import { usePostHog } from \"posthog-js/react\";\nimport { useEffect, useRef } from \"react\";",
+  "hookCode": "const posthog = usePostHog();",
+  "captureCode": "",
+  "manualCaptures": [
+    {
+      "eventName": "signup_attempted",
+      "trigger": "user clicks signup button",
+      "captureSnippet": "posthog?.capture(\"signup_attempted\", { email: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "properties": [
+        "email",
+        "timestamp"
+      ]
+    },
+    {
+      "eventName": "signup_succeeded",
+      "trigger": "successful account creation",
+      "captureSnippet": "posthog?.capture(\"signup_succeeded\", { user_id: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "properties": [
+        "user_id",
+        "timestamp"
+      ]
+    },
+    {
+      "eventName": "signup_failed",
+      "trigger": "account creation failure",
+      "captureSnippet": "posthog?.capture(\"signup_failed\", { error_type: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "properties": [
+        "error_type",
+        "timestamp"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "signup_attempted",
+      "trigger": "user clicks signup button",
+      "properties": [
+        "email",
+        "timestamp"
+      ]
+    },
+    {
+      "name": "signup_succeeded",
+      "trigger": "successful account creation",
+      "properties": [
+        "user_id",
+        "timestamp"
+      ]
+    },
+    {
+      "name": "signup_failed",
+      "trigger": "account creation failure",
+      "properties": [
+        "error_type",
+        "timestamp"
+      ]
+    }
+  ]
+}

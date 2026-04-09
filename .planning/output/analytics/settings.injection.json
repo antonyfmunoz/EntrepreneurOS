@@ -1,0 +1,83 @@
+{
+  "pageFilePath": "C:\\Users\\antonys beast pc\\dev\\EntrepreneurOS\\client\\src\\pages\\settings-page.tsx",
+  "pageName": "Settings",
+  "importCode": "import { usePostHog } from \"posthog-js/react\";\nimport { useEffect, useRef } from \"react\";",
+  "hookCode": "const posthog = usePostHog();",
+  "captureCode": "",
+  "manualCaptures": [
+    {
+      "eventName": "settings_viewed",
+      "trigger": "page load",
+      "captureSnippet": "posthog?.capture(\"settings_viewed\", { user_id: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "properties": [
+        "user_id",
+        "timestamp"
+      ]
+    },
+    {
+      "eventName": "profile_updated",
+      "trigger": "user saves profile changes",
+      "captureSnippet": "posthog?.capture(\"profile_updated\", { user_id: undefined /* TODO: wire */, fields_changed: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "properties": [
+        "user_id",
+        "fields_changed",
+        "timestamp"
+      ]
+    },
+    {
+      "eventName": "password_changed",
+      "trigger": "user successfully changes password",
+      "captureSnippet": "posthog?.capture(\"password_changed\", { user_id: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "properties": [
+        "user_id",
+        "timestamp"
+      ]
+    },
+    {
+      "eventName": "notification_preferences_updated",
+      "trigger": "user changes notification settings",
+      "captureSnippet": "posthog?.capture(\"notification_preferences_updated\", { user_id: undefined /* TODO: wire */, preferences: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "properties": [
+        "user_id",
+        "preferences",
+        "timestamp"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "settings_viewed",
+      "trigger": "page load",
+      "properties": [
+        "user_id",
+        "timestamp"
+      ]
+    },
+    {
+      "name": "profile_updated",
+      "trigger": "user saves profile changes",
+      "properties": [
+        "user_id",
+        "fields_changed",
+        "timestamp"
+      ]
+    },
+    {
+      "name": "password_changed",
+      "trigger": "user successfully changes password",
+      "properties": [
+        "user_id",
+        "timestamp"
+      ]
+    },
+    {
+      "name": "notification_preferences_updated",
+      "trigger": "user changes notification settings",
+      "properties": [
+        "user_id",
+        "preferences",
+        "timestamp"
+      ]
+    }
+  ]
+}
