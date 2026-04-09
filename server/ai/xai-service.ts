@@ -41,7 +41,7 @@ export class XAIService implements AIServiceInterface {
       return response.choices[0].message.content || "No response generated";
     } catch (error) {
       console.error("Error generating xAI response:", error);
-      throw new Error(`Failed to generate response from xAI: ${error.message}`);
+      throw new Error(`Failed to generate response from xAI: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   
@@ -76,7 +76,7 @@ export class XAIService implements AIServiceInterface {
       return visionResponse.choices[0].message.content || "No analysis generated";
     } catch (error) {
       console.error("Error analyzing image with xAI:", error);
-      throw new Error(`Failed to analyze image: ${error.message}`);
+      throw new Error(`Failed to analyze image: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

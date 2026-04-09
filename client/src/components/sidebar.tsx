@@ -203,6 +203,32 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                 </div>
               </Link>
             </li>
+        <li>
+          <Link href="/dashboard">
+            <div className={cn(
+              "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+              location === "/dashboard"
+                ? "bg-blue-50 text-primary font-medium"
+                : "hover:bg-gray-100 text-gray-700"
+            )}>
+              <i className="ri-dashboard-line"></i>
+              <span>Dashboard</span>
+            </div>
+          </Link>
+        </li>
+        <li>
+          <Link href="/admin">
+            <div className={cn(
+              "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+              location === "/admin"
+                ? "bg-blue-50 text-primary font-medium"
+                : "hover:bg-gray-100 text-gray-700"
+            )}>
+              <i className="ri-dashboard-line"></i>
+              <span>AdminDashboard</span>
+            </div>
+          </Link>
+        </li>
           </ul>
         </nav>
 
