@@ -1,0 +1,105 @@
+const fs = require('fs');
+const crypto = require('crypto');
+
+const spec = JSON.parse(fs.readFileSync('.planning/specs/eos-mvp-spec.json', 'utf-8'));
+const allComponents = [...new Set(spec.pages.flatMap(p => p.components))].sort();
+const normalized = allComponents.map(n => n.toLowerCase()).sort();
+const specHash = crypto.createHash('sha256').update(normalized.join('\n')).digest('hex');
+
+const components = [
+  // 21st.dev — kanban, org chart, KPI, wizard, portfolio, chat, workflows, settings, login, 404, glassmorphism panel, sidebar, status, signup
+  { name: "KanbanBoard", registry: "21st.dev", description: "Drag-and-drop kanban board with columns (Backlog, TODO, In Progress, Complete), add card, burn barrel, Framer Motion animations" },
+  { name: "KanbanColumn", registry: "21st.dev", description: "Kanban column with drag-over highlighting, drop indicator, card filtering by column status" },
+  { name: "TaskCard", registry: "21st.dev", description: "Issue card with priority badge, status icon, labels, assignee avatar, date, context menu (rename, duplicate, delete)" },
+  { name: "OrgTreeView", registry: "21st.dev", description: "Headless tree component with expandable nodes, keyboard navigation, drag-and-drop reordering, vertical line indicators" },
+  { name: "DepartmentNode", registry: "21st.dev", description: "Tree folder node with chevron expand/collapse, label, and nested children support" },
+  { name: "RoleNode", registry: "21st.dev", description: "Tree leaf node with label, selection state, and drag target support" },
+  { name: "KPICardGrid", registry: "21st.dev", description: "Statistics cards with metric value, delta percentage, trend icon (up/down), tone-based coloring, and caption" },
+  { name: "SetupWizard", registry: "21st.dev", description: "Multi-step form with animated step transitions, progress bar, step counter, back/next buttons, and close action" },
+  { name: "StepIndicator", registry: "21st.dev", description: "Step indicator with numbered circles, completion checkmarks, connecting lines, and progress state" },
+  { name: "CompanyCard", registry: "21st.dev", description: "Project/portfolio card with image, title, description, hover lift effect, and CTA link with arrow icon" },
+  { name: "PortfolioSummary", registry: "21st.dev", description: "Stats cards grid showing total revenue, active users, growth rate with change indicators" },
+  { name: "ConversationThread", registry: "21st.dev", description: "Chat conversation with stick-to-bottom scrolling, user/assistant message bubbles, actions toolbar" },
+  { name: "ChatMessageBubble", registry: "21st.dev", description: "Message component with role-based styling (user/assistant), avatar, content, and timestamp" },
+  { name: "ChatInput", registry: "21st.dev", description: "Chat input with file attachment, code, voice, send button, character counter, Enter to send" },
+  { name: "AgentStatusIndicator", registry: "21st.dev", description: "Online/offline/maintenance/degraded status with animated ping dot and label" },
+  { name: "SuggestedActionsPanel", registry: "21st.dev", description: "Action buttons panel with icon, label, tooltip, ghost variant" },
+  { name: "WorkflowRunner", registry: "21st.dev", description: "Order tracking / workflow stepper with completed/pending steps, timestamps, connecting lines" },
+  { name: "WorkflowStepItem", registry: "21st.dev", description: "Step item with check circle (complete) or circle (pending), title, description" },
+  { name: "SettingsTabs", registry: "21st.dev", description: "Animated tabs with smooth content transitions, tab list with triggers, form content per tab" },
+  { name: "ProfileForm", registry: "21st.dev", description: "Settings form with name, username, email inputs, save button" },
+  { name: "LoginForm", registry: "21st.dev", description: "Login form with email/password, OAuth buttons (Google, GitHub), separator, forgot password link" },
+  { name: "SignupForm", registry: "21st.dev", description: "Signup form with role selector, name fields, email, password with show/hide, terms checkbox, sign in link" },
+  { name: "GoogleOAuthButton", registry: "21st.dev", description: "OAuth button with Google SVG icon and 'Continue with Google' label" },
+  { name: "NotFoundIllustration", registry: "21st.dev", description: "404 page with animated illustration, large heading, subtext, and back-to-home button" },
+  { name: "ErrorMessage", registry: "21st.dev", description: "404 error page with illustration, message text, and navigation button" },
+  { name: "BackToHomeButton", registry: "21st.dev", description: "Button linking back to home page with arrow icon" },
+  { name: "BrandLogo", registry: "21st.dev", description: "SVG brand logo component used in auth pages header" },
+  { name: "AvatarUpload", registry: "21st.dev", description: "Avatar component with image, fallback initials, online status indicator dot" },
+  // MagicUI
+  { name: "ActiveWorkflowsList", registry: "MagicUI", description: "Animated List — sequenced item animations for workflow/notification feeds" },
+  { name: "RecentTasksList", registry: "MagicUI", description: "Animated List — sequenced item animations for recent activity items" },
+  { name: "SubmitButton", registry: "MagicUI", description: "Shimmer Button — shimmering light traveling around perimeter for CTAs" },
+  { name: "AddCompanyButton", registry: "MagicUI", description: "Pulsating Button — animated pulsating for capturing attention" },
+  { name: "QuickActionButtons", registry: "MagicUI", description: "Interactive Hover Button with hover effects for quick actions" },
+  { name: "WorkflowStatusBadge", registry: "MagicUI", description: "Animated Circular Progress Bar for workflow completion visualization" },
+  // shadcn/ui
+  { name: "ForgotPasswordForm", registry: "shadcn/ui", description: "Form with email input, submit button, success message. Card layout" },
+  { name: "ResetPasswordForm", registry: "shadcn/ui", description: "Form with new password, confirm password inputs, and submit button" },
+  { name: "ForgotPasswordLink", registry: "shadcn/ui", description: "Link component navigating to forgot-password page" },
+  { name: "SignupLink", registry: "shadcn/ui", description: "Link component navigating to signup page" },
+  { name: "LoginLink", registry: "shadcn/ui", description: "Link component navigating to login page" },
+  { name: "BackToLoginLink", registry: "shadcn/ui", description: "Link component navigating back to login page" },
+  { name: "SuccessMessage", registry: "shadcn/ui", description: "Alert/banner showing success state with green styling" },
+  { name: "CompanyNameInput", registry: "shadcn/ui", description: "Input component with label for company name" },
+  { name: "StageSelector", registry: "shadcn/ui", description: "Select dropdown for company stage (idea/pre-revenue/revenue/scaling/mature)" },
+  { name: "IndustryInput", registry: "shadcn/ui", description: "Input component with label for industry" },
+  { name: "BusinessModelInput", registry: "shadcn/ui", description: "Input component with label for business model" },
+  { name: "GoalsTextarea", registry: "shadcn/ui", description: "Textarea component for strategic goals" },
+  { name: "PortfolioHeader", registry: "shadcn/ui", description: "Page header with title, summary stats, and add company action" },
+  { name: "CompanyQuickActions", registry: "shadcn/ui", description: "Dropdown menu with open, settings, delete actions per company card" },
+  { name: "AlertsPanel", registry: "shadcn/ui", description: "Card with list of alert items, type icon, message, and timestamp" },
+  { name: "AddDepartmentButton", registry: "shadcn/ui", description: "Button triggering department creation dialog" },
+  { name: "AddRoleButton", registry: "shadcn/ui", description: "Button triggering role creation dialog" },
+  { name: "RoleDetailPanel", registry: "shadcn/ui", description: "Sheet/drawer panel showing role details with edit form" },
+  { name: "AgentSlotBadge", registry: "shadcn/ui", description: "Badge showing 'AI Agent (Coming Soon)' placeholder text" },
+  { name: "CreateTaskDialog", registry: "shadcn/ui", description: "Dialog with form for task creation (title, description, priority, assignee, due date)" },
+  { name: "EditTaskDialog", registry: "shadcn/ui", description: "Dialog with pre-filled form for task editing" },
+  { name: "TaskFilters", registry: "shadcn/ui", description: "Filter bar with select dropdowns for assignee, priority, status" },
+  { name: "AssigneeSelector", registry: "shadcn/ui", description: "Select dropdown listing users and DEX (AI) as assignee options" },
+  { name: "WorkflowList", registry: "shadcn/ui", description: "List of workflow cards with name, description, status, step count" },
+  { name: "WorkflowCard", registry: "shadcn/ui", description: "Card showing workflow name, description, status badge, step progress" },
+  { name: "CreateWorkflowDialog", registry: "shadcn/ui", description: "Dialog with form for workflow creation (name, description, initial steps)" },
+  { name: "StepTypeSelector", registry: "shadcn/ui", description: "Select dropdown for step type (human/AI/tool)" },
+  { name: "CompanySettingsForm", registry: "shadcn/ui", description: "Form with company name, stage, industry, business model, goals fields" },
+  { name: "NotificationPreferences", registry: "shadcn/ui", description: "Toggle switches for email, push, task, workflow notification preferences" },
+  { name: "AutonomyLevelSelector", registry: "shadcn/ui", description: "Radio group or select for autonomy levels (observe/recommend/assist/execute)" },
+];
+
+const cache = {
+  generated_at: new Date().toISOString(),
+  ttl_hours: 24,
+  project_id: "eos",
+  spec_hash: specHash,
+  source: "saas-dev:warm-cache skill - live MCP queries (21st.dev, MagicUI, shadcn/ui)",
+  components,
+};
+
+fs.writeFileSync('lib/ui-generator/component-cache.json', JSON.stringify(cache, null, 2) + '\n');
+
+const byRegistry = {};
+components.forEach(c => { byRegistry[c.registry] = (byRegistry[c.registry] || 0) + 1; });
+
+console.log("Component Cache Warmed");
+console.log("");
+console.log("  Pages:               " + spec.pages.length);
+console.log("  Components queried:  " + allComponents.length);
+console.log("  References found:    " + components.length);
+console.log("  Cache TTL:           24h");
+console.log("  Spec hash:           " + specHash.slice(0, 12) + "...");
+console.log("  Written to:          lib/ui-generator/component-cache.json");
+console.log("");
+console.log("  By registry:");
+Object.entries(byRegistry).sort().forEach(([reg, count]) => {
+  console.log("    " + reg + ": " + count);
+});

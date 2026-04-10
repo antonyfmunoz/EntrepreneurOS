@@ -129,14 +129,13 @@ export const specPhaseImplementation: PhaseImplementation = {
       }
     }
 
+    const projectRoot = path.resolve(config.repoPath);
+
     // Gap analysis — challenge the spec before locking
     const skipGaps = process.env.SKIP_GAP_ANALYSIS === "true";
     if (!skipGaps) {
       const gaps = await analyzeGaps(spec);
       const report = formatGapReport(spec, gaps);
-
-      // Persist gap analysis report
-      const projectRoot = path.resolve(config.repoPath);
       const outputDir = path.join(projectRoot, ".planning", "output", "spec");
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });

@@ -46,6 +46,7 @@ export function buildStitchPrompt(
   brandVoice?: string,
   pageCopy?: PageCopy,
   competitiveStructure?: string,
+  userFeedback?: string,
 ): string {
   const parts: string[] = [];
 
@@ -222,6 +223,12 @@ export function buildStitchPrompt(
   // 12. Component implementation references (from discovery layer, optional)
   if (componentReferences && componentReferences.length > 0) {
     parts.push(componentReferences);
+  }
+
+  // 13. User feedback from prior page reviews — highest priority overrides
+  if (userFeedback) {
+    parts.push("# MANDATORY DESIGN RULES — follow exactly, these override any conflicting guidance:");
+    parts.push(userFeedback);
   }
 
   // Enforce total prompt size budget to prevent unbounded growth

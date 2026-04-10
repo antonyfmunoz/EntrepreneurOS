@@ -18,7 +18,11 @@
       "Bash(tee /tmp/tsc5.log)",
       "Bash(tee /tmp/tsc7.log)",
       "Bash(tee /tmp/tsc8.log)",
-      "Bash(tee /tmp/tsc9.log)"
+      "Bash(tee /tmp/tsc9.log)",
+      "mcp__magicui__searchRegistryItems",
+      "mcp__magic21__21st_magic_component_inspiration",
+      "Bash(SKIP_GAP_ANALYSIS=true npx tsx scripts/run-intake.ts)",
+      "Read(//c/Users/antonys beast pc/dev/EntrepreneurOS/.planning/**)"
     ]
   }
 }

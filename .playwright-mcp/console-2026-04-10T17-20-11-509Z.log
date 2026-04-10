@@ -1,0 +1,46 @@
+[    1002ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:21550
+[    2028ms] ReferenceError: require is not defined
+    at ClerkProviderWrapper (http://localhost:5000/src/App.tsx?v=xuSbtsZfQXmVT3Fevg10d:362:29)
+    at renderWithHooks (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:11548:26)
+    at mountIndeterminateComponent (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:14926:21)
+    at beginWork (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:15914:22)
+    at HTMLUnknownElement.callCallback2 (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:3674:22)
+    at Object.invokeGuardedCallbackDev (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:3699:24)
+    at invokeGuardedCallback (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:3733:39)
+    at beginWork$1 (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:19765:15)
+    at performUnitOfWork (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:19198:20)
+    at workLoopSync (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:19137:13)
+[    2032ms] ReferenceError: require is not defined
+    at ClerkProviderWrapper (http://localhost:5000/src/App.tsx?v=xuSbtsZfQXmVT3Fevg10d:362:29)
+    at renderWithHooks (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:11548:26)
+    at mountIndeterminateComponent (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:14926:21)
+    at beginWork (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:15914:22)
+    at HTMLUnknownElement.callCallback2 (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:3674:22)
+    at Object.invokeGuardedCallbackDev (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:3699:24)
+    at invokeGuardedCallback (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:3733:39)
+    at beginWork$1 (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:19765:15)
+    at performUnitOfWork (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:19198:20)
+    at workLoopSync (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:19137:13)
+[    1173ms] [ERROR] The above error occurred in the <ClerkProviderWrapper> component:
+
+    at ClerkProviderWrapper (http://localhost:5000/src/App.tsx?v=xuSbtsZfQXmVT3Fevg10d:353:33)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries. @ http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:14031
+[    2040ms] ReferenceError: require is not defined
+    at ClerkProviderWrapper (http://localhost:5000/src/App.tsx?v=xuSbtsZfQXmVT3Fevg10d:362:29)
+    at renderWithHooks (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:11548:26)
+    at mountIndeterminateComponent (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:14926:21)
+    at beginWork (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:15914:22)
+    at beginWork$1 (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:19753:22)
+    at performUnitOfWork (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:19198:20)
+    at workLoopSync (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:19137:13)
+    at renderRootSync (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:19116:15)
+    at recoverFromConcurrentError (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:18736:28)
+    at performConcurrentWorkOnRoot (http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:18684:30)
+[   32060ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:5000/@fs/C:/Users/antonys%20beast%20pc/dev/EntrepreneurOS/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=d8b82c65:21550
+[   32397ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5000/api/company:0
+[   32397ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5000/api/user:0
+[   32399ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://localhost:5000/auth:0
+[   32663ms] [WARNING] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview @ https://hip-snipe-33.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js:18

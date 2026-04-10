@@ -1,0 +1,14 @@
+- generic [ref=e3]:
+  - generic [ref=e4]: "[plugin:runtime-error-plugin] require is not defined"
+  - generic [ref=e5]: C:/Users/antonys beast pc/dev/EntrepreneurOS/client/src/App.tsx:210:29
+  - generic [ref=e6]: "208| } 209| // Dynamic import to avoid bundling Clerk when not configured 210| const { ClerkProvider } = require(\"@clerk/clerk-react\"); | ^ 211| return <ClerkProvider publishableKey={key}>{children}</ClerkProvider>; 212| }"
+  - generic [ref=e7]: at ClerkProviderWrapper C:/Users/antonys beast pc/dev/EntrepreneurOS/client/src/App.tsx:210:29
+  - generic [ref=e8]:
+    - text: Click outside, press Esc key, or fix the code to dismiss.
+    - text: You can also disable this overlay by setting
+    - code [ref=e9]: server.hmr.overlay
+    - text: to
+    - code [ref=e10]: "false"
+    - text: in
+    - code [ref=e11]: vite.config.js
+    - text: .

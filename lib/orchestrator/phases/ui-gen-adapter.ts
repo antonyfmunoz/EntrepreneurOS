@@ -39,6 +39,18 @@ import { startPreviewServer, startPreviewServerFromFile } from "../../ui-generat
 import type { ProjectCopy, PageCopy } from "../../copy-planner/types.js";
 import { printPageReview } from "../../ui-generator/terminal-links.js";
 
+// Accumulated user feedback from page reviews. Injected into every Stitch
+// prompt as mandatory overrides so corrections carry forward to all pages.
+const GLOBAL_USER_FEEDBACK = `
+- Never use labels like "STRATEGIC ACCESS TERMINAL", "SECURE KEY", "WORK EMAIL", or "OR DEPLOY VIA" — these are not brand voice.
+- Form labels must be simple and direct: "Email", "Password", "Confirm password".
+- OAuth separator text: "OR CONTINUE WITH" (never "OR DEPLOY VIA").
+- Left panel / marketing copy must be operational and founder-focused. No agency/visionary language.
+- Cards must use glassmorphism: background rgba(255,255,255,0.7), backdrop-filter blur(16px). No hard white boxes.
+- No 1px solid borders on cards — use background shifts and subtle shadows instead.
+- Copyright year must be dynamic (current year), never hardcoded.
+`.trim();
+
 interface UiGenRunInput {
   page: PageSpecFull;
   pageIndex: number;
@@ -216,6 +228,8 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
       designSystemPath,
       brandVoice ?? undefined,
       pageCopy ?? undefined,
+      undefined, // competitiveStructure
+      GLOBAL_USER_FEEDBACK,
     );
 
     // Generate the desktop screen via Stitch.

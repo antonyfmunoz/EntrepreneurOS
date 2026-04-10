@@ -1,0 +1,30 @@
+- generic [ref=e2]:
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - heading "EntrepreneurOS" [level=1] [ref=e7]
+      - paragraph [ref=e8]: The Operating System for Founder-Led Companies
+    - generic [ref=e9]:
+      - tablist [ref=e10]:
+        - tab "Login" [selected] [ref=e11] [cursor=pointer]
+        - tab "Register" [ref=e12] [cursor=pointer]
+      - tabpanel "Login" [ref=e13]:
+        - generic [ref=e14]:
+          - generic [ref=e15]:
+            - heading "Login to your account" [level=3] [ref=e16]
+            - paragraph [ref=e17]: Enter your credentials below to access your workspace
+          - generic [ref=e19]:
+            - generic [ref=e20]:
+              - text: Email
+              - textbox "Email" [ref=e21]:
+                - /placeholder: your@email.com
+            - generic [ref=e22]:
+              - text: Password
+              - textbox "Password" [ref=e23]:
+                - /placeholder: ••••••
+            - button "Forgot password?" [ref=e25] [cursor=pointer]
+            - button "Sign In" [ref=e26] [cursor=pointer]
+          - paragraph [ref=e28]:
+            - text: Don't have an account?
+            - button "Register now" [ref=e29] [cursor=pointer]
+  - region "Notifications (F8)":
+    - list
