@@ -3,7 +3,9 @@
 // Wraps the pipeline_runs and pipeline_pages tables defined in
 // shared/design-schema.ts. State is NEVER written to JSON files.
 
-import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import { drizzle as drizzlePostgres, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
+import { neon } from "@neondatabase/serverless";
 import postgres from "postgres";
 import { and, eq, desc, ne } from "drizzle-orm";
 import {
@@ -42,13 +44,25 @@ export interface PipelinePageRow {
   completedAt: Date | null;
 }
 
-let _client: ReturnType<typeof postgres> | null = null;
-let _db: PostgresJsDatabase | null = null;
+type OrchestratorDb = PostgresJsDatabase | ReturnType<typeof drizzleNeon>;
 
-export function getOrchestratorDb(): PostgresJsDatabase {
+let _client: ReturnType<typeof postgres> | null = null;
+let _db: OrchestratorDb | null = null;
+
+/**
+ * Use Neon HTTP driver when USE_NEON_HTTP=1 is set (works from Windows/constrained
+ * environments where TCP to Neon hangs). Falls back to postgres.js TCP driver.
+ */
+export function getOrchestratorDb(): OrchestratorDb {
   if (_db) return _db;
-  _client = postgres(getDatabaseUrl());
-  _db = drizzle(_client);
+  const url = getDatabaseUrl();
+  if (process.env.USE_NEON_HTTP === "1") {
+    const sql = neon(url);
+    _db = drizzleNeon(sql) as unknown as OrchestratorDb;
+  } else {
+    _client = postgres(url);
+    _db = drizzlePostgres(_client);
+  }
   return _db;
 }
 

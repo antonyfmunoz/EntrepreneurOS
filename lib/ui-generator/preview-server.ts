@@ -11,6 +11,7 @@
 // Graceful: if fetch fails or all ports busy, returns null (never throws).
 
 import http from "node:http";
+import fs from "node:fs";
 import type { AddressInfo } from "node:net";
 
 export interface PreviewHandle {
@@ -35,6 +36,29 @@ export async function startPreviewServer(
     const resp = await fetch(htmlUrl);
     if (!resp.ok) return null;
     htmlContent = await resp.text();
+  } catch {
+    return null;
+  }
+
+  for (let attempt = 0; attempt < MAX_PORT_ATTEMPTS; attempt++) {
+    const port = START_PORT + attempt;
+    const result = await tryListen(htmlContent, port);
+    if (result) return result;
+  }
+
+  return null;
+}
+
+/**
+ * Serve HTML from a local file path. Used when presigned URLs have expired
+ * but the HTML was cached to disk at generation time.
+ */
+export async function startPreviewServerFromFile(
+  filePath: string,
+): Promise<PreviewHandle | null> {
+  let htmlContent: string;
+  try {
+    htmlContent = fs.readFileSync(filePath, "utf-8");
   } catch {
     return null;
   }

@@ -23,6 +23,7 @@ export interface ReviewBlockOptions {
   screenshotUrl?: string;
   htmlUrl?: string;
   figmaUrl?: string | null;
+  localHtmlPath?: string;
 }
 
 /**
@@ -56,6 +57,10 @@ export function printPageReview(options: ReviewBlockOptions): void {
   if (options.htmlUrl) {
     lines.push(`  HTML Source:   ${osc8Link(options.htmlUrl, "View HTML")}`);
     lines.push(`                 ${options.htmlUrl}`);
+  }
+
+  if (options.localHtmlPath) {
+    lines.push(`  Cached HTML:   ${options.localHtmlPath}`);
   }
 
   if (options.figmaUrl) {

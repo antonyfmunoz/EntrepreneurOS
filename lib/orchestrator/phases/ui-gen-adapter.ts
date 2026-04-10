@@ -9,6 +9,7 @@
 //   then dualReview the result. Returns a UiGenPhaseOutput-shaped record.
 
 import path from "node:path";
+import fs from "node:fs";
 import readline from "node:readline";
 import { and, asc, desc, eq } from "drizzle-orm";
 import {
@@ -34,7 +35,7 @@ import {
 } from "../../ui-generator/types.js";
 import { generateScreen, attemptFigmaExport } from "../../stitch/client.js";
 import { loadBrandVoice } from "../../spec-parser/brand-voice-inferrer.js";
-import { startPreviewServer } from "../../ui-generator/preview-server.js";
+import { startPreviewServer, startPreviewServerFromFile } from "../../ui-generator/preview-server.js";
 import type { ProjectCopy, PageCopy } from "../../copy-planner/types.js";
 import { printPageReview } from "../../ui-generator/terminal-links.js";
 
@@ -144,7 +145,7 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
 
     // Load approved copy from the copy phase (if it ran)
     let projectCopy: ProjectCopy | null = null;
-    const copyRows = await db
+    const copyRows = await getOrchestratorDb()
       .select()
       .from(pipelinePages)
       .where(
@@ -233,6 +234,15 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
     }
     const htmlContent = await htmlResp.text();
 
+    // Cache HTML to disk so it's available even after presigned URLs expire.
+    const previewDir = path.resolve(config.repoPath, ".planning/output/previews");
+    if (!fs.existsSync(previewDir)) {
+      fs.mkdirSync(previewDir, { recursive: true });
+    }
+    const localHtmlPath = path.resolve(previewDir, `${page.name}.html`);
+    fs.writeFileSync(localHtmlPath, htmlContent, "utf-8");
+    console.log(`[ui-gen] Cached HTML → ${localHtmlPath}`);
+
     // Dual review (Claude + Gemini if available).
     const review = await dualReview({
       htmlContent,
@@ -252,6 +262,7 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
       tokenVersion: tokens?.version ?? 0,
       approved,
       scoreSummary,
+      localHtmlPath,
     });
   },
 
@@ -264,12 +275,17 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
       htmlUrl?: string;
       scoreSummary?: string;
       approved?: boolean;
+      localHtmlPath?: string;
     };
 
-    // Start preview server (fetches HTML, serves locally)
-    const preview = output.htmlUrl
-      ? await startPreviewServer(output.htmlUrl)
+    // Start preview server from cached local file (immune to URL expiry).
+    // Falls back to fetching presigned URL if local file doesn't exist.
+    let preview = output.localHtmlPath
+      ? await startPreviewServerFromFile(output.localHtmlPath)
       : null;
+    if (!preview && output.htmlUrl) {
+      preview = await startPreviewServer(output.htmlUrl);
+    }
 
     // Attempt Figma export silently — null if unavailable
     const figmaUrl = config.stitchProjectId
@@ -286,6 +302,7 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
       screenshotUrl: output.screenshotUrl,
       htmlUrl: output.htmlUrl,
       figmaUrl,
+      localHtmlPath: output.localHtmlPath,
     });
 
     const answer = await promptStdin("Decision (y/n/s): ");
