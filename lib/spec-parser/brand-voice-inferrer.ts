@@ -8,16 +8,51 @@ import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 
-const BRAND_VOICE_SYSTEM_PROMPT = `You are a brand voice analyst. Given a product requirements document, extract the brand voice characteristics that should inform UI design.
+const BRAND_VOICE_SYSTEM_PROMPT = `You are a brand voice and SaaS copy expert. Given a product requirements document, extract the brand voice characteristics AND produce actionable copy guidance for building the product's UI and landing pages.
 
-Return a concise brand voice document in markdown with these sections:
-- **Tone**: 1-2 sentences describing the overall tone (e.g. professional, playful, authoritative)
-- **Personality**: 3-5 adjectives that define the brand personality
-- **Language Style**: guidance on copy style (formal vs casual, technical vs accessible, etc.)
-- **Visual Mood**: how the brand voice translates to visual design (color temperature, density, whitespace, typography feel)
-- **UI Copy Guidelines**: specific rules for button labels, headings, empty states, error messages
+Return a detailed brand voice document in markdown with these sections:
 
-Be specific to THIS product. Do not be generic. Keep total output under 300 words.`;
+# Brand Voice
+
+## Tone
+1-2 sentences describing the overall tone (e.g. professional, playful, authoritative). Be specific to THIS product.
+
+## Personality
+3-5 adjectives that define the brand personality.
+
+## Language Style
+Guidance on copy style (formal vs casual, technical vs accessible, sentence structure, vocabulary level).
+
+## Visual Mood
+How the brand voice translates to visual design (color temperature, density, whitespace, typography feel).
+
+## UI Copy Guidelines
+Specific rules as a table with columns: Element | Style | Examples. Cover:
+- Button labels (verb-forward? articles?)
+- Page headings (noun-based? outcome-focused?)
+- Empty states (tone, CTA phrasing)
+- Error messages (blame-free, actionable)
+- Success/confirmation messages
+- Tooltip and helper text
+- AI/agent references (how to refer to AI features)
+
+## SaaS Copy Patterns
+Best practices for this specific product type:
+- Value proposition framing (how to describe what the product does in one line)
+- Feature descriptions (benefit-led vs feature-led)
+- Onboarding copy (first-run experience, setup wizard tone)
+- Upgrade/upsell language (if applicable)
+- Social proof and trust signals style
+- CTA hierarchy (primary vs secondary action phrasing)
+
+## Landing Page Voice
+If this product had a marketing page, what would the copy feel like:
+- Hero headline style (aspirational? direct? provocative?)
+- Subheadline approach
+- Feature section copy style
+- Testimonial framing
+
+Be specific to THIS product. Do not be generic. Every example should feel like it belongs to this brand.`;
 
 export interface BrandVoiceResult {
   content: string;
@@ -44,7 +79,7 @@ export async function inferBrandVoice(
 
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
+      max_tokens: 4096,
       system: BRAND_VOICE_SYSTEM_PROMPT,
       messages: [{ role: "user", content: prdText }],
     });

@@ -260,14 +260,34 @@ function extractProductMeta(docs: ScannedDocs): {
   const visionMatch = text.match(/##\s*(?:\d+\.\s*)?Product Vision\s*\n+([\s\S]*?)(?=\n##|\n---)/i);
   const productVision = visionMatch?.[1]?.trim() ?? "";
 
-  // Extract target users
+  // Extract target users — handles bullet lists, "Primary:/Secondary:" prose, and plain paragraphs
   const usersMatch = text.match(/##\s*(?:\d+\.\s*)?Target Users[^#]*?\n+([\s\S]*?)(?=\n##|\n---)/i);
-  const targetUsers = usersMatch
-    ? usersMatch[1].split("\n").filter((l) => l.trim().startsWith("-") || l.trim().startsWith("*"))
-      .map((l) => l.replace(/^[\s*-]+/, "").trim()).filter(Boolean).slice(0, 5)
-    : [];
+  const targetUsers: string[] = [];
+  if (usersMatch) {
+    const block = usersMatch[1].trim();
+    const bullets = block.split("\n")
+      .filter((l) => l.trim().startsWith("-") || l.trim().startsWith("*"))
+      .map((l) => l.replace(/^[\s*-]+/, "").trim())
+      .filter(Boolean);
 
-  return { productName, productDescription, productVision, targetUsers, jobsToBeDone: [] };
+    if (bullets.length > 0) {
+      targetUsers.push(...bullets.slice(0, 5));
+    } else {
+      // Parse "Primary: ...", "Secondary: ..." prose lines
+      const lines = block.split("\n").map((l) => l.trim()).filter(Boolean);
+      for (const line of lines) {
+        const labelMatch = line.match(/^(Primary|Secondary|Tertiary)\s*:\s*(.+)/i);
+        if (labelMatch) {
+          targetUsers.push(labelMatch[2].trim());
+        } else if (targetUsers.length === 0) {
+          // First non-labeled paragraph — use as-is
+          targetUsers.push(line);
+        }
+      }
+    }
+  }
+
+  return { productName, productDescription, productVision, targetUsers: targetUsers.slice(0, 5), jobsToBeDone: [] };
 }
 
 function detectAuthFromSpec(spec: SpecOutput): "firebase" | "supabase" | "custom" | "none" {
