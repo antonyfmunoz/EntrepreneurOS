@@ -200,14 +200,14 @@ function Router() {
   );
 }
 
+import { ClerkProvider } from "@clerk/clerk-react";
+
 function ClerkProviderWrapper({ children }: { children: React.ReactNode }) {
   const key = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
   if (!key) {
     // Clerk not configured — render without it (local auth fallback)
     return <>{children}</>;
   }
-  // Dynamic import to avoid bundling Clerk when not configured
-  const { ClerkProvider } = require("@clerk/clerk-react");
   return <ClerkProvider publishableKey={key}>{children}</ClerkProvider>;
 }
 
