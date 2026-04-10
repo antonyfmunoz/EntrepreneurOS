@@ -1,0 +1,2022 @@
+{
+  "productName": "EntrepreneurOS",
+  "productDescription": "EntrepreneurOS is an AI-native business operating system that enables founders and operators to run one or more companies through a unified interface combining organizational structure, role-based dashboards, workflows, and agentic execution.\n\nMVP goal: A fully designed, fully wired frontend + backend shell. Every page matches the intended design. Every button, form, and nav item works. Data persists to Neon PostgreSQL. Auth is real via Firebase. The AI execution layer is a placeholder — the interface exists, stub responses are returned, and the slot is designed to be swapped for the real AI substrate later with no structural changes.\n\nEntrepreneurOS is one of three OS products (OS Trinity):\n- EntrepreneurOS: business, operations, execution\n- CreatorOS: content, distribution, audience\n- LYFEOS: personal life, focus, habits, mastery\n\nMVP operates independently. CreatorOS and LYFEOS integration is deferred. Shared AI substrate is deferred.",
+  "productVision": "To build the world's first truly AI-native operating system for entrepreneurs: a platform that structures companies, guides founders, deploys agentic labor, manages workflows, learns continuously, and helps humans operate at a world-class level regardless of prior experience.\n\nThe platform should function like a strategic advisor, an executive operating team, a workflow engine, a business intelligence system, and a human optimization layer — all through one coordinated interface.",
+  "targetUsers": [
+    "Founders and owner-operators running one or more companies who need strategy, execution, and clarity with leverage and without bloated teams.",
+    "Agency owners, operators, coaches, consultants, holding company operators who need repeatable systems and multi-entity management."
+  ],
+  "jobsToBeDone": [
+    "Structure a business correctly from the start",
+    "Generate and evolve the org chart based on stage, model, and goals",
+    "Install role-specific dashboards and operating systems",
+    "Run workflows manually, with AI assistance, or autonomously",
+    "Create, manage, and improve SOPs/workflows",
+    "Delegate work to AI agents safely",
+    "View key business metrics and next-best actions",
+    "Learn what to do and why",
+    "Coordinate teams, agents, and software from one platform",
+    "Run multiple companies from one portfolio view",
+    "Store, retrieve, and evolve business knowledge",
+    "Monitor market reality and competitive shifts",
+    "Improve the system from outcomes and failures",
+    "Integrate with CreatorOS and LYFEOS for distribution and personal optimization"
+  ],
+  "brandVoice": "# Brand Voice: EntrepreneurOS\n\n## Tone\n\nCommanding yet collaborative—the voice of a world-class operating partner who knows what needs to happen and invites you into the decision-making process, never commanding from above. Direct, clear, and sometimes provocative about what's possible, but never condescending about where you're starting from.\n\n## Personality\n\n- **Rigorous** — expects excellence but makes it accessible\n- **Empowering** — positions the founder as the decision-maker, not the system\n- **Strategic** — speaks about outcomes and leverage, not features\n- **Confident** — no hedging, no apologies for having high standards\n- **Conversational** — sounds like a trusted advisor at a dinner table, not a SaaS marketing page\n\n---\n\n## Language Style\n\n**Formality:** Casual-to-moderate. Avoid corporate jargon and buzzwords. Avoid false familiarity (\"Hey fam!\"). Use plain English with one level of sophistication—someone running a company should never feel talked down to, but also never confused.\n\n**Technical vs. Accessible:** Lean accessible. The product uses \"agent,\" \"workflow,\" \"autonomous execution\"—these are real concepts—but explain *why* they matter in business terms, not tech terms. Example: \"Workflows automate your repeatable decisions\" not \"Workflows parameterize task sequences.\"\n\n**Sentence Structure:** Short, declarative sentences. Avoid nested clauses. Favor active voice (\"You set the autonomy level\" not \"Autonomy levels are configured by the operator\").\n\n**Vocabulary:** \n- Use founder/operator vocabulary: \"scale,\" \"leverage,\" \"bottleneck,\" \"execution,\" \"clarity,\" \"capacity.\"\n- Avoid: \"user,\" \"software,\" \"cloud,\" \"solution,\" \"ecosystem,\" \"best practices,\" \"synergy.\"\n- Preferred: \"you,\" \"operator,\" \"founder,\" \"the system,\" \"your company,\" \"execution engine.\"\n\n**Tone Markers:**\n- Directness is trust. Say what's true.\n- Avoid wishy-washy language: \"might,\" \"could,\" \"potentially,\" \"some might say.\"\n- Embrace specificity: \"This removes 6 hours of weekly planning\" not \"Saves you time.\"\n- Use imperative when giving guidance: \"Set your autonomy level first\" not \"You should consider setting.\"\n\n---\n\n## Visual Mood\n\nLight mode. The Ethereal Professional design system governs all visual decisions — white backgrounds, violet primary (#6a37d4), glassmorphism surfaces, Inter font, gradient CTAs. The brand feels like a high-end illuminated workspace, not a dark command terminal. Airy, precise, and intentional.\n\n**Color Temperature:** Cool, professional. Light mode with white and soft gray surfaces. Violet primary (#6a37d4) and light violet accent (#ae8dff) for energy. Gradient CTAs (#6a37d4 → #ae8dff at 135deg). Never use pure black — use #2c2f30 for text. Shadows tinted with primary purple.\n\n**Density:** High on data views (Org Chart, Task Board, Workflows), lower on decision/input surfaces (setup wizard, role creation). This creates visual breathing room where friction could occur.\n\n**Whitespace:** Generous. Prioritize negative space for a premium editorial feel. Strategic use around CTAs, headers, and transition states. Empty states should feel intentional, not abandoned.\n\n**Typography:** Inter exclusively. Display headlines at semi-bold with tight letter-spacing. Body copy at regular weight, 1.6 line-height for readability. All-caps labels with wide tracking for structure.\n\n**Visual Patterns:** \n- Glassmorphism on floating elements: rgba(255,255,255,0.7) + backdrop-filter: blur(16px).\n- No 1px solid borders — use background shifts and ghost borders at 10% opacity.\n- Progress indicators are prominent (workflow step tracking, org setup completion).\n- Status is always visible (agent status, task priority, company health).\n- The AI/agent presence is indicated subtly (small icon, not a character mascot).\n- Cards use 32px padding, 12px border radius, ambient shadows tinted with primary violet.\n\n---\n\n## UI Copy Guidelines\n\n| Element | Style | Examples |\n|---------|-------|----------|\n| **Button Labels (Primary CTAs)** | Verb-forward, action-oriented, no articles. Specific outcome focus. | \"Add Company\" not \"Create New\" / \"Start Workflow\" not \"Execute\" / \"Save Structure\" not \"OK\" / \"Assign to DEX\" not \"Add Agent\" |\n| **Button Labels (Secondary)** | Neutral, lower cognitive weight. | \"Cancel\" / \"Skip\" / \"Edit\" / \"More Options\" / \"Learn More\" |\n| **Page Headings** | Outcome-focused noun phrases or light imperative. Reflect what the user *does* here, not system state. | \"Command Center\" not \"Dashboard\" / \"Your Org Chart\" not \"Organization\" / \"Agent Chat\" not \"Conversation History\" / \"Run a Workflow\" not \"Workflow Execution\" |\n| **Section Headings** | Task-oriented, hierarchical. | \"Active Workflows\" / \"Pending Tasks\" / \"Company Overview\" / \"Your Next Best Actions\" |\n| **Empty States** | Warm, specific, action-inviting. Never blame the user. Guide to the next step. Tone: \"Let's set this up together.\" | \"No workflows yet. Create your first SOP to start automating decisions.\" / \"All caught up—no tasks in this column.\" / \"No companies yet. Add your first one to get started.\" |\n| **Error Messages** | Actionable, blame-free, specific. Always provide the fix or next step. Never: \"Error.\" | \"That email is already in use. Try another or reset your password.\" / \"Workflow needs at least one step before you can run it. Add a step to continue.\" / \"Role can't be deleted—it has 2 assignees. Reassign them first.\" |\n| **Success/Confirmation** | Brief, affirmative, forward-looking. | \"Workflow saved and ready to run.\" / \"Company added to your portfolio.\" / \"Role assigned to Maya.\" / \"Task moved to In Progress.\" |\n| **Inline Helper Text / Tooltips** | Explain *why*, not just *what*. Benefit-focused. Assumptive (you might not know this, and that's fine). | \"Set autonomy level first—this controls how much the agent can do without asking.\" / \"Due dates help prioritize work across your team and agents.\" / \"Company stage shapes your default org structure and recommended workflows.\" |\n| **Form Labels** | Clear, specific, lowercase or title case. | \"Company Name\" / \"Business Stage\" / \"What does this role do?\" / \"Assign to (optional)\" |\n| **Placeholder Text** | Hint at the expected input. | \"acme.com\" / \"VP of Sales\" / \"Describe the decision this workflow automates\" |\n| **Alerts/Notifications** | Urgent but not alarmist. Context + action. | \"DEX needs clarification on your Q4 goals to make better recommendations. Provide details.\" / \"High-priority task overdue: Update Q3 forecast. Reassign or reschedule?\" / \"New company stage reached: scaling. Your default workflows have been updated.\" |\n| **AI/Agent References** | Refer to the agent as \"DEX\" (the actual product name, not \"AI,\" \"bot,\" or \"assistant\"). Position as a capability, not a character. Tone: competent, not anthropomorphic. | \"Assign to DEX\" not \"Ask AI\" / \"DEX is analyzing...\" not \"The AI is thinking...\" / \"DEX needs clarification\" not \"The bot wants to know\" / \"DEX recommends:\" not \"AI thinks you should:\" / Never use: \"DEX can't,\" \"DEX doesn't know,\" \"DEX made an error\"—frame as \"More context needed for DEX to help.\" |\n| **Links** | Descriptive, action-oriented. | \"View your org chart\" not \"Click here\" / \"Learn how to set autonomy\" not \"More info\" |\n| **Microcopy (form validation, in-progress states)** | Conversational, specific. | \"Adding your company...\" / \"Checking email...\" / \"This role is required in your structure.\" / \"Great—you're on the scaling stage. Here's what founders usually set up first.\" |\n\n---\n\n## SaaS Copy Patterns\n\n### Value Proposition Framing\n\n**One-liner:** \"EntrepreneurOS is the operating system for founder-led companies—structure, strategy, and execution in one intelligent interface.\"\n\n**Alternative (outcome-focused):** \"Run your company at world-class level without building a full executive team.\"\n\n**Avoid:** \"AI-powered SaaS for business operations\" / \"Platform for managing teams\" / \"Software for founders.\"\n\n**Why this works:** It leads with outcome (world-class operation, founder autonomy) and credibility (operating system, not just a tool). It's specific to the target (founder-led companies, not \"users\" or \"teams\").\n\n---\n\n### Feature Descriptions\n\n**Pattern:** Lead with the business outcome, then explain what the system does.\n\n**Feature: Org Chart**\n- ❌ *Wrong:* \"Visual organization structure with role management and department hierarchies.\"\n- ✅ *Right:* \"Design your operating structure in minutes. DEX suggests roles based on your company stage—you decide what stays, what goes. Clarity on who does what, even when you're solo.\"\n\n**Feature: Task Board**\n- ❌ *Wrong:* \"Kanban-style task management with priority filters and assignee views.\"\n- ✅ *Right:* \"See everything that needs to happen and by whom. Assign work to your team or to DEX. Move tasks through execution stages. Know what's stuck and why.\"\n\n**Feature: Workflows (SOPs)**\n- ❌ *Wrong:* \"Automate repeatable business processes with configurable step types.\"\n- ✅ *Right:* \"Turn your best decisions into repeatable routines. Write once, run forever. DEX can execute steps or flag them for your review—you stay in control.\"\n\n**Feature: Agent Chat (DEX)**\n- ❌ *Wrong:* \"Agentic AI interface for real-time interaction with business intelligence.\"\n- ✅ *Right:* \"Talk to DEX like an advisor. Ask about your business, delegate decisions, get unstuck. DEX knows your structure, your goals, and your pattern—and learns from every conversation.\"\n\n**Pattern applied:** Business outcome first (clarity, leverage, execution), then mechanism (here's what the system does), then trust signal (you stay in control / learns over time).\n\n---\n\n### Onboarding Copy\n\n**Tone:** Collaborative. Assume the founder is busy and smart—don't waste their time, but also don't assume they've set up a company operating system before.\n\n**Company Setup Wizard:**\n\n**Step 1 (Company Name):**\n- Heading: \"What's your company called?\"\n- Helper: \"This is how DEX will refer to your business in conversations and recommendations.\"\n- Placeholder: \"e.g., Acme Manufacturing\"\n\n**Step 2 (Company Stage):**\n- Heading: \"What stage are you at?\"\n- Helper: \"This shapes your default structure and recommended workflows. You can change it anytime.\"\n- Options: \"Just an idea\" / \"Pre-revenue\" / \"Revenue\" / \"Scaling\" / \"Mature\"\n\n**Step 3 (Industry & Business Model):**\n- Heading: \"Tell us about your business.\"\n- Helper: \"DEX will tailor workflows and recommendations to your type of company.\"\n\n**Step 4 (Strategic Goals):**\n- Heading: \"What are you trying to accomplish in the next 12 months?\"\n- Helper: \"Be specific. DEX uses this to prioritize what matters and flag opportunities.\"\n- Placeholder: \"e.g., $2M ARR, hire first salesperson, launch product line\"\n\n**Completion:**\n- Heading: \"You're ready. Your operating system is set up.\"\n- Copy: \"DEX has built your default org structure and suggested your first workflows. You can customize everything. Let's dive in.\"\n- CTA: \"Go to Command Center\"\n\n**Pattern:** Each step has a clear purpose (why are we asking this?), lives in founder language, and moves fast.\n\n---\n\n### Upgrade / Upsell Language\n\n**Not applicable for MVP.** When monetization comes, the pattern should be:\n- Lead with what becomes *possible* (not what you lose if you don't upgrade).\n- Example: \"Upgrade to allow DEX autonomous execution\" not \"Free plan limits DEX to recommendations.\"\n- Frame as expansion, not restriction.\n\n---\n\n### Social Proof & Trust Signals\n\n**In MVP:** Trust signals are structural, not testimonial.\n\n- **Competence Signal:** \"Built by operators for operators.\" (If founder/team has operating background, lead with this.)\n- **Rigor Signal:** \"World-class standard from day one—intelligent rigor adapted to present scale.\" (This is a core principle; bake it into the onboarding and design.)\n- **Control Signal:** \"You override, pause, or edit any decision. Human override is non-negotiable.\" (This should appear near any agent action.)\n- **Transparency Signal:** \"No surprises. DEX explains its reasoning. Every recommendation is optional.\"\n\n**Avoid:** \"Join 10,000+ founders\" (you're 10 users). \"Rated 4.9 stars\" (you don't have reviews yet). Generic \"trusted by\" statements.\n\n---\n\n### CTA Hierarchy\n\n**Primary CTAs (highest conversion intent):**\n- Do the core action: \"Add Company,\" \"Start Workflow,\" \"Assign to DEX,\" \"Save & Continue\"\n- Style: Strong, active, outcome-focused.\n- Placement: Center, high contrast, clear focal point.\n- Copy rule: One primary per screen.\n\n**Secondary CTAs (supporting actions):**\n- Navigate, learn, skip: \"View Org Chart,\" \"Skip Setup,\" \"Edit Settings,\" \"Learn How to Set Autonomy\"\n- Style: Neutral, lower visual weight.\n- Placement: Below or to the side of primary CTA.\n\n**Tertiary CTAs (low-friction escape routes):**\n- Cancel, go back, close: \"Cancel,\" \"Back,\" \"Dismiss\"\n- Style: Minimal, text-only or light outline.\n\n**Example (Task Board):**\n```\nPrimary:    [+ Add Task]  (strong, center)\nSecondary:  [Filter Tasks]  [View Assigned to DEX]  (lighter, below)\nTertiary:   ← back  (text only, top left)\n```\n\n---\n\n## Landing Page Voice\n\n*If EntrepreneurOS had a marketing homepage, it would feel like this:*\n\n### Hero Headline\n\n**Style:** Direct, outcome-focused, no hype. One clear promise.\n\n**Option A (Power-focused):**\n\"Run your company at world-class level. Without a bloated team.\"\n\n**Option B (Clarity-focused):**\n\"One operating system. Your strategy, your structure, your execution.\"\n\n**Option C (Ambition-focused):**\n\"The operating system for founder-led companies.\"\n\n**Not:**\n- \"The AI-native business OS for modern founders\" (too buzzwordy)\n- \"Unlock Your Company's Full Potential\" (too vague)\n- \"The Future of Business Operations\" (too hype)\n\n### Subheadline\n\n**Style:** Specific benefit + credibility. 2-3 sentences. Explain the \"why\" (what problem this solves).\n\n**Example:**\n\"You run your company the right way. But clarity is hard to scale. Structure gets messy. Execution gets lost. EntrepreneurOS is your operating partner—it shapes your strategy, clarifies your structure, and automates the decisions you've already made. So you can focus on the ones only you can make.\"\n\n**Pattern:** Problem → Solution → Outcome.\n\n### Feature Section Copy\n\n**Style:** Lead with outcome, then the mechanism. No feature lists. Instead: problems solved.\n\n**Section 1: Structure Without Chaos**\n\"Design your operating structure in hours, not months. Tell DEX your company stage and business model—it suggests a starting org chart. You customize it. No org design consultant needed.\"\n\n**Section 2: Strategy Into Action**\n\"Turn your decisions into repeatable workflows. Write once, run forever. DEX executes what you've approved. You approve what matters. Boring decisions become automatic. Hard decisions stay yours.\"\n\n**Section 3: Your Own Executive Team**\n\"DEX knows your business. Ask it anything. Get strategic advice in seconds. It learns from every conversation, every decision, every pattern. The more you use it, the more useful it becomes.\"\n\n**Section 4: Stay in Control**\n\"You override, edit, pause, or cancel any recommendation. No surprises. DEX explains its reasoning. This is your company—you decide.\"\n\n**Pattern:** Problem statement → How the system solves it → Why it matters to founders.\n\n### Testimonial Framing\n\n**Style:** Specific, outcome-focused, real voice (not polished marketing-speak).\n\n**Example (not a real quote yet, but the *voice* it should have):**\n\"EntrepreneurOS let me see my entire company in one place. The org chart caught gaps I'd been ignoring. DEX automated 10 hours of weekly planning. I'm not adding people—I'm adding clarity.\"\n*— Sarah, CEO, Series A SaaS*\n\n**What works:**\n- Specific outcome (10 hours, clarity, gaps caught)\n- Real founder language (\"adding people,\" \"one place\")\n- Not generic (\"It's great!\") or hyperbolic (\"Changed my life!\")\n- Founder name, title, company stage (credibility)\n\n---\n\n## Applied Example: Entire \"Add Workflow\" Flow\n\n### 1. **Button in Workflows List**\n**Copy:** \"[+ Start a Workflow]\"  \n**Not:** \"Create Workflow\" / \"New Process\" / \"+ Add\"\n\n### 2. **Modal Heading**\n**Copy:** \"What decision do",
+  "designSystem": "# Design System Specification: The Ethereal Professional\n\n## 1. Overview & Creative North Star\n\n**Creative North Star: The Lucid Architect**\n\nThis design system embraces a philosophy of \"Lucid Architecture.\" It is designed to feel like a high-end physical workspace — airy, illuminated, and intentional. We achieve a premium editorial feel by prioritizing negative space and utilizing optical weight over structural lines.\n\nThe system breaks the template look through intentional asymmetry: heavy-weight headlines paired with wide-margin body text and overlapping glass containers that suggest depth and fluidity.\n\n---\n\n## 2. Colors & Surface Philosophy\n\n**Core Palette:**\n- Primary: #6a37d4 (Actionable energy)\n- Secondary: #6448b2 (Supportive depth)\n- Tertiary / Primary Container: #ae8dff (Light violet accent)\n- Surface: #f5f6f7 (Base canvas)\n- Background: #ffffff (Breathing room)\n- On-Surface: #2c2f30 (High-contrast readability)\n- On-Surface-Variant: #595c5d (Secondary text)\n- Outline-Variant: #abadae (Ghost border at 10% opacity)\n\n**Rules:**\n- NO 1px solid borders for sectioning. Use background shifts instead.\n- Glassmorphism on floating elements: rgba(255,255,255,0.7) + backdrop-filter: blur(16px)\n- Main CTAs: linear gradient from #6a37d4 to #ae8dff at 135deg\n- Never use pure black (#000000) for text. Use #2c2f30.\n- Never use standard drop shadows. Always tint shadows with primary purple: 0 8px 32px rgba(106,55,212,0.08)\n- Maximum three layers of glass stacking\n\n---\n\n## 3. Typography\n\nSole typeface: **Inter**\n\n- Display: 3.5rem–2.25rem, tight letter-spacing (-0.02em), Semi-Bold\n- Headline: 2rem–1.5rem, Medium weight\n- Title: 1.375rem–1rem, Semi-Bold\n- Body: 1rem–0.75rem, Regular, line-height 1.6\n- Label: 0.75rem–0.6875rem, All-caps, 0.05em tracking\n\n---\n\n## 4. Elevation & Depth\n\n**Layering:**\n- Level 0: #ffffff (background)\n- Level 1: #eff1f2 (surface-container-low) — large sectioning\n- Level 2: #ffffff (surface-container-lowest) — cards, primary content\n\n**Ambient Shadow (Ghost Shadow):** 0 8px 32px rgba(106,55,212,0.08)\n\n**Ghost Border (accessibility):** outline-variant (#abadae) at 10% opacity\n\n**Glassmorphism:** backdrop-filter: blur(16px) on any surface-container that overlaps other content\n\n---\n\n## 5. Components\n\n**Buttons**\n- Primary: gradient fill (#6a37d4 → #ae8dff at 135deg), white text, 12px radius\n- Secondary: surface-container-high background, primary text, no border\n- Tertiary: ghost style, no background, primary text, shifts to surface-container-low on hover\n\n**Input Fields**\n- Default: surface-container-highest background, no dark border\n- Focus: primary ghost border (20% opacity) + subtle 4px primary outer glow\n\n**Cards**\n- No dividers. 32px padding. On hover: transition to Level 3 layering + ambient shadow.\n\n**Chips**\n- Selection: secondary-container background, on-secondary-container text, full roundness\n- Filter: semi-transparent surface-variant, 12px radius\n\n**Lists**\n- No divider lines. Use surface-container-low alternating rows or increased vertical whitespace.\n\n**Border Radius:** 12px standard throughout\n\n---\n\n## 6. Layout — Universal Dashboard\n\nEvery authenticated page uses:\n\n**Header** — glassmorphism navbar, org/portfolio context, global nav, search, notifications, account\n\n**Floating AI Control Panel** — sticky top-center of workspace\n- Collapsed: KPI chips + alert count + next action\n- Expanded: deeper insights, workflow context, recommendations\n- Style: glassmorphism card, primary gradient accent border\n\n**Left Rail** — role-dependent nav, surface-container-low background, no dividers between items\n\n**Workspace** — primary operational surface, background white, content floats within it\n\n**Right Rail** — AI interaction surface, glassmorphism panel, chat thread, agent status\n\n---\n\n## 7. Icon System\n\nUse **lucide-react** exclusively. No Material Symbols. No other icon libraries.\n\n---\n\n## 8. Do's and Don'ts\n\nDo:\n- Use asymmetrical margins for editorial interest\n- Allow background colors to bleed through headers via glassmorphism\n- Use On-Surface-Variant (#595c5d) for secondary text\n- Use 12px and 16px corner radii consistently\n\nDon't:\n- Use pure black (#000000) for text\n- Stack more than three layers of glass\n- Use 1px solid borders to define screen edges\n- Use standard drop shadows without primary color tint\n- Use any icon library other than lucide-react",
+  "techStack": {
+    "frontend": "react",
+    "buildTool": "vite",
+    "styling": "tailwind",
+    "componentLib": "shadcn/ui",
+    "language": "typescript"
+  },
+  "authProvider": "firebase",
+  "dbProvider": "neon",
+  "deployTarget": "vps",
+  "spec": {
+    "pages": [
+      {
+        "name": "Login",
+        "route": "/login",
+        "purpose": "Email/password and Google OAuth login page. Firebase auth. Redirects to Portfolio Dashboard on success.",
+        "components": [
+          "BrandLogo",
+          "LoginForm",
+          "GoogleOAuthButton",
+          "ForgotPasswordLink",
+          "SignupLink"
+        ],
+        "authLevel": "public",
+        "priority": 1,
+        "dependsOn": [],
+        "specVersion": 1,
+        "source": "explicit",
+        "layoutHint": "Centered card on surface background. Brand logo above form. Asymmetric left margin for editorial feel. No universal dashboard layout — standalone auth page.",
+        "emptyState": "Not applicable — form is always visible.",
+        "loadingState": "Submit button shows spinner during auth request. Google OAuth button shows connecting state.",
+        "errorState": "Inline error message below form fields for invalid credentials. Toast for network errors.",
+        "mobileConsiderations": "Full-width card. Virtual keyboard does not obscure form. OAuth button prominently accessible below form.",
+        "dataRequirements": [
+          {
+            "component": "LoginForm",
+            "fields": [
+              "email",
+              "password"
+            ]
+          },
+          {
+            "component": "GoogleOAuthButton",
+            "fields": [
+              "firebaseToken"
+            ]
+          }
+        ],
+        "apiEndpoints": [
+          {
+            "endpoint": "POST /api/auth/login",
+            "source": "explicit"
+          }
+        ],
+        "validationRules": [
+          "Email must be valid format",
+          "Password is required and non-empty"
+        ],
+        "events": [
+          {
+            "name": "page_viewed",
+            "trigger": "Page load",
+            "properties": [
+              "referrer"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "login_attempted",
+            "trigger": "User clicks login button",
+            "properties": [
+              "method"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "login_succeeded",
+            "trigger": "Server returns success",
+            "properties": [
+              "method",
+              "userId"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "login_failed",
+            "trigger": "Server returns error",
+            "properties": [
+              "method",
+              "errorCode"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "oauth_initiated",
+            "trigger": "User clicks Google OAuth button",
+            "properties": [],
+            "source": "explicit"
+          }
+        ],
+        "featureFlagCandidates": [
+          "google_oauth_enabled"
+        ]
+      },
+      {
+        "name": "Signup",
+        "route": "/signup",
+        "purpose": "User registration with username, email, full name, optional company name, and password. Firebase auth. Redirects to Company Setup on success.",
+        "components": [
+          "BrandLogo",
+          "SignupForm",
+          "GoogleOAuthButton",
+          "LoginLink"
+        ],
+        "authLevel": "public",
+        "priority": 1,
+        "dependsOn": [],
+        "specVersion": 1,
+        "source": "explicit",
+        "layoutHint": "Centered card on surface background. Same visual treatment as Login for consistency. Brand logo above form.",
+        "emptyState": "Not applicable — form is always visible.",
+        "loadingState": "Submit button shows spinner during registration request.",
+        "errorState": "Inline field-level validation errors. Toast for server errors (email taken, network failure).",
+        "mobileConsiderations": "Single-column form. Full-width inputs. Submit button fixed at bottom on small screens.",
+        "dataRequirements": [
+          {
+            "component": "SignupForm",
+            "fields": [
+              "username",
+              "email",
+              "fullName",
+              "company",
+              "password",
+              "confirmPassword"
+            ]
+          }
+        ],
+        "apiEndpoints": [
+          {
+            "endpoint": "POST /api/auth/register",
+            "source": "explicit"
+          }
+        ],
+        "validationRules": [
+          "Username is required, minimum 3 characters",
+          "Email must be valid format",
+          "Full name is required",
+          "Company name is optional",
+          "Password minimum 8 characters",
+          "Confirm password must match password"
+        ],
+        "events": [
+          {
+            "name": "page_viewed",
+            "trigger": "Page load",
+            "properties": [
+              "referrer"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "signup_attempted",
+            "trigger": "User clicks register button",
+            "properties": [
+              "method"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "signup_succeeded",
+            "trigger": "Server returns success",
+            "properties": [
+              "userId"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "signup_failed",
+            "trigger": "Server returns error",
+            "properties": [
+              "errorCode"
+            ],
+            "source": "explicit"
+          }
+        ],
+        "featureFlagCandidates": []
+      },
+      {
+        "name": "ForgotPassword",
+        "route": "/forgot-password",
+        "purpose": "Password recovery initiation. User enters email to receive a reset link via Firebase.",
+        "components": [
+          "BrandLogo",
+          "ForgotPasswordForm",
+          "BackToLoginLink",
+          "SuccessMessage"
+        ],
+        "authLevel": "public",
+        "priority": 1,
+        "dependsOn": [
+          "/login"
+        ],
+        "specVersion": 1,
+        "source": "explicit",
+        "layoutHint": "Centered card, same visual language as Login/Signup. Single email input with submit button.",
+        "emptyState": "Not applicable — form is always visible.",
+        "loadingState": "Submit button shows spinner while sending reset email.",
+        "errorState": "Inline error for invalid email format. Toast for server/network errors.",
+        "mobileConsiderations": "Full-width card. Simple single-field form works well on all screen sizes.",
+        "dataRequirements": [
+          {
+            "component": "ForgotPasswordForm",
+            "fields": [
+              "email"
+            ]
+          }
+        ],
+        "apiEndpoints": [],
+        "validationRules": [
+          "Email must be valid format"
+        ],
+        "events": [
+          {
+            "name": "page_viewed",
+            "trigger": "Page load",
+            "properties": [],
+            "source": "explicit"
+          },
+          {
+            "name": "reset_email_requested",
+            "trigger": "User submits email",
+            "properties": [],
+            "source": "explicit"
+          },
+          {
+            "name": "reset_email_sent",
+            "trigger": "Firebase confirms email sent",
+            "properties": [],
+            "source": "explicit"
+          }
+        ],
+        "featureFlagCandidates": []
+      },
+      {
+        "name": "ResetPassword",
+        "route": "/reset-password",
+        "purpose": "Password reset completion after email verification. User enters new password using token from email link.",
+        "components": [
+          "BrandLogo",
+          "ResetPasswordForm",
+          "BackToLoginLink",
+          "SuccessMessage"
+        ],
+        "authLevel": "public",
+        "priority": 1,
+        "dependsOn": [
+          "/forgot-password"
+        ],
+        "specVersion": 1,
+        "source": "explicit",
+        "layoutHint": "Centered card, same visual language as auth pages. New password + confirm password fields.",
+        "emptyState": "Not applicable — form is always visible.",
+        "loadingState": "Submit button shows spinner while resetting password.",
+        "errorState": "Error message for expired/invalid token. Inline validation for password mismatch.",
+        "mobileConsiderations": "Full-width card. Two password fields stack vertically.",
+        "dataRequirements": [
+          {
+            "component": "ResetPasswordForm",
+            "fields": [
+              "newPassword",
+              "confirmPassword",
+              "resetToken"
+            ]
+          }
+        ],
+        "apiEndpoints": [],
+        "validationRules": [
+          "New password minimum 8 characters",
+          "Confirm password must match new password",
+          "Reset token must be present in URL"
+        ],
+        "events": [
+          {
+            "name": "page_viewed",
+            "trigger": "Page load",
+            "properties": [],
+            "source": "explicit"
+          },
+          {
+            "name": "password_reset_completed",
+            "trigger": "User successfully resets password",
+            "properties": [],
+            "source": "explicit"
+          },
+          {
+            "name": "password_reset_failed",
+            "trigger": "Token invalid or expired",
+            "properties": [
+              "errorCode"
+            ],
+            "source": "explicit"
+          }
+        ],
+        "featureFlagCandidates": []
+      },
+      {
+        "name": "CompanySetup",
+        "route": "/company-setup",
+        "purpose": "First-run onboarding wizard. User creates their first company with name, stage, industry, business model, and strategic goals. Routes to Portfolio Dashboard on completion.",
+        "components": [
+          "SetupWizard",
+          "CompanyNameInput",
+          "StageSelector",
+          "IndustryInput",
+          "BusinessModelInput",
+          "GoalsTextarea",
+          "SubmitButton",
+          "StepIndicator"
+        ],
+        "authLevel": "authenticated",
+        "priority": 2,
+        "dependsOn": [
+          "/signup"
+        ],
+        "specVersion": 1,
+        "source": "explicit",
+        "layoutHint": "Centered single-column wizard with step indicator. No universal dashboard layout — standalone onboarding page. Progressive disclosure of fields.",
+        "emptyState": "All fields start empty — this is a creation form. Step indicator shows progress.",
+        "loadingState": "Submit button shows spinner during company creation API call.",
+        "errorState": "Inline field-level validation errors. Toast notification on server error.",
+        "mobileConsiderations": "Single-column layout works natively on mobile. Inputs auto-expand. Submit button fixed at bottom on small screens.",
+        "dataRequirements": [
+          {
+            "component": "CompanyNameInput",
+            "fields": [
+              "name"
+            ]
+          },
+          {
+            "component": "StageSelector",
+            "fields": [
+              "stage"
+            ]
+          },
+          {
+            "component": "IndustryInput",
+            "fields": [
+              "industry"
+            ]
+          },
+          {
+            "component": "BusinessModelInput",
+            "fields": [
+              "businessModel"
+            ]
+          },
+          {
+            "component": "GoalsTextarea",
+            "fields": [
+              "goals"
+            ]
+          }
+        ],
+        "apiEndpoints": [
+          {
+            "endpoint": "POST /api/companies",
+            "source": "explicit"
+          }
+        ],
+        "validationRules": [
+          "Company name is required and non-empty",
+          "Stage must be selected (idea/pre-revenue/revenue/scaling/mature)",
+          "Industry is required",
+          "Business model is required",
+          "Goals should be provided (at least one sentence)"
+        ],
+        "events": [
+          {
+            "name": "page_viewed",
+            "trigger": "Page load",
+            "properties": [],
+            "source": "explicit"
+          },
+          {
+            "name": "setup_step_completed",
+            "trigger": "User advances wizard step",
+            "properties": [
+              "stepIndex",
+              "stepName"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "company_created",
+            "trigger": "User submits wizard and server returns success",
+            "properties": [
+              "companyId",
+              "stage",
+              "industry"
+            ],
+            "source": "explicit"
+          }
+        ],
+        "featureFlagCandidates": [
+          "onboarding_v2_flow"
+        ]
+      },
+      {
+        "name": "PortfolioDashboard",
+        "route": "/portfolio",
+        "purpose": "All companies owned by the user displayed as cards. Portfolio-wide summary header. Add new company action. Entry point to per-company workspaces.",
+        "components": [
+          "PortfolioHeader",
+          "PortfolioSummary",
+          "CompanyCard",
+          "AddCompanyButton",
+          "CompanyQuickActions"
+        ],
+        "authLevel": "authenticated",
+        "priority": 2,
+        "dependsOn": [
+          "/company-setup"
+        ],
+        "specVersion": 1,
+        "source": "explicit",
+        "layoutHint": "No universal dashboard layout — portfolio-level page. Header with portfolio summary. Grid of company cards below. Add company button in header or as empty-state CTA.",
+        "emptyState": "No companies yet. Large CTA: 'Create your first company' with illustration. Routes to Company Setup.",
+        "loadingState": "Skeleton cards in grid layout. Portfolio summary shows shimmer placeholders.",
+        "errorState": "Toast notification for failed data fetch. Retry button in card area.",
+        "mobileConsiderations": "Company cards stack vertically in single column. Add company button floats at bottom.",
+        "dataRequirements": [
+          {
+            "component": "CompanyCard",
+            "fields": [
+              "id",
+              "name",
+              "stage",
+              "industry",
+              "createdAt"
+            ]
+          },
+          {
+            "component": "PortfolioSummary",
+            "fields": [
+              "totalCompanies",
+              "activeCompanies"
+            ]
+          }
+        ],
+        "apiEndpoints": [
+          {
+            "endpoint": "GET /api/companies",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "POST /api/companies",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "DELETE /api/companies/:id",
+            "source": "explicit"
+          }
+        ],
+        "validationRules": [],
+        "events": [
+          {
+            "name": "page_viewed",
+            "trigger": "Page load",
+            "properties": [
+              "companyCount"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "company_opened",
+            "trigger": "User clicks company card",
+            "properties": [
+              "companyId"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "add_company_clicked",
+            "trigger": "User clicks add company button",
+            "properties": [],
+            "source": "explicit"
+          }
+        ],
+        "featureFlagCandidates": []
+      },
+      {
+        "name": "CommandCenter",
+        "route": "/company/:companyId",
+        "purpose": "Founder dashboard for selected company. Universal dashboard layout with KPI cards, active workflows, recent tasks, alerts in workspace. Floating AI control panel with stub data. Right rail AI chat stub.",
+        "components": [
+          "KPICardGrid",
+          "ActiveWorkflowsList",
+          "RecentTasksList",
+          "AlertsPanel",
+          "QuickActionButtons"
+        ],
+        "authLevel": "authenticated",
+        "priority": 3,
+        "dependsOn": [
+          "/portfolio"
+        ],
+        "specVersion": 1,
+        "source": "explicit",
+        "layoutHint": "Universal dashboard layout: Header (glassmorphism, org context switcher, search, notifications, account), Floating AI Control Panel (sticky top-center, collapsed KPI chips + alerts + next action), Left Rail (Home, Tasks, Workflows, Org, Settings), Workspace (KPI cards grid, active workflows list, recent tasks, alerts), Right Rail (AI chat stub + agent status).",
+        "emptyState": "New company state. KPI cards show zero values. Workspace shows onboarding prompts: 'Add your first task', 'Create a workflow', 'Set up your org chart'.",
+        "loadingState": "Skeleton cards for KPIs. Shimmer placeholders for workflow and task lists. Floating AI panel shows loading dots.",
+        "errorState": "Individual sections show retry buttons on failure. Toast notification for API errors.",
+        "mobileConsiderations": "Left rail collapses to hamburger menu. Right rail becomes a floating chat button. KPI cards scroll horizontally. Floating AI panel collapses to minimal chip.",
+        "dataRequirements": [
+          {
+            "component": "KPICardGrid",
+            "fields": [
+              "taskCount",
+              "activeWorkflows",
+              "departmentCount",
+              "roleCount"
+            ]
+          },
+          {
+            "component": "ActiveWorkflowsList",
+            "fields": [
+              "id",
+              "name",
+              "status",
+              "currentStep"
+            ]
+          },
+          {
+            "component": "RecentTasksList",
+            "fields": [
+              "id",
+              "title",
+              "status",
+              "priority",
+              "assigneeId"
+            ]
+          },
+          {
+            "component": "AlertsPanel",
+            "fields": [
+              "id",
+              "type",
+              "message",
+              "createdAt"
+            ]
+          }
+        ],
+        "apiEndpoints": [
+          {
+            "endpoint": "GET /api/companies/:id",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "GET /api/companies/:id/tasks",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "GET /api/companies/:id/workflows",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "GET /api/companies/:id/departments",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "GET /api/companies/:id/roles",
+            "source": "explicit"
+          }
+        ],
+        "validationRules": [],
+        "events": [
+          {
+            "name": "page_viewed",
+            "trigger": "Page load",
+            "properties": [
+              "companyId"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "kpi_card_clicked",
+            "trigger": "User clicks a KPI card",
+            "properties": [
+              "kpiType"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "quick_action_clicked",
+            "trigger": "User clicks a quick action button",
+            "properties": [
+              "actionType"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "ai_panel_toggled",
+            "trigger": "User expands/collapses floating AI panel",
+            "properties": [
+              "state"
+            ],
+            "source": "explicit"
+          }
+        ],
+        "featureFlagCandidates": [
+          "ai_control_panel_enabled"
+        ]
+      },
+      {
+        "name": "OrgChart",
+        "route": "/company/:companyId/org",
+        "purpose": "Visual organizational chart for the company. Departments and roles displayed as tree nodes. Each role shows title, department, assigned human, and AI agent slot (placeholder). Editable — add/remove departments and roles. Generates default structure on first load based on company stage.",
+        "components": [
+          "OrgTreeView",
+          "DepartmentNode",
+          "RoleNode",
+          "AddDepartmentButton",
+          "AddRoleButton",
+          "RoleDetailPanel",
+          "AgentSlotBadge"
+        ],
+        "authLevel": "authenticated",
+        "priority": 3,
+        "dependsOn": [
+          "/company/:companyId"
+        ],
+        "specVersion": 1,
+        "source": "explicit",
+        "layoutHint": "Universal dashboard layout. Workspace contains the org tree visualization — horizontal tree flowing left to right or top to bottom. Role detail panel slides in from right on node click. Glassmorphism cards for each node.",
+        "emptyState": "No departments yet. System offers to generate a default org structure based on company stage and business model. CTA: 'Generate recommended structure' or 'Start from scratch'.",
+        "loadingState": "Skeleton tree nodes with shimmer animation. Detail panel shows loading state.",
+        "errorState": "Toast for failed CRUD operations. Retry on tree load failure.",
+        "mobileConsiderations": "Tree view scrolls horizontally. Nodes are tappable. Detail panel becomes a bottom sheet instead of side panel.",
+        "dataRequirements": [
+          {
+            "component": "OrgTreeView",
+            "fields": [
+              "departments",
+              "roles"
+            ]
+          },
+          {
+            "component": "DepartmentNode",
+            "fields": [
+              "id",
+              "name",
+              "description"
+            ]
+          },
+          {
+            "component": "RoleNode",
+            "fields": [
+              "id",
+              "title",
+              "departmentId",
+              "parentRoleId",
+              "responsibilities",
+              "assignedUserId",
+              "agentSlot"
+            ]
+          }
+        ],
+        "apiEndpoints": [
+          {
+            "endpoint": "GET /api/companies/:id/departments",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "POST /api/companies/:id/departments",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "PUT /api/companies/:id/departments/:did",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "DELETE /api/companies/:id/departments/:did",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "GET /api/companies/:id/roles",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "POST /api/companies/:id/roles",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "PUT /api/companies/:id/roles/:rid",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "DELETE /api/companies/:id/roles/:rid",
+            "source": "explicit"
+          }
+        ],
+        "validationRules": [
+          "Department name is required and non-empty",
+          "Role title is required",
+          "Role must belong to a department"
+        ],
+        "events": [
+          {
+            "name": "page_viewed",
+            "trigger": "Page load",
+            "properties": [
+              "companyId"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "department_created",
+            "trigger": "User adds a department",
+            "properties": [
+              "companyId",
+              "departmentName"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "role_created",
+            "trigger": "User adds a role",
+            "properties": [
+              "companyId",
+              "roleTitle",
+              "departmentId"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "default_structure_generated",
+            "trigger": "User generates default org structure",
+            "properties": [
+              "companyId",
+              "stage"
+            ],
+            "source": "explicit"
+          }
+        ],
+        "featureFlagCandidates": [
+          "auto_generate_org_structure"
+        ]
+      },
+      {
+        "name": "AgentChat",
+        "route": "/company/:companyId/chat",
+        "purpose": "Full-page AI executive assistant interface (DEX). Persistent conversation history per company. Accepts user messages and returns stub responses in v1. Primary human-AI interaction surface. Shows conversation thread, agent status indicator, and suggested actions panel.",
+        "components": [
+          "ConversationThread",
+          "ChatMessageBubble",
+          "ChatInput",
+          "AgentStatusIndicator",
+          "SuggestedActionsPanel"
+        ],
+        "authLevel": "authenticated",
+        "priority": 3,
+        "dependsOn": [
+          "/company/:companyId"
+        ],
+        "specVersion": 1,
+        "source": "explicit",
+        "layoutHint": "Universal dashboard layout. Workspace is the full-width conversation thread. Right rail is hidden (chat IS the workspace on this page). Suggested actions panel floats above the chat input.",
+        "emptyState": "No conversation yet. DEX introduces itself: 'I'm DEX, your AI executive assistant. Ask me anything about your company.' Shows 3-4 suggested starter prompts.",
+        "loadingState": "Typing indicator (animated dots) while waiting for AI response. Message history shows skeleton bubbles on initial load.",
+        "errorState": "Failed message shows retry button inline. Toast for network errors.",
+        "mobileConsiderations": "Full-screen chat view. Input bar fixed at bottom. Suggested actions collapse into a horizontal scrollable chip row.",
+        "dataRequirements": [
+          {
+            "component": "ConversationThread",
+            "fields": [
+              "id",
+              "messages",
+              "createdAt",
+              "updatedAt"
+            ]
+          },
+          {
+            "component": "ChatMessageBubble",
+            "fields": [
+              "role",
+              "content",
+              "timestamp"
+            ]
+          },
+          {
+            "component": "SuggestedActionsPanel",
+            "fields": [
+              "suggestions"
+            ]
+          }
+        ],
+        "apiEndpoints": [
+          {
+            "endpoint": "GET /api/companies/:id/conversations",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "POST /api/companies/:id/conversations",
+            "source": "explicit"
+          }
+        ],
+        "validationRules": [
+          "Message content is required and non-empty",
+          "Message must not exceed 4000 characters"
+        ],
+        "events": [
+          {
+            "name": "page_viewed",
+            "trigger": "Page load",
+            "properties": [
+              "companyId"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "message_sent",
+            "trigger": "User sends a message",
+            "properties": [
+              "companyId",
+              "messageLength"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "suggested_action_clicked",
+            "trigger": "User clicks a suggested action",
+            "properties": [
+              "actionLabel"
+            ],
+            "source": "explicit"
+          }
+        ],
+        "featureFlagCandidates": [
+          "dex_agent_enabled"
+        ]
+      },
+      {
+        "name": "TaskBoard",
+        "route": "/company/:companyId/tasks",
+        "purpose": "Kanban-style task management board with columns: Backlog, In Progress, In Review, Done. Tasks are draggable between columns. Create, edit, move, delete tasks. Filter by assignee, priority, status. DEX (AI) is available as an assignee option.",
+        "components": [
+          "KanbanBoard",
+          "KanbanColumn",
+          "TaskCard",
+          "CreateTaskDialog",
+          "EditTaskDialog",
+          "TaskFilters",
+          "AssigneeSelector"
+        ],
+        "authLevel": "authenticated",
+        "priority": 3,
+        "dependsOn": [
+          "/company/:companyId"
+        ],
+        "specVersion": 1,
+        "source": "explicit",
+        "layoutHint": "Universal dashboard layout. Workspace contains horizontal scrollable kanban board with 4 columns. Filter bar above the board. Create task button in header or as floating action.",
+        "emptyState": "Empty board with column headers visible. CTA in first column: 'Create your first task'. Suggested task templates based on company stage.",
+        "loadingState": "Skeleton task cards in each column. Column headers visible immediately.",
+        "errorState": "Toast for failed task operations (create, move, delete). Optimistic updates with rollback on failure.",
+        "mobileConsiderations": "Columns scroll horizontally. Task cards are full-width within column. Create task button floats at bottom-right. Edit task opens as bottom sheet.",
+        "dataRequirements": [
+          {
+            "component": "TaskCard",
+            "fields": [
+              "id",
+              "title",
+              "description",
+              "status",
+              "priority",
+              "assigneeId",
+              "dueDate",
+              "createdBy"
+            ]
+          },
+          {
+            "component": "TaskFilters",
+            "fields": [
+              "assignees",
+              "priorities",
+              "statuses"
+            ]
+          },
+          {
+            "component": "AssigneeSelector",
+            "fields": [
+              "users",
+              "agentSlots"
+            ]
+          }
+        ],
+        "apiEndpoints": [
+          {
+            "endpoint": "GET /api/companies/:id/tasks",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "POST /api/companies/:id/tasks",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "PUT /api/companies/:id/tasks/:tid",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "DELETE /api/companies/:id/tasks/:tid",
+            "source": "explicit"
+          }
+        ],
+        "validationRules": [
+          "Task title is required",
+          "Priority must be one of: low, medium, high, critical",
+          "Status must be one of: backlog, in_progress, in_review, done",
+          "Due date must be in the future when set"
+        ],
+        "events": [
+          {
+            "name": "page_viewed",
+            "trigger": "Page load",
+            "properties": [
+              "companyId"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "task_created",
+            "trigger": "User creates a task",
+            "properties": [
+              "companyId",
+              "priority",
+              "hasAssignee"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "task_moved",
+            "trigger": "User drags task to new column",
+            "properties": [
+              "companyId",
+              "taskId",
+              "fromStatus",
+              "toStatus"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "task_assigned_to_ai",
+            "trigger": "User assigns task to DEX",
+            "properties": [
+              "companyId",
+              "taskId"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "filter_applied",
+            "trigger": "User applies a filter",
+            "properties": [
+              "filterType",
+              "filterValue"
+            ],
+            "source": "explicit"
+          }
+        ],
+        "featureFlagCandidates": [
+          "ai_task_assignment"
+        ]
+      },
+      {
+        "name": "Workflows",
+        "route": "/company/:companyId/workflows",
+        "purpose": "List and manage SOPs/workflows for the company. Each workflow has steps (human/AI/tool). Create, edit, run workflows step by step. Running a workflow tracks progress through steps.",
+        "components": [
+          "WorkflowList",
+          "WorkflowCard",
+          "CreateWorkflowDialog",
+          "WorkflowRunner",
+          "WorkflowStepItem",
+          "StepTypeSelector",
+          "WorkflowStatusBadge"
+        ],
+        "authLevel": "authenticated",
+        "priority": 3,
+        "dependsOn": [
+          "/company/:companyId"
+        ],
+        "specVersion": 1,
+        "source": "explicit",
+        "layoutHint": "Universal dashboard layout. Workspace shows workflow list as cards. Clicking a workflow opens the runner view showing step-by-step progress. Create workflow button in header.",
+        "emptyState": "No workflows yet. CTA: 'Create your first workflow'. Suggested workflow templates based on company stage (e.g., Client Onboarding, Content Publishing, Sales Pipeline).",
+        "loadingState": "Skeleton workflow cards. Runner view shows step shimmer placeholders.",
+        "errorState": "Toast for failed operations. Step completion errors show inline retry.",
+        "mobileConsiderations": "Workflow cards stack vertically. Runner view is full-screen with step progress bar at top. Steps scroll vertically.",
+        "dataRequirements": [
+          {
+            "component": "WorkflowCard",
+            "fields": [
+              "id",
+              "name",
+              "description",
+              "status",
+              "stepCount",
+              "completedSteps"
+            ]
+          },
+          {
+            "component": "WorkflowRunner",
+            "fields": [
+              "id",
+              "steps",
+              "currentStepIndex"
+            ]
+          },
+          {
+            "component": "WorkflowStepItem",
+            "fields": [
+              "id",
+              "order",
+              "title",
+              "description",
+              "stepType",
+              "completedAt"
+            ]
+          }
+        ],
+        "apiEndpoints": [
+          {
+            "endpoint": "GET /api/companies/:id/workflows",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "POST /api/companies/:id/workflows",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "PUT /api/companies/:id/workflows/:wid",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "DELETE /api/companies/:id/workflows/:wid",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "GET /api/companies/:id/workflows/:wid/steps",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "POST /api/companies/:id/workflows/:wid/steps",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "PUT /api/companies/:id/workflows/:wid/steps/:sid",
+            "source": "explicit"
+          }
+        ],
+        "validationRules": [
+          "Workflow name is required",
+          "Status must be one of: draft, active, deprecated",
+          "Step title is required",
+          "Step type must be one of: human, ai, tool",
+          "Steps must have sequential order values"
+        ],
+        "events": [
+          {
+            "name": "page_viewed",
+            "trigger": "Page load",
+            "properties": [
+              "companyId"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "workflow_created",
+            "trigger": "User creates a workflow",
+            "properties": [
+              "companyId",
+              "workflowName"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "workflow_started",
+            "trigger": "User starts running a workflow",
+            "properties": [
+              "companyId",
+              "workflowId"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "workflow_step_completed",
+            "trigger": "User marks a step complete",
+            "properties": [
+              "companyId",
+              "workflowId",
+              "stepType"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "workflow_completed",
+            "trigger": "All steps in workflow marked done",
+            "properties": [
+              "companyId",
+              "workflowId"
+            ],
+            "source": "explicit"
+          }
+        ],
+        "featureFlagCandidates": [
+          "workflow_templates"
+        ]
+      },
+      {
+        "name": "Settings",
+        "route": "/settings",
+        "purpose": "User profile settings, company settings for active company, notification preferences, and agent autonomy levels (UI only in v1). Tabbed interface.",
+        "components": [
+          "SettingsTabs",
+          "ProfileForm",
+          "CompanySettingsForm",
+          "NotificationPreferences",
+          "AutonomyLevelSelector",
+          "AvatarUpload"
+        ],
+        "authLevel": "authenticated",
+        "priority": 4,
+        "dependsOn": [],
+        "specVersion": 1,
+        "source": "explicit",
+        "layoutHint": "Universal dashboard layout. Workspace contains tabbed settings panel. Tabs: Profile, Company, Notifications, AI Autonomy. Each tab has a form with save button.",
+        "emptyState": "Profile tab shows current user data pre-filled. Company tab shows active company data. Notifications tab shows default preferences.",
+        "loadingState": "Form fields show shimmer placeholders while loading user/company data.",
+        "errorState": "Inline validation errors on form fields. Toast for save failures with retry.",
+        "mobileConsiderations": "Tabs become a vertical list or accordion on mobile. Forms are single-column. Save button fixed at bottom.",
+        "dataRequirements": [
+          {
+            "component": "ProfileForm",
+            "fields": [
+              "email",
+              "username",
+              "fullName",
+              "avatarUrl"
+            ]
+          },
+          {
+            "component": "CompanySettingsForm",
+            "fields": [
+              "name",
+              "stage",
+              "industry",
+              "businessModel",
+              "goals"
+            ]
+          },
+          {
+            "component": "NotificationPreferences",
+            "fields": [
+              "emailNotifications",
+              "pushNotifications",
+              "taskAlerts",
+              "workflowAlerts"
+            ]
+          },
+          {
+            "component": "AutonomyLevelSelector",
+            "fields": [
+              "autonomyLevel"
+            ]
+          }
+        ],
+        "apiEndpoints": [
+          {
+            "endpoint": "GET /api/users/me",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "PUT /api/users/me",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "GET /api/companies/:id",
+            "source": "explicit"
+          },
+          {
+            "endpoint": "PUT /api/companies/:id",
+            "source": "explicit"
+          }
+        ],
+        "validationRules": [
+          "Username minimum 3 characters",
+          "Email must be valid format",
+          "Full name is required",
+          "Autonomy level must be one of: observe, recommend, assist, execute"
+        ],
+        "events": [
+          {
+            "name": "page_viewed",
+            "trigger": "Page load",
+            "properties": [
+              "activeTab"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "settings_tab_changed",
+            "trigger": "User switches tab",
+            "properties": [
+              "tabName"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "profile_updated",
+            "trigger": "User saves profile changes",
+            "properties": [],
+            "source": "explicit"
+          },
+          {
+            "name": "company_settings_updated",
+            "trigger": "User saves company settings",
+            "properties": [
+              "companyId"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "autonomy_level_changed",
+            "trigger": "User changes autonomy level",
+            "properties": [
+              "level"
+            ],
+            "source": "explicit"
+          }
+        ],
+        "featureFlagCandidates": [
+          "autonomy_levels_enabled"
+        ]
+      },
+      {
+        "name": "NotFound",
+        "route": "/*",
+        "purpose": "404 not found handler. Displays a friendly error when users navigate to a route that does not exist.",
+        "components": [
+          "NotFoundIllustration",
+          "ErrorMessage",
+          "BackToHomeButton"
+        ],
+        "authLevel": "public",
+        "priority": 5,
+        "dependsOn": [],
+        "specVersion": 1,
+        "source": "explicit",
+        "layoutHint": "Centered single-column layout with illustration, message, and action button stacked vertically. No universal dashboard layout — standalone error page.",
+        "emptyState": "Not applicable — content is always static.",
+        "loadingState": "Not applicable — no data to load.",
+        "errorState": "Not applicable — this page IS the error state.",
+        "mobileConsiderations": "Full-width centered layout. Illustration scales down on small screens. Button remains full-width and tappable.",
+        "dataRequirements": [],
+        "apiEndpoints": [],
+        "validationRules": [],
+        "events": [
+          {
+            "name": "page_viewed",
+            "trigger": "User lands on a non-existent route",
+            "properties": [
+              "attemptedRoute"
+            ],
+            "source": "explicit"
+          },
+          {
+            "name": "back_to_home_clicked",
+            "trigger": "User clicks back to home button",
+            "properties": [],
+            "source": "explicit"
+          }
+        ],
+        "featureFlagCandidates": []
+      }
+    ],
+    "sharedComponents": [
+      {
+        "id": "universal-layout",
+        "name": "UniversalLayout",
+        "purpose": "Base layout wrapper for all authenticated pages. Renders Header, LeftRail, Workspace slot, RightRail, and FloatingAIPanel. Applies glassmorphism design system.",
+        "usedByPages": [
+          "/company/:companyId",
+          "/company/:companyId/org",
+          "/company/:companyId/chat",
+          "/company/:companyId/tasks",
+          "/company/:companyId/workflows",
+          "/settings"
+        ],
+        "props": [
+          "children",
+          "companyId",
+          "activeNavItem"
+        ],
+        "source": "explicit"
+      },
+      {
+        "id": "header",
+        "name": "Header",
+        "purpose": "Glassmorphism top navigation bar with organization/portfolio context switcher, global navigation, search (UI only in v1), notifications bell, and account menu.",
+        "usedByPages": [
+          "/company/:companyId",
+          "/company/:companyId/org",
+          "/company/:companyId/chat",
+          "/company/:companyId/tasks",
+          "/company/:companyId/workflows",
+          "/settings",
+          "/portfolio"
+        ],
+        "props": [
+          "companyName",
+          "companyId",
+          "userName",
+          "avatarUrl"
+        ],
+        "source": "explicit"
+      },
+      {
+        "id": "left-rail",
+        "name": "LeftRail",
+        "purpose": "Navigation sidebar with links to Home (Command Center), Tasks, Workflows, Org Chart, and Settings. Surface-container-low background, no dividers between items. Highlights active item.",
+        "usedByPages": [
+          "/company/:companyId",
+          "/company/:companyId/org",
+          "/company/:companyId/chat",
+          "/company/:companyId/tasks",
+          "/company/:companyId/workflows",
+          "/settings"
+        ],
+        "props": [
+          "activeItem",
+          "companyId"
+        ],
+        "source": "explicit"
+      },
+      {
+        "id": "right-rail",
+        "name": "RightRail",
+        "purpose": "AI interaction surface on the right side. Glassmorphism panel containing a chat thread with DEX (stub responses in v1), agent status indicator, and execution status.",
+        "usedByPages": [
+          "/company/:companyId",
+          "/company/:companyId/org",
+          "/company/:companyId/tasks",
+          "/company/:companyId/workflows",
+          "/settings"
+        ],
+        "props": [
+          "companyId",
+          "collapsed"
+        ],
+        "source": "explicit"
+      },
+      {
+        "id": "floating-ai-panel",
+        "name": "FloatingAIPanel",
+        "purpose": "Sticky floating panel at top-center of workspace. Collapsed state shows KPI chips, alert count, and next-best action. Expanded state shows deeper insights, workflow context, AI recommendations. Glassmorphism card with primary gradient accent border. Stub data in v1.",
+        "usedByPages": [
+          "/company/:companyId",
+          "/company/:companyId/org",
+          "/company/:companyId/tasks",
+          "/company/:companyId/workflows"
+        ],
+        "props": [
+          "companyId",
+          "collapsed",
+          "onToggle"
+        ],
+        "source": "explicit"
+      },
+      {
+        "id": "agent-chat-stub",
+        "name": "AgentChatStub",
+        "purpose": "Reusable chat interface component for DEX interactions. Accepts user messages and returns stub responses. Used in RightRail and AgentChat page. Designed for real AI swap — replace the response function, keep the UI.",
+        "usedByPages": [
+          "/company/:companyId",
+          "/company/:companyId/chat"
+        ],
+        "props": [
+          "companyId",
+          "fullPage",
+          "onSendMessage"
+        ],
+        "source": "explicit"
+      }
+    ],
+    "suggestedOrder": [
+      "/login",
+      "/signup",
+      "/forgot-password",
+      "/reset-password",
+      "/company-setup",
+      "/portfolio",
+      "/company/:companyId",
+      "/company/:companyId/org",
+      "/company/:companyId/chat",
+      "/company/:companyId/tasks",
+      "/company/:companyId/workflows",
+      "/settings",
+      "/*"
+    ],
+    "backendSpec": {
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/auth/register",
+          "description": "Create new user account with username, email, fullName, and password. Firebase auth integration.",
+          "requestBody": [
+            "username",
+            "email",
+            "fullName",
+            "password"
+          ],
+          "responseFields": [
+            "id",
+            "email",
+            "username",
+            "fullName"
+          ],
+          "authRequired": false,
+          "uiPageRef": "/signup",
+          "source": "explicit"
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/login",
+          "description": "Authenticate user with email and password. Returns session token.",
+          "requestBody": [
+            "email",
+            "password"
+          ],
+          "responseFields": [
+            "id",
+            "email",
+            "username",
+            "sessionToken"
+          ],
+          "authRequired": false,
+          "uiPageRef": "/login",
+          "source": "explicit"
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/logout",
+          "description": "End user session and invalidate token.",
+          "requestBody": [],
+          "responseFields": [],
+          "authRequired": true,
+          "source": "explicit"
+        },
+        {
+          "method": "GET",
+          "path": "/api/users/me",
+          "description": "Get current authenticated user profile.",
+          "requestBody": [],
+          "responseFields": [
+            "id",
+            "email",
+            "username",
+            "fullName",
+            "avatarUrl",
+            "createdAt"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/settings",
+          "source": "explicit"
+        },
+        {
+          "method": "PUT",
+          "path": "/api/users/me",
+          "description": "Update current user profile (name, email, avatar).",
+          "requestBody": [
+            "fullName",
+            "email",
+            "avatarUrl"
+          ],
+          "responseFields": [
+            "id",
+            "email",
+            "username",
+            "fullName",
+            "avatarUrl"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/settings",
+          "source": "explicit"
+        },
+        {
+          "method": "GET",
+          "path": "/api/companies",
+          "description": "List all companies owned by the authenticated user.",
+          "requestBody": [],
+          "responseFields": [
+            "id",
+            "name",
+            "stage",
+            "industry",
+            "businessModel",
+            "goals",
+            "createdAt"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/portfolio",
+          "source": "explicit"
+        },
+        {
+          "method": "POST",
+          "path": "/api/companies",
+          "description": "Create a new company for the authenticated user.",
+          "requestBody": [
+            "name",
+            "stage",
+            "industry",
+            "businessModel",
+            "goals"
+          ],
+          "responseFields": [
+            "id",
+            "name",
+            "stage",
+            "industry",
+            "businessModel",
+            "goals",
+            "createdAt"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company-setup",
+          "source": "explicit"
+        },
+        {
+          "method": "GET",
+          "path": "/api/companies/:id",
+          "description": "Get single company details by ID.",
+          "requestBody": [],
+          "responseFields": [
+            "id",
+            "ownerId",
+            "name",
+            "stage",
+            "industry",
+            "businessModel",
+            "goals",
+            "createdAt"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId",
+          "source": "explicit"
+        },
+        {
+          "method": "PUT",
+          "path": "/api/companies/:id",
+          "description": "Update company profile fields.",
+          "requestBody": [
+            "name",
+            "stage",
+            "industry",
+            "businessModel",
+            "goals"
+          ],
+          "responseFields": [
+            "id",
+            "name",
+            "stage",
+            "industry",
+            "businessModel",
+            "goals"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/settings",
+          "source": "explicit"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/companies/:id",
+          "description": "Delete a company and all associated data.",
+          "requestBody": [],
+          "responseFields": [],
+          "authRequired": true,
+          "uiPageRef": "/portfolio",
+          "source": "explicit"
+        },
+        {
+          "method": "GET",
+          "path": "/api/companies/:id/departments",
+          "description": "List all departments for a company.",
+          "requestBody": [],
+          "responseFields": [
+            "id",
+            "companyId",
+            "name",
+            "description"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/org",
+          "source": "explicit"
+        },
+        {
+          "method": "POST",
+          "path": "/api/companies/:id/departments",
+          "description": "Create a new department in a company.",
+          "requestBody": [
+            "name",
+            "description"
+          ],
+          "responseFields": [
+            "id",
+            "companyId",
+            "name",
+            "description"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/org",
+          "source": "explicit"
+        },
+        {
+          "method": "PUT",
+          "path": "/api/companies/:id/departments/:did",
+          "description": "Update a department.",
+          "requestBody": [
+            "name",
+            "description"
+          ],
+          "responseFields": [
+            "id",
+            "name",
+            "description"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/org",
+          "source": "explicit"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/companies/:id/departments/:did",
+          "description": "Delete a department and reassign or remove associated roles.",
+          "requestBody": [],
+          "responseFields": [],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/org",
+          "source": "explicit"
+        },
+        {
+          "method": "GET",
+          "path": "/api/companies/:id/roles",
+          "description": "List all roles for a company.",
+          "requestBody": [],
+          "responseFields": [
+            "id",
+            "companyId",
+            "departmentId",
+            "title",
+            "parentRoleId",
+            "responsibilities",
+            "assignedUserId",
+            "agentSlot"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/org",
+          "source": "explicit"
+        },
+        {
+          "method": "POST",
+          "path": "/api/companies/:id/roles",
+          "description": "Create a new role in a company.",
+          "requestBody": [
+            "departmentId",
+            "title",
+            "parentRoleId",
+            "responsibilities"
+          ],
+          "responseFields": [
+            "id",
+            "companyId",
+            "departmentId",
+            "title",
+            "parentRoleId",
+            "responsibilities",
+            "agentSlot"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/org",
+          "source": "explicit"
+        },
+        {
+          "method": "PUT",
+          "path": "/api/companies/:id/roles/:rid",
+          "description": "Update a role.",
+          "requestBody": [
+            "title",
+            "departmentId",
+            "parentRoleId",
+            "responsibilities",
+            "assignedUserId"
+          ],
+          "responseFields": [
+            "id",
+            "title",
+            "departmentId",
+            "responsibilities",
+            "assignedUserId",
+            "agentSlot"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/org",
+          "source": "explicit"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/companies/:id/roles/:rid",
+          "description": "Delete a role.",
+          "requestBody": [],
+          "responseFields": [],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/org",
+          "source": "explicit"
+        },
+        {
+          "method": "GET",
+          "path": "/api/companies/:id/tasks",
+          "description": "List all tasks for a company. Supports filtering by status, priority, assignee.",
+          "requestBody": [],
+          "responseFields": [
+            "id",
+            "companyId",
+            "title",
+            "description",
+            "status",
+            "priority",
+            "assigneeId",
+            "dueDate",
+            "createdBy",
+            "createdAt"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/tasks",
+          "source": "explicit"
+        },
+        {
+          "method": "POST",
+          "path": "/api/companies/:id/tasks",
+          "description": "Create a new task in a company.",
+          "requestBody": [
+            "title",
+            "description",
+            "status",
+            "priority",
+            "assigneeId",
+            "dueDate"
+          ],
+          "responseFields": [
+            "id",
+            "companyId",
+            "title",
+            "description",
+            "status",
+            "priority",
+            "assigneeId",
+            "dueDate",
+            "createdBy",
+            "createdAt"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/tasks",
+          "source": "explicit"
+        },
+        {
+          "method": "PUT",
+          "path": "/api/companies/:id/tasks/:tid",
+          "description": "Update a task (title, description, status, priority, assignee, due date).",
+          "requestBody": [
+            "title",
+            "description",
+            "status",
+            "priority",
+            "assigneeId",
+            "dueDate"
+          ],
+          "responseFields": [
+            "id",
+            "title",
+            "description",
+            "status",
+            "priority",
+            "assigneeId",
+            "dueDate"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/tasks",
+          "source": "explicit"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/companies/:id/tasks/:tid",
+          "description": "Delete a task.",
+          "requestBody": [],
+          "responseFields": [],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/tasks",
+          "source": "explicit"
+        },
+        {
+          "method": "GET",
+          "path": "/api/companies/:id/workflows",
+          "description": "List all workflows for a company.",
+          "requestBody": [],
+          "responseFields": [
+            "id",
+            "companyId",
+            "name",
+            "description",
+            "status",
+            "createdAt"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/workflows",
+          "source": "explicit"
+        },
+        {
+          "method": "POST",
+          "path": "/api/companies/:id/workflows",
+          "description": "Create a new workflow.",
+          "requestBody": [
+            "name",
+            "description",
+            "status"
+          ],
+          "responseFields": [
+            "id",
+            "companyId",
+            "name",
+            "description",
+            "status",
+            "createdAt"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/workflows",
+          "source": "explicit"
+        },
+        {
+          "method": "PUT",
+          "path": "/api/companies/:id/workflows/:wid",
+          "description": "Update a workflow.",
+          "requestBody": [
+            "name",
+            "description",
+            "status"
+          ],
+          "responseFields": [
+            "id",
+            "name",
+            "description",
+            "status"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/workflows",
+          "source": "explicit"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/companies/:id/workflows/:wid",
+          "description": "Delete a workflow and its steps.",
+          "requestBody": [],
+          "responseFields": [],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/workflows",
+          "source": "explicit"
+        },
+        {
+          "method": "GET",
+          "path": "/api/companies/:id/workflows/:wid/steps",
+          "description": "List all steps for a workflow in order.",
+          "requestBody": [],
+          "responseFields": [
+            "id",
+            "workflowId",
+            "order",
+            "title",
+            "description",
+            "stepType",
+            "completedAt"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/workflows",
+          "source": "explicit"
+        },
+        {
+          "method": "POST",
+          "path": "/api/companies/:id/workflows/:wid/steps",
+          "description": "Add a step to a workflow.",
+          "requestBody": [
+            "order",
+            "title",
+            "description",
+            "stepType"
+          ],
+          "responseFields": [
+            "id",
+            "workflowId",
+            "order",
+            "title",
+            "description",
+            "stepType"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/workflows",
+          "source": "explicit"
+        },
+        {
+          "method": "PUT",
+          "path": "/api/companies/:id/workflows/:wid/steps/:sid",
+          "description": "Update a workflow step (mark complete, edit details).",
+          "requestBody": [
+            "title",
+            "description",
+            "stepType",
+            "completedAt"
+          ],
+          "responseFields": [
+            "id",
+            "title",
+            "description",
+            "stepType",
+            "completedAt"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/workflows",
+          "source": "explicit"
+        },
+        {
+          "method": "GET",
+          "path": "/api/companies/:id/conversations",
+          "description": "Get conversation history for a company's DEX agent.",
+          "requestBody": [],
+          "responseFields": [
+            "id",
+            "companyId",
+            "userId",
+            "messages",
+            "createdAt",
+            "updatedAt"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/chat",
+          "source": "explicit"
+        },
+        {
+          "method": "POST",
+          "path": "/api/companies/:id/conversations",
+          "description": "Send a message to DEX and receive stub response. Creates conversation if none exists.",
+          "requestBody": [
+            "message"
+          ],
+          "responseFields": [
+            "id",
+            "messages",
+            "updatedAt"
+          ],
+          "authRequired": true,
+          "uiPageRef": "/company/:companyId/chat",
+          "source": "explicit"
+        }
+      ],
+      "drizzleTableHints": [
+        "users",
+        "companies",
+        "departments",
+        "roles",
+        "tasks",
+        "workflows",
+        "workflow_steps",
+        "agent_conversations"
+      ],
+      "backgroundJobs": [],
+      "mismatches": []
+    }
+  },
+  "isGreenfield": false,
+  "existingCodeScanned": true,
+  "sourceDocs": [
+    "PRD.md",
+    "REQUIREMENTS.md",
+    "design-system.md",
+    "BRAND-VOICE.md",
+    "specs/eos-mvp-spec.json",
+    "specs/eos-mvp-spec.md",
+    "specs/login-page-spec.md"
+  ]
+}

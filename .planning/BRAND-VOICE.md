@@ -37,20 +37,23 @@ Commanding yet collaborative—the voice of a world-class operating partner who 
 
 ## Visual Mood
 
-The visual design should feel like **command center meets strategic office**—high information density but ruthlessly organized, dark/neutral color palette (charcoal, navy, white, one accent color), crisp typography, generous whitespace around decision points, and visual hierarchy that guides the eye to what matters *now*.
+Light mode. The Ethereal Professional design system governs all visual decisions — white backgrounds, violet primary (#6a37d4), glassmorphism surfaces, Inter font, gradient CTAs. The brand feels like a high-end illuminated workspace, not a dark command terminal. Airy, precise, and intentional.
 
-**Color Temperature:** Cool, professional. Dark mode is primary. Accent color should be energetic but not playful (think electric blue or deep orange, not gradient pastels).
+**Color Temperature:** Cool, professional. Light mode with white and soft gray surfaces. Violet primary (#6a37d4) and light violet accent (#ae8dff) for energy. Gradient CTAs (#6a37d4 → #ae8dff at 135deg). Never use pure black — use #2c2f30 for text. Shadows tinted with primary purple.
 
 **Density:** High on data views (Org Chart, Task Board, Workflows), lower on decision/input surfaces (setup wizard, role creation). This creates visual breathing room where friction could occur.
 
-**Whitespace:** Strategic use around CTAs, headers, and transition states. Empty states should feel intentional, not abandoned.
+**Whitespace:** Generous. Prioritize negative space for a premium editorial feel. Strategic use around CTAs, headers, and transition states. Empty states should feel intentional, not abandoned.
 
-**Typography:** Sans-serif, modern (Inter, Helvetica Neue, system fonts). Headlines should be strong and clear. Body copy should be easy to scan. Monospace for code/agent instructions.
+**Typography:** Inter exclusively. Display headlines at semi-bold with tight letter-spacing. Body copy at regular weight, 1.6 line-height for readability. All-caps labels with wide tracking for structure.
 
 **Visual Patterns:** 
+- Glassmorphism on floating elements: rgba(255,255,255,0.7) + backdrop-filter: blur(16px).
+- No 1px solid borders — use background shifts and ghost borders at 10% opacity.
 - Progress indicators are prominent (workflow step tracking, org setup completion).
 - Status is always visible (agent status, task priority, company health).
 - The AI/agent presence is indicated subtly (small icon, not a character mascot).
+- Cards use 32px padding, 12px border radius, ambient shadows tinted with primary violet.
 
 ---
 
