@@ -88,7 +88,7 @@ async function runGreenfieldIntake(
     brandVoice: "",
     designSystem: "",
     techStack: TechStackSchema.parse({}),
-    authProvider: "firebase",
+    authProvider: "clerk",
     dbProvider: "neon",
     deployTarget: "vps",
     spec: { pages: [{ name: "Placeholder", route: "/", purpose: "Placeholder for greenfield intake", components: [], authLevel: "public", priority: 1, dependsOn: [], specVersion: 1, source: "inferred", dataRequirements: [], apiEndpoints: [], validationRules: [], events: [], featureFlagCandidates: [] }] },
@@ -212,7 +212,7 @@ async function runExistingCodebaseIntake(
   );
 
   // Detect auth/db from actual dependencies
-  const authProvider = codeScan.hasAuth ? "firebase" : "none";
+  const authProvider = codeScan.hasAuth ? "clerk" : "none";
   const dbProvider = codeScan.hasDatabase ? "neon" : "other";
 
   const brief = ProjectBriefSchema.parse({
@@ -352,11 +352,11 @@ function extractProductMeta(docs: ScannedDocs): {
   return { productName, productDescription, productVision, targetUsers: targetUsers.slice(0, 5), jobsToBeDone: [] };
 }
 
-function detectAuthFromSpec(spec: SpecOutput): "firebase" | "supabase" | "custom" | "none" {
+function detectAuthFromSpec(spec: SpecOutput): "clerk" | "firebase" | "supabase" | "custom" | "none" {
   const hasAuthPages = spec.pages.some(
     (p) => p.authLevel === "authenticated" || p.authLevel === "admin",
   );
-  return hasAuthPages ? "firebase" : "none";
+  return hasAuthPages ? "clerk" : "none";
 }
 
 function persistGapReport(projectRoot: string, report: string): void {

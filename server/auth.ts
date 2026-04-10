@@ -6,7 +6,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
-import { initializeFirebaseAdmin, isFirebaseAdminInitialized, verifyFirebaseToken } from './firebase';
+import { createClerkClient, verifyToken } from "@clerk/express";
 
 declare global {
   namespace Express {
@@ -29,11 +29,15 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
+function getClerkClient() {
+  const secretKey = process.env.CLERK_SECRET_KEY;
+  if (!secretKey) return null;
+  return createClerkClient({ secretKey });
+}
+
 export function setupAuth(app: Express) {
-  initializeFirebaseAdmin();
-  
   const sessionSecret = process.env.SESSION_SECRET || randomBytes(32).toString("hex");
-  
+
   const sessionSettings: session.SessionOptions = {
     secret: sessionSecret,
     resave: false,
@@ -104,7 +108,7 @@ export function setupAuth(app: Express) {
     passport.authenticate("local", (err: Error | null, user: any, info: any) => {
       if (err) return next(err);
       if (!user) return res.status(401).json({ error: "Invalid username or password" });
-      
+
       req.login(user, (err: Error | null) => {
         if (err) return next(err);
         const { password, ...userWithoutPassword } = user;
@@ -126,44 +130,59 @@ export function setupAuth(app: Express) {
     res.json(userWithoutPassword);
   });
 
-  app.post("/api/auth/firebase", async (req, res, next) => {
+  // Clerk auth endpoint — verifies Clerk session token and syncs user to DB
+  app.post("/api/auth/clerk", async (req, res, next) => {
     try {
-      if (!isFirebaseAdminInitialized()) {
+      const clerk = getClerkClient();
+      if (!clerk) {
         return res.status(503).json({
-          error: "Firebase authentication is not available"
+          error: "Clerk authentication is not available — CLERK_SECRET_KEY not set"
         });
       }
 
-      const { idToken } = req.body;
-      if (!idToken) {
-        return res.status(400).json({ error: "Missing Firebase ID token" });
+      const { token } = req.body;
+      if (!token) {
+        return res.status(400).json({ error: "Missing Clerk session token" });
       }
 
-      const decodedToken = await verifyFirebaseToken(idToken);
-      const { uid, email, name, picture } = decodedToken;
+      // Verify the JWT with Clerk
+      const secretKey = process.env.CLERK_SECRET_KEY!;
+      const { sub: clerkUserId } = await verifyToken(token, { secretKey });
+
+      if (!clerkUserId) {
+        return res.status(401).json({ error: "Invalid Clerk token" });
+      }
+
+      // Get full user details from Clerk
+      const clerkUser = await clerk.users.getUser(clerkUserId);
+      const email = clerkUser.emailAddresses[0]?.emailAddress;
+      const fullName = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ");
 
       if (!email) {
-        return res.status(400).json({ error: "Email not available from Firebase" });
+        return res.status(400).json({ error: "Email not available from Clerk" });
       }
 
-      let user = await storage.getUserByFirebaseUid(uid);
-      
+      // Find or create local user
+      let user = await storage.getUserByClerkId(clerkUserId);
+
       if (!user) {
         user = await storage.getUserByEmail(email);
-        
+
         if (user) {
-          user = await storage.updateUser(user.id, { firebaseUid: uid });
+          // Link existing user to Clerk
+          user = await storage.updateUser(user.id, { clerkUserId });
         } else {
-          const username = email.split('@')[0] + '_' + Math.floor(Math.random() * 10000);
+          // Create new user from Clerk data
+          const username = clerkUser.username || email.split('@')[0] + '_' + Math.floor(Math.random() * 10000);
           const password = await hashPassword(randomBytes(32).toString('hex'));
-          
+
           user = await storage.createUser({
             username,
             email,
             password,
-            fullName: name || '',
-            avatar: picture || '',
-            firebaseUid: uid
+            fullName: fullName || '',
+            avatar: clerkUser.imageUrl || '',
+            clerkUserId,
           });
         }
       }
@@ -174,59 +193,10 @@ export function setupAuth(app: Express) {
         return res.status(200).json(userWithoutPassword);
       });
     } catch (error: any) {
-      console.error("Firebase auth error:", error);
-      if (error.code === 'auth/id-token-expired') {
+      console.error("Clerk auth error:", error);
+      if (error.message?.includes("expired")) {
         return res.status(401).json({ error: "Token expired" });
       }
-      if (error.code === 'auth/argument-error') {
-        return res.status(400).json({ error: "Invalid token" });
-      }
-      next(error);
-    }
-  });
-
-  app.post("/api/auth/google", async (req, res, next) => {
-    try {
-      if (!isFirebaseAdminInitialized()) {
-        return res.status(503).json({
-          error: "Google authentication is not available - Firebase Admin SDK not initialized"
-        });
-      }
-
-      const { uid, email, displayName } = req.body;
-
-      if (!uid || !email) {
-        return res.status(400).json({ error: "Missing required user data" });
-      }
-
-      let user = await storage.getUserByFirebaseUid(uid);
-      
-      if (!user) {
-        user = await storage.getUserByEmail(email);
-        
-        if (user) {
-          user = await storage.updateUser(user.id, { firebaseUid: uid });
-        } else {
-          const username = email.split('@')[0] + '_' + Math.floor(Math.random() * 1000);
-          const password = await hashPassword(randomBytes(16).toString('hex'));
-          
-          user = await storage.createUser({
-            username,
-            email,
-            password,
-            fullName: displayName || '',
-            firebaseUid: uid
-          });
-        }
-      }
-
-      req.login(user, (err) => {
-        if (err) return next(err);
-        const { password, ...userWithoutPassword } = user;
-        return res.status(200).json(userWithoutPassword);
-      });
-    } catch (error) {
-      console.error("Google auth error:", error);
       next(error);
     }
   });

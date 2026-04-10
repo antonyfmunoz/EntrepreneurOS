@@ -12,7 +12,7 @@ export const users = pgTable("users", {
   avatar: text("avatar"),
   company: text("company"),
   role: text("role"),
-  firebaseUid: text("firebase_uid").unique(), // Firebase User ID for Google Auth
+  clerkUserId: text("clerk_user_id").unique(), // Clerk User ID for OAuth
   preferences: text("preferences"), // JSON string for user preferences
   metadata: jsonb("metadata"), // For storing miscellaneous user data like notification preferences
   createdAt: timestamp("created_at").defaultNow(),
@@ -27,7 +27,7 @@ export const insertUserSchema = z.object({
   avatar: z.string().optional(),
   company: z.string().optional(),
   role: z.string().optional(),
-  firebaseUid: z.string().optional(), // Firebase User ID for Google Auth
+  clerkUserId: z.string().optional(), // Clerk User ID for OAuth
   preferences: z.record(z.unknown()).optional(),
   metadata: z.record(z.unknown()).optional(), // Store metadata like notification preferences
 });

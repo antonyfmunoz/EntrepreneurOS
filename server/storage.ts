@@ -57,7 +57,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
-  getUserByFirebaseUid(firebaseUid: string): Promise<User | undefined>;
+  getUserByClerkId(clerkUserId: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<InsertUser>): Promise<User>;
   
@@ -206,10 +206,10 @@ export class DatabaseStorage implements IStorage {
     return users.length > 0 ? users[0] : undefined;
   }
 
-  async getUserByFirebaseUid(firebaseUid: string): Promise<User | undefined> {
-    if (!firebaseUid) return undefined;
-    
-    const users = await db.select().from(usersTable).where(eq(usersTable.firebaseUid, firebaseUid));
+  async getUserByClerkId(clerkUserId: string): Promise<User | undefined> {
+    if (!clerkUserId) return undefined;
+
+    const users = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, clerkUserId));
     return users.length > 0 ? users[0] : undefined;
   }
 
@@ -232,7 +232,7 @@ export class DatabaseStorage implements IStorage {
         avatar: user.avatar || null,
         company: user.company || null,
         role: user.role || "user",
-        firebaseUid: user.firebaseUid || null,
+        clerkUserId: user.clerkUserId || null,
         preferences: preferences,
         createdAt: now,
         updatedAt: now

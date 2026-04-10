@@ -200,14 +200,27 @@ function Router() {
   );
 }
 
+function ClerkProviderWrapper({ children }: { children: React.ReactNode }) {
+  const key = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+  if (!key) {
+    // Clerk not configured — render without it (local auth fallback)
+    return <>{children}</>;
+  }
+  // Dynamic import to avoid bundling Clerk when not configured
+  const { ClerkProvider } = require("@clerk/clerk-react");
+  return <ClerkProvider publishableKey={key}>{children}</ClerkProvider>;
+}
+
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Router />
-        <Toaster />
-      </AuthProvider>
-    </QueryClientProvider>
+    <ClerkProviderWrapper>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <Router />
+          <Toaster />
+        </AuthProvider>
+      </QueryClientProvider>
+    </ClerkProviderWrapper>
   );
 }
 

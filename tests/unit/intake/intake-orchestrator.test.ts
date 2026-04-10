@@ -143,7 +143,7 @@ describe("runIntake", () => {
     const root = makeRoot({
       "client/src/App.tsx": "export default function App() {}",
       "package.json": JSON.stringify({
-        dependencies: { react: "^18", firebase: "^11" },
+        dependencies: { react: "^18", "@clerk/clerk-react": "^5" },
         devDependencies: { vite: "^5", tailwindcss: "^3" },
       }),
       ".planning/PRD.md": "# Product\n\n## 1. Executive Summary\nFull stack app.\n\n---",
@@ -159,7 +159,7 @@ describe("runIntake", () => {
     expect(result.mode).toBe("existing-codebase");
     expect(result.brief.existingCodeScanned).toBe(true);
     expect(result.brief.techStack.frontend).toBe("react");
-    expect(result.brief.authProvider).toBe("firebase");
+    expect(result.brief.authProvider).toBe("clerk");
   });
 });
 
@@ -174,7 +174,7 @@ describe("ProjectBriefSchema", () => {
       brandVoice: "Professional",
       designSystem: "# Colors\nprimary: blue",
       techStack: { frontend: "react", buildTool: "vite", styling: "tailwind", componentLib: "shadcn/ui", language: "typescript" },
-      authProvider: "firebase",
+      authProvider: "clerk",
       dbProvider: "neon",
       deployTarget: "vps",
       spec: JSON.parse(VALID_SPEC),
@@ -203,7 +203,7 @@ describe("ProjectBriefSchema", () => {
     const result = ProjectBriefSchema.safeParse(brief);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.authProvider).toBe("firebase");
+      expect(result.data.authProvider).toBe("clerk");
       expect(result.data.dbProvider).toBe("neon");
       expect(result.data.techStack.frontend).toBe("react");
     }
@@ -224,7 +224,7 @@ describe("loadBriefFromConfig", () => {
       productName: "X",
       productDescription: "Y",
       techStack: { frontend: "react", buildTool: "vite", styling: "tailwind", componentLib: "shadcn/ui", language: "typescript" },
-      authProvider: "firebase",
+      authProvider: "clerk",
       dbProvider: "neon",
       deployTarget: "vps",
       spec: JSON.parse(VALID_SPEC),

@@ -30,7 +30,7 @@ export const ProjectBriefSchema = z.object({
 
   // Tech
   techStack: TechStackSchema,
-  authProvider: z.enum(["firebase", "supabase", "custom", "none"]).default("firebase"),
+  authProvider: z.enum(["clerk", "firebase", "supabase", "custom", "none"]).default("clerk"),
   dbProvider: z.enum(["neon", "supabase", "planetscale", "other"]).default("neon"),
   deployTarget: z.enum(["vercel", "railway", "vps", "other"]).default("vps"),
 

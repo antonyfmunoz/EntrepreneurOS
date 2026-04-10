@@ -26,8 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
 import { useCompany } from "@/hooks/use-company";
 import { queryClient } from "@/lib/queryClient";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Mail, KeyRound, Shield, Loader2 } from "lucide-react";
+import { KeyRound, Loader2 } from "lucide-react";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address."),
@@ -50,35 +49,21 @@ const resetPasswordSchema = z.object({
   email: z.string().email("Please enter a valid email address."),
 });
 
-const mfaCodeSchema = z.object({
-  code: z.string().min(6, "Enter the 6-digit code").max(6, "Enter the 6-digit code"),
-});
-
 type LoginFormValues = z.infer<typeof loginSchema>;
 type RegisterFormValues = z.infer<typeof registerSchema>;
 type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>;
-type MFACodeFormValues = z.infer<typeof mfaCodeSchema>;
 
 export default function AuthPage() {
   const [activeTab, setActiveTab] = useState("login");
   const [showResetPassword, setShowResetPassword] = useState(false);
-  const [showMFA, setShowMFA] = useState(false);
-  const [mfaVerificationId, setMfaVerificationId] = useState<string | null>(null);
-  const { 
-    user, 
-    isLoading, 
+  const {
+    user,
+    isLoading,
     loginMutation,
     registerMutation,
-    firebaseLoginMutation,
-    firebaseRegisterMutation,
-    signInWithGoogle, 
+    signInWithGoogle,
     resetPassword,
-    isGoogleSignInAvailable,
-    isFirebaseReady,
-    mfaResolver,
-    setMfaResolver,
-    sendMFAVerificationCode,
-    verifyMFASignIn,
+    isClerkReady,
   } = useAuth();
   const { hasCompany, isLoading: companyLoading } = useCompany();
   const [, navigate] = useLocation();
@@ -95,23 +80,6 @@ export default function AuthPage() {
     }
   }, [user, isLoading, companyLoading, hasCompany, navigate]);
 
-  useEffect(() => {
-    if (mfaResolver) {
-      setShowMFA(true);
-      handleSendMFACode();
-    }
-  }, [mfaResolver]);
-
-  const handleSendMFACode = async () => {
-    if (!mfaResolver) return;
-    try {
-      const vId = await sendMFAVerificationCode("", "recaptcha-container-mfa");
-      setMfaVerificationId(vId);
-    } catch (error) {
-      console.error("Failed to send MFA code:", error);
-    }
-  };
-
   const loginForm = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
@@ -119,122 +87,31 @@ export default function AuthPage() {
 
   const registerForm = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { username: "", email: "", password: "", confirmPassword: "", fullName: "", company: "" }
-});
+    defaultValues: { username: "", email: "", password: "", confirmPassword: "", fullName: "", company: "" },
+  });
 
   const resetForm = useForm<ResetPasswordFormValues>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: { email: "" },
   });
 
-  const mfaForm = useForm<MFACodeFormValues>({
-    resolver: zodResolver(mfaCodeSchema),
-    defaultValues: { code: "" },
-  });
-
   function onLoginSubmit(data: LoginFormValues) {
-    if (isFirebaseReady) {
-      firebaseLoginMutation.mutate(data, {
-        onError: (error) => {
-          if (error.message === "MFA_REQUIRED") {
-            setShowMFA(true);
-          }
-        }
-      });
-    } else {
-      loginMutation.mutate({ username: data.email, password: data.password });
-    }
+    loginMutation.mutate({ username: data.email, password: data.password });
   }
 
   function onRegisterSubmit(data: RegisterFormValues) {
-    if (isFirebaseReady) {
-      firebaseRegisterMutation.mutate({
-        email: data.email,
-        password: data.password,
-        fullName: data.fullName,
-        company: data.company,
-      });
-    } else {
-      registerMutation.mutate({
-        username: data.username,
-        email: data.email,
-        password: data.password,
-        fullName: data.fullName,
-        company: data.company,
-      });
-    }
+    registerMutation.mutate({
+      username: data.username,
+      email: data.email,
+      password: data.password,
+      fullName: data.fullName,
+      company: data.company,
+    });
   }
 
   async function onResetPasswordSubmit(data: ResetPasswordFormValues) {
     await resetPassword(data.email);
     setShowResetPassword(false);
-  }
-
-  async function onMFASubmit(data: MFACodeFormValues) {
-    if (!mfaVerificationId) return;
-    try {
-      await verifyMFASignIn(mfaVerificationId, data.code);
-      setShowMFA(false);
-      setMfaResolver(null);
-    } catch (error) {
-      console.error("MFA verification failed:", error);
-    }
-  }
-
-  if (showMFA) {
-    return (
-      <div className="flex min-h-screen items-center justify-center px-6">
-        <div className="max-w-md w-full">
-          <Card>
-            <CardHeader className="text-center">
-              <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-violet-100 dark:bg-violet-900 flex items-center justify-center">
-                <Shield className="h-6 w-6 text-violet-600 dark:text-violet-300" />
-              </div>
-              <CardTitle>Two-Factor Authentication</CardTitle>
-              <CardDescription>
-                Enter the verification code sent to your phone
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Form {...mfaForm}>
-                <form onSubmit={mfaForm.handleSubmit(onMFASubmit)} className="space-y-4">
-                  <FormField
-                    control={mfaForm.control}
-                    name="code"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Verification Code</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="123456" 
-                            maxLength={6}
-                            className="text-center text-2xl tracking-widest"
-                            {...field} 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button type="submit" className="w-full">
-                    Verify
-                  </Button>
-                </form>
-              </Form>
-            </CardContent>
-            <CardFooter className="flex justify-center">
-              <Button 
-                variant="link" 
-                onClick={() => { setShowMFA(false); setMfaResolver(null); }}
-              >
-                Cancel and go back
-              </Button>
-            </CardFooter>
-          </Card>
-          <div id="recaptcha-container-mfa" />
-        </div>
-      </div>
-    );
   }
 
   if (showResetPassword) {
@@ -243,8 +120,8 @@ export default function AuthPage() {
         <div className="max-w-md w-full">
           <Card>
             <CardHeader className="text-center">
-              <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-violet-100 dark:bg-violet-900 flex items-center justify-center">
-                <KeyRound className="h-6 w-6 text-violet-600 dark:text-violet-300" />
+              <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-violet-100 flex items-center justify-center">
+                <KeyRound className="h-6 w-6 text-violet-600" />
               </div>
               <CardTitle>Reset Password</CardTitle>
               <CardDescription>
@@ -268,16 +145,15 @@ export default function AuthPage() {
                     )}
                   />
                   <Button type="submit" className="w-full">
-                    <Mail className="mr-2 h-4 w-4" />
                     Send Reset Email
                   </Button>
                 </form>
               </Form>
             </CardContent>
             <CardFooter className="flex justify-center">
-              <Button 
-                variant="link" 
-                className="p-0 h-auto" 
+              <Button
+                variant="link"
+                className="p-0 h-auto"
                 onClick={() => setShowResetPassword(false)}
               >
                 Back to login
@@ -289,8 +165,8 @@ export default function AuthPage() {
     );
   }
 
-  const isLoginPending = isFirebaseReady ? firebaseLoginMutation.isPending : loginMutation.isPending;
-  const isRegisterPending = isFirebaseReady ? firebaseRegisterMutation.isPending : registerMutation.isPending;
+  const isLoginPending = loginMutation.isPending;
+  const isRegisterPending = registerMutation.isPending;
 
   return (
     <div className="flex min-h-screen bg-white">
@@ -298,10 +174,10 @@ export default function AuthPage() {
         <div className="max-w-md w-full space-y-8">
           <div className="text-center">
             <h1 className="text-4xl font-bold tracking-tight mb-2 bg-gradient-to-r from-violet-500 to-indigo-600 bg-clip-text text-transparent">
-              AgentOS
+              EntrepreneurOS
             </h1>
-            <p className="text-gray-500 dark:text-gray-400 mb-8">
-              Your AI Operating System for Business
+            <p className="text-gray-500 mb-8">
+              The Operating System for Founder-Led Companies
             </p>
           </div>
 
@@ -348,18 +224,16 @@ export default function AuthPage() {
                           </FormItem>
                         )}
                       />
-                      {isFirebaseReady && (
-                        <div className="flex justify-end">
-                          <Button
-                            type="button"
-                            variant="link"
-                            className="p-0 h-auto text-sm"
-                            onClick={() => setShowResetPassword(true)}
-                          >
-                            Forgot password?
-                          </Button>
-                        </div>
-                      )}
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          variant="link"
+                          className="p-0 h-auto text-sm"
+                          onClick={() => setShowResetPassword(true)}
+                        >
+                          Forgot password?
+                        </Button>
+                      </div>
                       <Button type="submit" className="w-full" disabled={isLoginPending}>
                         {isLoginPending ? (
                           <>
@@ -370,18 +244,18 @@ export default function AuthPage() {
                       </Button>
                     </form>
                   </Form>
-                  
-                  {isGoogleSignInAvailable && (
+
+                  {isClerkReady && (
                     <div className="mt-4">
                       <div className="relative my-4">
                         <div className="absolute inset-0 flex items-center">
                           <span className="w-full border-t border-gray-300" />
                         </div>
                         <div className="relative flex justify-center text-xs uppercase">
-                          <span className="bg-white dark:bg-background px-2 text-gray-500">Or continue with</span>
+                          <span className="bg-white px-2 text-gray-500">Or continue with</span>
                         </div>
                       </div>
-                      <Button 
+                      <Button
                         type="button"
                         variant="outline"
                         className="w-full flex items-center justify-center gap-2"
@@ -396,14 +270,6 @@ export default function AuthPage() {
                         Sign in with Google
                       </Button>
                     </div>
-                  )}
-
-                  {!isFirebaseReady && (
-                    <Alert className="mt-4">
-                      <AlertDescription className="text-sm">
-                        Firebase is not configured. Using basic authentication. Set up Firebase for Google sign-in, email verification, password reset, and 2FA.
-                      </AlertDescription>
-                    </Alert>
                   )}
                 </CardContent>
                 <CardFooter className="flex justify-center">
@@ -422,25 +288,25 @@ export default function AuthPage() {
                 <CardHeader>
                   <CardTitle>Create a new account</CardTitle>
                   <CardDescription>
-                    Enter your details to create your AgentOS workspace
+                    Enter your details to create your workspace
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Form {...registerForm}>
-                    <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">             
-                    <FormField
-  control={registerForm.control}
-  name="username"
-  render={({ field }) => (
-    <FormItem>
-      <FormLabel>Username</FormLabel>
-      <FormControl>
-        <Input placeholder="yourusername" {...field} />
-      </FormControl>
-      <FormMessage />
-    </FormItem>
-  )}
-/>
+                    <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">
+                      <FormField
+                        control={registerForm.control}
+                        name="username"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Username</FormLabel>
+                            <FormControl>
+                              <Input placeholder="yourusername" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                       <FormField
                         control={registerForm.control}
                         name="email"
@@ -517,26 +383,17 @@ export default function AuthPage() {
                     </form>
                   </Form>
 
-                  {isFirebaseReady && (
-                    <Alert className="mt-4">
-                      <Mail className="h-4 w-4" />
-                      <AlertDescription className="text-sm">
-                        A verification email will be sent to confirm your email address after registration.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                  
-                  {isGoogleSignInAvailable && (
+                  {isClerkReady && (
                     <div className="mt-4">
                       <div className="relative my-4">
                         <div className="absolute inset-0 flex items-center">
                           <span className="w-full border-t border-gray-300" />
                         </div>
                         <div className="relative flex justify-center text-xs uppercase">
-                          <span className="bg-white dark:bg-background px-2 text-gray-500">Or continue with</span>
+                          <span className="bg-white px-2 text-gray-500">Or continue with</span>
                         </div>
                       </div>
-                      <Button 
+                      <Button
                         type="button"
                         variant="outline"
                         className="w-full flex items-center justify-center gap-2"
@@ -567,45 +424,44 @@ export default function AuthPage() {
         </div>
       </div>
 
-      <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-[#5e17eb] to-[#4311b3]">
+      <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-[#6a37d4] to-[#ae8dff]">
         <div className="flex flex-col justify-center items-center h-full p-12 text-white">
           <h2 className="text-4xl font-bold mb-6">
-            The AI Operating System for Business
+            The Operating System for Founder-Led Companies
           </h2>
           <div className="max-w-xl space-y-6">
             <p className="text-xl">
-              Create, manage, and orchestrate dynamic AI agent teams to handle complex business tasks.
+              Structure, strategy, and execution in one intelligent interface.
             </p>
             <ul className="space-y-3">
               <li className="flex items-center">
                 <svg className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Powerful AI agent collaboration system
+                Design your org chart and operating structure
               </li>
               <li className="flex items-center">
                 <svg className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Task delegation and workflow management
+                Delegate work to your team and to DEX
               </li>
               <li className="flex items-center">
                 <svg className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Multiple AI model integration
+                Turn decisions into repeatable workflows
               </li>
               <li className="flex items-center">
                 <svg className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Secure with 2FA and email verification
+                Run multiple companies from one portfolio
               </li>
             </ul>
           </div>
         </div>
       </div>
-      <div id="recaptcha-container" />
     </div>
   );
 }

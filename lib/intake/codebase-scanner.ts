@@ -102,7 +102,8 @@ function detectAuth(projectRoot: string): boolean {
   try {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
     const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
-    return "firebase" in allDeps || "firebase-admin" in allDeps ||
+    return "@clerk/clerk-react" in allDeps || "@clerk/express" in allDeps ||
+      "firebase" in allDeps || "firebase-admin" in allDeps ||
       "@supabase/supabase-js" in allDeps || "passport" in allDeps;
   } catch {
     return false;

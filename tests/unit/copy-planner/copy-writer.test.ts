@@ -69,7 +69,7 @@ const BRIEF: ProjectBrief = {
   brandVoice: "# Brand Voice\nBe direct.",
   designSystem: "",
   techStack: { frontend: "react", buildTool: "vite", styling: "tailwind", componentLib: "shadcn/ui", language: "typescript" },
-  authProvider: "firebase",
+  authProvider: "clerk",
   dbProvider: "neon",
   deployTarget: "vps",
   spec: SPEC,
