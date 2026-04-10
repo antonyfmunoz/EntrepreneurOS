@@ -36,6 +36,7 @@ import { loadProjectConfig } from "../project-config.js";
 
 const PHASE_ORDER: Phase[] = [
   "spec",
+  "copy",
   "ui-gen",
   "integration",
   "backend",
@@ -101,6 +102,7 @@ function notWiredImpl(phase: Phase): PhaseImplementation {
  */
 export const PHASE_IMPLEMENTATIONS: Record<Phase, PhaseImplementation> = {
   spec: notWiredImpl("spec"),
+  copy: notWiredImpl("copy"),
   "ui-gen": notWiredImpl("ui-gen"),
   integration: notWiredImpl("integration"),
   backend: notWiredImpl("backend"),

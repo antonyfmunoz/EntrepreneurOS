@@ -140,7 +140,7 @@ export const ProjectConfigSchema = z.object({
 
 export const PipelineRunSchema = z.object({
   projectId: z.string().min(1),
-  phase: z.enum(["spec", "ui-gen", "integration", "backend", "deploy"]),
+  phase: z.enum(["spec", "copy", "ui-gen", "integration", "backend", "deploy"]),
   status: z.enum(["running", "paused", "complete", "failed"]).default("running"),
   config: z.lazy(() => ProjectConfigSchema),
 });

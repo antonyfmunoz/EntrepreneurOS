@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from "node:fs";
 import type { PageSpecFull } from "@shared/spec-schema.js";
 import type { DmTokenRow, SkillEnrichment } from "./types.js";
 import { MAX_PROMPT_TOTAL_CHARS } from "./types.js";
+import type { PageCopy } from "../copy-planner/types.js";
 
 // The design system markdown is the single source of truth. When a path is
 // passed, the file is read and injected verbatim — no project-specific brand
@@ -43,6 +44,7 @@ export function buildStitchPrompt(
   enrichment?: SkillEnrichment,
   designSystemPath?: string,
   brandVoice?: string,
+  pageCopy?: PageCopy,
 ): string {
   const parts: string[] = [];
 
@@ -73,6 +75,49 @@ export function buildStitchPrompt(
   if (brandVoice) {
     parts.push("## Brand Voice");
     parts.push(brandVoice);
+  }
+
+  // 0d. Page copy — approved copy from the copy planning phase. When present,
+  //     Stitch must use this exact text for all visible UI elements.
+  if (pageCopy) {
+    const copyLines: string[] = [
+      "# PAGE COPY — use this exact copy for all visible text. Do not invent your own copy.",
+      `Heading: ${pageCopy.pageHeading}`,
+    ];
+    if (pageCopy.pageSubheading) {
+      copyLines.push(`Subheading: ${pageCopy.pageSubheading}`);
+    }
+    if (pageCopy.ctas.length > 0) {
+      copyLines.push(`CTAs: ${pageCopy.ctas.map((c) => c.label).join(", ")}`);
+    }
+    if (pageCopy.emptyState) {
+      copyLines.push(`Empty state: ${pageCopy.emptyState}`);
+    }
+    if (Object.keys(pageCopy.placeholders).length > 0) {
+      copyLines.push("Placeholders:");
+      for (const [field, text] of Object.entries(pageCopy.placeholders)) {
+        copyLines.push(`  ${field}: ${text}`);
+      }
+    }
+    if (Object.keys(pageCopy.helperText).length > 0) {
+      copyLines.push("Helper text:");
+      for (const [field, text] of Object.entries(pageCopy.helperText)) {
+        copyLines.push(`  ${field}: ${text}`);
+      }
+    }
+    if (Object.keys(pageCopy.errorMessages).length > 0) {
+      copyLines.push("Error messages:");
+      for (const [key, msg] of Object.entries(pageCopy.errorMessages)) {
+        copyLines.push(`  ${key}: ${msg}`);
+      }
+    }
+    if (Object.keys(pageCopy.successMessages).length > 0) {
+      copyLines.push("Success messages:");
+      for (const [key, msg] of Object.entries(pageCopy.successMessages)) {
+        copyLines.push(`  ${key}: ${msg}`);
+      }
+    }
+    parts.push(copyLines.join("\n"));
   }
 
   // 1. Page description

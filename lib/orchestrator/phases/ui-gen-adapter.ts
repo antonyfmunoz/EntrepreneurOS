@@ -35,6 +35,7 @@ import {
 import { generateScreen, attemptFigmaExport } from "../../stitch/client.js";
 import { loadBrandVoice } from "../../spec-parser/brand-voice-inferrer.js";
 import { startPreviewServer } from "../../ui-generator/preview-server.js";
+import type { ProjectCopy, PageCopy } from "../../copy-planner/types.js";
 import { printPageReview } from "../../ui-generator/terminal-links.js";
 
 interface UiGenRunInput {
@@ -46,6 +47,8 @@ interface UiGenRunInput {
   priorScreenshotUrl: string | null;
   /** Brand voice markdown inferred from PRD, or null if unavailable */
   brandVoice: string | null;
+  /** Approved copy from copy planning phase, or null if copy phase was skipped */
+  pageCopy: PageCopy | null;
 }
 
 async function loadLatestSpec(projectId: string): Promise<SpecOutput> {
@@ -139,6 +142,27 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
     const planningDir = path.resolve(config.repoPath, ".planning");
     const brandVoice = loadBrandVoice(planningDir);
 
+    // Load approved copy from the copy phase (if it ran)
+    let projectCopy: ProjectCopy | null = null;
+    const copyRows = await db
+      .select()
+      .from(pipelinePages)
+      .where(
+        and(
+          eq(pipelinePages.projectId, config.projectId),
+          eq(pipelinePages.phase, "copy"),
+          eq(pipelinePages.status, "complete"),
+        ),
+      )
+      .limit(1);
+    if (copyRows.length > 0 && copyRows[0].output) {
+      try {
+        projectCopy = JSON.parse(copyRows[0].output) as ProjectCopy;
+      } catch {
+        // Copy phase output malformed — continue without copy
+      }
+    }
+
     // Validate component cache freshness before any generation.
     // The cache is populated by /saas-dev:warm-cache inside a Claude Code session.
     const allComponentNames = Array.from(
@@ -163,13 +187,14 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
         // context for inheritance. Page 0 has no prior reference.
         priorScreenshotUrl: idx > 0 ? priorByIndex.get(idx - 1) ?? null : null,
         brandVoice,
+        pageCopy: projectCopy?.pages.find((p) => p.pageName === page.name) ?? null,
       } satisfies UiGenRunInput,
     }));
   },
 
   async runPage(rawInput: unknown, config: ProjectConfig): Promise<unknown> {
     const input = rawInput as UiGenRunInput;
-    const { page, tokens, designSystemPath, priorScreenshotUrl, brandVoice } = input;
+    const { page, tokens, designSystemPath, priorScreenshotUrl, brandVoice, pageCopy } = input;
 
     // Discover component references from the warm cache.
     const discoveryResult = discoverComponents(page.components);
@@ -178,6 +203,8 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
     // Build prompt — design-system.md is the single source of truth, no
     // hardcoded brand values. priorScreenshotUrl gives Stitch visual context
     // from the previously approved page (multi-page inheritance).
+    // pageCopy injects approved copy from the copy planning phase — Stitch
+    // uses it as the single source of truth for all visible text.
     const prompt = buildStitchPrompt(
       page,
       tokens,
@@ -187,6 +214,7 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
       undefined, // enrichment — wired separately via skill-enrichment layer
       designSystemPath,
       brandVoice ?? undefined,
+      pageCopy ?? undefined,
     );
 
     // Generate the desktop screen via Stitch.
