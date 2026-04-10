@@ -45,6 +45,7 @@ export function buildStitchPrompt(
   designSystemPath?: string,
   brandVoice?: string,
   pageCopy?: PageCopy,
+  competitiveStructure?: string,
 ): string {
   const parts: string[] = [];
 
@@ -118,6 +119,12 @@ export function buildStitchPrompt(
       }
     }
     parts.push(copyLines.join("\n"));
+  }
+
+  // 0e. Competitive structure insights — optional layout guidance from competitor research.
+  if (competitiveStructure) {
+    parts.push("# COMPETITIVE STRUCTURE INSIGHTS — consider these patterns when designing layout:");
+    parts.push(competitiveStructure);
   }
 
   // 1. Page description

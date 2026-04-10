@@ -25,9 +25,19 @@ import {
   type ProjectBrief,
   type IntakeMode,
 } from "./types.js";
+import {
+  researchCompetitors,
+  formatCompetitiveIntelReport,
+  type CompetitiveIntel,
+} from "./competitive-researcher.js";
 import type { ProjectConfig } from "../../shared/design-schema.js";
 
 export { type IntakeMode } from "./types.js";
+
+export interface IntakeOptions {
+  /** Competitor URLs to research during intake. */
+  competitorUrls?: string[];
+}
 
 export interface IntakeResult {
   brief: ProjectBrief;
@@ -47,6 +57,7 @@ export interface IntakeResult {
  */
 export async function runIntake(
   config: ProjectConfig,
+  options: IntakeOptions = {},
 ): Promise<IntakeResult> {
   const projectRoot = path.resolve(config.repoPath);
   const mode = detectIntakeMode(projectRoot);
@@ -55,9 +66,9 @@ export async function runIntake(
     case "greenfield":
       return runGreenfieldIntake(config, projectRoot);
     case "docs-only":
-      return runDocsOnlyIntake(config, projectRoot);
+      return runDocsOnlyIntake(config, projectRoot, options);
     case "existing-codebase":
-      return runExistingCodebaseIntake(config, projectRoot);
+      return runExistingCodebaseIntake(config, projectRoot, options);
   }
 }
 
@@ -92,6 +103,7 @@ async function runGreenfieldIntake(
 async function runDocsOnlyIntake(
   config: ProjectConfig,
   projectRoot: string,
+  options: IntakeOptions = {},
 ): Promise<IntakeResult> {
   const docs = scanPlanningDocs(projectRoot);
   const planningDir = path.join(projectRoot, ".planning");
@@ -130,6 +142,11 @@ async function runDocsOnlyIntake(
   // Extract product metadata from PRD or spec
   const productMeta = extractProductMeta(docs);
 
+  // Competitive research (if URLs provided)
+  const competitiveIntel = await runCompetitiveResearchIfRequested(
+    options.competitorUrls, brandVoice, spec, projectRoot,
+  );
+
   const brief = ProjectBriefSchema.parse({
     ...productMeta,
     brandVoice,
@@ -139,6 +156,7 @@ async function runDocsOnlyIntake(
     dbProvider: "neon",
     deployTarget: "vps",
     spec,
+    competitiveIntel,
     isGreenfield: false,
     existingCodeScanned: false,
     sourceDocs: docs.sourceDocs,
@@ -150,6 +168,7 @@ async function runDocsOnlyIntake(
 async function runExistingCodebaseIntake(
   config: ProjectConfig,
   projectRoot: string,
+  options: IntakeOptions = {},
 ): Promise<IntakeResult> {
   const docs = scanPlanningDocs(projectRoot);
   const codeScan = scanCodebase(projectRoot);
@@ -187,6 +206,11 @@ async function runExistingCodebaseIntake(
 
   const productMeta = extractProductMeta(docs);
 
+  // Competitive research (if URLs provided)
+  const competitiveIntel = await runCompetitiveResearchIfRequested(
+    options.competitorUrls, brandVoice, spec, projectRoot,
+  );
+
   // Detect auth/db from actual dependencies
   const authProvider = codeScan.hasAuth ? "firebase" : "none";
   const dbProvider = codeScan.hasDatabase ? "neon" : "other";
@@ -206,12 +230,50 @@ async function runExistingCodebaseIntake(
     dbProvider,
     deployTarget: "vps",
     spec,
+    competitiveIntel,
     isGreenfield: false,
     existingCodeScanned: true,
     sourceDocs: docs.sourceDocs,
   });
 
   return { brief, mode: "existing-codebase", gapReport };
+}
+
+// ─── Competitive Research ─────────────────────────────────────────────────────
+
+async function runCompetitiveResearchIfRequested(
+  urls: string[] | undefined,
+  brandVoice: string,
+  spec: SpecOutput,
+  projectRoot: string,
+): Promise<CompetitiveIntel | undefined> {
+  if (!urls || urls.length === 0) return undefined;
+
+  try {
+    const intel = await researchCompetitors(urls, brandVoice, spec);
+
+    // Persist to .planning/output/research/
+    const researchDir = path.join(projectRoot, ".planning", "output", "research");
+    if (!fs.existsSync(researchDir)) {
+      fs.mkdirSync(researchDir, { recursive: true });
+    }
+    fs.writeFileSync(
+      path.join(researchDir, "COMPETITIVE-INTEL.json"),
+      JSON.stringify(intel, null, 2) + "\n",
+      "utf-8",
+    );
+    fs.writeFileSync(
+      path.join(researchDir, "COMPETITIVE-INTEL.md"),
+      formatCompetitiveIntelReport(intel) + "\n",
+      "utf-8",
+    );
+    console.log(`[intake] Competitive intel saved to .planning/output/research/`);
+
+    return intel;
+  } catch (err) {
+    console.warn(`[intake] Competitive research failed — continuing without it. ${err instanceof Error ? err.message : String(err)}`);
+    return undefined;
+  }
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

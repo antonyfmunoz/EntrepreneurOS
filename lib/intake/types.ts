@@ -3,6 +3,7 @@
 
 import { z } from "zod";
 import { SpecOutputSchema } from "@shared/spec-schema.js";
+import { CompetitiveIntelSchema } from "./competitive-researcher.js";
 
 export type IntakeMode = "greenfield" | "docs-only" | "existing-codebase";
 
@@ -35,6 +36,9 @@ export const ProjectBriefSchema = z.object({
 
   // Scope
   spec: SpecOutputSchema,
+
+  // Competitive Intelligence
+  competitiveIntel: CompetitiveIntelSchema.optional(),
 
   // Meta
   isGreenfield: z.boolean(),

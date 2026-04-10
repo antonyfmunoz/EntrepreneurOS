@@ -74,7 +74,7 @@ Description: ${projectBrief.productDescription.slice(0, 500)}
 Target users: ${projectBrief.targetUsers.join("; ")}
 
 Use the brand voice EXACTLY — commanding, operator-focused, specific, no generic SaaS language. Every heading, CTA, empty state, and error message must sound like it was written by this brand, not a template.
-
+${projectBrief.competitiveIntel?.copyInfluences ? `\nCompetitive intelligence — learn from these but maintain our distinct brand voice:\n${projectBrief.competitiveIntel.copyInfluences}\n` : ""}
 For each page produce: pageHeading, pageSubheading, sections (with headings and body copy), all CTA labels with context, emptyState, errorMessages (keyed by error type), placeholders (keyed by field name), helperText (keyed by field name), successMessages (keyed by action), navLabel.
 
 Pages:
