@@ -1,6 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import { AIServiceInterface, AIMessage, AIModelConfig } from "./index.js";
-import { callAI, type ModelTier } from "./gateway.js";
+import { callAI, callVision, type ModelTier } from "./gateway.js";
 
 const COMPLEXITY_KEYWORDS = [
   "analyze", "analysis", "explain in detail", "compare", "evaluate",
@@ -93,44 +93,14 @@ export class AnthropicService implements AIServiceInterface {
     }
   }
 
-  // NOTE: analyzeImage uses a direct Anthropic client because the gateway
-  // does not support vision/multimodal message content yet. Once the gateway
-  // supports image blocks this should be migrated.
   async analyzeImage(base64Image: string, prompt: string): Promise<string> {
     if (!this.isAvailable()) {
       throw new Error("Anthropic AI integration is not configured");
     }
 
     try {
-      const client = new Anthropic({
-        apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-        baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
-      });
-
-      const response = await client.messages.create({
-        model: "claude-sonnet-4-5",
-        max_tokens: 8192,
-        messages: [{
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: prompt
-            },
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: "image/jpeg",
-                data: base64Image
-              }
-            }
-          ]
-        }]
-      });
-
-      const firstBlock = response.content[0];
-      return firstBlock.type === "text" ? firstBlock.text : "";
+      const response = await callVision(base64Image, prompt, "anthropic-service:analyzeImage");
+      return response.content;
     } catch (error: any) {
       console.error("Error analyzing image with Anthropic:", error);
       throw new Error(`Failed to analyze image: ${error.message}`);

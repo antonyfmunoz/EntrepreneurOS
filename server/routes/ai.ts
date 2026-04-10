@@ -1,5 +1,4 @@
 import { Express } from "express";
-import Anthropic from "@anthropic-ai/sdk";
 import { storage } from "../storage";
 import { generateAgentResponse } from "../openai";
 import {
@@ -10,11 +9,7 @@ import {
   AIModelProvider,
   AIModelName,
 } from "../ai";
-
-export const anthropic = new Anthropic({
-  apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
-});
+import { callAI, getGatewayStats } from "../ai/gateway";
 
 export function registerAIRoutes(app: Express): void {
   // AI Models API
@@ -341,7 +336,7 @@ export function registerAIRoutes(app: Express): void {
     }
   });
 
-  // LLM Chat endpoint
+  // LLM Chat endpoint — routes through AI gateway
   app.post("/api/llm/chat", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -354,25 +349,16 @@ export function registerAIRoutes(app: Express): void {
         return res.status(400).json({ message: "Prompt is required" });
       }
 
-      const modelToUse = model && ["claude-haiku-4-5", "claude-sonnet-4-5"].includes(model)
-        ? model
-        : "claude-haiku-4-5";
+      // Map legacy model names to gateway tiers
+      const tier = model?.includes("sonnet") ? "standard" as const : "fast" as const;
 
-      const response = await anthropic.messages.create({
-        model: modelToUse,
-        max_tokens: 8192,
+      const response = await callAI({
+        messages: [{ role: "user", content: prompt }],
         system: systemMessage || "You are an autonomous business agent designed to help build and manage businesses.",
-        messages: [
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        temperature: 0.2,
+        tier,
+        maxTokens: 8192,
+        context: "llm-chat",
       });
-
-      const firstBlock = response.content[0];
-      const content = firstBlock.type === "text" ? firstBlock.text : "";
 
       if (req.user.id) {
         try {
@@ -386,7 +372,7 @@ export function registerAIRoutes(app: Express): void {
           await storage.addAiMessage({
             userId: req.user.id,
             role: "assistant",
-            content: content || "",
+            content: response.content || "",
             timestamp: new Date(),
           });
         } catch (logError) {
@@ -394,7 +380,7 @@ export function registerAIRoutes(app: Express): void {
         }
       }
 
-      res.json({ response: content });
+      res.json({ response: response.content });
     } catch (error) {
       console.error("Error calling LLM API:", error);
 
@@ -405,14 +391,12 @@ export function registerAIRoutes(app: Express): void {
       const errorObj = error as any;
 
       if (errorObj && typeof errorObj === 'object') {
-        if (errorObj.status === 429 ||
-            (errorObj.message && typeof errorObj.message === 'string' && errorObj.message.includes('rate limit'))) {
+        if (errorObj.message?.includes('rate limit')) {
           statusCode = 429;
           errorMessage = "Rate limit exceeded. Please try again later.";
           errorCode = 'rate_limit_exceeded';
         }
-        else if (errorObj.status === 401 ||
-                (errorObj.message && typeof errorObj.message === 'string' && errorObj.message.includes('API key'))) {
+        else if (errorObj.message?.includes('API key')) {
           statusCode = 401;
           errorMessage = "AI service configuration issue. Please contact support.";
           errorCode = 'configuration_error';
@@ -425,5 +409,13 @@ export function registerAIRoutes(app: Express): void {
         code: errorCode
       });
     }
+  });
+
+  // AI Gateway stats endpoint (admin)
+  app.get("/api/ai/stats", (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    res.json(getGatewayStats());
   });
 }

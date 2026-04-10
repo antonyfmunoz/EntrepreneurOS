@@ -7,7 +7,7 @@ import {
   generateAIResponse,
   AIMessage,
 } from "../ai";
-import { anthropic } from "./ai";
+import { callAI } from "../ai/gateway";
 
 export function registerAgentRoutes(app: Express): void {
   // Agents API
@@ -175,23 +175,18 @@ export function registerAgentRoutes(app: Express): void {
         });
 
         const selectedModel = aiConfig?.modelName || "claude-haiku-4-5";
+        const tier = selectedModel.includes("sonnet") ? "standard" as const : "fast" as const;
 
         try {
-          const response = await anthropic.messages.create({
-            model: selectedModel,
-            max_tokens: 8192,
+          const gatewayResponse = await callAI({
+            messages: [{ role: "user", content: message }],
             system: virtualClaudeAgent.instructions,
-            messages: [
-              {
-                role: "user",
-                content: message
-              }
-            ],
-            temperature: 0.2,
+            tier,
+            maxTokens: 8192,
+            context: "agent-chat",
           });
 
-          const firstBlock = response.content[0];
-          const reply = firstBlock.type === "text" ? firstBlock.text : "";
+          const reply = gatewayResponse.content;
 
           const aiMessage = await storage.addAgentMessage({
             agentId: agentId,

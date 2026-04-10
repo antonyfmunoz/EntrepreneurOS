@@ -135,6 +135,75 @@ export async function callAI(request: GatewayRequest): Promise<GatewayResponse> 
   }
 }
 
+/**
+ * Vision call — analyzes an image with a text prompt.
+ * Uses claude-sonnet-4-6 (standard tier). Routes through the same stats
+ * tracking and retry logic as callAI.
+ */
+export async function callVision(
+  base64Image: string,
+  prompt: string,
+  context: string = "vision",
+): Promise<GatewayResponse> {
+  const model = MODEL_MAP.standard;
+  const maxTokens = 8192;
+
+  const attempt = async () => {
+    const response = await getClient().messages.create({
+      model,
+      max_tokens: maxTokens,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: "image/jpeg",
+              data: base64Image,
+            },
+          },
+        ],
+      }],
+    });
+
+    const inputTokens = response.usage.input_tokens;
+    const outputTokens = response.usage.output_tokens;
+    const cost = calculateCost(model, inputTokens, outputTokens);
+
+    stats.totalCalls += 1;
+    stats.totalCost += cost;
+    stats.totalInputTokens += inputTokens;
+    stats.totalOutputTokens += outputTokens;
+    stats.callsByContext[context] =
+      (stats.callsByContext[context] || 0) + 1;
+
+    console.log(
+      `[ai-gateway] ${context} | vision → ${model} | ${inputTokens}+${outputTokens} tokens | $${cost.toFixed(4)}`,
+    );
+
+    const firstBlock = response.content[0];
+    const content = firstBlock.type === "text" ? firstBlock.text : "";
+
+    return { content, model, inputTokens, outputTokens, cost };
+  };
+
+  try {
+    return await pRetry(attempt, {
+      retries: 3,
+      minTimeout: process.env.NODE_ENV === "test" ? 1 : 1000,
+      factor: 2,
+    });
+  } catch (error: any) {
+    throw new GatewayError(
+      `AI gateway vision call failed after retries: ${error.message}`,
+      context,
+      "standard",
+    );
+  }
+}
+
 export function getGatewayStats(): Readonly<GatewayStats> {
   return { ...stats, callsByContext: { ...stats.callsByContext } };
 }

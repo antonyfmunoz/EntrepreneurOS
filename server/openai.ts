@@ -1,9 +1,8 @@
-import Anthropic from "@anthropic-ai/sdk";
+// server/openai.ts
+// Agent brain response generation — routes through AI gateway.
+// Named "openai.ts" for historical reasons (originally used OpenAI).
 
-const anthropic = new Anthropic({
-  apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
-});
+import { callAI } from "./ai/gateway";
 
 export type AgentBrain = {
   instructions: string;
@@ -18,12 +17,12 @@ export async function generateAgentResponse(
   history: { role: string; content: string }[]
 ): Promise<string> {
   try {
-    const systemContent = `You are ${brain.name}, an AI assistant with the role of ${brain.role}. 
+    const systemContent = `You are ${brain.name}, an AI assistant with the role of ${brain.role}.
           ${brain.instructions}
           ${brain.knowledgeBase ? `Use this knowledge base: ${brain.knowledgeBase}` : ""}
           Respond in a helpful, concise, and professional manner. Focus on your specific role.`;
 
-    const anthropicMessages = [
+    const gatewayMessages = [
       ...history.filter(m => m.role !== "system").map(m => ({
         role: (m.role === "user" ? "user" : "assistant") as "user" | "assistant",
         content: m.content,
@@ -31,15 +30,15 @@ export async function generateAgentResponse(
       { role: "user" as const, content: message },
     ];
 
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 8192,
+    const response = await callAI({
+      messages: gatewayMessages,
       system: systemContent,
-      messages: anthropicMessages,
+      tier: "fast",
+      maxTokens: 8192,
+      context: "agent-brain:generateResponse",
     });
 
-    const firstBlock = response.content[0];
-    return firstBlock.type === "text" ? firstBlock.text : "I'm sorry, I couldn't generate a response.";
+    return response.content || "I'm sorry, I couldn't generate a response.";
   } catch (error) {
     console.error("Error generating response from Claude:", error);
     return "I'm having trouble connecting to my knowledge base. Please try again in a moment.";
@@ -51,28 +50,26 @@ export async function generateTaskSuggestion(
   currentTasks: { title: string; description: string; status: string }[]
 ): Promise<{ title: string; description: string } | null> {
   try {
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 8192,
+    const response = await callAI({
+      messages: [
+        { role: "user", content: "Suggest a new task based on current priorities." }
+      ],
       system: `You are ${agentBrain.name}, an AI assistant with the role of ${agentBrain.role}.
           Based on your role and the current tasks, suggest a new task that would be valuable to work on.
           Current tasks: ${JSON.stringify(currentTasks)}
-          
+
           Respond in JSON format with:
           {
             "title": "Task title - keep it short and specific",
             "description": "Brief description of what needs to be done and why it's important"
           }`,
-      messages: [
-        { role: "user", content: "Suggest a new task based on current priorities." }
-      ],
+      tier: "fast",
+      maxTokens: 8192,
+      context: "agent-brain:taskSuggestion",
     });
 
-    const firstBlock = response.content[0];
-    const content = firstBlock.type === "text" ? firstBlock.text : null;
-    if (!content) return null;
-    
-    return JSON.parse(content);
+    if (!response.content) return null;
+    return JSON.parse(response.content);
   } catch (error) {
     console.error("Error generating task suggestion:", error);
     return null;
