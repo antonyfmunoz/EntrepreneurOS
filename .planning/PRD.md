@@ -167,6 +167,21 @@ Required API routes:
 
 ---
 
+## Infrastructure: Clerk Organizations (OS Trinity Foundation)
+
+Clerk organizations are enabled as the identity foundation for the OS Trinity (EntrepreneurOS, CreatorOS, LYFEOS):
+
+- Each company in EntrepreneurOS can optionally belong to a Clerk organization
+- When CreatorOS and LYFEOS launch, they join the same Clerk organization
+- Users authenticate once via Clerk and access all three products under one identity
+- No user needs to re-register across products
+- Organization-level billing, roles, and permissions are managed through Clerk's dashboard
+- The `org_id` column on the companies table links to the Clerk organization
+
+This is foundation infrastructure — no user-facing organization UI is built in MVP. The wiring exists so that multi-product identity works from day one when the other OS products launch.
+
+---
+
 ## 10. What Is Explicitly Deferred
 
 - Real AI execution (all AI surfaces are stubs)

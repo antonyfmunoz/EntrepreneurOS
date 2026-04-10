@@ -8,5 +8,6 @@
   "serverPath": "server",
   "defaultBranch": "main",
   "featureBranchPrefix": "feature/",
-  "stitchProjectId": "15245812195263033351"
+  "stitchProjectId": "15245812195263033351",
+  "clerkOrganizationsEnabled": true
 }

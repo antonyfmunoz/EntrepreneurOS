@@ -7,6 +7,7 @@ import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
 import { createClerkClient, verifyToken } from "@clerk/express";
+import { extractClerkOrg } from "./middleware/clerk-org";
 
 declare global {
   namespace Express {
@@ -53,6 +54,7 @@ export function setupAuth(app: Express) {
   app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());
+  app.use(extractClerkOrg);
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {
