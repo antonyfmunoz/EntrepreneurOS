@@ -40,6 +40,7 @@ export function registerCompanyRoutes(app: Express): void {
       offer: z.string().optional(),
       targetCustomer: z.string().optional(),
       goals: z.string().optional(),
+      assistantName: z.string().optional(),
     });
 
     try {
@@ -60,6 +61,7 @@ export function registerCompanyRoutes(app: Express): void {
           offer: data.offer ?? null,
           targetCustomer: data.targetCustomer ?? null,
           goals: data.goals ?? null,
+          assistantName: data.assistantName || "Assistant",
         })
         .returning();
 
@@ -84,6 +86,7 @@ export function registerCompanyRoutes(app: Express): void {
       offer: z.string().optional().nullable(),
       targetCustomer: z.string().optional().nullable(),
       goals: z.string().optional().nullable(),
+      assistantName: z.string().optional().nullable(),
     });
 
     try {

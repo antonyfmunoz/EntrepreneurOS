@@ -489,6 +489,7 @@ export const companies = pgTable("companies", {
   offer: text("offer"),
   targetCustomer: text("target_customer"),
   goals: text("goals"),
+  assistantName: text("assistant_name").default("Assistant"),
   orgId: text("org_id"),  // Clerk organization ID — nullable for single-user companies
   createdAt: timestamp("created_at").defaultNow()
 });

@@ -1,4 +1,5 @@
 import { Express } from "express";
+import { eq } from "drizzle-orm";
 import { storage } from "../storage";
 import { generateAgentResponse } from "../openai";
 import {
@@ -10,6 +11,8 @@ import {
   AIModelName,
 } from "../ai";
 import { callAI, getGatewayStats } from "../ai/gateway";
+import { db } from "../db";
+import { companies as companiesTable } from "@shared/schema";
 
 export function registerAIRoutes(app: Express): void {
   // AI Models API
@@ -307,11 +310,19 @@ export function registerAIRoutes(app: Express): void {
         userId: req.user.id
       });
 
+      // Look up company assistant name for personalized response
+      const userCompanies = await db
+        .select({ assistantName: companiesTable.assistantName })
+        .from(companiesTable)
+        .where(eq(companiesTable.ownerUserId, req.user.id))
+        .limit(1);
+      const assistantDisplayName = userCompanies[0]?.assistantName || "Assistant";
+
       // Generate assistant response
       // Usually this would involve an actual AI service call
       const assistantMessage = await storage.addAiMessage({
         role: "assistant",
-        content: "I'm your AI assistant. I can help answer questions about the AgentOS platform and your agents. How can I assist you today?",
+        content: `I'm ${assistantDisplayName}, your AI assistant. I can help answer questions about your company, tasks, and workflows. How can I assist you today?`,
         userId: req.user.id
       });
 

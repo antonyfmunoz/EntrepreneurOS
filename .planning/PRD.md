@@ -67,7 +67,7 @@ Secondary: Agency owners, operators, coaches, consultants, holding company opera
 
 7. **Org Chart** — visual org chart for the company. Departments and roles displayed as nodes. Each role has: title, department, parent role, responsibilities, assigned human (optional), AI agent slot (placeholder). Editable — add/remove departments and roles. Generates default structure based on company stage and business model on first load.
 
-8. **Agent Chat** — full-page AI EA interface (DEX). Persistent conversation history per company. Accepts user messages. Returns stub responses in v1. Designed as the primary human-AI interaction surface. Shows: conversation thread, agent status indicator, suggested actions panel.
+8. **Agent Chat** — full-page AI assistant interface. Each company has a named AI assistant configured during setup (defaults to "Assistant"). Persistent conversation history per company. Accepts user messages. Returns stub responses in v1. Designed as the primary human-AI interaction surface. Shows: conversation thread, agent status indicator, suggested actions panel.
 
 9. **Task Board** — Kanban board: Backlog, In Progress, In Review, Done. Tasks have: title, description, priority (low/medium/high/critical), assignee (human user or AI agent placeholder), due date, company reference, created by. Create, edit, move, delete tasks. Filter by assignee, priority, status.
 
@@ -108,7 +108,7 @@ Every authenticated page uses this base layout:
 - Primary operational surface — varies per page
 
 **Right Rail**
-- AI chat interface (DEX)
+- AI chat interface (user-named assistant)
 - Agent activity log (stub in v1)
 - Execution status
 
@@ -138,11 +138,11 @@ Every authenticated page uses this base layout:
 
 Every AI surface in v1 returns stub responses but is architecturally wired for swap:
 
-- Right rail chat: accepts message, returns "DEX is analyzing your request... [stub]"
+- Right rail chat: accepts message, returns "[Assistant name] is analyzing your request... [stub]"
 - Floating AI control panel: shows hardcoded next-best actions from company stage
 - Agent status: shows "Online" indicator
 - Org chart AI slot: shows "AI Agent (Coming Soon)" per role
-- Task assignee: includes "DEX (AI)" as assignable option — tasks assigned to DEX are flagged, no execution in v1
+- Task assignee: includes "[Assistant name] (AI)" as assignable option — tasks assigned to the assistant are flagged, no execution in v1
 
 When real AI substrate is ready: replace stub response functions with real agent calls. No page redesign required.
 

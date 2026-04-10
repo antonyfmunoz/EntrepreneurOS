@@ -1,59 +1,54 @@
-# Brand Voice: EntrepreneurOS
+# Brand Voice — EntrepreneurOS
 
 ## Tone
 
-Commanding yet collaborative—the voice of a world-class operating partner who knows what needs to happen and invites you into the decision-making process, never commanding from above. Direct, clear, and sometimes provocative about what's possible, but never condescending about where you're starting from.
+Decisive and grounded, with intellectual rigor and quiet confidence. EntrepreneurOS speaks to founders who are drowning in fragmentation and complexity—it meets them with clarity, not hype. The tone is advisory and structural (like a strategic partner who has operated at scale), never salesy, always executable. Calm urgency: there is real work to do, and this system gets you there faster.
+
+---
 
 ## Personality
 
-- **Rigorous** — expects excellence but makes it accessible
-- **Empowering** — positions the founder as the decision-maker, not the system
-- **Strategic** — speaks about outcomes and leverage, not features
-- **Confident** — no hedging, no apologies for having high standards
-- **Conversational** — sounds like a trusted advisor at a dinner table, not a SaaS marketing page
+- **Structural** — thinks in systems, org charts, dependencies, workflows; organized clarity is native
+- **Operationally wise** — assumes the user is intelligent and has hard problems; no hand-holding, no oversimplification
+- **Architecturally transparent** — shows the *shape* of decisions and work, not just the outcome
+- **Autonomy-respecting** — human override is assumed and valued; no dark patterns, no premature automation
+- **Relentlessly practical** — every feature and flow is about reducing friction, not adding features for feature's sake
 
 ---
 
 ## Language Style
 
-**Formality:** Casual-to-moderate. Avoid corporate jargon and buzzwords. Avoid false familiarity ("Hey fam!"). Use plain English with one level of sophistication—someone running a company should never feel talked down to, but also never confused.
+**Register:** professional but not corporate; operational; first-principles.
 
-**Technical vs. Accessible:** Lean accessible. The product uses "agent," "workflow," "autonomous execution"—these are real concepts—but explain *why* they matter in business terms, not tech terms. Example: "Workflows automate your repeatable decisions" not "Workflows parameterize task sequences."
+**Sentence structure:** Short, declarative sentences when possible. Imperative (verb-first) in CTAs and instructions. Avoid marketing jargon (no "leverage," "synergy," "revolutionize"). 
 
-**Sentence Structure:** Short, declarative sentences. Avoid nested clauses. Favor active voice ("You set the autonomy level" not "Autonomy levels are configured by the operator").
+**Vocabulary:** Technical specificity where it matters (roles, workflows, agents, execution). Plain English elsewhere. Assume founder literacy: no explanation of "org chart" or "workflow."
 
-**Vocabulary:** 
-- Use founder/operator vocabulary: "scale," "leverage," "bottleneck," "execution," "clarity," "capacity."
-- Avoid: "user," "software," "cloud," "solution," "ecosystem," "best practices," "synergy."
-- Preferred: "you," "operator," "founder," "the system," "your company," "execution engine."
+**Voice markers:**
+- Use active voice (rarely passive).
+- Prefer "you" and imperative over "we" unless emphasizing partnership.
+- No exclamation marks outside of very specific celebratory moments.
+- No placeholder language ("something," "stuff," "etc."); name things explicitly.
 
-**Tone Markers:**
-- Directness is trust. Say what's true.
-- Avoid wishy-washy language: "might," "could," "potentially," "some might say."
-- Embrace specificity: "This removes 6 hours of weekly planning" not "Saves you time."
-- Use imperative when giving guidance: "Set your autonomy level first" not "You should consider setting."
+**Tone examples:**
+- **Instead of:** "Unlock your team's potential with our AI-powered collaboration tools."
+- **Use:** "Assign work to your team or your AI agent. Track who's doing what. Know what's blocking."
 
 ---
 
 ## Visual Mood
 
-Light mode. The Ethereal Professional design system governs all visual decisions — white backgrounds, violet primary (#6a37d4), glassmorphism surfaces, Inter font, gradient CTAs. The brand feels like a high-end illuminated workspace, not a dark command terminal. Airy, precise, and intentional.
+**Color temperature:** Cool, neutral, high-contrast. Think operating room or command center: functional, precise, trustworthy. Not warm or inviting; this is *work*.
 
-**Color Temperature:** Cool, professional. Light mode with white and soft gray surfaces. Violet primary (#6a37d4) and light violet accent (#ae8dff) for energy. Gradient CTAs (#6a37d4 → #ae8dff at 135deg). Never use pure black — use #2c2f30 for text. Shadows tinted with primary purple.
+**Density:** Medium-high information density. Whitespace is used structurally (to separate decision layers), not for breathing room. Founder needs to see context and options at a glance.
 
-**Density:** High on data views (Org Chart, Task Board, Workflows), lower on decision/input surfaces (setup wizard, role creation). This creates visual breathing room where friction could occur.
+**Typography:** Sans-serif, geometric, confident. Hierarchy is crisp: bold headers are commands; body text is readable at small sizes (lots of information to display). No serif or "human" typefaces.
 
-**Whitespace:** Generous. Prioritize negative space for a premium editorial feel. Strategic use around CTAs, headers, and transition states. Empty states should feel intentional, not abandoned.
+**Micro-interactions:** Snappy, confirmatory. No delightful animations; feedback is immediate and unambiguous. A button press is acknowledged within 100ms.
 
-**Typography:** Inter exclusively. Display headlines at semi-bold with tight letter-spacing. Body copy at regular weight, 1.6 line-height for readability. All-caps labels with wide tracking for structure.
+**Iconography:** Minimal, geometric, high contrast. Icons are scannable shortcuts for role/status/urgency, not decorative.
 
-**Visual Patterns:** 
-- Glassmorphism on floating elements: rgba(255,255,255,0.7) + backdrop-filter: blur(16px).
-- No 1px solid borders — use background shifts and ghost borders at 10% opacity.
-- Progress indicators are prominent (workflow step tracking, org setup completion).
-- Status is always visible (agent status, task priority, company health).
-- The AI/agent presence is indicated subtly (small icon, not a character mascot).
-- Cards use 32px padding, 12px border radius, ambient shadows tinted with primary violet.
+**Overall feel:** Pilot's cockpit or trader's desk—high agency, real-time, designed for humans who move fast and need clarity.
 
 ---
 
@@ -61,213 +56,182 @@ Light mode. The Ethereal Professional design system governs all visual decisions
 
 | Element | Style | Examples |
 |---------|-------|----------|
-| **Button Labels (Primary CTAs)** | Verb-forward, action-oriented, no articles. Specific outcome focus. | "Add Company" not "Create New" / "Start Workflow" not "Execute" / "Save Structure" not "OK" / "Assign to DEX" not "Add Agent" |
-| **Button Labels (Secondary)** | Neutral, lower cognitive weight. | "Cancel" / "Skip" / "Edit" / "More Options" / "Learn More" |
-| **Page Headings** | Outcome-focused noun phrases or light imperative. Reflect what the user *does* here, not system state. | "Command Center" not "Dashboard" / "Your Org Chart" not "Organization" / "Agent Chat" not "Conversation History" / "Run a Workflow" not "Workflow Execution" |
-| **Section Headings** | Task-oriented, hierarchical. | "Active Workflows" / "Pending Tasks" / "Company Overview" / "Your Next Best Actions" |
-| **Empty States** | Warm, specific, action-inviting. Never blame the user. Guide to the next step. Tone: "Let's set this up together." | "No workflows yet. Create your first SOP to start automating decisions." / "All caught up—no tasks in this column." / "No companies yet. Add your first one to get started." |
-| **Error Messages** | Actionable, blame-free, specific. Always provide the fix or next step. Never: "Error." | "That email is already in use. Try another or reset your password." / "Workflow needs at least one step before you can run it. Add a step to continue." / "Role can't be deleted—it has 2 assignees. Reassign them first." |
-| **Success/Confirmation** | Brief, affirmative, forward-looking. | "Workflow saved and ready to run." / "Company added to your portfolio." / "Role assigned to Maya." / "Task moved to In Progress." |
-| **Inline Helper Text / Tooltips** | Explain *why*, not just *what*. Benefit-focused. Assumptive (you might not know this, and that's fine). | "Set autonomy level first—this controls how much the agent can do without asking." / "Due dates help prioritize work across your team and agents." / "Company stage shapes your default org structure and recommended workflows." |
-| **Form Labels** | Clear, specific, lowercase or title case. | "Company Name" / "Business Stage" / "What does this role do?" / "Assign to (optional)" |
-| **Placeholder Text** | Hint at the expected input. | "acme.com" / "VP of Sales" / "Describe the decision this workflow automates" |
-| **Alerts/Notifications** | Urgent but not alarmist. Context + action. | "DEX needs clarification on your Q4 goals to make better recommendations. Provide details." / "High-priority task overdue: Update Q3 forecast. Reassign or reschedule?" / "New company stage reached: scaling. Your default workflows have been updated." |
-| **AI/Agent References** | Refer to the agent as "DEX" (the actual product name, not "AI," "bot," or "assistant"). Position as a capability, not a character. Tone: competent, not anthropomorphic. | "Assign to DEX" not "Ask AI" / "DEX is analyzing..." not "The AI is thinking..." / "DEX needs clarification" not "The bot wants to know" / "DEX recommends:" not "AI thinks you should:" / Never use: "DEX can't," "DEX doesn't know," "DEX made an error"—frame as "More context needed for DEX to help." |
-| **Links** | Descriptive, action-oriented. | "View your org chart" not "Click here" / "Learn how to set autonomy" not "More info" |
-| **Microcopy (form validation, in-progress states)** | Conversational, specific. | "Adding your company..." / "Checking email..." / "This role is required in your structure." / "Great—you're on the scaling stage. Here's what founders usually set up first." |
+| **Button Labels (Primary)** | Verb-forward, outcome-focused, no articles. Action is the label. | "Create company" / "Run workflow" / "Assign to [assistant name]" / "Save org chart" / "Start conversation" |
+| **Button Labels (Secondary)** | Softer verb or clarification; still direct. | "Cancel" / "Skip for now" / "View details" / "Edit" / "Delete" |
+| **Page Headings** | Noun-based (the thing you're managing) with optional outcome. No articles. | "Command Center" / "Task Board" / "Org Chart" / "Workflows" / "Agent Chat" |
+| **Section Headings** | Task-oriented or status-based. | "Active Workflows" / "Your Next Actions" / "Assigned to You" / "Needs Attention" |
+| **Empty States** | Acknowledge the blank space, explain what goes here, offer one clear path forward. No sad mascots. | "No tasks yet. Create your first task or assign work from a workflow." / "No conversations started. Message your assistant to get started." |
+| **Error Messages** | Blame-free, technical if needed, actionable. Name the problem and the fix. | "Email already in use. Try another or reset your password." / "Workflow step failed: your assistant encountered an unknown task type. Edit step and try again." / "Company name required. Give your company a name to continue." |
+| **Success Messages** | Confirm the action, brief. No celebration unless genuinely significant. | "Task created." / "Workflow saved." / "Org chart updated." / "You're all set—create your first company." |
+| **Confirmation Dialogs** | Clear statement of consequence, two buttons (action + cancel). | "Delete this workflow? It will be removed from all schedules. This can't be undone." / "Mark all tasks done? You can undo this." |
+| **Tooltips & Helper Text** | Clarify non-obvious UI. Assume user is smart; explain *why*, not basic *what*. | (hover on "Autonomy Level") "Higher autonomy = your assistant executes more steps without asking. Start low, increase as trust builds." / (on priority field) "Critical: blocks other work. High: due this week. Medium/Low: flex." |
+| **AI/Agent References** | The AI assistant name is set by each user per company. Refer to it as [assistant name] dynamically. In product copy and documentation use "your assistant" as the generic reference. Never hardcode a specific name. No personality projection. Transparent about what it's doing. | "Assign to [assistant name]" / "[Assistant name] is analyzing this workflow" / "[Assistant name] status: Online" / "This task was created by [assistant name] based on your Q3 goals." / (not) "Your AI friend is here to help!" |
+| **Placeholders in Forms** | Hint at format without being redundant. | (Company name field) "e.g., Acme Labs" / (Goals field) "e.g., 10x revenue, hire 5 engineers, launch product line" |
+| **Navigation Labels** | Lowercase, scannable, functional. | "home" / "tasks" / "workflows" / "org chart" / "settings" |
+| **Status Indicators** | Two or three words, adjective + noun or gerund. Color + text. | "In Progress" / "Needs Review" / "Blocked" / "Completed" / "Online" / "Thinking..." |
+| **Microcopy (Loading, etc.)** | Brief, transparent, no spin. | "Saving..." / "Loading your org chart..." / "[Assistant name] is reviewing this..." |
 
 ---
 
 ## SaaS Copy Patterns
 
-### Value Proposition Framing
+### Value Proposition (One-Line)
 
-**One-liner:** "EntrepreneurOS is the operating system for founder-led companies—structure, strategy, and execution in one intelligent interface."
+**Pattern:** [Outcome] without [friction].
 
-**Alternative (outcome-focused):** "Run your company at world-class level without building a full executive team."
+**Examples:**
+- "Run your company from one place. Structure, execute, learn—without the chaos of five tools."
+- "Strategy + execution + AI labor in one system. Know what's happening. Know what's next."
+- "Your operating system for founders: strategy, org structure, workflows, and agentic execution—all in one."
 
-**Avoid:** "AI-powered SaaS for business operations" / "Platform for managing teams" / "Software for founders."
-
-**Why this works:** It leads with outcome (world-class operation, founder autonomy) and credibility (operating system, not just a tool). It's specific to the target (founder-led companies, not "users" or "teams").
-
----
+**Not:** "The AI-native operating system for entrepreneurs" (too abstract). Be operational and concrete.
 
 ### Feature Descriptions
 
-**Pattern:** Lead with the business outcome, then explain what the system does.
+**Pattern:** Benefit-led always. State the outcome first, then the mechanism.
 
-**Feature: Org Chart**
-- ❌ *Wrong:* "Visual organization structure with role management and department hierarchies."
-- ✅ *Right:* "Design your operating structure in minutes. DEX suggests roles based on your company stage—you decide what stays, what goes. Clarity on who does what, even when you're solo."
+**Examples:**
+- **Org Chart:** "See your entire company structure at a glance. Assign roles to humans or AI agents. Know who's doing what and who reports to whom."
+  - *Not:* "Visual representation of your organization with drag-and-drop role assignment."
+- **Task Board:** "Move work through stages: Backlog → In Progress → In Review → Done. Assign to your team or your assistant. Filter by person, priority, or deadline to find what matters."
+  - *Not:* "Kanban-style task management with customizable columns."
+- **Workflows:** "Codify how your company works. Write a workflow once (hire, onboard, customer success, etc.). Run it step by step. Hand steps to humans or your assistant. Save time, reduce mistakes."
+  - *Not:* "Create and execute repeatable business processes."
 
-**Feature: Task Board**
-- ❌ *Wrong:* "Kanban-style task management with priority filters and assignee views."
-- ✅ *Right:* "See everything that needs to happen and by whom. Assign work to your team or to DEX. Move tasks through execution stages. Know what's stuck and why."
+### Onboarding Copy (First-Run Experience)
 
-**Feature: Workflows (SOPs)**
-- ❌ *Wrong:* "Automate repeatable business processes with configurable step types."
-- ✅ *Right:* "Turn your best decisions into repeatable routines. Write once, run forever. DEX can execute steps or flag them for your review—you stay in control."
+**Pattern:** Assume the user wants to start immediately, not read a tutorial. Each step is one decision + one action.
 
-**Feature: Agent Chat (DEX)**
-- ❌ *Wrong:* "Agentic AI interface for real-time interaction with business intelligence."
-- ✅ *Right:* "Talk to DEX like an advisor. Ask about your business, delegate decisions, get unstuck. DEX knows your structure, your goals, and your pattern—and learns from every conversation."
+**First page (Signup):**
+- Headline: "Start operating." (not "Welcome" or "Create your account")
+- Subheading: "Tell us who you are and what you're building."
+- Form labels: "Full name" / "Email" / "Password" / "Company (optional)"
+- CTA: "Create account"
+- If skipping company setup: "You can add companies later."
 
-**Pattern applied:** Business outcome first (clarity, leverage, execution), then mechanism (here's what the system does), then trust signal (you stay in control / learns over time).
+**Company Setup (Wizard):**
+- Page 1 (Name + Stage): "What's your company called?" + "What stage?" (Idea / Pre-revenue / Revenue / Scaling / Mature)
+  - Subheading: "We'll adapt your operating system to your scale."
+- Page 2 (Industry + Model): "What industry?" + "How do you make money?" (SaaS / Services / Product / Hybrid / Other)
+- Page 3 (Goals): "What are your top 3 goals for the next quarter?" (optional, but recommended)
+  - Helper text: "These shape your AI agent's recommendations."
+- Final screen: "You're ready. Your org chart and first workflows are below. Edit them or create from scratch."
+  - CTA: "Open Command Center"
 
----
+**Tone:** Direct, zero fluff. Each field is genuinely needed. No "Tell us about your vision" pink-cloud nonsense.
 
-### Onboarding Copy
+### Upgrade/Upsell Language
 
-**Tone:** Collaborative. Assume the founder is busy and smart—don't waste their time, but also don't assume they've set up a company operating system before.
+**Deferred in MVP.** When tier differentiation is added:
+- Avoid scarcity language ("Limited slots").
+- Avoid feature-list language ("20+ integrations").
+- Lead with outcome: "Run multiple companies. Scale your operations. Grow your team without the coordination tax."
+- Price is transparent; tie it to value removed (time, team size, errors avoided).
 
-**Company Setup Wizard:**
+### Social Proof and Trust Signals
 
-**Step 1 (Company Name):**
-- Heading: "What's your company called?"
-- Helper: "This is how DEX will refer to your business in conversations and recommendations."
-- Placeholder: "e.g., Acme Manufacturing"
-
-**Step 2 (Company Stage):**
-- Heading: "What stage are you at?"
-- Helper: "This shapes your default structure and recommended workflows. You can change it anytime."
-- Options: "Just an idea" / "Pre-revenue" / "Revenue" / "Scaling" / "Mature"
-
-**Step 3 (Industry & Business Model):**
-- Heading: "Tell us about your business."
-- Helper: "DEX will tailor workflows and recommendations to your type of company."
-
-**Step 4 (Strategic Goals):**
-- Heading: "What are you trying to accomplish in the next 12 months?"
-- Helper: "Be specific. DEX uses this to prioritize what matters and flag opportunities."
-- Placeholder: "e.g., $2M ARR, hire first salesperson, launch product line"
-
-**Completion:**
-- Heading: "You're ready. Your operating system is set up."
-- Copy: "DEX has built your default org structure and suggested your first workflows. You can customize everything. Let's dive in."
-- CTA: "Go to Command Center"
-
-**Pattern:** Each step has a clear purpose (why are we asking this?), lives in founder language, and moves fast.
-
----
-
-### Upgrade / Upsell Language
-
-**Not applicable for MVP.** When monetization comes, the pattern should be:
-- Lead with what becomes *possible* (not what you lose if you don't upgrade).
-- Example: "Upgrade to allow DEX autonomous execution" not "Free plan limits DEX to recommendations."
-- Frame as expansion, not restriction.
-
----
-
-### Social Proof & Trust Signals
-
-**In MVP:** Trust signals are structural, not testimonial.
-
-- **Competence Signal:** "Built by operators for operators." (If founder/team has operating background, lead with this.)
-- **Rigor Signal:** "World-class standard from day one—intelligent rigor adapted to present scale." (This is a core principle; bake it into the onboarding and design.)
-- **Control Signal:** "You override, pause, or edit any decision. Human override is non-negotiable." (This should appear near any agent action.)
-- **Transparency Signal:** "No surprises. DEX explains its reasoning. Every recommendation is optional."
-
-**Avoid:** "Join 10,000+ founders" (you're 10 users). "Rated 4.9 stars" (you don't have reviews yet). Generic "trusted by" statements.
-
----
+**Deferred in MVP.** When added:
+- Prefer operator quotes over generic testimonials.
+- Lead with outcome/problem solved, not name/title.
+- Example: *"We used to spend 2 days a week in Slack asking who was doing what. EntrepreneurOS got that to zero. Now we operate like a 50-person company on a 5-person team."* — Founder, Series A SaaS.
+- No "5-star rating" badges. No logo walls unless genuinely relevant (big-name customers only).
 
 ### CTA Hierarchy
 
-**Primary CTAs (highest conversion intent):**
-- Do the core action: "Add Company," "Start Workflow," "Assign to DEX," "Save & Continue"
-- Style: Strong, active, outcome-focused.
-- Placement: Center, high contrast, clear focal point.
-- Copy rule: One primary per screen.
+**Primary CTA (action you want most):** Verb + outcome.
+- "Create company"
+- "Start workflow"
+- "Assign to [assistant name]"
+- "Save and run"
 
-**Secondary CTAs (supporting actions):**
-- Navigate, learn, skip: "View Org Chart," "Skip Setup," "Edit Settings," "Learn How to Set Autonomy"
-- Style: Neutral, lower visual weight.
-- Placement: Below or to the side of primary CTA.
+**Secondary CTA (alt path):** Softer, often "verb + clarification" or plain action.
+- "Cancel"
+- "Skip"
+- "View more"
+- "Edit"
+- "Learn how" (only if learning is necessary to proceed)
 
-**Tertiary CTAs (low-friction escape routes):**
-- Cancel, go back, close: "Cancel," "Back," "Dismiss"
-- Style: Minimal, text-only or light outline.
+**Tertiary (informational, linked):** Lowercase, underlined or subtle.
+- "What's a workflow?" (contextual help)
+- "See example" (shows template or instance)
+- "Read the guide" (deferred to external resource)
 
-**Example (Task Board):**
-```
-Primary:    [+ Add Task]  (strong, center)
-Secondary:  [Filter Tasks]  [View Assigned to DEX]  (lighter, below)
-Tertiary:   ← back  (text only, top left)
-```
+**Rule:** Never more than two primary CTAs on a single screen. One is preferred.
 
 ---
 
 ## Landing Page Voice
 
-*If EntrepreneurOS had a marketing homepage, it would feel like this:*
+### Hero Section
 
-### Hero Headline
+**Headline:** Operational problem + system solution.
 
-**Style:** Direct, outcome-focused, no hype. One clear promise.
+**Pattern:** [Founder pain] → [Operating system outcome].
 
-**Option A (Power-focused):**
-"Run your company at world-class level. Without a bloated team."
+**Examples:**
+- "Stop toggling between tools. One operating system for your entire company."
+- "Founder, operator, team lead in your head. EntrepreneurOS is your external brain."
+- "Strategy, structure, execution, and AI labor. In one place. In real time."
 
-**Option B (Clarity-focused):**
-"One operating system. Your strategy, your structure, your execution."
+**Subheadline:** Outcome-focused, no hype.
+- "Manage strategy, org structure, workflows, and AI-powered execution from a single dashboard. Scale without the chaos."
+- "See your company's operating model. Assign work. Track progress. Know what's next."
 
-**Option C (Ambition-focused):**
-"The operating system for founder-led companies."
+**CTA:** "Start operating" or "Create your company." (Not "Sign up for free trial"—ownership language matters.)
 
-**Not:**
-- "The AI-native business OS for modern founders" (too buzzwordy)
-- "Unlock Your Company's Full Potential" (too vague)
-- "The Future of Business Operations" (too hype)
+### Social Proof Section (if included)
 
-### Subheadline
+**Framing:** Founder testimonials centered on *problems solved* and *time/complexity reduced*.
 
-**Style:** Specific benefit + credibility. 2-3 sentences. Explain the "why" (what problem this solves).
+**Format:** Quote + founder name/company/stage. 
 
-**Example:**
-"You run your company the right way. But clarity is hard to scale. Structure gets messy. Execution gets lost. EntrepreneurOS is your operating partner—it shapes your strategy, clarifies your structure, and automates the decisions you've already made. So you can focus on the ones only you can make."
-
-**Pattern:** Problem → Solution → Outcome.
+**Avoid:** "Best-in-class," "Industry leader," generic praise.
 
 ### Feature Section Copy
 
-**Style:** Lead with outcome, then the mechanism. No feature lists. Instead: problems solved.
+**Pattern:** 
+1. Feature name (noun).
+2. Outcome (what it unlocks).
+3. Tactical detail (how it works).
 
-**Section 1: Structure Without Chaos**
-"Design your operating structure in hours, not months. Tell DEX your company stage and business model—it suggests a starting org chart. You customize it. No org design consultant needed."
+**Example:**
 
-**Section 2: Strategy Into Action**
-"Turn your decisions into repeatable workflows. Write once, run forever. DEX executes what you've approved. You approve what matters. Boring decisions become automatic. Hard decisions stay yours."
+**Org Chart**
+See your entire company structure. Assign roles to your team or your AI agent. Know who reports to whom, who's overloaded, and where gaps are. Built for companies of any size.
 
-**Section 3: Your Own Executive Team**
-"DEX knows your business. Ask it anything. Get strategic advice in seconds. It learns from every conversation, every decision, every pattern. The more you use it, the more useful it becomes."
+**Not:** "Visualize organizational hierarchies with drag-and-drop role management powered by advanced algorithms."
 
-**Section 4: Stay in Control**
-"You override, edit, pause, or cancel any recommendation. No surprises. DEX explains its reasoning. This is your company—you decide."
+### Comparative/Contextual Language (if relevant)
 
-**Pattern:** Problem statement → How the system solves it → Why it matters to founders.
+**Pattern:** Acknowledge other tools' existence, but position as *complementary* or *foundational*.
 
-### Testimonial Framing
+**Example:**
+- "EntrepreneurOS isn't Slack, Jira, or Notion. It's your operating system. It works *with* those tools, but it gives you the single source of truth for strategy, org structure, and execution."
 
-**Style:** Specific, outcome-focused, real voice (not polished marketing-speak).
+### Tone Throughout
 
-**Example (not a real quote yet, but the *voice* it should have):**
-"EntrepreneurOS let me see my entire company in one place. The org chart caught gaps I'd been ignoring. DEX automated 10 hours of weekly planning. I'm not adding people—I'm adding clarity."
-*— Sarah, CEO, Series A SaaS*
-
-**What works:**
-- Specific outcome (10 hours, clarity, gaps caught)
-- Real founder language ("adding people," "one place")
-- Not generic ("It's great!") or hyperbolic ("Changed my life!")
-- Founder name, title, company stage (credibility)
+- **Founder-to-founder:** No corporate voice. No corporate case studies.
+- **Clarity first:** Every sentence is about removing confusion or friction.
+- **Outcome-obsessed:** Lead with what the founder gets, not what the system does.
+- **No urgency/FOMO tactics:** Founders are skeptical of artificial scarcity. Be honest about what this is and what it does.
 
 ---
 
-## Applied Example: Entire "Add Workflow" Flow
+## Key Brand Voice Do's and Don'ts
 
-### 1. **Button in Workflows List**
-**Copy:** "[+ Start a Workflow]"  
-**Not:** "Create Workflow" / "New Process" / "+ Add"
+| Do | Don't |
+|-----|-------|
+| Use present tense (active). "You assign work. Your assistant executes." | Use future tense or passive ("work will be assigned"). |
+| Name the system, user, and action clearly. "You assign tasks to your assistant or your team." | Use pronouns without context. "It does things." |
+| Be specific about outcomes. "Save 10 hours/week on coordination meetings." | Use vague benefit language. "Unlock potential." |
+| Assume founder intelligence. Skip explanations of "workflow" or "org chart." | Over-explain or infantilize. No hand-holding in micro-copy. |
+| Refer to the AI by its user-configured name, not as a character. "[Assistant name] is analyzing your workflows." | Anthropomorphize the agent. No "your AI friend" or emoji personalities. |
+| Acknowledge limitations. "In v1, your assistant is in recommend mode—you decide." | Hide complexity or oversell capability. |
+| Use imperative mood in commands and CTAs. "Create company. Save workflow." | Use questions in button labels ("Do you want to delete?"). |
+| Show respect for founder time. Every flow is as short as possible. | Assume users want lengthy tutorials or onboarding sequences. |
 
-### 2. **Modal Heading**
-**Copy:** "What decision do
+---
+
+## Summary
+
+**EntrepreneurOS brand voice is:** Operationally wise, structurally clear, quietly confident, and relentlessly practical. It speaks to founders as a strategic partner who has built and scaled, not as a vendor selling a product. Every word earns its place by removing confusion or enabling action. The system is transparent about what it can do (and what it can't yet). Human override is assumed and respected. Complexity is managed through clarity, not simplification.

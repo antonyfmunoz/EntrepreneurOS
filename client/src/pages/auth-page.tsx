@@ -444,7 +444,7 @@ export default function AuthPage() {
                 <svg className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Delegate work to your team and to DEX
+                Delegate work to your team and your AI assistant
               </li>
               <li className="flex items-center">
                 <svg className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">

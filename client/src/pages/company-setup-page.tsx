@@ -27,6 +27,7 @@ const companySetupSchema = z.object({
   offer: z.string().optional(),
   targetCustomer: z.string().optional(),
   goals: z.string().optional(),
+  assistantName: z.string().optional(),
 });
 
 type CompanySetupValues = z.infer<typeof companySetupSchema>;
@@ -44,6 +45,7 @@ export default function CompanySetupPage() {
       offer: "",
       targetCustomer: "",
       goals: "",
+      assistantName: "",
     },
   });
 
@@ -178,6 +180,23 @@ export default function CompanySetupPage() {
                           {...field}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="assistantName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name your AI assistant</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., DEX, ARIA, MAX" {...field} />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        Your assistant handles tasks, recommendations, and workflows. Defaults to "Assistant" if left blank.
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
