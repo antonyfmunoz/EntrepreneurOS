@@ -1,0 +1,24 @@
+{
+  "pages": [
+    {
+      "pageName": "Dashboard",
+      "pageHeading": "Your Command Center",
+      "sections": [],
+      "ctas": [
+        {
+          "id": "add",
+          "label": "Add Task",
+          "context": "main"
+        }
+      ],
+      "emptyState": "No data yet.",
+      "errorMessages": {},
+      "placeholders": {},
+      "helperText": {},
+      "successMessages": {},
+      "navLabel": "Home"
+    }
+  ],
+  "generatedAt": "2026-04-10T18:41:40.534Z",
+  "brandVoiceHash": "abc123"
+}
