@@ -70,6 +70,7 @@ export function printPageReview(options: ReviewBlockOptions): void {
 
   lines.push("");
   lines.push("  [y] Approve and continue");
+  lines.push("  [f] Approve with feedback (carries forward to all remaining pages)");
   lines.push("  [n] Reject with feedback (retry once)");
   lines.push("  [s] Skip this page");
   lines.push("");

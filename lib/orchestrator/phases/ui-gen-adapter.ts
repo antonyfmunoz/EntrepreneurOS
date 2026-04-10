@@ -206,12 +206,19 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
   },
 
   async runPage(rawInput: unknown, config: ProjectConfig): Promise<unknown> {
-    const input = rawInput as UiGenRunInput;
+    const input = rawInput as UiGenRunInput & { accumulatedFeedback?: string };
     const { page, tokens, designSystemPath, priorScreenshotUrl, brandVoice, pageCopy } = input;
 
     // Discover component references from the warm cache.
     const discoveryResult = discoverComponents(page.components);
     const componentReferences = formatDiscoveryForPrompt(discoveryResult);
+
+    // Merge static GLOBAL_USER_FEEDBACK with any accumulated feedback from
+    // prior page reviews (injected by the phase runner on 'continue-with-feedback').
+    let combinedFeedback = GLOBAL_USER_FEEDBACK;
+    if (input.accumulatedFeedback) {
+      combinedFeedback += "\n" + input.accumulatedFeedback;
+    }
 
     // Build prompt — design-system.md is the single source of truth, no
     // hardcoded brand values. priorScreenshotUrl gives Stitch visual context
@@ -229,7 +236,7 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
       brandVoice ?? undefined,
       pageCopy ?? undefined,
       undefined, // competitiveStructure
-      GLOBAL_USER_FEEDBACK,
+      combinedFeedback,
     );
 
     // Generate the desktop screen via Stitch.
@@ -319,7 +326,7 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
       localHtmlPath: output.localHtmlPath,
     });
 
-    const answer = await promptStdin("Decision (y/n/s): ");
+    const answer = await promptStdin("Decision (y/f/n/s): ");
     const normalized = answer.trim().toLowerCase();
 
     // Shut down preview server after user makes their decision
@@ -327,21 +334,27 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
       await preview.shutdown();
     }
 
+    if (normalized === "f") {
+      const feedback = await promptStdin("What should carry forward to all remaining pages? ");
+      console.log(`[ui-gen] Approved ${context.pageName} with carry-forward feedback`);
+      return { action: "continue-with-feedback", feedback: feedback.trim() };
+    }
+
     if (normalized === "n") {
       const feedback = await promptStdin("Feedback for retry: ");
       if (feedback.trim()) {
         console.log(`[ui-gen] Retrying ${context.pageName} with feedback: ${feedback.trim()}`);
       }
-      return "retry";
+      return { action: "retry", feedback: feedback.trim() };
     }
 
     if (normalized === "s") {
       console.log(`[ui-gen] Skipping ${context.pageName}`);
-      return "skip";
+      return { action: "skip" };
     }
 
     // Default to continue (approve) for 'y' or any other input
-    return "continue";
+    return { action: "continue" };
   },
 };
 

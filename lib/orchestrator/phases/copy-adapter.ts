@@ -177,15 +177,15 @@ export const copyPhaseImplementation: PhaseImplementation = {
       if (feedback.trim()) {
         console.log(`[copy] Will regenerate with feedback: ${feedback.trim()}`);
       }
-      return "retry";
+      return { action: "retry", feedback: feedback.trim() };
     }
 
     if (normalized === "s") {
       console.log("[copy] Skipping copy phase.");
-      return "skip";
+      return { action: "skip" };
     }
 
-    return "continue";
+    return { action: "continue" };
   },
 };
 

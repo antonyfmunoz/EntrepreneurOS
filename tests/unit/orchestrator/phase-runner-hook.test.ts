@@ -57,7 +57,7 @@ describe("phase-runner onPageComplete hook", () => {
   });
 
   it("calls onPageComplete after successful runPage and continues on 'continue'", async () => {
-    const onPageComplete = vi.fn().mockResolvedValue("continue" as PageDecision);
+    const onPageComplete = vi.fn().mockResolvedValue({ action: "continue" } as PageDecision);
     const impl: PhaseImplementation = {
       prepare: vi.fn().mockResolvedValue([
         { pageName: "Page1", pageIndex: 0, input: {} },
@@ -80,7 +80,7 @@ describe("phase-runner onPageComplete hook", () => {
   });
 
   it("retries runPage once when onPageComplete returns 'retry'", async () => {
-    const onPageComplete = vi.fn().mockResolvedValue("retry" as PageDecision);
+    const onPageComplete = vi.fn().mockResolvedValue({ action: "retry", feedback: "fix colors" } as PageDecision);
     const runPage = vi.fn()
       .mockResolvedValueOnce({ version: 1 })
       .mockResolvedValueOnce({ version: 2 });
@@ -107,7 +107,7 @@ describe("phase-runner onPageComplete hook", () => {
   });
 
   it("marks page as skipped when onPageComplete returns 'skip'", async () => {
-    const onPageComplete = vi.fn().mockResolvedValue("skip" as PageDecision);
+    const onPageComplete = vi.fn().mockResolvedValue({ action: "skip" } as PageDecision);
     const impl: PhaseImplementation = {
       prepare: vi.fn().mockResolvedValue([
         { pageName: "Page1", pageIndex: 0, input: {} },
@@ -149,7 +149,11 @@ describe("phase-runner onPageComplete hook", () => {
   });
 
   it("works with multiple pages — hook called per page", async () => {
-    const decisions: PageDecision[] = ["continue", "skip", "continue"];
+    const decisions: PageDecision[] = [
+      { action: "continue" },
+      { action: "skip" },
+      { action: "continue" },
+    ];
     let callIdx = 0;
     const onPageComplete = vi.fn().mockImplementation(() => {
       return Promise.resolve(decisions[callIdx++]);

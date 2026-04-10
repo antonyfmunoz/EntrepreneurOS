@@ -27,7 +27,11 @@ export interface PageWorkUnit {
   input: unknown;
 }
 
-export type PageDecision = "continue" | "retry" | "skip";
+export type PageDecision =
+  | { action: "continue" }
+  | { action: "continue-with-feedback"; feedback: string }
+  | { action: "retry"; feedback: string }
+  | { action: "skip" };
 
 export interface PageCompleteContext {
   pageName: string;
@@ -114,6 +118,10 @@ export async function runPhase(
   const failed: { pageName: string; error: string }[] = [];
   let completed = 0;
 
+  // Accumulated user feedback from 'continue-with-feedback' decisions.
+  // Persists across pages so corrections carry forward to all remaining pages.
+  const runningFeedback: string[] = [];
+
   for (let i = 0; i < pageRows.length; i++) {
     const row = pageRows[i];
     const unit = workUnits[i];
@@ -121,6 +129,13 @@ export async function runPhase(
     if (row.status === "complete") {
       completed++;
       continue;
+    }
+
+    // Inject accumulated feedback into the work unit input so downstream
+    // phase implementations can read it without knowing about the runner.
+    if (runningFeedback.length > 0) {
+      (unit.input as Record<string, unknown>).accumulatedFeedback =
+        runningFeedback.join("\n");
     }
 
     await updatePage(row.id, {
@@ -131,7 +146,7 @@ export async function runPhase(
 
     try {
       let output = await impl.runPage(unit.input, config);
-      let decision: PageDecision = "continue";
+      let decision: PageDecision = { action: "continue" };
 
       if (impl.onPageComplete) {
         decision = await impl.onPageComplete(
@@ -139,14 +154,19 @@ export async function runPhase(
           config,
         );
 
-        if (decision === "retry") {
-          // Re-run the page once with the assumption that the implementation
-          // has captured user feedback and will adjust its approach.
+        if (decision.action === "retry") {
+          // Re-run the page once with user feedback injected.
+          (unit.input as Record<string, unknown>).accumulatedFeedback =
+            [...runningFeedback, decision.feedback].join("\n");
           output = await impl.runPage(unit.input, config);
           // After retry, always continue — no infinite loops.
         }
 
-        if (decision === "skip") {
+        if (decision.action === "continue-with-feedback") {
+          runningFeedback.push(decision.feedback);
+        }
+
+        if (decision.action === "skip") {
           await updatePage(row.id, {
             status: "complete",
             output: JSON.stringify({ skipped: true }),
