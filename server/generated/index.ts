@@ -2,6 +2,44 @@
 import type { Express } from "express";
 
 // __GENERATED_ROUTE_IMPORTS__
+import { registerPostApiAuthRegisterRoutes } from "./routes/post_api_auth_register.js";
+import { registerPostApiAuthLoginRoutes } from "./routes/post_api_auth_login.js";
+import { registerPostApiAuthLogoutRoutes } from "./routes/post_api_auth_logout.js";
+import { registerGetApiUsersMeRoutes } from "./routes/get_api_users_me.js";
+import { registerPutApiUsersMeRoutes } from "./routes/put_api_users_me.js";
+import { registerGetApiCompaniesRoutes } from "./routes/get_api_companies.js";
+import { registerGetApiPortfoliosRoutes } from "./routes/get_api_portfolios.js";
+import { registerPostApiPortfoliosRoutes } from "./routes/post_api_portfolios.js";
+import { registerGetApiPortfoliosIdRoutes } from "./routes/get_api_portfolios_id.js";
+import { registerPutApiPortfoliosIdRoutes } from "./routes/put_api_portfolios_id.js";
+import { registerDeleteApiPortfoliosIdRoutes } from "./routes/delete_api_portfolios_id.js";
+import { registerGetApiPortfoliosIdCompaniesRoutes } from "./routes/get_api_portfolios_id_companies.js";
+import { registerPostApiPortfoliosIdCompaniesRoutes } from "./routes/post_api_portfolios_id_companies.js";
+import { registerPostApiCompaniesRoutes } from "./routes/post_api_companies.js";
+import { registerGetApiCompaniesIdRoutes } from "./routes/get_api_companies_id.js";
+import { registerPutApiCompaniesIdRoutes } from "./routes/put_api_companies_id.js";
+import { registerDeleteApiCompaniesIdRoutes } from "./routes/delete_api_companies_id.js";
+import { registerGetApiCompaniesIdDepartmentsRoutes } from "./routes/get_api_companies_id_departments.js";
+import { registerPostApiCompaniesIdDepartmentsRoutes } from "./routes/post_api_companies_id_departments.js";
+import { registerPutApiCompaniesIdDepartmentsDidRoutes } from "./routes/put_api_companies_id_departments_did.js";
+import { registerDeleteApiCompaniesIdDepartmentsDidRoutes } from "./routes/delete_api_companies_id_departments_did.js";
+import { registerGetApiCompaniesIdRolesRoutes } from "./routes/get_api_companies_id_roles.js";
+import { registerPostApiCompaniesIdRolesRoutes } from "./routes/post_api_companies_id_roles.js";
+import { registerPutApiCompaniesIdRolesRidRoutes } from "./routes/put_api_companies_id_roles_rid.js";
+import { registerDeleteApiCompaniesIdRolesRidRoutes } from "./routes/delete_api_companies_id_roles_rid.js";
+import { registerGetApiCompaniesIdTasksRoutes } from "./routes/get_api_companies_id_tasks.js";
+import { registerPostApiCompaniesIdTasksRoutes } from "./routes/post_api_companies_id_tasks.js";
+import { registerPutApiCompaniesIdTasksTidRoutes } from "./routes/put_api_companies_id_tasks_tid.js";
+import { registerDeleteApiCompaniesIdTasksTidRoutes } from "./routes/delete_api_companies_id_tasks_tid.js";
+import { registerGetApiCompaniesIdWorkflowsRoutes } from "./routes/get_api_companies_id_workflows.js";
+import { registerPostApiCompaniesIdWorkflowsRoutes } from "./routes/post_api_companies_id_workflows.js";
+import { registerPutApiCompaniesIdWorkflowsWidRoutes } from "./routes/put_api_companies_id_workflows_wid.js";
+import { registerDeleteApiCompaniesIdWorkflowsWidRoutes } from "./routes/delete_api_companies_id_workflows_wid.js";
+import { registerGetApiCompaniesIdWorkflowsWidStepsRoutes } from "./routes/get_api_companies_id_workflows_wid_steps.js";
+import { registerPostApiCompaniesIdWorkflowsWidStepsRoutes } from "./routes/post_api_companies_id_workflows_wid_steps.js";
+import { registerPutApiCompaniesIdWorkflowsWidStepsSidRoutes } from "./routes/put_api_companies_id_workflows_wid_steps_sid.js";
+import { registerGetApiCompaniesIdConversationsRoutes } from "./routes/get_api_companies_id_conversations.js";
+import { registerPostApiCompaniesIdConversationsRoutes } from "./routes/post_api_companies_id_conversations.js";
 // __GENERATED_ROUTE_IMPORTS_END__
 
 // The route/storage files under ./routes and ./storage are stale output from
@@ -9,7 +47,45 @@ import type { Express } from "express";
 // imported here (and are left on disk so a future pipeline run can overwrite
 // them idempotently). Re-running the backend phase will rebuild this file
 // with real imports + registrations.
-export function registerGeneratedRoutes(_app: Express): void {
+export function registerGeneratedRoutes(app: Express): void {
   // __GENERATED_ROUTE_REGISTRATIONS__
-  // __GENERATED_ROUTE_REGISTRATIONS_END__
+registerPostApiAuthRegisterRoutes(app);
+registerPostApiAuthLoginRoutes(app);
+registerPostApiAuthLogoutRoutes(app);
+registerGetApiUsersMeRoutes(app);
+registerPutApiUsersMeRoutes(app);
+registerGetApiCompaniesRoutes(app);
+registerGetApiPortfoliosRoutes(app);
+registerPostApiPortfoliosRoutes(app);
+registerGetApiPortfoliosIdRoutes(app);
+registerPutApiPortfoliosIdRoutes(app);
+registerDeleteApiPortfoliosIdRoutes(app);
+registerGetApiPortfoliosIdCompaniesRoutes(app);
+registerPostApiPortfoliosIdCompaniesRoutes(app);
+registerPostApiCompaniesRoutes(app);
+registerGetApiCompaniesIdRoutes(app);
+registerPutApiCompaniesIdRoutes(app);
+registerDeleteApiCompaniesIdRoutes(app);
+registerGetApiCompaniesIdDepartmentsRoutes(app);
+registerPostApiCompaniesIdDepartmentsRoutes(app);
+registerPutApiCompaniesIdDepartmentsDidRoutes(app);
+registerDeleteApiCompaniesIdDepartmentsDidRoutes(app);
+registerGetApiCompaniesIdRolesRoutes(app);
+registerPostApiCompaniesIdRolesRoutes(app);
+registerPutApiCompaniesIdRolesRidRoutes(app);
+registerDeleteApiCompaniesIdRolesRidRoutes(app);
+registerGetApiCompaniesIdTasksRoutes(app);
+registerPostApiCompaniesIdTasksRoutes(app);
+registerPutApiCompaniesIdTasksTidRoutes(app);
+registerDeleteApiCompaniesIdTasksTidRoutes(app);
+registerGetApiCompaniesIdWorkflowsRoutes(app);
+registerPostApiCompaniesIdWorkflowsRoutes(app);
+registerPutApiCompaniesIdWorkflowsWidRoutes(app);
+registerDeleteApiCompaniesIdWorkflowsWidRoutes(app);
+registerGetApiCompaniesIdWorkflowsWidStepsRoutes(app);
+registerPostApiCompaniesIdWorkflowsWidStepsRoutes(app);
+registerPutApiCompaniesIdWorkflowsWidStepsSidRoutes(app);
+registerGetApiCompaniesIdConversationsRoutes(app);
+registerPostApiCompaniesIdConversationsRoutes(app);
+// __GENERATED_ROUTE_REGISTRATIONS_END__
 }

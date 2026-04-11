@@ -706,3 +706,121 @@ export const insertConfigSchema = z.object({
 
 export type Config = typeof config.$inferSelect;
 export type InsertConfig = z.infer<typeof insertConfigSchema>;
+
+export const register = pgTable("register", {
+  id: text("id").primaryKey(),
+  username: text("username"),
+  email: text("email"),
+  fullName: text("full_name"),
+  password: text("password"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertRegisterSchema = z.object({
+  username: z.string(),
+  email: z.string(),
+  fullName: z.string(),
+  password: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Register = typeof register.$inferSelect;
+export type InsertRegister = z.infer<typeof insertRegisterSchema>;
+
+export const logout = pgTable("logout", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertLogoutSchema = z.object({
+  name: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Logout = typeof logout.$inferSelect;
+export type InsertLogout = z.infer<typeof insertLogoutSchema>;
+
+export const me = pgTable("me", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertMeSchema = z.object({
+  name: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Me = typeof me.$inferSelect;
+export type InsertMe = z.infer<typeof insertMeSchema>;
+
+export const departments = pgTable("departments", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertDepartmentSchema = z.object({
+  name: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Department = typeof departments.$inferSelect;
+export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;
+
+export const roles = pgTable("roles", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertRoleSchema = z.object({
+  name: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Role = typeof roles.$inferSelect;
+export type InsertRole = z.infer<typeof insertRoleSchema>;
+
+export const steps = pgTable("steps", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertStepSchema = z.object({
+  name: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Step = typeof steps.$inferSelect;
+export type InsertStep = z.infer<typeof insertStepSchema>;
+
+export const conversations = pgTable("conversations", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertConversationSchema = z.object({
+  name: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Conversation = typeof conversations.$inferSelect;
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
