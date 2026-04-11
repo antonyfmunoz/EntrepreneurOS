@@ -585,12 +585,15 @@ export const integrationPhaseImplementation: PhaseImplementation = {
     });
 
     // 3. Write the page file. Overwrite for replace mode; fresh write
-    // otherwise.
+    // otherwise. For supplement mode, the writer falls back to
+    // `<name>-page-new.tsx` on filename collision and banners the file
+    // for manual merge review.
     const pageFile = await writePage({
       projectRoot,
       pageName: page.name,
       tsxContent: translation.tsxContent,
       overwrite,
+      mode: planEntry.mode,
     });
 
     // 4. Inject route (idempotent — Phase A). For replace mode, the existing

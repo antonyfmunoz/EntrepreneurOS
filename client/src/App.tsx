@@ -215,6 +215,13 @@ function Router() {
               </CompanyGate>
             )}
           </ProtectedRoute>
+          <ProtectedRoute path="/company/:companyId/org">
+            {() => (
+              <CompanyGate>
+                <OrgChartPage />
+              </CompanyGate>
+            )}
+          </ProtectedRoute>
           <ProtectedRoute path="/company/:companyId/chat">
             {() => (
               <CompanyGate>
@@ -229,6 +236,14 @@ function Router() {
               </CompanyGate>
             )}
           </ProtectedRoute>
+          <ProtectedRoute path="/company/:companyId/tasks">
+            {() => (
+              <CompanyGate>
+                <TaskBoard />
+              </CompanyGate>
+            )}
+          </ProtectedRoute>
+          {/* Catch-all must stay LAST inside the Switch — wouter matches in order. */}
           <ProtectedRoute path="/*" component={NotFoundPage} />
       <Route component={NotFound} />
 
@@ -243,6 +258,8 @@ import CommandCenter from "@/pages/command-center-page";
 import AgentChatPage from "@/pages/agent-chat-page";
 import Workflows from "@/pages/workflows-page";
 import NotFoundPage from "@/pages/not-found-page";
+import OrgChartPage from "@/pages/org-chart-page";
+import TaskBoard from "@/pages/task-board-page-new";
 
 function ClerkProviderWrapper({ children }: { children: React.ReactNode }) {
   const key = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;

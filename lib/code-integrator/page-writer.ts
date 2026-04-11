@@ -53,33 +53,76 @@ export async function checkFileConflict(options: {
 // ─── writePage ────────────────────────────────────────────────────────────────
 
 // Writes a translated TSX page file to client/src/pages/{kebab-name}-page.tsx.
-// Throws if file already exists and overwrite is not set (D-10 conflict detection).
-// Pass overwrite=true only after user has confirmed "replace" resolution (D-10).
+//
+// Collision behavior depends on `mode`:
+//   - mode omitted or "create":  throw if the target file already exists.
+//     Caller is expected to have checked conflicts (D-10) first and picked
+//     either "replace" (with overwrite=true) or "skip".
+//   - mode "replace" + overwrite=true: overwrite the target.
+//   - mode "supplement": if the target file already exists, write to
+//     `<name>-page-new.tsx` instead (or `<name>-new.tsx` if the page name
+//     already ends in "-page"). This is the documented escape hatch for
+//     the integration planner's supplement mode, where we've chosen to
+//     keep both the existing and generated pages but the expected target
+//     filename happens to match the existing one.
+//
+//     Pages written to `*-new.tsx` REQUIRE manual review. The integration
+//     planner picked supplement because the existing file owns the same
+//     spec page name — the user must hand-merge valuable logic from the
+//     old page into the new one (or vice versa) and delete the loser.
+//
+// Returns the absolute path actually written.
+export type WritePageMode = "create" | "replace" | "merge" | "supplement" | "skip";
+
 export async function writePage(options: {
   projectRoot: string;
   pageName: string;
   tsxContent: string;
   overwrite?: boolean;
+  mode?: WritePageMode;
 }): Promise<string> {
-  const { projectRoot, pageName, tsxContent, overwrite = false } = options;
+  const { projectRoot, pageName, tsxContent, overwrite = false, mode } = options;
   const filePath = getPageFilePath(projectRoot, pageName);
 
   // Check for existing file
+  let exists = false;
   try {
     await access(filePath);
-    // File exists
-    if (!overwrite) {
-      throw new Error(
-        `Page file already exists: ${filePath}. Use checkFileConflict() + conflict resolution (D-10) before overwriting.`
-      );
+    exists = true;
+  } catch {
+    exists = false;
+  }
+
+  if (exists && !overwrite) {
+    if (mode === "supplement") {
+      // Supplement-mode collision fallback: write to a sibling `-new.tsx`
+      // file so both pages coexist. The new one is flagged for manual
+      // review (see header comment on writePage).
+      const kebab = toKebabCase(pageName);
+      const newKebab = kebab.endsWith("-page") ? `${kebab}-new` : `${kebab}-page-new`;
+      const newPath = join(projectRoot, "client", "src", "pages", `${newKebab}.tsx`);
+
+      // Prepend a review banner so the hand-merge step is obvious when a
+      // developer opens the file.
+      const bannered =
+        `// ⚠ MANUAL REVIEW REQUIRED\n` +
+        `// This file was written in supplement mode because an existing page at\n` +
+        `// the same kebab filename (${filePath.split(/[\\/]/).pop()}) already owns\n` +
+        `// the spec page name. Both pages now exist.\n` +
+        `//\n` +
+        `// Hand-merge: pick which one is authoritative, port any missing logic\n` +
+        `// from the other, wire the winner into the route, and delete the loser.\n` +
+        `// The integration planner will not repeat this collision once one file\n` +
+        `// is deleted.\n\n` +
+        tsxContent;
+
+      await writeFile(newPath, bannered, "utf-8");
+      return newPath;
     }
-    // overwrite=true — proceed with replacement (user chose "replace" per D-10)
-  } catch (err) {
-    // Re-throw our own error (already-exists guard)
-    if (err instanceof Error && err.message.includes("already exists")) {
-      throw err;
-    }
-    // access() threw because file doesn't exist — safe to write
+
+    throw new Error(
+      `Page file already exists: ${filePath}. Use checkFileConflict() + conflict resolution (D-10) before overwriting.`
+    );
   }
 
   await writeFile(filePath, tsxContent, "utf-8");

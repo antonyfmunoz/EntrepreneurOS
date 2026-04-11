@@ -269,6 +269,19 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
           </Link>
         </li>
         <li>
+          <Link href="/company/:companyId/org">
+            <div className={cn(
+              "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+              location === "/company/:companyId/org"
+                ? "bg-blue-50 text-primary font-medium"
+                : "hover:bg-gray-100 text-gray-700"
+            )}>
+              <i className="ri-organization-chart"></i>
+              <span>OrgChart</span>
+            </div>
+          </Link>
+        </li>
+        <li>
           <Link href="/company/:companyId/chat">
             <div className={cn(
               "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
@@ -291,6 +304,19 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
             )}>
               <i className="ri-layout-line"></i>
               <span>Workflows</span>
+            </div>
+          </Link>
+        </li>
+        <li>
+          <Link href="/company/:companyId/tasks">
+            <div className={cn(
+              "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+              location === "/company/:companyId/tasks"
+                ? "bg-blue-50 text-primary font-medium"
+                : "hover:bg-gray-100 text-gray-700"
+            )}>
+              <i className="ri-task-line"></i>
+              <span>TaskBoard</span>
             </div>
           </Link>
         </li>
