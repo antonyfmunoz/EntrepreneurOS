@@ -46,9 +46,12 @@ const GLOBAL_USER_FEEDBACK = `
 - Form labels must be simple and direct: "Email", "Password", "Confirm password".
 - OAuth separator text: "OR CONTINUE WITH" (never "OR DEPLOY VIA").
 - Left panel / marketing copy must be operational and founder-focused. No agency/visionary language.
-- Cards must use glassmorphism: background rgba(255,255,255,0.7), backdrop-filter blur(16px). No hard white boxes.
+- Cards: glassmorphism only, no visible borders, ambient purple shadow (0 8px 32px rgba(106,55,212,0.08)).
 - No 1px solid borders on cards — use background shifts and subtle shadows instead.
 - Copyright year must be dynamic (current year), never hardcoded.
+- Remove decorative icons not from lucide-react.
+- No Help Center or support links on auth pages.
+- Auth pages: floating cards on soft gradient background.
 `.trim();
 
 interface UiGenRunInput {
