@@ -1,6 +1,129 @@
 import { Request, Response, NextFunction } from "express";
+import { randomBytes } from "crypto";
+import { createClerkClient } from "@clerk/express";
+import { storage } from "../storage";
+import type { User as SelectUser } from "@shared/schema";
 
+declare global {
+  namespace Express {
+    // Local user record attached to the request after successful Clerk auth
+    // (populated by attachClerkUser from storage.getUserByClerkId + lazy create).
+    interface User extends SelectUser {}
+    interface Request {
+      // Non-optional to match the old Passport Express.User typing. Route
+      // handlers still guard access via `if (!req.isAuthenticated()) ...`
+      // before reading req.user.id, exactly as they did under Passport.
+      user: User;
+      // Polyfill of the Passport-era check. Backed by Clerk: returns true iff
+      // attachClerkUser succeeded in populating req.user from a valid Clerk
+      // session. Kept as a function (not a boolean) so the existing call
+      // sites across server/routes/*.ts continue to work unchanged.
+      isAuthenticated: () => boolean;
+    }
+  }
+}
+
+function getClerkClient() {
+  const secretKey = process.env.CLERK_SECRET_KEY;
+  if (!secretKey) return null;
+  return createClerkClient({ secretKey });
+}
+
+/**
+ * attachClerkUser — global, non-rejecting middleware.
+ *
+ * Runs on every request AFTER clerkMiddleware() has populated req.auth.
+ *
+ * Behavior:
+ *   - If req.user is already set (test harness or upstream middleware),
+ *     installs the isAuthenticated polyfill and passes through. This
+ *     preserves the existing auth-smoke test mocking pattern.
+ *   - If req.auth.userId is absent (no Clerk session), installs
+ *     isAuthenticated = () => false and passes through. Unauthenticated
+ *     endpoints still work; authenticated endpoints will 401 via their
+ *     existing inline checks.
+ *   - Otherwise, looks up (or lazy-creates) the local user row keyed by
+ *     Clerk user id, attaches to req.user, and installs
+ *     isAuthenticated = () => true.
+ *
+ * This replaces the Passport deserializeUser path. Does one DB lookup per
+ * authenticated request; zero cost for anonymous requests.
+ */
+export async function attachClerkUser(req: Request, res: Response, next: NextFunction) {
+  // Pre-populated user (test harness / upstream mock): install polyfill and pass.
+  if ((req as any).user) {
+    req.isAuthenticated = () => true;
+    return next();
+  }
+
+  const clerkUserId = (req as any).auth?.userId as string | undefined;
+
+  if (!clerkUserId) {
+    req.isAuthenticated = () => false;
+    return next();
+  }
+
+  try {
+    let user = await storage.getUserByClerkId(clerkUserId);
+
+    if (!user) {
+      const clerk = getClerkClient();
+      if (!clerk) {
+        // Clerk secret missing — treat as unauthenticated rather than hard-failing
+        // the request. Routes that require auth will return 401 via their inline
+        // req.isAuthenticated() checks.
+        console.warn("attachClerkUser: CLERK_SECRET_KEY not set, cannot sync user");
+        req.isAuthenticated = () => false;
+        return next();
+      }
+
+      const clerkUser = await clerk.users.getUser(clerkUserId);
+      const email = clerkUser.emailAddresses[0]?.emailAddress;
+      if (!email) {
+        console.warn(`attachClerkUser: Clerk user ${clerkUserId} has no email`);
+        req.isAuthenticated = () => false;
+        return next();
+      }
+
+      const fullName = [clerkUser.firstName, clerkUser.lastName]
+        .filter(Boolean)
+        .join(" ");
+      const username =
+        clerkUser.username ||
+        `${email.split("@")[0]}_${Math.floor(Math.random() * 10000)}`;
+
+      user = await storage.createUser({
+        username,
+        email,
+        // Clerk owns password management. The local users table still has a
+        // notNull password column for historical reasons; we populate it with
+        // random bytes that are never used for authentication.
+        password: randomBytes(32).toString("hex"),
+        fullName: fullName || undefined,
+        avatar: clerkUser.imageUrl || undefined,
+        clerkUserId,
+      });
+    }
+
+    (req as any).user = user;
+    req.isAuthenticated = () => true;
+    return next();
+  } catch (error) {
+    console.error("attachClerkUser: sync failed", error);
+    req.isAuthenticated = () => false;
+    return next();
+  }
+}
+
+/**
+ * requireAuth — explicit guard for routes that want middleware-level
+ * rejection instead of inline `if (!req.isAuthenticated())` checks. Included
+ * for new routes going forward; existing routes continue to use the inline
+ * pattern backed by the isAuthenticated polyfill installed by attachClerkUser.
+ */
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (!req.isAuthenticated()) return res.sendStatus(401);
-  next();
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  return next();
 }

@@ -1,13 +1,20 @@
 /**
  * Auth mocking smoke test — validates pre-route middleware injection pattern.
  *
- * This test MUST pass before bulk integration test generation is used (RESEARCH.md
- * Open Question 1). It verifies that:
+ * This test MUST pass before bulk integration test generation is used. It
+ * verifies that:
  *   1. Unauthenticated requests to a protected route return 401
- *   2. Mock-authenticated requests (req.isAuthenticated = () => true) bypass the
- *      auth check and reach the handler
+ *   2. Mock-authenticated requests (req.user pre-populated) bypass the
+ *      Clerk lookup in attachClerkUser and reach the handler
  *
- * Target endpoint: GET /api/company (existing, protected, already in routes.ts)
+ * Under the Clerk-only auth model, attachClerkUser short-circuits when
+ * req.user is already set by upstream middleware, so the mock pattern is
+ * simply: push a middleware that sets req.user before registerRoutes runs.
+ * The attachClerkUser middleware then installs req.isAuthenticated = () =>
+ * true automatically, and the existing `if (!req.isAuthenticated())` checks
+ * in route files pass through to the handler.
+ *
+ * Target endpoint: GET /api/company (existing, protected).
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
@@ -19,21 +26,18 @@ describe("Auth mocking smoke test — GET /api/company", () => {
   let authApp: express.Express;
 
   beforeAll(async () => {
-    // App 1: unauthenticated — req.isAuthenticated returns false
+    // App 1: unauthenticated — no req.user, no req.auth. attachClerkUser will
+    // see no Clerk session and install isAuthenticated = () => false.
     unauthApp = express();
     unauthApp.use(express.json());
-    unauthApp.use((req: any, _res: any, next: any) => {
-      req.isAuthenticated = () => false;
-      req.user = null;
-      next();
-    });
     await registerRoutes(unauthApp);
 
-    // App 2: authenticated — req.isAuthenticated returns true with mock user
+    // App 2: mock-authenticated — pre-populate req.user so attachClerkUser
+    // short-circuits and installs isAuthenticated = () => true without
+    // touching Clerk or the database.
     authApp = express();
     authApp.use(express.json());
     authApp.use((req: any, _res: any, next: any) => {
-      req.isAuthenticated = () => true;
       req.user = { id: "test-user-id" };
       next();
     });

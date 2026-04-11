@@ -48,8 +48,6 @@ import {
 } from "@shared/schema";
 import { db, client } from './db';
 import { eq, and, desc, asc, sql } from 'drizzle-orm';
-import session from 'express-session';
-import connectPg from 'connect-pg-simple';
 
 export interface IStorage {
   // User operations
@@ -156,31 +154,12 @@ export interface IStorage {
   getAgentMetrics(agentId: string, userId: string): Promise<AgentMetric[]>;
   upsertAgentMetric(metric: InsertAgentMetric): Promise<AgentMetric>;
   incrementMetric(agentId: string, userId: string, field: string, amount?: number): Promise<void>;
-
-  // Session store
-  sessionStore: session.Store;
 }
 
 export class DatabaseStorage implements IStorage {
-  // Define the session store property
-  sessionStore: session.Store;
-  
   constructor() {
-    // Create PostgreSQL session store
-    const PostgresSessionStore = connectPg(session);
-    
-    // Initialize the session store with the PostgreSQL connection string
-    this.sessionStore = new PostgresSessionStore({
-      conObject: {
-        connectionString: process.env.DATABASE_URL
-      },
-      createTableIfMissing: true,
-      // Table configuration (optional)
-      tableName: 'session',
-      schemaName: 'public'
-    });
-    
-    // Initialize with sample data if needed
+    // Clerk owns session management — no local session store is created here.
+    // Initialize with sample data if needed.
     this.initSampleData().catch(err => {
       console.error("Error initializing sample data:", err);
     });
@@ -264,29 +243,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   private async initSampleData(): Promise<void> {
-    // Check if there are any users in the database
-    const existingUsers = await this.getUsers();
-    
-    // Create a demo user if no users exist
-    if (existingUsers.length === 0) {
-      try {
-        const { hashPassword } = await import('./auth');
-        const password = await hashPassword("password");
+    // Demo user seed removed with the Passport → Clerk migration. Clerk owns
+    // account creation, so a local password-based demo row is unreachable.
+    // Real users are lazy-created by attachClerkUser on first authenticated
+    // request.
 
-        await this.createUser({
-          username: "demo",
-          password,
-          email: "demo@example.com",
-          fullName: "Demo User",
-          role: "admin"
-        });
-
-        console.log("Created demo user: username 'demo', password 'password'");
-      } catch (error) {
-        console.error("Error creating demo user:", error);
-      }
-    }
-    
     // Check if there are any agents first
     const existingAgents = await this.getAgents();
     

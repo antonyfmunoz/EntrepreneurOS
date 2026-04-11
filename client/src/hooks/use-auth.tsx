@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext, useEffect } from "react";
+import { createContext, ReactNode, useContext } from "react";
 import {
   useQuery,
   useMutation,
@@ -39,161 +39,160 @@ type RegisterData = {
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
+/**
+ * AuthProvider — Clerk-only auth context.
+ *
+ * The legacy Passport local + scrypt path has been removed. Every auth
+ * mutation now goes through Clerk's React SDK (useSignIn / useSignUp /
+ * useClerkAuth.signOut). The server-side user row is synced lazily on the
+ * first authenticated request to /api/user via attachClerkUser middleware —
+ * no explicit POST /api/auth/clerk round-trip from the frontend is needed.
+ *
+ * The context surface (user / loginMutation / registerMutation / etc.) is
+ * preserved so existing consumers (auth-page.tsx, settings-page.tsx,
+ * sidebar.tsx, protected-route.tsx) continue to compile unchanged.
+ */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
-  const { signOut: clerkSignOut, getToken } = useClerkAuth();
+  const { signOut: clerkSignOut } = useClerkAuth();
   const { signIn } = useSignIn();
   const { signUp } = useSignUp();
   const clerkReady = isClerkConfigured() && clerkLoaded;
 
+  // The backend /api/user endpoint reads the Clerk session from cookies via
+  // attachClerkUser and returns the local user row. When Clerk is still
+  // loading or the user is signed out, we skip the query to avoid a wasted
+  // 401. Refetch whenever Clerk auth state flips.
   const {
     data: userData,
     error,
     isLoading: queryLoading,
   } = useQuery<UserWithoutPassword | null, Error>({
-    queryKey: ["/api/user"],
+    queryKey: ["/api/user", clerkUser?.id ?? null],
+    enabled: clerkReady && Boolean(clerkUser),
     queryFn: async () => {
-      try {
-        const res = await apiRequest("GET", "/api/user");
-        if (res.status === 401) return null;
-        if (!res.ok) throw new Error(`API error: ${res.status}`);
-        return await res.json();
-      } catch (error) {
-        throw new Error(error instanceof Error ? error.message : "Unknown error");
-      }
+      const res = await fetch("/api/user", { credentials: "include" });
+      if (res.status === 401) return null;
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      return await res.json();
     },
   });
 
-  const user = userData ?? null;
-  const isLoading = queryLoading || (isClerkConfigured() && !clerkLoaded);
+  const user = clerkUser ? userData ?? null : null;
+  const isLoading = !clerkLoaded || (clerkReady && Boolean(clerkUser) && queryLoading);
 
-  // Sync Clerk user to backend when Clerk auth state changes
-  useEffect(() => {
-    if (!clerkReady || !clerkUser) return;
-    const syncClerkUser = async () => {
-      try {
-        const token = await getToken();
-        if (!token) return;
-        const res = await apiRequest("POST", "/api/auth/clerk", { token });
-        if (res.ok) {
-          const userData = await res.json();
-          queryClient.setQueryData(["/api/user"], userData);
-        }
-      } catch (err) {
-        console.error("Error syncing Clerk user:", err);
-      }
-    };
-    syncClerkUser();
-  }, [clerkUser?.id, clerkReady]);
-
-  const loginMutation = useMutation({
+  const loginMutation = useMutation<UserWithoutPassword, Error, LoginData>({
     mutationFn: async (credentials: LoginData) => {
-      // Try Clerk first if configured
-      if (clerkReady && signIn) {
-        try {
-          const result = await signIn.create({
-            identifier: credentials.username,
-            password: credentials.password,
-          });
-          if (result.status === "complete") {
-            // Clerk handles session — sync will happen via useEffect
-            const token = await getToken();
-            if (token) {
-              const res = await apiRequest("POST", "/api/auth/clerk", { token });
-              if (res.ok) return await res.json();
-            }
-          }
-          throw new Error("Sign in not complete. Check your email for verification.");
-        } catch (err: any) {
-          if (err.errors?.[0]?.message) {
-            throw new Error(err.errors[0].message);
-          }
-          throw err;
+      if (!clerkReady || !signIn) {
+        throw new Error("Authentication is not available — Clerk is not configured");
+      }
+      try {
+        const result = await signIn.create({
+          identifier: credentials.username,
+          password: credentials.password,
+        });
+        if (result.status !== "complete") {
+          throw new Error("Sign in not complete — check your email for verification");
         }
+        // Clerk sets its session cookie immediately. Refetch /api/user so
+        // attachClerkUser can sync the local row and return it.
+        const res = await fetch("/api/user", { credentials: "include" });
+        if (!res.ok) throw new Error(`Sync failed with status ${res.status}`);
+        return await res.json();
+      } catch (err: any) {
+        if (err?.errors?.[0]?.message) {
+          throw new Error(err.errors[0].message);
+        }
+        throw err;
       }
-      // Fallback to local auth
-      const res = await apiRequest("POST", "/api/login", credentials);
-      if (!res.ok) {
-        if (res.status === 401) throw new Error("Invalid username or password");
-        throw new Error(`Login failed with status: ${res.status}`);
-      }
-      return await res.json();
     },
     onSuccess: (userData: UserWithoutPassword) => {
-      queryClient.setQueryData(["/api/user"], userData);
-      toast({ title: "Login successful", description: `Welcome back, ${userData.username}!` });
+      queryClient.setQueryData(["/api/user", clerkUser?.id ?? null], userData);
+      toast({
+        title: "Login successful",
+        description: `Welcome back, ${userData.username}!`,
+      });
     },
     onError: (error: Error) => {
-      toast({ title: "Login failed", description: error.message, variant: "destructive" });
+      toast({
+        title: "Login failed",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
-  const registerMutation = useMutation({
+  const registerMutation = useMutation<UserWithoutPassword, Error, RegisterData>({
     mutationFn: async (data: RegisterData) => {
-      // Try Clerk first if configured
-      if (clerkReady && signUp) {
-        try {
-          const result = await signUp.create({
-            username: data.username,
-            emailAddress: data.email,
-            password: data.password,
-            firstName: data.fullName?.split(" ")[0],
-            lastName: data.fullName?.split(" ").slice(1).join(" "),
+      if (!clerkReady || !signUp) {
+        throw new Error("Registration is not available — Clerk is not configured");
+      }
+      try {
+        const firstName = data.fullName?.split(" ")[0];
+        const lastName = data.fullName?.split(" ").slice(1).join(" ");
+        const result = await signUp.create({
+          username: data.username,
+          emailAddress: data.email,
+          password: data.password,
+          firstName,
+          lastName,
+        });
+        if (result.status !== "complete") {
+          toast({
+            title: "Check your email",
+            description:
+              "Please verify your email address to complete registration.",
           });
-          if (result.status === "complete") {
-            const token = await getToken();
-            if (token) {
-              const res = await apiRequest("POST", "/api/auth/clerk", { token });
-              if (res.ok) return await res.json();
-            }
-          }
-          // May need email verification
-          if (result.status === "missing_requirements") {
-            toast({
-              title: "Check your email",
-              description: "Please verify your email address to complete registration.",
-            });
-          }
-          throw new Error("Registration requires email verification. Check your inbox.");
-        } catch (err: any) {
-          if (err.errors?.[0]?.message) {
-            throw new Error(err.errors[0].message);
-          }
-          throw err;
+          throw new Error(
+            "Registration requires email verification — check your inbox",
+          );
         }
+        const res = await fetch("/api/user", { credentials: "include" });
+        if (!res.ok) throw new Error(`Sync failed with status ${res.status}`);
+        return await res.json();
+      } catch (err: any) {
+        if (err?.errors?.[0]?.message) {
+          throw new Error(err.errors[0].message);
+        }
+        throw err;
       }
-      // Fallback to local auth
-      const res = await apiRequest("POST", "/api/register", data);
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
-        throw new Error(errorData.error || `Registration failed with status: ${res.status}`);
-      }
-      return await res.json();
     },
     onSuccess: (userData: UserWithoutPassword) => {
-      queryClient.setQueryData(["/api/user"], userData);
-      toast({ title: "Account created", description: `Welcome, ${userData.username}!` });
+      queryClient.setQueryData(["/api/user", clerkUser?.id ?? null], userData);
+      toast({
+        title: "Account created",
+        description: `Welcome, ${userData.username}!`,
+      });
     },
     onError: (error: Error) => {
-      toast({ title: "Registration failed", description: error.message, variant: "destructive" });
+      toast({
+        title: "Registration failed",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
-  const logoutMutation = useMutation({
+  const logoutMutation = useMutation<void, Error, void>({
     mutationFn: async () => {
       if (clerkReady) {
         await clerkSignOut();
       }
-      const res = await apiRequest("POST", "/api/logout");
-      if (!res.ok) throw new Error(`Logout failed with status: ${res.status}`);
+      // Server no-op for parity; cookie cleanup happens client-side via Clerk.
+      await apiRequest("POST", "/api/logout");
     },
     onSuccess: () => {
-      queryClient.setQueryData(["/api/user"], null);
+      queryClient.setQueryData(["/api/user", null], null);
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       toast({ title: "Logged out successfully" });
     },
     onError: (error: Error) => {
-      toast({ title: "Logout failed", description: error.message, variant: "destructive" });
+      toast({
+        title: "Logout failed",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -242,7 +241,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.errors?.[0]?.message || "Failed to send password reset email",
+        description:
+          error?.errors?.[0]?.message || "Failed to send password reset email",
         variant: "destructive",
       });
     }
@@ -253,7 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         isLoading,
-        error,
+        error: error ?? null,
         loginMutation,
         logoutMutation,
         registerMutation,

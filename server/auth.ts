@@ -1,205 +1,64 @@
-import passport from "passport";
-import { Strategy as LocalStrategy } from "passport-local";
-import { Express, Request, Response, NextFunction } from "express";
-import session from "express-session";
-import { scrypt, randomBytes, timingSafeEqual } from "crypto";
-import { promisify } from "util";
-import { storage } from "./storage";
-import { User as SelectUser } from "@shared/schema";
-import { createClerkClient, verifyToken } from "@clerk/express";
+import { Express } from "express";
+import { clerkMiddleware } from "@clerk/express";
 import { extractClerkOrg } from "./middleware/clerk-org";
+import { attachClerkUser, requireAuth } from "./middleware/auth";
 
-declare global {
-  namespace Express {
-    interface User extends SelectUser {}
-  }
-}
-
-const scryptAsync = promisify(scrypt);
-
-export async function hashPassword(password: string) {
-  const salt = randomBytes(16).toString("hex");
-  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
-  return `${buf.toString("hex")}.${salt}`;
-}
-
-async function comparePasswords(supplied: string, stored: string) {
-  const [hashed, salt] = stored.split(".");
-  const hashedBuf = Buffer.from(hashed, "hex");
-  const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
-  return timingSafeEqual(hashedBuf, suppliedBuf);
-}
-
-function getClerkClient() {
-  const secretKey = process.env.CLERK_SECRET_KEY;
-  if (!secretKey) return null;
-  return createClerkClient({ secretKey });
-}
-
+/**
+ * setupAuth — Clerk-only authentication wiring.
+ *
+ * The previous Passport local + scrypt + express-session stack has been
+ * removed entirely. Clerk is now the sole authentication provider.
+ *
+ * Middleware chain (global, runs on every request):
+ *   1. clerkMiddleware()    — parses the Clerk session token from cookies /
+ *                             Authorization headers, populates req.auth.
+ *                             Non-blocking: unauthenticated requests still
+ *                             pass through, they just have no req.auth.userId.
+ *   2. extractClerkOrg      — annotates req.clerkOrg from the Clerk JWT.
+ *   3. attachClerkUser      — non-rejecting sync: if req.auth.userId exists,
+ *                             looks up (or lazy-creates) the local users row
+ *                             keyed by Clerk user id, attaches to req.user,
+ *                             and installs req.isAuthenticated() polyfill.
+ *                             This preserves the 56 existing
+ *                             `req.isAuthenticated()` / `req.user.id` call
+ *                             sites across server/routes/*.ts unchanged.
+ *
+ * Endpoints exposed:
+ *   - GET  /api/user    — returns the authenticated local user row (sans password).
+ *   - POST /api/logout  — server-side no-op. Clerk manages session teardown
+ *                          via its SDK (clerkSignOut() in the frontend clears
+ *                          the Clerk session cookie). The endpoint remains so
+ *                          the frontend logout mutation has a canonical hook
+ *                          and we can extend it later (audit log, cleanup).
+ *
+ * Removed:
+ *   - POST /api/register — Clerk's signUp handles account creation.
+ *   - POST /api/login    — Clerk's signIn handles credential verification.
+ *   - POST /api/auth/clerk — replaced by lazy sync in attachClerkUser.
+ */
 export function setupAuth(app: Express) {
-  const sessionSecret = process.env.SESSION_SECRET || randomBytes(32).toString("hex");
-
-  const sessionSettings: session.SessionOptions = {
-    secret: sessionSecret,
-    resave: false,
-    saveUninitialized: false,
-    store: storage.sessionStore,
-    cookie: {
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 1000 * 60 * 60 * 24 * 7
-    }
-  };
-
   app.set("trust proxy", 1);
-  app.use(session(sessionSettings));
-  app.use(passport.initialize());
-  app.use(passport.session());
+
+  // Conditional mount: clerkMiddleware() from @clerk/express requires
+  // CLERK_SECRET_KEY at request time and throws without it. In the vitest
+  // test environment the secret is intentionally absent so we skip it; the
+  // downstream attachClerkUser middleware already handles the "no req.auth"
+  // case gracefully by installing isAuthenticated = () => false. In real
+  // deployments (dev + prod) CLERK_SECRET_KEY is always set so Clerk runs
+  // normally.
+  if (process.env.CLERK_SECRET_KEY) {
+    app.use(clerkMiddleware());
+  }
   app.use(extractClerkOrg);
+  app.use(attachClerkUser);
 
-  passport.use(
-    new LocalStrategy(async (username, password, done) => {
-      try {
-        let user = await storage.getUserByUsername(username);
-        if (!user && username.includes('@')) {
-          user = await storage.getUserByEmail(username);
-        }
-        if (!user || !(await comparePasswords(password, user.password))) {
-          return done(null, false);
-        } else {
-          return done(null, user);
-        }
-      } catch (error) {
-        return done(error);
-      }
-    }),
-  );
-
-  passport.serializeUser((user, done) => done(null, user.id));
-  passport.deserializeUser(async (id: string, done) => {
-    try {
-      const user = await storage.getUser(id);
-      done(null, user);
-    } catch (error) {
-      done(error);
-    }
-  });
-
-  app.post("/api/register", async (req, res, next) => {
-    try {
-      const existingUser = await storage.getUserByUsername(req.body.username);
-      if (existingUser) {
-        return res.status(400).json({ error: "Username already exists" });
-      }
-
-      const user = await storage.createUser({
-        ...req.body,
-        password: await hashPassword(req.body.password),
-      });
-
-      req.login(user, (err) => {
-        if (err) return next(err);
-        const { password, ...userWithoutPassword } = user;
-        res.status(201).json(userWithoutPassword);
-      });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err: Error | null, user: any, info: any) => {
-      if (err) return next(err);
-      if (!user) return res.status(401).json({ error: "Invalid username or password" });
-
-      req.login(user, (err: Error | null) => {
-        if (err) return next(err);
-        const { password, ...userWithoutPassword } = user;
-        res.status(200).json(userWithoutPassword);
-      });
-    })(req, res, next);
-  });
-
-  app.post("/api/logout", (req, res, next) => {
-    req.logout((err: Error | null) => {
-      if (err) return next(err);
-      res.sendStatus(200);
-    });
-  });
-
-  app.get("/api/user", (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    const { password, ...userWithoutPassword } = req.user;
+  app.get("/api/user", requireAuth, (req, res) => {
+    const user = (req as any).user;
+    const { password, ...userWithoutPassword } = user;
     res.json(userWithoutPassword);
   });
 
-  // Clerk auth endpoint — verifies Clerk session token and syncs user to DB
-  app.post("/api/auth/clerk", async (req, res, next) => {
-    try {
-      const clerk = getClerkClient();
-      if (!clerk) {
-        return res.status(503).json({
-          error: "Clerk authentication is not available — CLERK_SECRET_KEY not set"
-        });
-      }
-
-      const { token } = req.body;
-      if (!token) {
-        return res.status(400).json({ error: "Missing Clerk session token" });
-      }
-
-      // Verify the JWT with Clerk
-      const secretKey = process.env.CLERK_SECRET_KEY!;
-      const { sub: clerkUserId } = await verifyToken(token, { secretKey });
-
-      if (!clerkUserId) {
-        return res.status(401).json({ error: "Invalid Clerk token" });
-      }
-
-      // Get full user details from Clerk
-      const clerkUser = await clerk.users.getUser(clerkUserId);
-      const email = clerkUser.emailAddresses[0]?.emailAddress;
-      const fullName = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ");
-
-      if (!email) {
-        return res.status(400).json({ error: "Email not available from Clerk" });
-      }
-
-      // Find or create local user
-      let user = await storage.getUserByClerkId(clerkUserId);
-
-      if (!user) {
-        user = await storage.getUserByEmail(email);
-
-        if (user) {
-          // Link existing user to Clerk
-          user = await storage.updateUser(user.id, { clerkUserId });
-        } else {
-          // Create new user from Clerk data
-          const username = clerkUser.username || email.split('@')[0] + '_' + Math.floor(Math.random() * 10000);
-          const password = await hashPassword(randomBytes(32).toString('hex'));
-
-          user = await storage.createUser({
-            username,
-            email,
-            password,
-            fullName: fullName || '',
-            avatar: clerkUser.imageUrl || '',
-            clerkUserId,
-          });
-        }
-      }
-
-      req.login(user, (err) => {
-        if (err) return next(err);
-        const { password, ...userWithoutPassword } = user;
-        return res.status(200).json(userWithoutPassword);
-      });
-    } catch (error: any) {
-      console.error("Clerk auth error:", error);
-      if (error.message?.includes("expired")) {
-        return res.status(401).json({ error: "Token expired" });
-      }
-      next(error);
-    }
+  app.post("/api/logout", (_req, res) => {
+    res.sendStatus(200);
   });
 }
