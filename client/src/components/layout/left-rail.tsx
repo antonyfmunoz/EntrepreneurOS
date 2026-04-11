@@ -8,6 +8,8 @@ import {
   ListTodo,
   Workflow,
   Settings,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 interface NavItem {
@@ -26,31 +28,58 @@ const navItems: NavItem[] = [
   { label: 'Settings', href: '/settings', icon: <Settings className="h-5 w-5" /> },
 ];
 
-export default function LeftRail() {
+interface LeftRailProps {
+  collapsed?: boolean;
+  onToggle?: () => void;
+}
+
+export default function LeftRail({ collapsed = false, onToggle }: LeftRailProps) {
   const [location] = useLocation();
 
   return (
-    <aside className="w-64 bg-[#eff1f2] border-r border-[#abadae]/10 flex-shrink-0">
-      <nav className="py-8 px-4">
+    <aside
+      className={
+        (collapsed ? 'w-16 ' : 'w-64 ') +
+        'relative bg-[#eff1f2] border-r border-[#abadae]/10 flex-shrink-0 ' +
+        'transition-[width] duration-200 ease-out'
+      }
+    >
+      {onToggle && (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+          className="absolute top-5 -right-3 z-20 w-6 h-6 rounded-full bg-white border border-[#abadae]/20 shadow-[0_4px_12px_rgba(0,0,0,0.08)] flex items-center justify-center text-[#595c5d] hover:text-[#6a37d4] transition-colors"
+        >
+          {collapsed ? (
+            <ChevronRight className="w-3.5 h-3.5" />
+          ) : (
+            <ChevronLeft className="w-3.5 h-3.5" />
+          )}
+        </button>
+      )}
+      <nav className={'py-8 ' + (collapsed ? 'px-2' : 'px-4')}>
         <ul className="space-y-1">
           {navItems.map((item) => {
             const isActive = location === item.href;
-            
+
             return (
               <li key={item.href}>
                 <Link href={item.href}>
                   <a
-                    className={`
-                      flex items-center gap-3 px-4 py-3 rounded-xl transition-colors
-                      ${
-                        isActive
-                          ? 'bg-white text-[#6a37d4] shadow-[0_8px_32px_rgba(106,55,212,0.08)]'
-                          : 'text-[#595c5d] hover:bg-white/50 hover:text-[#2c2f30]'
-                      }
-                    `}
+                    title={collapsed ? item.label : undefined}
+                    className={
+                      'flex items-center gap-3 rounded-xl transition-colors ' +
+                      (collapsed ? 'justify-center px-0 py-3 ' : 'px-4 py-3 ') +
+                      (isActive
+                        ? 'bg-white text-[#6a37d4] shadow-[0_8px_32px_rgba(106,55,212,0.08)]'
+                        : 'text-[#595c5d] hover:bg-white/50 hover:text-[#2c2f30]')
+                    }
                   >
                     {item.icon}
-                    <span className="text-sm font-medium">{item.label}</span>
+                    {!collapsed && (
+                      <span className="text-sm font-medium">{item.label}</span>
+                    )}
                   </a>
                 </Link>
               </li>
