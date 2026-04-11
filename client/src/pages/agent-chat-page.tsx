@@ -1,239 +1,295 @@
-import { useState } from "react";
-import { Link } from "wouter";
+import { useEffect, useRef, useState } from "react";
+import { useParams } from "wouter";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Bolt, Send, Loader2, AlertCircle } from "lucide-react";
+
 import { UniversalLayout } from "@/components/layout/universal-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { 
-  Bolt, 
-  Send, 
-  Paperclip, 
-  Mic, 
-  Target, 
-  BarChart3, 
-  FileText,
-  Lock,
-  Link2Off
-} from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import type { Company } from "@shared/schema";
 
-interface Message {
+// Chat is backed by the existing /api/agents/:id/chat + messages endpoints
+// rather than the generated /api/companies/:id/conversations routes, which
+// are 501 stubs until storage.createConversation lands. Using the "direct-
+// claude" virtual agent id gives us a stable per-user conversation without
+// requiring an agent row in the DB.
+const CHAT_AGENT_ID = "direct-claude";
+
+interface AgentMessage {
   id: string;
-  role: "assistant" | "user";
+  agentId: string;
+  role: "user" | "assistant" | "system";
   content: string;
   timestamp: string;
-  data?: {
-    blockers?: Array<{
-      id: string;
-      title: string;
-      priority: "critical" | "high" | "medium";
-      blockedBy: string;
-      icon: "lock" | "link-off";
-    }>;
-  };
 }
 
-const placeholderMessages: Message[] = [
-  {
-    id: "1",
-    role: "assistant",
-    content: "I'm DEX, your AI executive assistant. Ask me anything about your company. I have full context on your Q3 goals, current workflow bottlenecks, and team task distribution.",
-    timestamp: "5m ago",
-  },
-  {
-    id: "2",
-    role: "user",
-    content: "Can you show me the high-priority tasks that are currently blocked in the Engineering workflow?",
-    timestamp: "2m ago",
-  },
-  {
-    id: "3",
-    role: "assistant",
-    content: "Found 3 critical blockers in the Engineering Pipeline. These are impacting our target ship date for the V2 Core.",
-    timestamp: "1m ago",
-    data: {
-      blockers: [
-        {
-          id: "b1",
-          title: "API Authentication Refactor",
-          priority: "critical",
-          blockedBy: "Infrastructure approval",
-          icon: "lock",
-        },
-        {
-          id: "b2",
-          title: "Database Schema Migration",
-          priority: "high",
-          blockedBy: "Pending QA sign-off",
-          icon: "link-off",
-        },
-      ],
-    },
-  },
-];
+interface ChatResponse {
+  reply: string;
+  messageId: string;
+}
 
-const suggestedActions = [
-  { icon: Target, label: "Review Q3 Goals" },
-  { icon: BarChart3, label: "Analyze Workflow" },
-  { icon: FileText, label: "Summarize Tasks" },
-];
+function formatTimestamp(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
 
 export default function AgentChatPage() {
-  const [messages] = useState<Message[]>(placeholderMessages);
-  const [inputValue, setInputValue] = useState("");
+  const params = useParams<{ companyId?: string }>();
+  const companyId = params.companyId;
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [input, setInput] = useState("");
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  const handleSend = () => {
-    if (!inputValue.trim()) return;
-    setInputValue("");
-  };
+  const { data: company } = useQuery<Company, Error>({
+    queryKey: ["/api/company"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/company");
+      return (await res.json()) as Company;
+    },
+  });
+
+  const messagesQueryKey = [
+    `/api/agents/${CHAT_AGENT_ID}/messages`,
+  ] as const;
+
+  const {
+    data: messages,
+    isLoading: messagesLoading,
+    error: messagesError,
+  } = useQuery<AgentMessage[], Error>({
+    queryKey: messagesQueryKey,
+    queryFn: async () => {
+      const res = await apiRequest(
+        "GET",
+        `/api/agents/${CHAT_AGENT_ID}/messages`,
+      );
+      return (await res.json()) as AgentMessage[];
+    },
+  });
+
+  const sendMutation = useMutation<ChatResponse, Error, string>({
+    mutationFn: async (text: string) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/agents/${CHAT_AGENT_ID}/chat`,
+        { message: text },
+      );
+      return (await res.json()) as ChatResponse;
+    },
+    onMutate: async (text) => {
+      // Optimistic append — user sees their message immediately. The full
+      // assistant reply arrives in onSuccess and invalidates the query.
+      setInput("");
+      await queryClient.cancelQueries({ queryKey: messagesQueryKey });
+      const previous = queryClient.getQueryData<AgentMessage[]>(messagesQueryKey) ?? [];
+      const optimistic: AgentMessage = {
+        id: `optimistic-${Date.now()}`,
+        agentId: CHAT_AGENT_ID,
+        role: "user",
+        content: text,
+        timestamp: new Date().toISOString(),
+      };
+      queryClient.setQueryData<AgentMessage[]>(messagesQueryKey, [
+        ...previous,
+        optimistic,
+      ]);
+      return { previous };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: messagesQueryKey });
+    },
+    onError: (err, _vars, ctx) => {
+      // Roll back the optimistic message so the user can retry.
+      const previous = (ctx as { previous?: AgentMessage[] } | undefined)
+        ?.previous;
+      if (previous) {
+        queryClient.setQueryData(messagesQueryKey, previous);
+      }
+      toast({
+        title: "Couldn't send message",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Auto-scroll to the latest message whenever the list grows.
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages?.length]);
+
+  function handleSend() {
+    const text = input.trim();
+    if (!text || sendMutation.isPending) return;
+    sendMutation.mutate(text);
+  }
+
+  const assistantName = company?.assistantName ?? "DEX Assistant";
+  const leftRailItems = companyId
+    ? [
+        { icon: Bolt, label: "Home", href: `/company/${companyId}`, active: false },
+        {
+          icon: Bolt,
+          label: "Chat",
+          href: `/company/${companyId}/chat`,
+          active: true,
+        },
+      ]
+    : undefined;
 
   return (
-    <UniversalLayout title="DEX Assistant">
-      <div className="flex-1 flex flex-col relative overflow-hidden bg-[#f3f4f5]">
-        {/* Background decorative element */}
+    <UniversalLayout
+      title={`Chat — ${assistantName}`}
+      companyName={company?.name}
+      leftRailItems={leftRailItems}
+    >
+      <div className="flex flex-col h-[calc(100vh-160px)] relative overflow-hidden bg-[#f3f4f5]">
         <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#6a37d4]/5 blur-[120px] rounded-full pointer-events-none" />
 
-        {/* Conversation thread */}
-        <div className="flex-1 px-8 lg:px-24 pt-12 pb-48 overflow-y-auto space-y-10">
-          {messages.map((message, index) => (
-            <div
-              key={message.id}
-              className={`flex flex-col gap-4 ${
-                message.role === "user" ? "items-end" : "max-w-4xl"
-              } animate-in fade-in slide-in-from-bottom-4 duration-700`}
-              style={{ animationDelay: `${index * 150}ms` }}
-            >
-              {message.role === "assistant" && (
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="h-8 w-8 bg-[#6a37d4] rounded-lg flex items-center justify-center text-white">
-                    <Bolt className="h-[18px] w-[18px]" />
-                  </div>
-                  <span className="text-xs font-bold uppercase tracking-widest text-[#6a37d4]">
-                    DEX Assistant
-                  </span>
-                </div>
-              )}
-
-              {message.role === "user" ? (
-                <>
-                  <div className="glass-panel px-6 py-4 rounded-2xl rounded-tr-none border border-[#abadae]/15 text-[#2c2f30] max-w-xl bg-white/70 backdrop-blur-[16px]">
-                    <p className="text-base">{message.content}</p>
-                  </div>
-                  <span className="text-[10px] uppercase tracking-widest text-[#abadae]">
-                    Sent {message.timestamp}
-                  </span>
-                </>
-              ) : (
-                <Card className="bg-white p-8 rounded-2xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] border border-[#abadae]/10">
-                  <p className="text-base text-[#2c2f30] mb-6">
-                    {message.content.split("Engineering Pipeline").map((part, i) =>
-                      i === 0 ? (
-                        <span key={i}>{part}</span>
-                      ) : (
-                        <span key={i}>
-                          <span className="font-bold text-[#6a37d4]">Engineering Pipeline</span>
-                          {part}
-                        </span>
-                      )
-                    )}
-                  </p>
-
-                  {message.data?.blockers && (
-                    <>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {message.data.blockers.map((blocker) => (
-                          <div
-                            key={blocker.id}
-                            className="p-4 bg-[#f3f4f5] rounded-xl border border-[#abadae]/5"
-                          >
-                            <div className="flex justify-between items-start mb-2">
-                              <Badge
-                                className={`${
-                                  blocker.priority === "critical"
-                                    ? "bg-[#ffdad6] text-[#93000a]"
-                                    : "bg-amber-100 text-amber-800"
-                                } text-[10px] font-bold uppercase`}
-                              >
-                                {blocker.priority}
-                              </Badge>
-                              {blocker.icon === "lock" ? (
-                                <Lock className="h-4 w-4 text-[#abadae]" />
-                              ) : (
-                                <Link2Off className="h-4 w-4 text-[#abadae]" />
-                              )}
-                            </div>
-                            <h4 className="font-semibold text-sm mb-1">{blocker.title}</h4>
-                            <p className="text-xs text-[#595c5d]">Blocked by: {blocker.blockedBy}</p>
-                          </div>
-                        ))}
-                      </div>
-                      <Button
-                        variant="ghost"
-                        className="mt-6 flex items-center gap-2 text-[#6a37d4] font-semibold text-sm hover:translate-x-1 transition-transform p-0 h-auto"
-                      >
-                        Generate detailed blocker report
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                        </svg>
-                      </Button>
-                    </>
-                  )}
-                </Card>
-              )}
+        {/* Header */}
+        <div className="px-8 lg:px-24 pt-8 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 bg-[#6a37d4] rounded-lg flex items-center justify-center text-white">
+              <Bolt className="h-5 w-5" />
             </div>
-          ))}
+            <div>
+              <h1 className="text-xl font-bold text-[#2c2f30]">
+                {assistantName}
+              </h1>
+              <p className="text-xs text-slate-500">
+                Your company's AI executive assistant
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* Fixed interaction layer */}
-        <div className="fixed bottom-0 left-0 right-0 md:left-64 p-8 flex flex-col items-center pointer-events-none">
-          {/* Suggested actions */}
-          <div className="flex flex-wrap justify-center gap-2 mb-6 pointer-events-auto">
-            {suggestedActions.map((action, index) => {
-              const Icon = action.icon;
-              return (
-                <Button
-                  key={index}
-                  variant="ghost"
-                  className="bg-white/70 backdrop-blur-[16px] px-4 py-2 rounded-full border border-[#abadae]/20 text-xs font-medium text-[#595c5d] hover:bg-white hover:text-[#6a37d4] transition-all flex items-center gap-2 shadow-sm h-auto"
-                >
-                  <Icon className="h-4 w-4" />
-                  {action.label}
-                </Button>
-              );
-            })}
-          </div>
+        {/* Thread */}
+        <div
+          ref={scrollRef}
+          className="flex-1 px-8 lg:px-24 pb-32 overflow-y-auto space-y-6"
+        >
+          {messagesLoading && (
+            <div className="flex items-center justify-center py-16 text-slate-500">
+              <Loader2 className="h-5 w-5 animate-spin mr-3" />
+              <span className="text-sm">Loading conversation…</span>
+            </div>
+          )}
 
-          {/* Chat input */}
-          <div className="w-full max-w-3xl bg-white/70 backdrop-blur-[16px] p-2 rounded-2xl border border-[#abadae]/15 shadow-[0_8px_48px_rgba(106,55,212,0.12)] pointer-events-auto mb-4">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 pl-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-[#abadae] hover:text-[#6a37d4] h-10 w-10"
-                >
-                  <Paperclip className="h-5 w-5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-[#abadae] hover:text-[#6a37d4] h-10 w-10"
-                >
-                  <Mic className="h-5 w-5" />
-                </Button>
+          {messagesError && !messagesLoading && (
+            <Card className="p-6 bg-red-50 border border-red-200 max-w-2xl">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-red-900">
+                    Couldn't load chat history
+                  </p>
+                  <p className="text-sm text-red-700 mt-1">
+                    {messagesError.message}
+                  </p>
+                </div>
               </div>
+            </Card>
+          )}
+
+          {!messagesLoading &&
+            messages &&
+            messages.length === 0 && (
+              <div className="max-w-2xl">
+                <Card className="bg-white p-8 rounded-2xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] border border-[#abadae]/10">
+                  <p className="text-base text-[#2c2f30] mb-2">
+                    Hi, I'm {assistantName}. Ask me anything about{" "}
+                    {company?.name ?? "your company"} — goals, tasks,
+                    workflows, or the next best action.
+                  </p>
+                </Card>
+              </div>
+            )}
+
+          {messages?.map((message) => {
+            const isUser = message.role === "user";
+            return (
+              <div
+                key={message.id}
+                className={
+                  "flex flex-col gap-2 " +
+                  (isUser ? "items-end" : "max-w-2xl items-start")
+                }
+              >
+                {!isUser && (
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-6 bg-[#6a37d4] rounded-md flex items-center justify-center text-white">
+                      <Bolt className="h-3 w-3" />
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#6a37d4]">
+                      {assistantName}
+                    </span>
+                  </div>
+                )}
+                {isUser ? (
+                  <div className="px-5 py-3 rounded-2xl rounded-tr-none bg-[#6a37d4] text-white max-w-xl">
+                    <p className="text-sm whitespace-pre-wrap">
+                      {message.content}
+                    </p>
+                  </div>
+                ) : (
+                  <Card className="bg-white p-5 rounded-2xl shadow-[0_8px_32px_rgba(106,55,212,0.06)] border border-[#abadae]/10">
+                    <p className="text-sm text-[#2c2f30] whitespace-pre-wrap">
+                      {message.content}
+                    </p>
+                  </Card>
+                )}
+                <span className="text-[10px] uppercase tracking-widest text-[#abadae]">
+                  {formatTimestamp(message.timestamp)}
+                </span>
+              </div>
+            );
+          })}
+
+          {sendMutation.isPending && (
+            <div className="flex items-center gap-2 text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-xs">{assistantName} is thinking…</span>
+            </div>
+          )}
+        </div>
+
+        {/* Input */}
+        <div className="absolute bottom-0 left-0 right-0 p-6 pointer-events-none">
+          <div className="max-w-3xl mx-auto bg-white/90 backdrop-blur-[16px] p-2 rounded-2xl border border-[#abadae]/15 shadow-[0_8px_48px_rgba(106,55,212,0.12)] pointer-events-auto">
+            <div className="flex items-center gap-2">
               <Input
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                className="flex-1 bg-transparent border-none focus-visible:ring-0 text-[#2c2f30] text-base placeholder:text-[#abadae] px-2 h-auto"
-                placeholder="Message DEX..."
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                disabled={sendMutation.isPending}
+                className="flex-1 bg-transparent border-none focus-visible:ring-0 text-[#2c2f30] text-base placeholder:text-[#abadae] px-4 h-auto"
+                placeholder={`Message ${assistantName}…`}
               />
               <Button
                 onClick={handleSend}
-                className="bg-[#6a37d4] hover:bg-[#6448b2] text-white p-3 rounded-xl shadow-lg shadow-[#6a37d4]/20 transition-all h-auto"
+                disabled={!input.trim() || sendMutation.isPending}
+                className="bg-[#6a37d4] hover:bg-[#6448b2] text-white p-3 rounded-xl shadow-lg shadow-[#6a37d4]/20 h-auto disabled:opacity-50"
               >
-                <Send className="h-5 w-5" />
+                {sendMutation.isPending ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
               </Button>
             </div>
           </div>
