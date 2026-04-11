@@ -17,8 +17,94 @@
       "helperText": {},
       "successMessages": {},
       "navLabel": "Home"
+    },
+    {
+      "pageName": "PortfolioList",
+      "pageHeading": "Portfolios",
+      "sections": [
+        {
+          "id": "canvas",
+          "heading": "Your portfolios",
+          "subheading": "Every company you operate, grouped."
+        }
+      ],
+      "ctas": [
+        {
+          "id": "create",
+          "label": "Create portfolio",
+          "context": "header"
+        },
+        {
+          "id": "open",
+          "label": "Open",
+          "context": "node"
+        }
+      ],
+      "emptyState": "No portfolios yet. Create your first portfolio to start grouping companies.",
+      "errorMessages": {
+        "fetchFailed": "Could not load your portfolios. Retry.",
+        "createFailed": "Could not create portfolio. Check your connection and try again."
+      },
+      "placeholders": {
+        "name": "e.g., Main Operating Group",
+        "description": "What belongs in this portfolio?"
+      },
+      "helperText": {
+        "create": "A portfolio holds one or more companies you operate."
+      },
+      "successMessages": {
+        "created": "Portfolio created."
+      },
+      "navLabel": "Portfolios"
+    },
+    {
+      "pageName": "PortfolioDetail",
+      "pageHeading": "Portfolio",
+      "sections": [
+        {
+          "id": "summary",
+          "heading": "Portfolio overview",
+          "subheading": "Companies, status, and next moves."
+        },
+        {
+          "id": "canvas",
+          "heading": "Companies in this portfolio",
+          "subheading": "Click a company to enter its Command Center."
+        }
+      ],
+      "ctas": [
+        {
+          "id": "addCompany",
+          "label": "Add company",
+          "context": "header"
+        },
+        {
+          "id": "openCompany",
+          "label": "Open",
+          "context": "node"
+        },
+        {
+          "id": "backToPortfolios",
+          "label": "All portfolios",
+          "context": "header"
+        }
+      ],
+      "emptyState": "No companies in this portfolio yet. Add your first company to get started.",
+      "errorMessages": {
+        "fetchFailed": "Could not load this portfolio. Retry.",
+        "attachFailed": "Could not add company to portfolio. Try again."
+      },
+      "placeholders": {},
+      "helperText": {
+        "addCompany": "Create a new company inside this portfolio, or attach an existing one."
+      },
+      "successMessages": {
+        "companyAdded": "Company added to portfolio.",
+        "companyAttached": "Company moved into this portfolio."
+      },
+      "navLabel": "Portfolio"
     }
   ],
-  "generatedAt": "2026-04-10T19:49:37.351Z",
+  "generatedAt": "2026-04-11T02:40:00.000Z",
   "brandVoiceHash": "abc123"
 }

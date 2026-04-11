@@ -49,10 +49,11 @@ const GLOBAL_USER_FEEDBACK = `
 - Left panel / marketing copy must be operational and founder-focused. No agency/visionary language.
 - Cards: glassmorphism only, no visible borders, ambient purple shadow (0 8px 32px rgba(106,55,212,0.08)).
 - No 1px solid borders on cards — use background shifts and subtle shadows instead.
+- No gradients anywhere. Primary buttons solid #6a37d4 only.
 - Copyright year must be dynamic (current year), never hardcoded.
 - Remove decorative icons not from lucide-react.
 - No Help Center or support links on auth pages.
-- Auth pages: floating cards on soft gradient background.
+- Auth pages: floating cards on a solid surface background (#f5f6f7). No gradient backgrounds.
 `.trim();
 
 interface UiGenRunInput {

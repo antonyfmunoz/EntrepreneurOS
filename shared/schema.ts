@@ -480,9 +480,35 @@ export const insertAgentMetricSchema = z.object({
 export type InsertAgentMetric = z.infer<typeof insertAgentMetricSchema>;
 export type AgentMetric = typeof agentMetrics.$inferSelect;
 
+// Portfolios — a portfolio groups related companies under a single owner.
+// One user can have many portfolios, each containing many companies.
+export const portfolios = pgTable("portfolios", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertPortfolioSchema = z.object({
+  name: z.string().min(1, "Portfolio name is required"),
+  description: z.string().optional(),
+});
+
+export const updatePortfolioSchema = z.object({
+  name: z.string().min(1, "Portfolio name is required").optional(),
+  description: z.string().optional().nullable(),
+});
+
+export type InsertPortfolio = z.infer<typeof insertPortfolioSchema>;
+export type UpdatePortfolio = z.infer<typeof updatePortfolioSchema>;
+export type Portfolio = typeof portfolios.$inferSelect;
+
 export const companies = pgTable("companies", {
   id: serial("id").primaryKey(),
   ownerUserId: text("owner_user_id").notNull(),
+  portfolioId: integer("portfolio_id").references(() => portfolios.id, { onDelete: "set null" }),
   name: text("name").notNull(),
   type: text("type"),
   stage: text("stage"),

@@ -135,8 +135,8 @@
     {
       "name": "CompanySetup",
       "route": "/company-setup",
-      "purpose": "First-run onboarding wizard. User creates their first company with name, stage, industry, business model, and strategic goals. Routes to Portfolio Dashboard on completion.",
-      "components": ["SetupWizard", "CompanyNameInput", "StageSelector", "IndustryInput", "BusinessModelInput", "GoalsTextarea", "SubmitButton", "StepIndicator"],
+      "purpose": "First-run onboarding wizard. User selects or creates a portfolio, then creates their first company with name, stage, industry, business model, and strategic goals. Routes to Portfolio Detail on completion.",
+      "components": ["SetupWizard", "PortfolioSelector", "CreatePortfolioInline", "CompanyNameInput", "StageSelector", "IndustryInput", "BusinessModelInput", "GoalsTextarea", "SubmitButton", "StepIndicator"],
       "authLevel": "authenticated",
       "priority": 2,
       "dependsOn": ["/signup"],
@@ -148,6 +148,8 @@
       "errorState": "Inline field-level validation errors. Toast notification on server error.",
       "mobileConsiderations": "Single-column layout works natively on mobile. Inputs auto-expand. Submit button fixed at bottom on small screens.",
       "dataRequirements": [
+        { "component": "PortfolioSelector", "fields": ["portfolios", "selectedPortfolioId"] },
+        { "component": "CreatePortfolioInline", "fields": ["name", "description"] },
         { "component": "CompanyNameInput", "fields": ["name"] },
         { "component": "StageSelector", "fields": ["stage"] },
         { "component": "IndustryInput", "fields": ["industry"] },
@@ -155,9 +157,14 @@
         { "component": "GoalsTextarea", "fields": ["goals"] }
       ],
       "apiEndpoints": [
-        { "endpoint": "POST /api/companies", "source": "explicit" }
+        { "endpoint": "GET /api/portfolios", "source": "explicit" },
+        { "endpoint": "POST /api/portfolios", "source": "explicit" },
+        { "endpoint": "POST /api/companies", "source": "explicit" },
+        { "endpoint": "POST /api/portfolios/:id/companies", "source": "explicit" }
       ],
       "validationRules": [
+        "Portfolio must be selected or newly created",
+        "Portfolio name (if creating) is required and non-empty",
         "Company name is required and non-empty",
         "Stage must be selected (idea/pre-revenue/revenue/scaling/mature)",
         "Industry is required",
@@ -166,40 +173,82 @@
       ],
       "events": [
         { "name": "page_viewed", "trigger": "Page load", "properties": [], "source": "explicit" },
+        { "name": "portfolio_selected", "trigger": "User selects an existing portfolio", "properties": ["portfolioId"], "source": "explicit" },
+        { "name": "portfolio_created_inline", "trigger": "User creates a new portfolio during company setup", "properties": ["portfolioId"], "source": "explicit" },
         { "name": "setup_step_completed", "trigger": "User advances wizard step", "properties": ["stepIndex", "stepName"], "source": "explicit" },
-        { "name": "company_created", "trigger": "User submits wizard and server returns success", "properties": ["companyId", "stage", "industry"], "source": "explicit" }
+        { "name": "company_created", "trigger": "User submits wizard and server returns success", "properties": ["companyId", "portfolioId", "stage", "industry"], "source": "explicit" }
       ],
       "featureFlagCandidates": ["onboarding_v2_flow"]
     },
     {
-      "name": "PortfolioDashboard",
-      "route": "/portfolio",
-      "purpose": "All companies owned by the user displayed as cards. Portfolio-wide summary header. Add new company action. Entry point to per-company workspaces.",
-      "components": ["PortfolioHeader", "PortfolioSummary", "CompanyCard", "AddCompanyButton", "CompanyQuickActions"],
+      "name": "PortfolioList",
+      "route": "/portfolios",
+      "purpose": "Entity canvas showing all portfolios owned by the user as React Flow nodes. Each portfolio node shows name, company count, and a quick-open action. Primary entry point after login. Create new portfolio from this page.",
+      "components": ["PortfolioCanvas", "PortfolioNode", "CreatePortfolioButton", "CanvasControls", "PortfolioDetailDrawer"],
       "authLevel": "authenticated",
       "priority": 2,
       "dependsOn": ["/company-setup"],
       "specVersion": 1,
       "source": "explicit",
-      "layoutHint": "No universal dashboard layout — portfolio-level page. Header with portfolio summary. Grid of company cards below. Add company button in header or as empty-state CTA.",
-      "emptyState": "No companies yet. Large CTA: 'Create your first company' with illustration. Routes to Company Setup.",
-      "loadingState": "Skeleton cards in grid layout. Portfolio summary shows shimmer placeholders.",
-      "errorState": "Toast notification for failed data fetch. Retry button in card area.",
-      "mobileConsiderations": "Company cards stack vertically in single column. Add company button floats at bottom.",
+      "layoutHint": "No universal dashboard layout — full-bleed React Flow canvas (@xyflow/react) with glassmorphism node cards on a subtle grid background. Minimal toolbar at top-right with zoom, fit-view, and create portfolio. Click a node to drill into that portfolio.",
+      "emptyState": "Empty canvas with a single centered CTA node: 'Create your first portfolio'. Routes to inline create dialog.",
+      "loadingState": "Skeleton portfolio nodes positioned in a grid with shimmer animation. Canvas controls visible immediately.",
+      "errorState": "Toast notification for failed data fetch. Inline retry affordance on the canvas.",
+      "mobileConsiderations": "Canvas supports pinch-zoom and pan. Nodes scale down. Create portfolio button floats at bottom-right. Detail drawer becomes a bottom sheet.",
       "dataRequirements": [
-        { "component": "CompanyCard", "fields": ["id", "name", "stage", "industry", "createdAt"] },
-        { "component": "PortfolioSummary", "fields": ["totalCompanies", "activeCompanies"] }
+        { "component": "PortfolioNode", "fields": ["id", "name", "description", "companyCount", "createdAt"] },
+        { "component": "PortfolioCanvas", "fields": ["portfolios"] }
       ],
       "apiEndpoints": [
-        { "endpoint": "GET /api/companies", "source": "explicit" },
+        { "endpoint": "GET /api/portfolios", "source": "explicit" },
+        { "endpoint": "POST /api/portfolios", "source": "explicit" },
+        { "endpoint": "DELETE /api/portfolios/:id", "source": "explicit" }
+      ],
+      "validationRules": [
+        "Portfolio name is required and non-empty"
+      ],
+      "events": [
+        { "name": "page_viewed", "trigger": "Page load", "properties": ["portfolioCount"], "source": "explicit" },
+        { "name": "portfolio_opened", "trigger": "User clicks a portfolio node", "properties": ["portfolioId"], "source": "explicit" },
+        { "name": "create_portfolio_clicked", "trigger": "User clicks create portfolio button", "properties": [], "source": "explicit" },
+        { "name": "portfolio_created", "trigger": "Server returns success for new portfolio", "properties": ["portfolioId"], "source": "explicit" }
+      ],
+      "featureFlagCandidates": []
+    },
+    {
+      "name": "PortfolioDetail",
+      "route": "/portfolios/:portfolioId",
+      "purpose": "Entity canvas for a single portfolio showing all companies inside it as React Flow nodes. Shows portfolio header with name, description, and summary. Users can add companies, open a company workspace, or detach a company from the portfolio.",
+      "components": ["PortfolioHeader", "PortfolioSummary", "CompanyCanvas", "CompanyNode", "AddCompanyButton", "CompanyDetailDrawer", "CanvasControls"],
+      "authLevel": "authenticated",
+      "priority": 2,
+      "dependsOn": ["/portfolios"],
+      "specVersion": 1,
+      "source": "explicit",
+      "layoutHint": "No universal dashboard layout. Sticky portfolio header across the top (name, summary metrics, add company). Full-bleed React Flow canvas (@xyflow/react) below with company nodes laid out on a grid. Glassmorphism node cards with company name, stage, and industry. Click a node to open its Command Center.",
+      "emptyState": "Empty canvas with a single centered CTA node: 'Add your first company to this portfolio'. Routes to Company Setup with portfolioId prefilled.",
+      "loadingState": "Header skeleton with shimmer. Skeleton company nodes positioned on the canvas.",
+      "errorState": "Toast notification for failed operations. Inline retry affordance on the canvas.",
+      "mobileConsiderations": "Portfolio header stacks vertically. Canvas supports pinch-zoom and pan. Company nodes tappable. Add company button floats at bottom-right.",
+      "dataRequirements": [
+        { "component": "PortfolioHeader", "fields": ["id", "name", "description"] },
+        { "component": "PortfolioSummary", "fields": ["totalCompanies", "activeCompanies"] },
+        { "component": "CompanyNode", "fields": ["id", "name", "stage", "industry", "createdAt"] },
+        { "component": "CompanyCanvas", "fields": ["companies"] }
+      ],
+      "apiEndpoints": [
+        { "endpoint": "GET /api/portfolios/:id", "source": "explicit" },
+        { "endpoint": "GET /api/portfolios/:id/companies", "source": "explicit" },
         { "endpoint": "POST /api/companies", "source": "explicit" },
+        { "endpoint": "POST /api/portfolios/:id/companies", "source": "explicit" },
         { "endpoint": "DELETE /api/companies/:id", "source": "explicit" }
       ],
       "validationRules": [],
       "events": [
-        { "name": "page_viewed", "trigger": "Page load", "properties": ["companyCount"], "source": "explicit" },
-        { "name": "company_opened", "trigger": "User clicks company card", "properties": ["companyId"], "source": "explicit" },
-        { "name": "add_company_clicked", "trigger": "User clicks add company button", "properties": [], "source": "explicit" }
+        { "name": "page_viewed", "trigger": "Page load", "properties": ["portfolioId", "companyCount"], "source": "explicit" },
+        { "name": "company_opened", "trigger": "User clicks a company node", "properties": ["companyId"], "source": "explicit" },
+        { "name": "add_company_clicked", "trigger": "User clicks add company button", "properties": ["portfolioId"], "source": "explicit" },
+        { "name": "company_attached", "trigger": "Existing company attached to this portfolio", "properties": ["portfolioId", "companyId"], "source": "explicit" }
       ],
       "featureFlagCandidates": []
     },
@@ -210,7 +259,7 @@
       "components": ["KPICardGrid", "ActiveWorkflowsList", "RecentTasksList", "AlertsPanel", "QuickActionButtons"],
       "authLevel": "authenticated",
       "priority": 3,
-      "dependsOn": ["/portfolio"],
+      "dependsOn": ["/portfolios/:portfolioId"],
       "specVersion": 1,
       "source": "explicit",
       "layoutHint": "Universal dashboard layout: Header (glassmorphism, org context switcher, search, notifications, account), Floating AI Control Panel (sticky top-center, collapsed KPI chips + alerts + next action), Left Rail (Home, Tasks, Workflows, Org, Settings), Workspace (KPI cards grid, active workflows list, recent tasks, alerts), Right Rail (AI chat stub + agent status).",
@@ -484,7 +533,7 @@
       "id": "header",
       "name": "Header",
       "purpose": "Glassmorphism top navigation bar with organization/portfolio context switcher, global navigation, search (UI only in v1), notifications bell, and account menu.",
-      "usedByPages": ["/company/:companyId", "/company/:companyId/org", "/company/:companyId/chat", "/company/:companyId/tasks", "/company/:companyId/workflows", "/settings", "/portfolio"],
+      "usedByPages": ["/company/:companyId", "/company/:companyId/org", "/company/:companyId/chat", "/company/:companyId/tasks", "/company/:companyId/workflows", "/settings", "/portfolios", "/portfolios/:portfolioId"],
       "props": ["companyName", "companyId", "userName", "avatarUrl"],
       "source": "explicit"
     },
@@ -507,7 +556,7 @@
     {
       "id": "floating-ai-panel",
       "name": "FloatingAIPanel",
-      "purpose": "Sticky floating panel at top-center of workspace. Collapsed state shows KPI chips, alert count, and next-best action. Expanded state shows deeper insights, workflow context, AI recommendations. Glassmorphism card with primary gradient accent border. Stub data in v1.",
+      "purpose": "Sticky floating panel at top-center of workspace. Collapsed state shows KPI chips, alert count, and next-best action. Expanded state shows deeper insights, workflow context, AI recommendations. Glassmorphism card with a solid #6a37d4 accent border. Stub data in v1.",
       "usedByPages": ["/company/:companyId", "/company/:companyId/org", "/company/:companyId/tasks", "/company/:companyId/workflows"],
       "props": ["companyId", "collapsed", "onToggle"],
       "source": "explicit"
@@ -527,7 +576,8 @@
     "/forgot-password",
     "/reset-password",
     "/company-setup",
-    "/portfolio",
+    "/portfolios",
+    "/portfolios/:portfolioId",
     "/company/:companyId",
     "/company/:companyId/org",
     "/company/:companyId/chat",
@@ -543,11 +593,18 @@
       { "method": "POST", "path": "/api/auth/logout", "description": "End user session and invalidate token.", "requestBody": [], "responseFields": [], "authRequired": true, "source": "explicit" },
       { "method": "GET", "path": "/api/users/me", "description": "Get current authenticated user profile.", "requestBody": [], "responseFields": ["id", "email", "username", "fullName", "avatarUrl", "createdAt"], "authRequired": true, "uiPageRef": "/settings", "source": "explicit" },
       { "method": "PUT", "path": "/api/users/me", "description": "Update current user profile (name, email, avatar).", "requestBody": ["fullName", "email", "avatarUrl"], "responseFields": ["id", "email", "username", "fullName", "avatarUrl"], "authRequired": true, "uiPageRef": "/settings", "source": "explicit" },
-      { "method": "GET", "path": "/api/companies", "description": "List all companies owned by the authenticated user.", "requestBody": [], "responseFields": ["id", "name", "stage", "industry", "businessModel", "goals", "createdAt"], "authRequired": true, "uiPageRef": "/portfolio", "source": "explicit" },
+      { "method": "GET", "path": "/api/companies", "description": "List all companies owned by the authenticated user.", "requestBody": [], "responseFields": ["id", "name", "stage", "industry", "businessModel", "goals", "createdAt"], "authRequired": true, "uiPageRef": "/portfolios", "source": "explicit" },
+      { "method": "GET", "path": "/api/portfolios", "description": "List all portfolios owned by the authenticated user.", "requestBody": [], "responseFields": ["id", "ownerId", "name", "description", "createdAt", "updatedAt"], "authRequired": true, "uiPageRef": "/portfolios", "source": "explicit" },
+      { "method": "POST", "path": "/api/portfolios", "description": "Create a new portfolio for the authenticated user.", "requestBody": ["name", "description"], "responseFields": ["id", "ownerId", "name", "description", "createdAt"], "authRequired": true, "uiPageRef": "/portfolios", "source": "explicit" },
+      { "method": "GET", "path": "/api/portfolios/:id", "description": "Get a single portfolio by id.", "requestBody": [], "responseFields": ["id", "ownerId", "name", "description", "createdAt", "updatedAt"], "authRequired": true, "uiPageRef": "/portfolios/:portfolioId", "source": "explicit" },
+      { "method": "PUT", "path": "/api/portfolios/:id", "description": "Update a portfolio name or description.", "requestBody": ["name", "description"], "responseFields": ["id", "name", "description"], "authRequired": true, "uiPageRef": "/portfolios/:portfolioId", "source": "explicit" },
+      { "method": "DELETE", "path": "/api/portfolios/:id", "description": "Delete a portfolio. Companies inside the portfolio are detached (portfolio_id set to null), not deleted.", "requestBody": [], "responseFields": [], "authRequired": true, "uiPageRef": "/portfolios", "source": "explicit" },
+      { "method": "GET", "path": "/api/portfolios/:id/companies", "description": "List all companies belonging to a portfolio.", "requestBody": [], "responseFields": ["id", "name", "stage", "industry", "createdAt"], "authRequired": true, "uiPageRef": "/portfolios/:portfolioId", "source": "explicit" },
+      { "method": "POST", "path": "/api/portfolios/:id/companies", "description": "Attach an existing company to this portfolio by id.", "requestBody": ["companyId"], "responseFields": ["id", "portfolioId", "name"], "authRequired": true, "uiPageRef": "/portfolios/:portfolioId", "source": "explicit" },
       { "method": "POST", "path": "/api/companies", "description": "Create a new company for the authenticated user.", "requestBody": ["name", "stage", "industry", "businessModel", "goals"], "responseFields": ["id", "name", "stage", "industry", "businessModel", "goals", "createdAt"], "authRequired": true, "uiPageRef": "/company-setup", "source": "explicit" },
       { "method": "GET", "path": "/api/companies/:id", "description": "Get single company details by ID.", "requestBody": [], "responseFields": ["id", "ownerId", "name", "stage", "industry", "businessModel", "goals", "createdAt"], "authRequired": true, "uiPageRef": "/company/:companyId", "source": "explicit" },
       { "method": "PUT", "path": "/api/companies/:id", "description": "Update company profile fields.", "requestBody": ["name", "stage", "industry", "businessModel", "goals"], "responseFields": ["id", "name", "stage", "industry", "businessModel", "goals"], "authRequired": true, "uiPageRef": "/settings", "source": "explicit" },
-      { "method": "DELETE", "path": "/api/companies/:id", "description": "Delete a company and all associated data.", "requestBody": [], "responseFields": [], "authRequired": true, "uiPageRef": "/portfolio", "source": "explicit" },
+      { "method": "DELETE", "path": "/api/companies/:id", "description": "Delete a company and all associated data.", "requestBody": [], "responseFields": [], "authRequired": true, "uiPageRef": "/portfolios/:portfolioId", "source": "explicit" },
       { "method": "GET", "path": "/api/companies/:id/departments", "description": "List all departments for a company.", "requestBody": [], "responseFields": ["id", "companyId", "name", "description"], "authRequired": true, "uiPageRef": "/company/:companyId/org", "source": "explicit" },
       { "method": "POST", "path": "/api/companies/:id/departments", "description": "Create a new department in a company.", "requestBody": ["name", "description"], "responseFields": ["id", "companyId", "name", "description"], "authRequired": true, "uiPageRef": "/company/:companyId/org", "source": "explicit" },
       { "method": "PUT", "path": "/api/companies/:id/departments/:did", "description": "Update a department.", "requestBody": ["name", "description"], "responseFields": ["id", "name", "description"], "authRequired": true, "uiPageRef": "/company/:companyId/org", "source": "explicit" },

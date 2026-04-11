@@ -5,6 +5,7 @@ import { registerAIRoutes } from "./routes/ai";
 import { registerAgentRoutes } from "./routes/agents";
 import { registerTaskRoutes } from "./routes/tasks";
 import { registerCompanyRoutes } from "./routes/companies";
+import { registerPortfolioRoutes } from "./routes/portfolios";
 import { registerWorkflowRoutes } from "./routes/workflows";
 import { registerConversationRoutes } from "./routes/conversations";
 import { registerNotificationRoutes } from "./routes/notifications";
@@ -23,6 +24,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerAIRoutes(app);
   registerAgentRoutes(app);
   registerCompanyRoutes(app);
+  registerPortfolioRoutes(app);
   registerWorkflowRoutes(app);
   registerTaskRoutes(app);
   registerConversationRoutes(app);

@@ -24,8 +24,9 @@ The system breaks the template look through intentional asymmetry: heavy-weight 
 
 **Rules:**
 - NO 1px solid borders for sectioning. Use background shifts instead.
+- NO gradients anywhere. All colors are solid flat fills.
 - Glassmorphism on floating elements: rgba(255,255,255,0.7) + backdrop-filter: blur(16px)
-- Main CTAs: linear gradient from #6a37d4 to #ae8dff at 135deg
+- Main CTAs: solid #6a37d4 fill (never a gradient).
 - Never use pure black (#000000) for text. Use #2c2f30.
 - Never use standard drop shadows. Always tint shadows with primary purple: 0 8px 32px rgba(106,55,212,0.08)
 - Maximum three layers of glass stacking
@@ -62,7 +63,7 @@ Sole typeface: **Inter**
 ## 5. Components
 
 **Buttons**
-- Primary: gradient fill (#6a37d4 → #ae8dff at 135deg), white text, 12px radius
+- Primary: solid #6a37d4 fill, white text, 12px radius. Hover darkens slightly to #5a2dc0. NO gradients.
 - Secondary: surface-container-high background, primary text, no border
 - Tertiary: ghost style, no background, primary text, shifts to surface-container-low on hover
 
@@ -93,7 +94,7 @@ Every authenticated page uses:
 **Floating AI Control Panel** — sticky top-center of workspace
 - Collapsed: KPI chips + alert count + next action
 - Expanded: deeper insights, workflow context, recommendations
-- Style: glassmorphism card, primary gradient accent border
+- Style: glassmorphism card with a solid #6a37d4 1px accent border. NO gradients.
 
 **Left Rail** — role-dependent nav, surface-container-low background, no dividers between items
 
@@ -123,3 +124,4 @@ Don't:
 - Use 1px solid borders to define screen edges
 - Use standard drop shadows without primary color tint
 - Use any icon library other than lucide-react
+- Use gradients anywhere — buttons, backgrounds, borders, text, or accents are all solid fills only
