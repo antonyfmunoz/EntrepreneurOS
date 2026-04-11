@@ -103,10 +103,23 @@ export interface PlannerInput {
    * (Firebase auth, custom data fetching) to choose merge vs replace.
    */
   pageSources?: Record<string, string>;
+  /**
+   * Optional per-page mode overrides keyed by spec page name. When the
+   * default heuristic flags a page for merge review (needsReview=true), the
+   * caller can inject an explicit decision here — typically `skip` to
+   * preserve the existing file, or `replace` to force overwrite after a
+   * human has decided the existing behavior is disposable.
+   *
+   * Overrides ALWAYS clear `needsReview`, and the rationale is updated to
+   * note that it came from an override. This is the documented escape
+   * hatch for unblocking integration runs without loosening the default
+   * merge-safety heuristic.
+   */
+  overrides?: Record<string, IntegrationMode>;
 }
 
 export function planBrownfieldIntegration(input: PlannerInput): IntegrationPlan {
-  const { specPages, inventory, pageSources = {} } = input;
+  const { specPages, inventory, pageSources = {}, overrides = {} } = input;
 
   // Build lookup tables off the inventory.
   const routesByPath = new Map(
@@ -176,6 +189,21 @@ export function planBrownfieldIntegration(input: PlannerInput): IntegrationPlan 
       // Defensive default.
       mode = "create";
       rationale = "Falling back to create — no overlap detected.";
+    }
+
+    // Apply explicit override if the caller supplied one. Overrides ALWAYS
+    // win over the heuristic result and ALWAYS clear needsReview — the
+    // caller has already decided.
+    const override = overrides[page.name];
+    if (override && override !== mode) {
+      rationale =
+        `Override applied via OVERRIDES.json: ${mode}${needsReview ? " (needs review)" : ""} → ${override}. ` +
+        `Original rationale: ${rationale}`;
+      mode = override;
+      needsReview = false;
+    } else if (override && override === mode && needsReview) {
+      rationale = `Override applied via OVERRIDES.json: confirmed ${mode}, review waived. ${rationale}`;
+      needsReview = false;
     }
 
     entries.push({

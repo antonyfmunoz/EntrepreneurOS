@@ -34,6 +34,7 @@ import { injectNavItem } from "../../code-integrator/nav-injector.js";
 import {
   planBrownfieldIntegration,
   renderIntegrationPlanMarkdown,
+  type IntegrationMode,
   type IntegrationPlanEntry,
 } from "../../code-integrator/brownfield-planner.js";
 import {
@@ -116,6 +117,31 @@ async function loadUiGenOutputs(
     }));
 }
 
+/**
+ * Resolve a ui-gen row to its spec page by **pageName**, not pageIndex.
+ *
+ * Historically the adapter did `spec.pages[row.pageIndex]`, which broke the
+ * moment the spec was reordered or had pages inserted/removed between runs —
+ * every ui-gen row after the shift would map to the wrong spec page (wrong
+ * filename, wrong content, silent data corruption).
+ *
+ * Name-based matching is stable across spec edits. Also returns the page's
+ * **current** index in the spec so downstream code can surface a consistent
+ * ordering to the integration planner and the phase-runner.
+ *
+ * Returns `null` if the row references a page that no longer exists in the
+ * spec (e.g. a page was removed). Those rows are orphaned — caller should
+ * log and skip them rather than silently integrating stale HTML.
+ */
+export function resolveRowToSpecPage(
+  row: { pageIndex: number; pageName: string; output?: UiGenOutput },
+  spec: SpecOutput,
+): { page: PageSpecFull; currentSpecIndex: number } | null {
+  const currentSpecIndex = spec.pages.findIndex((p) => p.name === row.pageName);
+  if (currentSpecIndex === -1) return null;
+  return { page: spec.pages[currentSpecIndex], currentSpecIndex };
+}
+
 // Best-effort remixicon class selection from a page name. Defaults to a
 // generic layout icon. Caller can override later by editing sidebar.tsx.
 function selectIconClass(pageName: string): string {
@@ -131,6 +157,68 @@ function selectIconClass(pageName: string): string {
   if (/calendar|schedule/.test(lc)) return "ri-calendar-line";
   if (/task/.test(lc)) return "ri-task-line";
   return "ri-layout-line";
+}
+
+/**
+ * Load per-page integration mode overrides from
+ * `<outputPath>/integration/OVERRIDES.json`.
+ *
+ * File format: `{ "PageName": "skip" | "create" | "replace" | "merge" | "supplement" }`
+ *
+ * Missing file → empty overrides. Malformed JSON or invalid mode → throw
+ * with the offending key/value so the user can fix it quickly instead of
+ * silently ignoring a typo that would re-block the integration run.
+ */
+function loadIntegrationOverrides(
+  projectRoot: string,
+  outputPath: string,
+): Record<string, IntegrationMode> {
+  const overridesPath = path.join(
+    projectRoot,
+    outputPath,
+    "integration",
+    "OVERRIDES.json",
+  );
+  if (!fs.existsSync(overridesPath)) return {};
+
+  const raw = fs.readFileSync(overridesPath, "utf-8").trim();
+  if (!raw) return {};
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(
+      `Phase "integration": OVERRIDES.json is not valid JSON. ` +
+        `Fix ${overridesPath} and re-run. (${(err as Error).message})`,
+    );
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(
+      `Phase "integration": OVERRIDES.json must be an object mapping ` +
+        `pageName → integration mode. Got ${typeof parsed} in ${overridesPath}.`,
+    );
+  }
+
+  const validModes: ReadonlySet<IntegrationMode> = new Set<IntegrationMode>([
+    "create",
+    "replace",
+    "merge",
+    "supplement",
+    "skip",
+  ]);
+  const out: Record<string, IntegrationMode> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value !== "string" || !validModes.has(value as IntegrationMode)) {
+      throw new Error(
+        `Phase "integration": OVERRIDES.json has invalid mode "${String(value)}" ` +
+          `for "${key}". Must be one of: create, replace, merge, supplement, skip.`,
+      );
+    }
+    out[key] = value as IntegrationMode;
+  }
+  return out;
 }
 
 // ─── Preview helpers (Phase C) ───────────────────────────────────────────────
@@ -160,13 +248,16 @@ async function buildIntegrationPreview(config: ProjectConfig): Promise<string> {
   }
 
   const onlySpecPagesWithUiGen = uiGenRows
-    .map((row) => spec.pages[row.pageIndex])
+    .map((row) => resolveRowToSpecPage(row, spec)?.page)
     .filter((p): p is PageSpecFull => Boolean(p));
+
+  const overrides = loadIntegrationOverrides(projectRoot, config.outputPath);
 
   const plan = planBrownfieldIntegration({
     specPages: onlySpecPagesWithUiGen,
     inventory,
     pageSources,
+    overrides,
   });
 
   return renderIntegrationPlanMarkdown(plan);
@@ -218,14 +309,34 @@ export const integrationPhaseImplementation: PhaseImplementation = {
       }
     }
 
-    const onlySpecPagesWithUiGen = uiGenRows
-      .map((row) => spec.pages[row.pageIndex])
-      .filter((p): p is PageSpecFull => Boolean(p));
+    // Resolve each ui-gen row to its current spec page by NAME.
+    // Orphaned rows (page removed from spec) are logged and dropped.
+    const resolvedRows: Array<{
+      row: (typeof uiGenRows)[number];
+      page: PageSpecFull;
+      currentSpecIndex: number;
+    }> = [];
+    for (const row of uiGenRows) {
+      const match = resolveRowToSpecPage(row, spec);
+      if (!match) {
+        console.warn(
+          `[integration] ui-gen row "${row.pageName}" (stored pageIndex=${row.pageIndex}) ` +
+            `no longer exists in the spec — skipping. Delete the row if this is intentional.`,
+        );
+        continue;
+      }
+      resolvedRows.push({ row, page: match.page, currentSpecIndex: match.currentSpecIndex });
+    }
+
+    const onlySpecPagesWithUiGen = resolvedRows.map((r) => r.page);
+
+    const overrides = loadIntegrationOverrides(projectRoot, config.outputPath);
 
     const plan = planBrownfieldIntegration({
       specPages: onlySpecPagesWithUiGen,
       inventory,
       pageSources,
+      overrides,
     });
 
     // Write PLAN.md so the user can audit decisions before/after the run.
@@ -289,17 +400,19 @@ export const integrationPhaseImplementation: PhaseImplementation = {
     // Build base work unit inputs for every ui-gen page. HTML is loaded from
     // the locally cached file (written by ui-gen phase at generation time),
     // which is immune to Stitch presigned URL expiry.
+    //
+    // Iterate over the name-resolved rows, NOT the raw uiGenRows — the raw
+    // row's pageIndex may be stale relative to the current spec order, so we
+    // use `currentSpecIndex` for all downstream indexing (plan lookup,
+    // complete-page filter, work-unit pageIndex).
     const previewsDir = path.join(projectRoot, config.outputPath, "previews");
     const baseWork: Array<{ unit: PageWorkUnit; needsAgent: boolean }> = [];
-    for (const row of uiGenRows) {
-      const page = spec.pages[row.pageIndex];
-      if (!page) continue;
-
+    for (const { row, page, currentSpecIndex } of resolvedRows) {
       const planEntry = planByName.get(page.name);
       if (!planEntry) continue;
 
       const skipMode = planEntry.mode === "skip";
-      const alreadyComplete = completePageIndexes.has(row.pageIndex);
+      const alreadyComplete = completePageIndexes.has(currentSpecIndex);
 
       let htmlContent = "";
       if (!skipMode) {
@@ -331,7 +444,7 @@ export const integrationPhaseImplementation: PhaseImplementation = {
       baseWork.push({
         unit: {
           pageName: page.name,
-          pageIndex: row.pageIndex,
+          pageIndex: currentSpecIndex,
           input,
         },
         needsAgent: !skipMode && !alreadyComplete && htmlContent.length > 0,
