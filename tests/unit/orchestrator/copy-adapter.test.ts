@@ -1,4 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+
+// ─── Isolated temp workspace ─────────────────────────────────────────────────
+// copy-adapter.runPage() writes PROJECT-COPY.json to
+// `<config.repoPath>/.planning/output/copy/` using real filesystem APIs.
+// Use a per-run tmpdir as repoPath so tests never touch the real workspace.
+const TMP_REPO = fs.mkdtempSync(path.join(os.tmpdir(), "copy-adapter-test-"));
 
 // ─── Mock dependencies ───────────────────────────────────────────────────────
 
@@ -76,7 +85,7 @@ const BRIEF = {
 
 const CONFIG: ProjectConfig = {
   projectId: "test-proj",
-  repoPath: ".",
+  repoPath: TMP_REPO,
   framework: "react-vite-tailwind-shadcn",
   designSystemPath: ".planning/design-system.md",
   outputPath: ".planning/output",
@@ -113,6 +122,15 @@ describe("copyPhaseImplementation", () => {
       config: JSON.stringify({ ...CONFIG, brief: BRIEF }),
       startedAt: new Date(),
     }]);
+  });
+
+  afterAll(() => {
+    // Clean up the isolated temp workspace created at module load.
+    try {
+      fs.rmSync(TMP_REPO, { recursive: true, force: true });
+    } catch {
+      // Best-effort cleanup; ignore failures.
+    }
   });
 
   it("prepare() returns single work unit named 'project-copy'", async () => {
