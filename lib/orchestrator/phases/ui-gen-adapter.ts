@@ -11,6 +11,7 @@
 import path from "node:path";
 import fs from "node:fs";
 import readline from "node:readline";
+import pLimit from "p-limit";
 import { and, asc, desc, eq } from "drizzle-orm";
 import {
   dmTokens,
@@ -65,7 +66,18 @@ interface UiGenRunInput {
   brandVoice: string | null;
   /** Approved copy from copy planning phase, or null if copy phase was skipped */
   pageCopy: PageCopy | null;
+  /** Accumulated feedback from prior page reviews (carry-forward). */
+  accumulatedFeedback?: string;
+  /** Cached output from parallel batch generation during prepare(). When set,
+   *  runPage returns this directly instead of calling Stitch again. */
+  precomputedOutput?: unknown;
+  /** Cached error from parallel batch generation. When set, runPage throws. */
+  precomputedError?: string;
 }
+
+/** Max concurrent Stitch generations per prepare() batch. Stitch free tier
+ *  has tight rate limits; 3 concurrent calls is a safe ceiling. */
+const STITCH_PARALLEL_LIMIT = 3;
 
 async function loadLatestSpec(projectId: string): Promise<SpecOutput> {
   const db = getOrchestratorDb();
@@ -136,8 +148,83 @@ async function loadPriorScreenshotsByIndex(
   return map;
 }
 
+// ─── Single-page generation helper ───────────────────────────────────────────
+// Extracted from runPage so it can be called in parallel from prepare() when
+// batching multiple pages at once. Pure function over its inputs — no DB writes.
+async function generatePage(
+  input: UiGenRunInput,
+  config: ProjectConfig,
+): Promise<unknown> {
+  const { page, tokens, designSystemPath, priorScreenshotUrl, brandVoice, pageCopy } = input;
+
+  const discoveryResult = discoverComponents(page.components);
+  const componentReferences = formatDiscoveryForPrompt(discoveryResult);
+
+  let combinedFeedback = GLOBAL_USER_FEEDBACK;
+  if (input.accumulatedFeedback) {
+    combinedFeedback += "\n" + input.accumulatedFeedback;
+  }
+
+  const prompt = buildStitchPrompt(
+    page,
+    tokens,
+    priorScreenshotUrl ?? undefined,
+    tokens?.componentDirection ?? undefined,
+    componentReferences || undefined,
+    undefined,
+    designSystemPath,
+    brandVoice ?? undefined,
+    pageCopy ?? undefined,
+    undefined,
+    combinedFeedback,
+  );
+
+  const stitchResult = await generateScreen(config.stitchProjectId!, {
+    prompt,
+    deviceType: "DESKTOP",
+  });
+
+  const htmlResp = await fetch(stitchResult.htmlUrl);
+  if (!htmlResp.ok) {
+    throw new Error(
+      `Phase "ui-gen": failed to fetch generated HTML (${htmlResp.status}) ` +
+        `for ${page.name}. Stitch presigned URL may have expired.`,
+    );
+  }
+  const htmlContent = await htmlResp.text();
+
+  const previewDir = path.resolve(config.repoPath, ".planning/output/previews");
+  if (!fs.existsSync(previewDir)) {
+    fs.mkdirSync(previewDir, { recursive: true });
+  }
+  const localHtmlPath = path.resolve(previewDir, `${page.name}.html`);
+  fs.writeFileSync(localHtmlPath, htmlContent, "utf-8");
+  console.log(`[ui-gen] Cached HTML → ${localHtmlPath}`);
+
+  const review = await dualReview({
+    htmlContent,
+    screenshotUrls: [stitchResult.screenshotUrl],
+    spec: page,
+    tokens,
+    priorPatterns: [],
+  });
+
+  const approved = allDimensionsPass(review.combined);
+  const scoreSummary = formatScoreSummary(review.combined);
+  console.log(`[ui-gen] ${page.name}: ${scoreSummary} | approved=${approved}`);
+
+  return UiGenPhaseOutputSchema.parse({
+    htmlUrl: stitchResult.htmlUrl,
+    screenshotUrl: stitchResult.screenshotUrl,
+    tokenVersion: tokens?.version ?? 0,
+    approved,
+    scoreSummary,
+    localHtmlPath,
+  });
+}
+
 export const uiGenPhaseImplementation: PhaseImplementation = {
-  async prepare(config: ProjectConfig): Promise<PageWorkUnit[]> {
+  async prepare(config: ProjectConfig, runId?: number): Promise<PageWorkUnit[]> {
     // Allow env fallback so users can keep project IDs out of checked-in config.
     if (!config.stitchProjectId && process.env.STITCH_PROJECT_ID) {
       config.stitchProjectId = process.env.STITCH_PROJECT_ID;
@@ -191,103 +278,103 @@ export const uiGenPhaseImplementation: PhaseImplementation = {
       );
     }
 
-    return spec.pages.map((page, idx) => ({
-      pageName: page.name,
-      pageIndex: idx,
-      input: {
+    // Build base work unit inputs for every spec page.
+    const baseInputs: Map<number, UiGenRunInput> = new Map();
+    for (let idx = 0; idx < spec.pages.length; idx++) {
+      const page = spec.pages[idx];
+      baseInputs.set(idx, {
         page,
         pageIndex: idx,
         tokens,
         designSystemPath,
-        // Carry forward the screenshot from page N-1 so Stitch has visual
-        // context for inheritance. Page 0 has no prior reference.
         priorScreenshotUrl: idx > 0 ? priorByIndex.get(idx - 1) ?? null : null,
         brandVoice,
         pageCopy: projectCopy?.pages.find((p) => p.pageName === page.name) ?? null,
-      } satisfies UiGenRunInput,
+      });
+    }
+
+    // Identify which pages are already complete for this run so we don't
+    // re-generate them. If runId is not passed (legacy caller), generate
+    // everything — caller is responsible for picking the right subset.
+    const completePageIndexes = new Set<number>();
+    if (runId !== undefined) {
+      const existingRows = await getOrchestratorDb()
+        .select()
+        .from(pipelinePages)
+        .where(
+          and(
+            eq(pipelinePages.runId, runId),
+            eq(pipelinePages.phase, "ui-gen"),
+            eq(pipelinePages.status, "complete"),
+          ),
+        );
+      for (const r of existingRows) completePageIndexes.add(r.pageIndex);
+    }
+
+    const pendingIndexes = spec.pages
+      .map((_, idx) => idx)
+      .filter((idx) => !completePageIndexes.has(idx));
+
+    // ── Parallel Stitch generation ───────────────────────────────────────────
+    // Run up to STITCH_PARALLEL_LIMIT generations concurrently. Per-page
+    // failures are captured and attached to the work unit — they do NOT block
+    // the rest of the batch. The phase-runner sees failures via runPage()
+    // which throws the cached error string.
+    if (pendingIndexes.length > 0) {
+      console.log(
+        `[ui-gen] Parallel generation: ${pendingIndexes.length} page(s), ` +
+          `concurrency=${STITCH_PARALLEL_LIMIT}`,
+      );
+      const limit = pLimit(STITCH_PARALLEL_LIMIT);
+      const results = await Promise.allSettled(
+        pendingIndexes.map((idx) =>
+          limit(async () => {
+            const input = baseInputs.get(idx)!;
+            const output = await generatePage(input, config);
+            return { idx, output };
+          }),
+        ),
+      );
+
+      for (let i = 0; i < results.length; i++) {
+        const idx = pendingIndexes[i];
+        const result = results[i];
+        const input = baseInputs.get(idx)!;
+        if (result.status === "fulfilled") {
+          input.precomputedOutput = result.value.output;
+        } else {
+          const msg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+          input.precomputedError = msg;
+          console.error(`[ui-gen] ${spec.pages[idx].name} FAILED: ${msg}`);
+        }
+      }
+
+      const ok = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results.length - ok;
+      console.log(`[ui-gen] Parallel batch complete: ${ok} ok, ${failed} failed`);
+    }
+
+    return spec.pages.map((page, idx) => ({
+      pageName: page.name,
+      pageIndex: idx,
+      input: baseInputs.get(idx)!,
     }));
   },
 
   async runPage(rawInput: unknown, config: ProjectConfig): Promise<unknown> {
-    const input = rawInput as UiGenRunInput & { accumulatedFeedback?: string };
-    const { page, tokens, designSystemPath, priorScreenshotUrl, brandVoice, pageCopy } = input;
+    const input = rawInput as UiGenRunInput;
 
-    // Discover component references from the warm cache.
-    const discoveryResult = discoverComponents(page.components);
-    const componentReferences = formatDiscoveryForPrompt(discoveryResult);
-
-    // Merge static GLOBAL_USER_FEEDBACK with any accumulated feedback from
-    // prior page reviews (injected by the phase runner on 'continue-with-feedback').
-    let combinedFeedback = GLOBAL_USER_FEEDBACK;
-    if (input.accumulatedFeedback) {
-      combinedFeedback += "\n" + input.accumulatedFeedback;
+    // If prepare() already generated this page in parallel, return the cache.
+    if (input.precomputedError) {
+      throw new Error(input.precomputedError);
+    }
+    if (input.precomputedOutput !== undefined) {
+      return input.precomputedOutput;
     }
 
-    // Build prompt — design-system.md is the single source of truth, no
-    // hardcoded brand values. priorScreenshotUrl gives Stitch visual context
-    // from the previously approved page (multi-page inheritance).
-    // pageCopy injects approved copy from the copy planning phase — Stitch
-    // uses it as the single source of truth for all visible text.
-    const prompt = buildStitchPrompt(
-      page,
-      tokens,
-      priorScreenshotUrl ?? undefined,
-      tokens?.componentDirection ?? undefined,
-      componentReferences || undefined,
-      undefined, // enrichment — wired separately via skill-enrichment layer
-      designSystemPath,
-      brandVoice ?? undefined,
-      pageCopy ?? undefined,
-      undefined, // competitiveStructure
-      combinedFeedback,
-    );
-
-    // Generate the desktop screen via Stitch.
-    const stitchResult = await generateScreen(config.stitchProjectId!, {
-      prompt,
-      deviceType: "DESKTOP",
-    });
-
-    // Fetch the HTML so dualReview can score against it.
-    const htmlResp = await fetch(stitchResult.htmlUrl);
-    if (!htmlResp.ok) {
-      throw new Error(
-        `Phase "ui-gen": failed to fetch generated HTML (${htmlResp.status}) ` +
-          `for ${page.name}. Stitch presigned URL may have expired.`,
-      );
-    }
-    const htmlContent = await htmlResp.text();
-
-    // Cache HTML to disk so it's available even after presigned URLs expire.
-    const previewDir = path.resolve(config.repoPath, ".planning/output/previews");
-    if (!fs.existsSync(previewDir)) {
-      fs.mkdirSync(previewDir, { recursive: true });
-    }
-    const localHtmlPath = path.resolve(previewDir, `${page.name}.html`);
-    fs.writeFileSync(localHtmlPath, htmlContent, "utf-8");
-    console.log(`[ui-gen] Cached HTML → ${localHtmlPath}`);
-
-    // Dual review (Claude + Gemini if available).
-    const review = await dualReview({
-      htmlContent,
-      screenshotUrls: [stitchResult.screenshotUrl],
-      spec: page,
-      tokens,
-      priorPatterns: [],
-    });
-
-    const approved = allDimensionsPass(review.combined);
-    const scoreSummary = formatScoreSummary(review.combined);
-    console.log(`[ui-gen] ${page.name}: ${scoreSummary} | approved=${approved}`);
-
-    return UiGenPhaseOutputSchema.parse({
-      htmlUrl: stitchResult.htmlUrl,
-      screenshotUrl: stitchResult.screenshotUrl,
-      tokenVersion: tokens?.version ?? 0,
-      approved,
-      scoreSummary,
-      localHtmlPath,
-    });
+    // Fallback: single-page generation path (used by scripts/ui-gen-next.ts
+    // and scripts/ui-gen-runner.ts which bypass prepare()'s batch mode).
+    return generatePage(input, config);
   },
 
   async onPageComplete(

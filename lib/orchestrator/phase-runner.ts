@@ -40,9 +40,13 @@ export interface PageCompleteContext {
 }
 
 export interface PhaseImplementation {
-  /** Compute the work units for this phase from the project state. */
+  /** Compute the work units for this phase from the project state.
+   *  `runId` is passed so implementations can query pipeline_pages to skip
+   *  already-complete pages when batching expensive work (e.g. parallel
+   *  Stitch generation in ui-gen, parallel sub-agents in integration). */
   prepare(
     config: ProjectConfig,
+    runId?: number,
   ): Promise<PageWorkUnit[]>;
 
   /** Execute one page worth of work. Return value is JSON-serialized into the
@@ -88,8 +92,9 @@ export async function runPhase(
   impl: PhaseImplementation,
   config: ProjectConfig,
 ): Promise<PhaseRunResult> {
-  // 1. Compute work units for this phase
-  const workUnits = await impl.prepare(config);
+  // 1. Compute work units for this phase (passing runId so implementations
+  //    can skip already-complete pages when batching expensive work).
+  const workUnits = await impl.prepare(config, runId);
 
   // 2. Reconcile work units against existing pipeline_pages rows. Pages that
   //    already exist are reused (preserving status); missing pages are inserted
