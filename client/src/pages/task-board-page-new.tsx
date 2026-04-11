@@ -1,421 +1,459 @@
-// ⚠ MANUAL REVIEW REQUIRED
-// This file was written in supplement mode because an existing page at
-// the same kebab filename (task-board-page.tsx) already owns
-// the spec page name. Both pages now exist.
-//
-// Hand-merge: pick which one is authoritative, port any missing logic
-// from the other, wire the winner into the route, and delete the loser.
-// The integration planner will not repeat this collision once one file
-// is deleted.
-
 import { useState } from "react";
-import { Link } from "wouter";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Plus,
+  Loader2,
+  AlertCircle,
+  X,
+  CheckCircle2,
+  Circle,
+  Clock,
+  ArrowLeft,
+  ArrowRight,
+  Trash2,
+} from "lucide-react";
+
 import { UniversalLayout } from "@/components/layout/universal-layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Progress } from "@/components/ui/progress";
-import {
-  Plus,
-  Filter,
-  ChevronDown,
-  MoreHorizontal,
-  GripVertical,
-  MessageSquare,
-  Paperclip,
-  Zap,
-  CheckCircle2,
-  Lightbulb,
-  Clock,
-  ArrowUpDown,
-  Wand2,
-  Bot
-} from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import type { Task, InsertTask, UpdateTask } from "@shared/schema";
 
-interface Task {
-  id: string;
+type TaskStatus = "todo" | "in-progress" | "done";
+type TaskPriority = "low" | "medium" | "high" | "urgent";
+
+const statusColumns: Array<{
+  id: TaskStatus;
   title: string;
-  priority: "critical" | "high" | "medium" | "low";
-  assignee: {
-    type: "human" | "ai";
-    name: string;
-    avatar?: string;
-  };
-  status: "backlog" | "in-progress" | "in-review" | "done";
-  progress?: number;
-  attachments?: number;
-  comments?: number;
-  isActive?: boolean;
-  completedDate?: string;
-}
-
-const mockTasks: Task[] = [
+  accent: string;
+  icon: typeof Circle;
+}> = [
+  { id: "todo", title: "Todo", accent: "text-slate-500", icon: Circle },
   {
-    id: "1",
-    title: "Review Q3 Revenue Data",
-    priority: "high",
-    assignee: { type: "ai", name: "DEX AI" },
-    status: "backlog",
-    comments: 0
+    id: "in-progress",
+    title: "In Progress",
+    accent: "text-[#6a37d4]",
+    icon: Clock,
   },
   {
-    id: "2",
-    title: "Onboard New Lead Engineer",
-    priority: "medium",
-    assignee: {
-      type: "human",
-      name: "Sarah C.",
-      avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuCnw3YeSKthBnXWxtYdHxNrezQmKVz5iNrVEnwb7NQ1vw7WnBjdfwL_SKlf-1FB0lSlYr_OribH3pctAZme3ZQ2Os1ohUWalvz40VkxSKRu5loEjPkM8Tp9s72Czs62PFj2KRkBRzGKx8o-OkBy3xlIPcW8TGQ75H_QXK8F-fF2B-9BtKizgdcQbils03jlh-Ji9EZ5kdUXS2sDQYwQHEduJS22aCa4RAJ1WUnAdPlbHK8vz09tz0NDxuE_75ZCpJWwKWFyt5oJkYTC"
-    },
-    status: "backlog",
-    attachments: 3
+    id: "done",
+    title: "Done",
+    accent: "text-emerald-600",
+    icon: CheckCircle2,
   },
-  {
-    id: "3",
-    title: "Finalize Series B Deck",
-    priority: "critical",
-    assignee: {
-      type: "human",
-      name: "You",
-      avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuCEmurMIyLmtrRgrEUCWKX35wnooMCbYsENG9YKeMbJSecDnTyWoY5LSVwodZRrerTiJdTd_ImjYTsKTNe-kSYzaHSGc-ISepK5VV4X4uRVHLKzqgEsI3GMDgmONxDkGFZ0Ab56kCcdUIy9wKAxRnnrRRVASfw9EDa-Z7IhrpE4kFsD3ku0KV5gOK7aDUypw58blikShccUWnY8RVcCggqN_FlgzxsEq1u7fO3r9Plx2QQIP7TFTze8-04x_5obqdI9ct0VWzrlYVA2"
-    },
-    status: "in-progress",
-    progress: 80
-  },
-  {
-    id: "4",
-    title: "Automate Sales Pipeline",
-    priority: "high",
-    assignee: { type: "ai", name: "DEX AI" },
-    status: "in-progress",
-    isActive: true
-  },
-  {
-    id: "5",
-    title: "Company Entity Registration",
-    priority: "medium",
-    assignee: {
-      type: "human",
-      name: "Marcus J.",
-      avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuBL89h-7Y-6vT_kc_FP3OxHEqd9s28B7lclw1r3Css_kMW8AL33r72_vKRnfCd342glbDhNjiHIv1s0kvKfGinVRjLpOwrlhWOn-o2ep52hEPPrkQ0bG5fQAT4D0yoNwiDfTR9SHgfUnvIqZP8Vs0HkvNb3BHAqxwgRnmezoSeHV6uzozriBk_lCSbce2Y_irnL9uZr-rCjxt4Nv-hpgQqaiMvPB-c8SjyfBL_UYC4vcqxDYy96Wb4fUBG0DoOqaCDrUngyEeXzqr8-"
-    },
-    status: "done",
-    completedDate: "Sep 12"
-  }
 ];
 
-const columns = [
-  { id: "backlog", title: "Backlog", color: "text-on-surface-variant" },
-  { id: "in-progress", title: "In Progress", color: "text-primary" },
-  { id: "in-review", title: "In Review", color: "text-on-surface-variant" },
-  { id: "done", title: "Done", color: "text-tertiary" }
-] as const;
-
-const getPriorityConfig = (priority: Task["priority"]) => {
-  switch (priority) {
-    case "critical":
-      return { label: "Critical", className: "bg-error text-white" };
-    case "high":
-      return { label: "High", className: "bg-error/10 text-error" };
-    case "medium":
-      return { label: "Medium", className: "bg-secondary/10 text-secondary" };
-    case "low":
-      return { label: "Low", className: "bg-outline-variant/10 text-outline" };
-  }
+const priorityStyles: Record<TaskPriority, string> = {
+  low: "bg-slate-100 text-slate-600",
+  medium: "bg-blue-100 text-blue-700",
+  high: "bg-amber-100 text-amber-800",
+  urgent: "bg-red-100 text-red-700",
 };
 
-function TaskCard({ task }: { task: Task }) {
-  const priorityConfig = getPriorityConfig(task.priority);
-  const isDone = task.status === "done";
-
-  return (
-    <Card
-      className={`p-5 rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] group cursor-grab active:cursor-grabbing border border-transparent hover:border-primary/10 transition-all ${
-        task.priority === "critical" && task.status === "in-progress"
-          ? "border-l-4 border-l-error"
-          : ""
-      } ${isDone ? "opacity-70 bg-surface-container-lowest/60" : "bg-surface-container-lowest"}`}
-    >
-      <div className="flex items-center justify-between mb-3">
-        <Badge
-          className={`${priorityConfig.className} text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-sm`}
-        >
-          {isDone ? "Done" : priorityConfig.label}
-        </Badge>
-        {isDone ? (
-          <CheckCircle2 className="h-4 w-4 text-tertiary fill-tertiary" />
-        ) : (
-          <GripVertical className="h-4 w-4 text-outline-variant opacity-0 group-hover:opacity-100 transition-opacity" />
-        )}
-      </div>
-      <h3
-        className={`font-bold text-on-surface mb-4 leading-tight ${
-          isDone ? "line-through decoration-on-surface/30" : ""
-        }`}
-      >
-        {task.title}
-      </h3>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          {task.assignee.type === "ai" ? (
-            <>
-              <div className="w-6 h-6 rounded-full bg-primary-container flex items-center justify-center text-white">
-                <Zap className="h-3.5 w-3.5 fill-white" />
-              </div>
-              <span className="text-[11px] font-medium text-outline">
-                {task.assignee.name}
-              </span>
-            </>
-          ) : (
-            <>
-              <Avatar className="w-6 h-6">
-                <AvatarImage src={task.assignee.avatar} />
-                <AvatarFallback>{task.assignee.name[0]}</AvatarFallback>
-              </Avatar>
-              <span className="text-[11px] font-medium text-outline">
-                {task.assignee.name}
-              </span>
-            </>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {task.progress !== undefined && (
-            <>
-              <Progress value={task.progress} className="w-8 h-1" />
-              <span className="text-[10px] font-bold text-outline">
-                {task.progress}%
-              </span>
-            </>
-          )}
-          {task.isActive && (
-            <div className="px-2 py-1 bg-primary/5 rounded flex items-center gap-1">
-              <Wand2 className="h-2.5 w-2.5 text-primary" />
-              <span className="text-[9px] font-bold text-primary uppercase">
-                Active
-              </span>
-            </div>
-          )}
-          {task.attachments !== undefined && task.attachments > 0 && (
-            <>
-              <Paperclip className="h-3.5 w-3.5 text-outline" />
-              <span className="text-[10px] font-bold text-outline">
-                {task.attachments}
-              </span>
-            </>
-          )}
-          {task.comments !== undefined && task.comments > 0 && (
-            <MessageSquare className="h-3.5 w-3.5 text-outline" />
-          )}
-          {task.completedDate && (
-            <span className="text-[10px] font-bold text-outline">
-              {task.completedDate}
-            </span>
-          )}
-        </div>
-      </div>
-    </Card>
-  );
+function nextStatus(current: TaskStatus): TaskStatus | null {
+  if (current === "todo") return "in-progress";
+  if (current === "in-progress") return "done";
+  return null;
 }
 
-function KanbanColumn({
-  column,
-  tasks
-}: {
-  column: (typeof columns)[number];
-  tasks: Task[];
-}) {
-  const taskCount = tasks.length;
-  const isEmpty = taskCount === 0;
-
-  return (
-    <div className="kanban-column flex flex-col gap-4 min-w-[320px]">
-      <div className="flex items-center justify-between px-2">
-        <div className="flex items-center gap-2">
-          <h2 className="font-extrabold text-on-surface text-lg">
-            {column.title}
-          </h2>
-          <Badge
-            className={`${
-              column.id === "in-progress"
-                ? "bg-primary/10 text-primary"
-                : column.id === "done"
-                ? "bg-tertiary/10 text-tertiary"
-                : "bg-surface-container-high text-on-surface-variant"
-            } text-xs px-2 py-0.5 rounded-full font-bold`}
-          >
-            {taskCount}
-          </Badge>
-        </div>
-        <MoreHorizontal className="h-5 w-5 text-outline cursor-pointer" />
-      </div>
-      <div className="flex flex-col gap-4">
-        {isEmpty ? (
-          <div className="h-32 border-2 border-dashed border-outline-variant/20 rounded-2xl flex flex-col items-center justify-center text-outline-variant gap-2 bg-surface-container-low/30">
-            <Plus className="h-5 w-5" />
-            <span className="text-[10px] font-bold uppercase tracking-widest">
-              Drop here
-            </span>
-          </div>
-        ) : (
-          tasks.map((task) => <TaskCard key={task.id} task={task} />)
-        )}
-      </div>
-    </div>
-  );
+function prevStatus(current: TaskStatus): TaskStatus | null {
+  if (current === "done") return "in-progress";
+  if (current === "in-progress") return "todo";
+  return null;
 }
 
 export default function TaskBoard() {
-  const [tasks] = useState<Task[]>(mockTasks);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [showCreate, setShowCreate] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState<TaskPriority>("medium");
 
-  const getTasksByStatus = (status: Task["status"]) =>
-    tasks.filter((task) => task.status === status);
+  const {
+    data: tasks,
+    isLoading,
+    error,
+  } = useQuery<Task[], Error>({
+    queryKey: ["/api/tasks"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/tasks");
+      return (await res.json()) as Task[];
+    },
+  });
+
+  const createMutation = useMutation<Task, Error, InsertTask>({
+    mutationFn: async (input) => {
+      const res = await apiRequest("POST", "/api/tasks", input);
+      return (await res.json()) as Task;
+    },
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      setShowCreate(false);
+      setTitle("");
+      setDescription("");
+      setPriority("medium");
+      toast({ title: "Task created", description: created.title });
+    },
+    onError: (err) => {
+      toast({
+        title: "Couldn't create task",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateStatusMutation = useMutation<
+    Task,
+    Error,
+    { id: string; status: TaskStatus }
+  >({
+    mutationFn: async ({ id, status }) => {
+      const res = await apiRequest("PATCH", `/api/tasks/${id}`, {
+        status,
+      } satisfies UpdateTask);
+      return (await res.json()) as Task;
+    },
+    onMutate: async ({ id, status }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/tasks"] });
+      const previous = queryClient.getQueryData<Task[]>(["/api/tasks"]);
+      if (previous) {
+        queryClient.setQueryData<Task[]>(
+          ["/api/tasks"],
+          previous.map((t) => (t.id === id ? { ...t, status } : t)),
+        );
+      }
+      return { previous };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+    },
+    onError: (err, _vars, ctx) => {
+      const previous = (ctx as { previous?: Task[] } | undefined)?.previous;
+      if (previous) queryClient.setQueryData(["/api/tasks"], previous);
+      toast({
+        title: "Couldn't move task",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteMutation = useMutation<void, Error, string>({
+    mutationFn: async (id) => {
+      await apiRequest("DELETE", `/api/tasks/${id}`);
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/tasks"] });
+      const previous = queryClient.getQueryData<Task[]>(["/api/tasks"]);
+      if (previous) {
+        queryClient.setQueryData<Task[]>(
+          ["/api/tasks"],
+          previous.filter((t) => t.id !== id),
+        );
+      }
+      return { previous };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+    },
+    onError: (err, _vars, ctx) => {
+      const previous = (ctx as { previous?: Task[] } | undefined)?.previous;
+      if (previous) queryClient.setQueryData(["/api/tasks"], previous);
+      toast({
+        title: "Couldn't delete task",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmedTitle = title.trim();
+    const trimmedDescription = description.trim();
+    if (!trimmedTitle || !trimmedDescription) return;
+    createMutation.mutate({
+      title: trimmedTitle,
+      description: trimmedDescription,
+      status: "todo",
+      priority,
+      taskType: "standard",
+    });
+  }
+
+  function tasksInColumn(status: TaskStatus): Task[] {
+    if (!tasks) return [];
+    return tasks.filter((t) => (t.status as TaskStatus) === status);
+  }
 
   return (
     <UniversalLayout title="Task Board">
       <div className="max-w-[1600px] mx-auto px-8 pb-12">
         <header className="flex justify-between items-end mb-10">
           <div className="space-y-1">
-            <h1 className="text-4xl font-extrabold tracking-tight text-on-surface">
+            <h1 className="text-4xl font-extrabold tracking-tight text-[#2c2f30]">
               Task Board
             </h1>
-            <p className="text-on-surface-variant/70 font-medium">
-              Operational oversight and autonomous task execution.
+            <p className="text-slate-500 font-medium">
+              Plan, track, and complete tasks across your company.
             </p>
           </div>
-          <Button className="bg-primary-container text-white px-6 py-3 rounded-xl font-bold text-sm shadow-[0_8px_32px_rgba(106,55,212,0.08)] hover:scale-[0.98] transition-transform flex items-center gap-2">
+          <Button
+            onClick={() => setShowCreate((v) => !v)}
+            className="bg-[#6a37d4] text-white px-5 py-3 rounded-xl flex items-center gap-2 font-semibold text-sm hover:bg-[#5a2dc0]"
+          >
             <Plus className="h-4 w-4" />
-            Create Task
+            {showCreate ? "Cancel" : "Create Task"}
           </Button>
         </header>
 
-        <section className="flex flex-wrap items-center gap-4 mb-8">
-          <div className="flex items-center gap-2 bg-surface-container-low px-4 py-2 rounded-xl">
-            <Filter className="h-4 w-4 text-outline" />
-            <span className="text-xs font-bold text-outline uppercase tracking-widest">
-              Filters
-            </span>
-          </div>
-          <Button
-            variant="ghost"
-            className="bg-surface-container-lowest px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 text-on-surface-variant hover:bg-white transition-colors"
-          >
-            Assignee: All
-            <ChevronDown className="h-3 w-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            className="bg-surface-container-lowest px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 text-on-surface-variant hover:bg-white transition-colors"
-          >
-            Priority: Any
-            <ChevronDown className="h-3 w-3" />
-          </Button>
-          <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs font-medium text-outline">
-              Sorted by: Priority
-            </span>
-            <ArrowUpDown className="h-4 w-4 text-outline" />
-          </div>
-        </section>
+        {showCreate && (
+          <Card className="p-6 mb-8 bg-white shadow-[0_8px_32px_rgba(106,55,212,0.08)]">
+            <form onSubmit={handleCreate} className="space-y-4">
+              <div className="flex items-start justify-between">
+                <h3 className="text-lg font-semibold text-[#2c2f30]">
+                  New task
+                </h3>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setShowCreate(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
 
-        <div className="flex gap-6 overflow-x-auto pb-6 no-scrollbar">
-          {columns.map((column) => (
-            <KanbanColumn
-              key={column.id}
-              column={column}
-              tasks={getTasksByStatus(column.id)}
-            />
-          ))}
-        </div>
-      </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                  Title
+                </Label>
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Finalize Q4 launch plan"
+                  disabled={createMutation.isPending}
+                  required
+                  autoFocus
+                />
+              </div>
 
-      <aside className="hidden xl:flex fixed right-0 top-0 h-screen w-80 pt-24 pb-8 px-6 bg-surface-container-low flex-col gap-8 z-40">
-        <section>
-          <h4 className="text-xs font-black text-outline uppercase tracking-widest mb-6">
-            Agent Status
-          </h4>
-          <Card className="bg-white p-4 rounded-2xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-white">
-                  <Bot className="h-5 w-5" />
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                  Description
+                </Label>
+                <Textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Outline the release checklist, confirm marketing assets, and schedule the go-live."
+                  disabled={createMutation.isPending}
+                  required
+                  rows={3}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                  Priority
+                </Label>
+                <div className="flex gap-2">
+                  {(["low", "medium", "high", "urgent"] as TaskPriority[]).map(
+                    (p) => (
+                      <button
+                        type="button"
+                        key={p}
+                        onClick={() => setPriority(p)}
+                        disabled={createMutation.isPending}
+                        className={
+                          "px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors " +
+                          (priority === p
+                            ? priorityStyles[p]
+                            : "bg-slate-50 text-slate-400 hover:bg-slate-100")
+                        }
+                      >
+                        {p}
+                      </button>
+                    ),
+                  )}
                 </div>
-                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full"></div>
               </div>
+
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  disabled={
+                    createMutation.isPending ||
+                    !title.trim() ||
+                    !description.trim()
+                  }
+                  className="bg-[#6a37d4] text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#5a2dc0] disabled:opacity-50"
+                >
+                  {createMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    "Create task"
+                  )}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        )}
+
+        {isLoading && (
+          <div className="flex items-center justify-center py-24 text-slate-500">
+            <Loader2 className="h-6 w-6 animate-spin mr-3" />
+            <span className="text-sm">Loading tasks…</span>
+          </div>
+        )}
+
+        {error && !isLoading && (
+          <Card className="p-6 bg-red-50 border border-red-200 max-w-2xl">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold text-sm text-on-surface">
-                  DEX-01 Core
+                <p className="text-sm font-semibold text-red-900">
+                  Couldn't load tasks
                 </p>
-                <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-tight">
-                  Active Optimization
-                </p>
+                <p className="text-sm text-red-700 mt-1">{error.message}</p>
               </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-[10px] font-bold text-on-surface-variant">
-                <span>CPU LOAD</span>
-                <span>12%</span>
-              </div>
-              <Progress value={12} className="h-1.5" />
             </div>
           </Card>
-        </section>
+        )}
 
-        <section className="flex-grow">
-          <h4 className="text-xs font-black text-outline uppercase tracking-widest mb-6">
-            AI Insights
-          </h4>
-          <div className="space-y-4">
-            <Card className="bg-primary/5 p-4 rounded-2xl border-l-2 border-primary">
-              <div className="flex items-center gap-2 mb-2 text-primary">
-                <Lightbulb className="h-3.5 w-3.5" />
-                <span className="text-[11px] font-black uppercase tracking-tight">
-                  Bottleneck Alert
-                </span>
-              </div>
-              <p className="text-xs text-on-surface-variant leading-relaxed font-medium">
-                "Finalize Series B Deck" is at 80% but has stalled for 6 hours.
-                Recommend delegating financial appendix to DEX AI.
-              </p>
-              <button className="mt-3 text-[10px] font-bold text-primary hover:underline">
-                Apply Action
-              </button>
-            </Card>
-            <Card className="bg-white/50 p-4 rounded-2xl border border-transparent">
-              <div className="flex items-center gap-2 mb-2 text-outline">
-                <Clock className="h-3.5 w-3.5" />
-                <span className="text-[11px] font-black uppercase tracking-tight">
-                  Workflow Trend
-                </span>
-              </div>
-              <p className="text-xs text-on-surface-variant/70 leading-relaxed">
-                Sales pipeline automation has increased throughput by 42% this
-                week.
-              </p>
-            </Card>
-          </div>
-        </section>
+        {!isLoading && !error && tasks && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {statusColumns.map((column) => {
+              const columnTasks = tasksInColumn(column.id);
+              const Icon = column.icon;
+              return (
+                <div key={column.id} className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between px-2">
+                    <div className="flex items-center gap-2">
+                      <Icon className={`h-5 w-5 ${column.accent}`} />
+                      <h2 className="font-bold text-[#2c2f30] text-lg">
+                        {column.title}
+                      </h2>
+                      <Badge className="bg-slate-100 text-slate-500 text-xs px-2 py-0.5 rounded-full font-bold">
+                        {columnTasks.length}
+                      </Badge>
+                    </div>
+                  </div>
 
-        <footer className="mt-auto">
-          <div className="flex gap-4 mb-4">
-            <Link
-              href="/support"
-              className="text-[10px] font-bold text-outline hover:text-primary transition-colors uppercase tracking-widest"
-            >
-              Support
-            </Link>
-            <Link
-              href="/docs"
-              className="text-[10px] font-bold text-outline hover:text-primary transition-colors uppercase tracking-widest"
-            >
-              Docs
-            </Link>
+                  <div className="flex flex-col gap-3">
+                    {columnTasks.length === 0 ? (
+                      <div className="h-24 border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center text-slate-400 text-xs">
+                        No tasks
+                      </div>
+                    ) : (
+                      columnTasks.map((task) => {
+                        const priority = (task.priority ??
+                          "medium") as TaskPriority;
+                        const currentStatus = (task.status ??
+                          "todo") as TaskStatus;
+                        const backStatus = prevStatus(currentStatus);
+                        const forwardStatus = nextStatus(currentStatus);
+                        const isUpdating =
+                          updateStatusMutation.isPending &&
+                          updateStatusMutation.variables?.id === task.id;
+                        return (
+                          <Card
+                            key={task.id}
+                            className="p-4 bg-white hover:shadow-[0_12px_40px_rgba(106,55,212,0.10)] transition-shadow"
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <Badge
+                                className={`${priorityStyles[priority]} text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded`}
+                              >
+                                {priority}
+                              </Badge>
+                              <button
+                                type="button"
+                                disabled={deleteMutation.isPending}
+                                onClick={() => deleteMutation.mutate(task.id)}
+                                className="text-slate-300 hover:text-red-500 transition-colors disabled:opacity-50"
+                                aria-label="Delete task"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            <h3
+                              className={
+                                "font-semibold text-sm text-[#2c2f30] mb-1 leading-snug " +
+                                (currentStatus === "done"
+                                  ? "line-through decoration-slate-400"
+                                  : "")
+                              }
+                            >
+                              {task.title}
+                            </h3>
+                            {task.description && (
+                              <p className="text-xs text-slate-500 line-clamp-2 mb-3">
+                                {task.description}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2 mt-3">
+                              {backStatus && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={isUpdating}
+                                  onClick={() =>
+                                    updateStatusMutation.mutate({
+                                      id: task.id,
+                                      status: backStatus,
+                                    })
+                                  }
+                                  className="h-7 px-2 text-xs text-slate-500 hover:text-[#6a37d4]"
+                                >
+                                  <ArrowLeft className="h-3 w-3 mr-1" />
+                                  {statusColumns.find((c) => c.id === backStatus)?.title}
+                                </Button>
+                              )}
+                              {forwardStatus && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={isUpdating}
+                                  onClick={() =>
+                                    updateStatusMutation.mutate({
+                                      id: task.id,
+                                      status: forwardStatus,
+                                    })
+                                  }
+                                  className="h-7 px-2 text-xs text-slate-500 hover:text-[#6a37d4] ml-auto"
+                                >
+                                  {statusColumns.find((c) => c.id === forwardStatus)?.title}
+                                  <ArrowRight className="h-3 w-3 ml-1" />
+                                </Button>
+                              )}
+                              {isUpdating && (
+                                <Loader2 className="h-3 w-3 animate-spin text-slate-400 ml-auto" />
+                              )}
+                            </div>
+                          </Card>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <p className="text-[10px] text-outline-variant font-medium">
-            © 2024 EntrepreneurOS
-          </p>
-        </footer>
-      </aside>
+        )}
+      </div>
     </UniversalLayout>
   );
 }
