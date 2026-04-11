@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Settings | EntrepreneurOS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #ffffff;
+            color: #191c1d;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        /* Custom scrollbar for subtle feel */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #edeeef; border-radius: 10px; }
+        
+        .no-border-input:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(106, 55, 212, 0.1);
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                "surface-bright": "#f8f9fa",
+                "secondary": "#674bb5",
+                "surface-container-highest": "#e1e3e4",
+                "secondary-fixed": "#e8ddff",
+                "tertiary": "#4f2b9a",
+                "surface-dim": "#d9dadb",
+                "on-tertiary-fixed-variant": "#522f9d",
+                "on-tertiary": "#ffffff",
+                "on-surface": "#191c1d",
+                "on-primary": "#ffffff",
+                "on-primary-fixed-variant": "#5516bf",
+                "secondary-fixed-dim": "#cebdff",
+                "tertiary-container": "#6746b3",
+                "surface-tint": "#6d3bd7",
+                "surface-container-low": "#f3f4f5",
+                "inverse-primary": "#d0bcff",
+                "surface-variant": "#e1e3e4",
+                "surface-container": "#edeeef",
+                "on-error": "#ffffff",
+                "surface": "#f8f9fa",
+                "secondary-container": "#ab8ffe",
+                "on-primary-fixed": "#23005c",
+                "background": "#f8f9fa",
+                "primary-container": "#6a37d4",
+                "surface-container-high": "#e7e8e9",
+                "inverse-surface": "#2e3132",
+                "outline-variant": "#cbc3d7",
+                "on-error-container": "#93000a",
+                "on-secondary-fixed": "#21005e",
+                "on-primary-container": "#dcccff",
+                "error": "#ba1a1a",
+                "primary-fixed-dim": "#d0bcff",
+                "on-secondary-fixed-variant": "#4f319c",
+                "primary-fixed": "#e9ddff",
+                "on-secondary-container": "#3f1e8b",
+                "on-background": "#191c1d",
+                "tertiary-fixed-dim": "#d0bcff",
+                "on-tertiary-fixed": "#23005c",
+                "on-tertiary-container": "#dcccff",
+                "error-container": "#ffdad6",
+                "inverse-on-surface": "#f0f1f2",
+                "outline": "#7b7486",
+                "tertiary-fixed": "#e9ddff",
+                "on-secondary": "#ffffff",
+                "primary": "#5210bc",
+                "surface-container-lowest": "#ffffff",
+                "on-surface-variant": "#494454"
+              },
+              "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+              }
+            }
+          }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col">
+<!-- TopAppBar (Shared Component) -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-8 h-16 bg-white/70 dark:bg-slate-900/70 backdrop-blur-lg shadow-[0_8px_32px_rgba(106,55,212,0.08)]">
+<div class="flex items-center gap-4">
+<span class="text-xl font-semibold tracking-tighter text-[#6a37d4]">EntrepreneurOS</span>
+</div>
+<div class="hidden md:flex items-center space-x-8">
+<nav class="flex space-x-6">
+<a class="text-slate-500 hover:text-[#6a37d4] transition-colors font-['Inter'] leading-relaxed tracking-tight" href="#">Portfolio</a>
+<a class="text-slate-500 hover:text-[#6a37d4] transition-colors font-['Inter'] leading-relaxed tracking-tight" href="#">Context</a>
+</nav>
+<div class="relative flex items-center bg-surface-container rounded-full px-4 py-1.5">
+<span class="material-symbols-outlined text-on-surface-variant text-sm mr-2" data-icon="search">search</span>
+<input class="bg-transparent border-none text-sm focus:ring-0 w-48" placeholder="Search Workspace" type="text"/>
+</div>
+<div class="flex items-center space-x-4">
+<button class="text-on-surface-variant hover:bg-[#f5f6f7]/50 p-2 rounded-full transition-all">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:bg-[#f5f6f7]/50 p-2 rounded-full transition-all">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+</div>
+</header>
+<div class="flex flex-1 pt-16">
+<!-- SideNavBar (Shared Component) -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 bg-[#f5f6f7] dark:bg-slate-900 flex flex-col p-4 space-y-2 z-40">
+<div class="mb-6 px-4">
+<p class="font-['Inter'] text-[10px] uppercase tracking-[0.05em] text-slate-400">Executive Suite</p>
+</div>
+<nav class="space-y-1">
+<a class="flex items-center space-x-3 px-4 py-3 text-slate-500 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-all font-['Inter'] text-sm font-medium uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span>Home</span>
+</a>
+<a class="flex items-center space-x-3 px-4 py-3 text-slate-500 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-all font-['Inter'] text-sm font-medium uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined" data-icon="checklist">checklist</span>
+<span>Tasks</span>
+</a>
+<a class="flex items-center space-x-3 px-4 py-3 text-slate-500 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-all font-['Inter'] text-sm font-medium uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined" data-icon="account_tree">account_tree</span>
+<span>Workflows</span>
+</a>
+<a class="flex items-center space-x-3 px-4 py-3 text-slate-500 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-all font-['Inter'] text-sm font-medium uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+<span>Org Chart</span>
+</a>
+<a class="flex items-center space-x-3 px-4 py-3 bg-white dark:bg-slate-800 text-[#6a37d4] rounded-lg shadow-sm font-['Inter'] text-sm font-medium uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+</aside>
+<!-- Main Workspace (Center) -->
+<main class="ml-64 mr-80 flex-1 p-12 overflow-y-auto">
+<div class="max-w-4xl mx-auto space-y-12">
+<header class="space-y-2">
+<span class="text-[0.75rem] font-medium uppercase tracking-[0.05em] text-on-surface-variant">System Configuration</span>
+<h1 class="text-[2.25rem] font-semibold tracking-tight text-on-surface">Settings</h1>
+</header>
+<!-- Settings Tabs -->
+<div class="flex space-x-8 border-b-0">
+<button class="pb-4 text-sm font-semibold text-[#6a37d4] border-b-2 border-[#6a37d4] transition-all">Profile</button>
+<button class="pb-4 text-sm font-medium text-on-surface-variant hover:text-[#6a37d4] transition-all">Company</button>
+<button class="pb-4 text-sm font-medium text-on-surface-variant hover:text-[#6a37d4] transition-all">Notifications</button>
+<button class="pb-4 text-sm font-medium text-on-surface-variant hover:text-[#6a37d4] transition-all">AI Autonomy</button>
+</div>
+<!-- Profile Form -->
+<section class="space-y-10 animate-fade-in">
+<div class="flex items-start gap-12">
+<!-- Avatar Upload -->
+<div class="flex-shrink-0 space-y-4">
+<label class="text-[0.75rem] font-medium uppercase tracking-[0.05em] text-on-surface-variant">Identity Shield</label>
+<div class="relative group">
+<div class="w-32 h-32 rounded-2xl overflow-hidden shadow-lg shadow-primary/10">
+<img class="w-full h-full object-cover" data-alt="professional portrait of a confident male executive in a minimalist architectural studio setting with soft natural light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBz8eyq_0ym5pLzlbJ1NTuBI7WJM5TUOPAXsVeL6kQA2wg3j1WxDIZ124t2E_Li8YOpwKoMonxV8XQmZ3GFYTgtopqBayn70uwcgUcJVlehZzsHjjc4I9JtLnSqigmEVcHLVJ_9okawSzki9AQ0Js3MC21DoTPPCuIqjBZiBQAWMJrBNh7uG2bPnLpEXH0d_wrCJAAQIrRQs4BzNJ4KSsc_LT7v16kzY4dRsy3c5hJoXsxplcJTf9dKMGnZGZzEDZULibLt2es8KnQt"/>
+</div>
+<button class="absolute -bottom-2 -right-2 bg-white p-2 rounded-xl shadow-md text-[#6a37d4] hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-sm" data-icon="edit">edit</span>
+</button>
+</div>
+</div>
+<!-- Form Inputs -->
+<div class="flex-1 space-y-8">
+<div class="grid grid-cols-2 gap-6">
+<div class="space-y-2">
+<label class="text-[0.75rem] font-medium uppercase tracking-[0.05em] text-on-surface-variant block">Full Name</label>
+<input class="w-full bg-surface-container-lowest border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#6a37d4]/20 transition-all text-sm shadow-sm" type="text" value="Alexander Sterling"/>
+</div>
+<div class="space-y-2">
+<label class="text-[0.75rem] font-medium uppercase tracking-[0.05em] text-on-surface-variant block">Username</label>
+<input class="w-full bg-surface-container-lowest border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#6a37d4]/20 transition-all text-sm shadow-sm" type="text" value="asterling_exec"/>
+</div>
+</div>
+<div class="space-y-2">
+<label class="text-[0.75rem] font-medium uppercase tracking-[0.05em] text-on-surface-variant block">Email Address</label>
+<input class="w-full bg-surface-container-lowest border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#6a37d4]/20 transition-all text-sm shadow-sm" type="email" value="alexander.sterling@vanguard.io"/>
+</div>
+</div>
+</div>
+<div class="pt-6 flex justify-end">
+<button class="px-8 py-3 bg-gradient-to-r from-[#6a37d4] to-[#ae8dff] text-white rounded-xl font-medium shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all">
+                            Save Profile
+                        </button>
+</div>
+</section>
+<!-- Company Settings Preview (Scroll Down) -->
+<div class="pt-24 space-y-8 opacity-40 hover:opacity-100 transition-opacity">
+<header class="space-y-2">
+<span class="text-[0.75rem] font-medium uppercase tracking-[0.05em] text-on-surface-variant">Corporate Framework</span>
+<h2 class="text-2xl font-semibold tracking-tight text-on-surface">Company Configuration</h2>
+</header>
+<div class="bg-surface-container-low p-8 rounded-3xl space-y-6">
+<div class="grid grid-cols-2 gap-8">
+<div class="space-y-2">
+<label class="text-[0.75rem] font-medium uppercase tracking-[0.05em] text-on-surface-variant block">Organization Name</label>
+<input class="w-full bg-white border-none rounded-xl px-4 py-3 text-sm shadow-sm" type="text" value="Vanguard Systems"/>
+</div>
+<div class="space-y-2">
+<label class="text-[0.75rem] font-medium uppercase tracking-[0.05em] text-on-surface-variant block">Growth Stage</label>
+<select class="w-full bg-white border-none rounded-xl px-4 py-3 text-sm shadow-sm">
+<option>Series B</option>
+<option>Series C</option>
+<option>Public</option>
+</select>
+</div>
+</div>
+</div>
+</div>
+<!-- AI Autonomy Section -->
+<div class="pt-24 space-y-8">
+<header class="space-y-2">
+<span class="text-[0.75rem] font-medium uppercase tracking-[0.05em] text-on-surface-variant">Intelligence Layer</span>
+<h2 class="text-2xl font-semibold tracking-tight text-on-surface">AI Autonomy Level</h2>
+<p class="text-on-surface-variant text-sm leading-relaxed max-w-2xl">Define how much operational control is delegated to the EntrepreneurOS core intelligence. These settings dictate execution speed versus human oversight.</p>
+</header>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Option 1 -->
+<div class="p-6 bg-white rounded-2xl shadow-[0_8px_32px_rgba(106,55,212,0.04)] border-2 border-transparent hover:border-[#6a37d4]/20 cursor-pointer transition-all flex items-start gap-4">
+<div class="w-6 h-6 rounded-full border-2 border-slate-200 flex-shrink-0 mt-1 flex items-center justify-center"></div>
+<div class="space-y-1">
+<h3 class="font-semibold text-on-surface">Observe</h3>
+<p class="text-xs text-on-surface-variant leading-relaxed">AI acts as a passive auditor. It tracks data and creates logs without providing suggestions.</p>
+</div>
+</div>
+<!-- Option 2 (Selected) -->
+<div class="p-6 bg-white rounded-2xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] border-2 border-[#6a37d4] cursor-pointer transition-all flex items-start gap-4">
+<div class="w-6 h-6 rounded-full border-2 border-[#6a37d4] flex-shrink-0 mt-1 flex items-center justify-center">
+<div class="w-3 h-3 bg-[#6a37d4] rounded-full"></div>
+</div>
+<div class="space-y-1">
+<h3 class="font-semibold text-on-surface">Recommend</h3>
+<p class="text-xs text-on-surface-variant leading-relaxed">AI analyzes workflows and presents strategic options for approval before any action is taken.</p>
+</div>
+</div>
+<!-- Option 3 -->
+<div class="p-6 bg-white rounded-2xl shadow-[0_8px_32px_rgba(106,55,212,0.04)] border-2 border-transparent hover:border-[#6a37d4]/20 cursor-pointer transition-all flex items-start gap-4">
+<div class="w-6 h-6 rounded-full border-2 border-slate-200 flex-shrink-0 mt-1 flex items-center justify-center"></div>
+<div class="space-y-1">
+<h3 class="font-semibold text-on-surface">Assist</h3>
+<p class="text-xs text-on-surface-variant leading-relaxed">AI handles low-stakes operational tasks but pauses for high-priority executive decisions.</p>
+</div>
+</div>
+<!-- Option 4 -->
+<div class="p-6 bg-white rounded-2xl shadow-[0_8px_32px_rgba(106,55,212,0.04)] border-2 border-transparent hover:border-[#6a37d4]/20 cursor-pointer transition-all flex items-start gap-4">
+<div class="w-6 h-6 rounded-full border-2 border-slate-200 flex-shrink-0 mt-1 flex items-center justify-center"></div>
+<div class="space-y-1">
+<h3 class="font-semibold text-on-surface text-error">Execute</h3>
+<p class="text-xs text-on-surface-variant leading-relaxed">Full autonomous control. AI manages workflows, budgeting, and scheduling with 24/7 velocity.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer (Shared Component) -->
+<footer class="flex justify-between items-center px-8 mt-24 py-8 w-full font-['Inter'] text-[10px] uppercase tracking-[0.05em] text-slate-400">
+<span>EntrepreneurOS 2024</span>
+<div class="flex space-x-6">
+<a class="hover:text-[#6a37d4] transition-colors" href="#">Privacy</a>
+<a class="hover:text-[#6a37d4] transition-colors" href="#">Terms</a>
+<a class="hover:text-[#6a37d4] transition-colors" href="#">Support</a>
+</div>
+</footer>
+</main>
+<!-- Right Rail (Intelligence Hub) -->
+<aside class="fixed right-0 top-16 h-[calc(100vh-64px)] w-80 bg-surface-container-low flex flex-col p-8 space-y-8 z-40 overflow-y-auto">
+<div class="space-y-6">
+<header class="space-y-1">
+<span class="text-[0.65rem] font-bold text-[#6a37d4] uppercase tracking-widest">Active Context</span>
+<h3 class="text-lg font-semibold tracking-tight text-on-surface">Setting Optimisation</h3>
+</header>
+<!-- Recommendation Card -->
+<div class="glass-panel p-6 rounded-2xl shadow-[0_8px_32px_rgba(106,55,212,0.06)] border-0 space-y-4">
+<div class="flex items-center gap-2 text-[#6a37d4]">
+<span class="material-symbols-outlined text-sm" data-icon="auto_awesome">auto_awesome</span>
+<span class="text-[0.7rem] font-bold uppercase tracking-wider">AI Suggestion</span>
+</div>
+<p class="text-xs leading-relaxed text-on-surface-variant italic">"Alexander, based on your high workflow volume, switching AI Autonomy to **Assist** could save 14 hours/week on administrative triage."</p>
+<button class="w-full py-2 bg-[#6a37d4]/10 text-[#6a37d4] rounded-lg text-[0.75rem] font-semibold hover:bg-[#6a37d4]/20 transition-all">Review Impact</button>
+</div>
+<!-- Recent Activity -->
+<div class="space-y-4 pt-4">
+<h4 class="text-[0.75rem] font-bold text-on-surface uppercase tracking-widest">Security Log</h4>
+<div class="space-y-4">
+<div class="flex gap-3">
+<div class="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5"></div>
+<div>
+<p class="text-[0.8rem] font-medium">Password updated</p>
+<p class="text-[0.7rem] text-on-surface-variant">2 days ago via Web</p>
+</div>
+</div>
+<div class="flex gap-3">
+<div class="w-1.5 h-1.5 rounded-full bg-[#6a37d4] mt-1.5"></div>
+<div>
+<p class="text-[0.8rem] font-medium">New device authorized</p>
+<p class="text-[0.7rem] text-on-surface-variant">MacBook Pro M3 Max</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Visual Graphic (Architectural Feel) -->
+<div class="mt-auto pt-12">
+<div class="h-40 w-full rounded-2xl overflow-hidden relative grayscale opacity-40 hover:grayscale-0 hover:opacity-100 transition-all duration-700">
+<img class="w-full h-full object-cover" data-alt="abstract architectural geometry of a modern glass skyscraper reflecting a clear blue sky, minimalist and powerful" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBhriRuglS88rrAE37kAETVTHYs3zKP9uNUSX6ml300gtd6l7RKbgpCdP0J1eMZ3Hnbx8rppd08tjneUAffbNobLNzyXXEc7R40oEEWplIEhXxDT-Le_noDORXI_rICidF8cPfiMijHNjAhI-se5XnEp_0xrwA_SEZG_IHABlGzNn8iPgW1rNciKkAS6hBvwq-BgkrATL6fD-SP2K7kfWT8oB1xpV2hDQJLhoCqbP_yQo-FViKKdb42KBt5HXEHCbtIr87o0JnipG2A"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-low to-transparent"></div>
+</div>
+</div>
+</aside>
+</div>
+</body></html>

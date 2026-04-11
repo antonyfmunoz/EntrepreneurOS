@@ -194,6 +194,42 @@ function Router() {
               </CompanyGate>
             )}
           </ProtectedRoute>
+          <ProtectedRoute path="/portfolios">
+            {() => (
+              <CompanyGate>
+                <PortfolioList />
+              </CompanyGate>
+            )}
+          </ProtectedRoute>
+          <ProtectedRoute path="/portfolios/:portfolioId">
+            {() => (
+              <CompanyGate>
+                <PortfolioDetail />
+              </CompanyGate>
+            )}
+          </ProtectedRoute>
+          <ProtectedRoute path="/company/:companyId">
+            {(params) => (
+              <CompanyGate>
+                <CommandCenter params={params as { companyId: string }} />
+              </CompanyGate>
+            )}
+          </ProtectedRoute>
+          <ProtectedRoute path="/company/:companyId/chat">
+            {() => (
+              <CompanyGate>
+                <AgentChatPage />
+              </CompanyGate>
+            )}
+          </ProtectedRoute>
+          <ProtectedRoute path="/company/:companyId/workflows">
+            {() => (
+              <CompanyGate>
+                <Workflows />
+              </CompanyGate>
+            )}
+          </ProtectedRoute>
+          <ProtectedRoute path="/*" component={NotFoundPage} />
       <Route component={NotFound} />
 
     </Switch>
@@ -201,6 +237,12 @@ function Router() {
 }
 
 import { ClerkProvider } from "@clerk/clerk-react";
+import PortfolioList from "@/pages/portfolio-list-page";
+import PortfolioDetail from "@/pages/portfolio-detail-page";
+import CommandCenter from "@/pages/command-center-page";
+import AgentChatPage from "@/pages/agent-chat-page";
+import Workflows from "@/pages/workflows-page";
+import NotFoundPage from "@/pages/not-found-page";
 
 function ClerkProviderWrapper({ children }: { children: React.ReactNode }) {
   const key = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;

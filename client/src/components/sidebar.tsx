@@ -229,6 +229,71 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
             </div>
           </Link>
         </li>
+        <li>
+          <Link href="/portfolios">
+            <div className={cn(
+              "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+              location === "/portfolios"
+                ? "bg-blue-50 text-primary font-medium"
+                : "hover:bg-gray-100 text-gray-700"
+            )}>
+              <i className="ri-layout-line"></i>
+              <span>PortfolioList</span>
+            </div>
+          </Link>
+        </li>
+        <li>
+          <Link href="/portfolios/:portfolioId">
+            <div className={cn(
+              "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+              location === "/portfolios/:portfolioId"
+                ? "bg-blue-50 text-primary font-medium"
+                : "hover:bg-gray-100 text-gray-700"
+            )}>
+              <i className="ri-layout-line"></i>
+              <span>PortfolioDetail</span>
+            </div>
+          </Link>
+        </li>
+        <li>
+          <Link href="/company/:companyId">
+            <div className={cn(
+              "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+              location === "/company/:companyId"
+                ? "bg-blue-50 text-primary font-medium"
+                : "hover:bg-gray-100 text-gray-700"
+            )}>
+              <i className="ri-layout-line"></i>
+              <span>CommandCenter</span>
+            </div>
+          </Link>
+        </li>
+        <li>
+          <Link href="/company/:companyId/chat">
+            <div className={cn(
+              "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+              location === "/company/:companyId/chat"
+                ? "bg-blue-50 text-primary font-medium"
+                : "hover:bg-gray-100 text-gray-700"
+            )}>
+              <i className="ri-chat-3-line"></i>
+              <span>AgentChat</span>
+            </div>
+          </Link>
+        </li>
+        <li>
+          <Link href="/company/:companyId/workflows">
+            <div className={cn(
+              "flex items-center space-x-2 p-2 rounded-md cursor-pointer",
+              location === "/company/:companyId/workflows"
+                ? "bg-blue-50 text-primary font-medium"
+                : "hover:bg-gray-100 text-gray-700"
+            )}>
+              <i className="ri-layout-line"></i>
+              <span>Workflows</span>
+            </div>
+          </Link>
+        </li>
           </ul>
         </nav>
 
