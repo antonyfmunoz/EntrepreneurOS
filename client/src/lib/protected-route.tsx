@@ -45,11 +45,12 @@ export function ProtectedRoute(props: ProtectedRouteProps) {
     );
   }
 
-  // Logged in with company: redirect /company-setup to /home so setup page never mounts
+  // Logged in with company: redirect /company-setup to /portfolios so setup
+  // page never mounts for existing users.
   if (hasCompany && path === "/company-setup") {
     return (
       <Route path={path}>
-        <Redirect to="/home" />
+        <Redirect to="/portfolios" />
       </Route>
     );
   }

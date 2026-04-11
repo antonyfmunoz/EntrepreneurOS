@@ -76,7 +76,7 @@ export default function AuthPage() {
 
   useEffect(() => {
     if (user && !isLoading && !companyLoading) {
-      navigate(hasCompany ? "/home" : "/company-setup");
+      navigate(hasCompany ? "/portfolios" : "/company-setup");
     }
   }, [user, isLoading, companyLoading, hasCompany, navigate]);
 

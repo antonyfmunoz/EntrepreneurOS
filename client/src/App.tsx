@@ -42,9 +42,9 @@ function RootRedirect() {
     );
   }
 
-  if (!user) return <Redirect to="/auth" />;
+  if (!user) return <Redirect to="/login" />;
   if (!hasCompany) return <Redirect to="/company-setup" />;
-  return <Redirect to="/home" />;
+  return <Redirect to="/portfolios" />;
 }
 
 function Router() {
@@ -176,10 +176,10 @@ function Router() {
 
       <Route path="/auth" component={AuthPage} />
 
-          <ProtectedRoute path="/login" component={Login} />
-          <ProtectedRoute path="/signup" component={Signup} />
-          <ProtectedRoute path="/forgot-password" component={ForgotPassword} />
-          <ProtectedRoute path="/reset-password" component={ResetPassword} />
+          <Route path="/login" component={Login} />
+          <Route path="/signup" component={Signup} />
+          <Route path="/forgot-password" component={ForgotPassword} />
+          <Route path="/reset-password" component={ResetPassword} />
           <ProtectedRoute path="/dashboard">
             {() => (
               <CompanyGate>

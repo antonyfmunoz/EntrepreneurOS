@@ -1,10 +1,58 @@
-import { Layout } from "@/components/layout";
+import { useEffect } from "react";
+import { useLocation, Link } from "wouter";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { Bot, Terminal, AlertCircle, Loader2 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Bot, Terminal, AlertCircle } from "lucide-react";
+import { Layout } from "@/components/layout";
+import { useAuth } from "@/hooks/use-auth";
+
+const loginSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(1, "Password is required"),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function Login() {
+  const { user, isLoading, loginMutation, signInWithGoogle, isClerkReady } =
+    useAuth();
+  const [, navigate] = useLocation();
+
+  // If already authenticated, bounce to the portfolios list. This covers
+  // users who land on /login by accident after logging in elsewhere.
+  useEffect(() => {
+    if (user && !isLoading) {
+      navigate("/portfolios");
+    }
+  }, [user, isLoading, navigate]);
+
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "" },
+  });
+
+  function onSubmit(values: LoginFormValues) {
+    loginMutation.mutate(
+      { username: values.email, password: values.password },
+      {
+        onSuccess: () => {
+          navigate("/portfolios");
+        },
+      },
+    );
+  }
+
+  const isPending = loginMutation.isPending;
+  const serverError = loginMutation.error?.message ?? null;
+  const emailError = form.formState.errors.email?.message;
+  const passwordError = form.formState.errors.password?.message;
+  const displayError = serverError ?? emailError ?? passwordError ?? null;
+
   return (
     <Layout title="Sign In">
       <div className="bg-surface-container-low min-h-screen flex items-center justify-center p-6 selection:bg-primary-fixed selection:text-primary">
@@ -34,7 +82,7 @@ export default function Login() {
               </p>
             </header>
 
-            <form className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <div className="space-y-2">
                 <Label
                   htmlFor="email"
@@ -47,7 +95,10 @@ export default function Login() {
                     id="email"
                     type="email"
                     placeholder="name@architecture.ai"
+                    autoComplete="email"
+                    disabled={isPending}
                     className="w-full h-14 px-5 bg-surface-container-highest border-0 rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-lowest transition-all duration-300 placeholder:text-outline text-on-surface"
+                    {...form.register("email")}
                   />
                   <div className="absolute inset-0 rounded-xl outline outline-1 outline-[rgba(171,173,174,0.1)] pointer-events-none"></div>
                 </div>
@@ -61,48 +112,61 @@ export default function Login() {
                   >
                     Password
                   </Label>
-                  <a
-                    href="#"
+                  <Link
+                    href="/forgot-password"
                     className="text-[0.75rem] font-medium text-primary hover:text-primary-container transition-colors"
                   >
                     Forgot?
-                  </a>
+                  </Link>
                 </div>
                 <div className="relative group">
                   <Input
                     id="password"
                     type="password"
                     placeholder="••••••••"
+                    autoComplete="current-password"
+                    disabled={isPending}
                     className="w-full h-14 px-5 bg-surface-container-highest border-0 rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-lowest transition-all duration-300 placeholder:text-outline text-on-surface"
+                    {...form.register("password")}
                   />
                   <div className="absolute inset-0 rounded-xl outline outline-1 outline-[rgba(171,173,174,0.1)] pointer-events-none"></div>
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 px-1 py-1">
-                <AlertCircle className="w-[18px] h-[18px] text-error mt-0.5 flex-shrink-0" />
-                <p className="text-[0.8125rem] text-error font-medium leading-tight">
-                  Authentication failed. Please verify your architectural credentials.
-                </p>
-              </div>
+              {displayError && (
+                <div className="flex items-start gap-3 px-1 py-1">
+                  <AlertCircle className="w-[18px] h-[18px] text-error mt-0.5 flex-shrink-0" />
+                  <p className="text-[0.8125rem] text-error font-medium leading-tight">
+                    {displayError}
+                  </p>
+                </div>
+              )}
 
               <Button
                 type="submit"
-                className="w-full h-14 bg-gradient-to-br from-[#6a37d4] to-[#ae8dff] text-white font-semibold rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 tracking-wide mt-4"
+                disabled={isPending}
+                className="w-full h-14 bg-gradient-to-br from-[#6a37d4] to-[#ae8dff] text-white font-semibold rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 tracking-wide mt-4 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
-                Sign Into Console
+                {isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  "Sign Into Console"
+                )}
               </Button>
             </form>
 
             <footer className="mt-10 text-center">
               <p className="text-on-surface-variant text-[0.875rem]">
                 New to the architecture?
-                <a
-                  href="#"
+                <Link
+                  href="/signup"
                   className="text-primary font-semibold hover:underline decoration-2 underline-offset-4 ml-1 transition-all"
                 >
                   Create Account
-                </a>
+                </Link>
               </p>
             </footer>
           </div>
@@ -118,7 +182,10 @@ export default function Login() {
 
             <div className="flex gap-4 w-full">
               <Button
+                type="button"
                 variant="outline"
+                disabled={!isClerkReady || isPending}
+                onClick={() => void signInWithGoogle()}
                 className="flex-1 h-12 flex items-center justify-center gap-2 bg-surface-container-lowest rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] outline outline-1 outline-[rgba(171,173,174,0.1)] hover:bg-surface-container-low transition-all"
               >
                 <img
@@ -126,15 +193,22 @@ export default function Login() {
                   alt="Google"
                   className="w-5 h-5 opacity-80"
                 />
-                <span className="text-[0.875rem] font-medium text-on-surface">Google</span>
+                <span className="text-[0.875rem] font-medium text-on-surface">
+                  Google
+                </span>
               </Button>
 
               <Button
+                type="button"
                 variant="outline"
-                className="flex-1 h-12 flex items-center justify-center gap-2 bg-surface-container-lowest rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] outline outline-1 outline-[rgba(171,173,174,0.1)] hover:bg-surface-container-low transition-all"
+                disabled
+                className="flex-1 h-12 flex items-center justify-center gap-2 bg-surface-container-lowest rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] outline outline-1 outline-[rgba(171,173,174,0.1)] hover:bg-surface-container-low transition-all opacity-50"
+                title="GitHub sign-in coming soon"
               >
                 <Terminal className="w-5 h-5 text-on-surface" />
-                <span className="text-[0.875rem] font-medium text-on-surface">GitHub</span>
+                <span className="text-[0.875rem] font-medium text-on-surface">
+                  GitHub
+                </span>
               </Button>
             </div>
           </div>
