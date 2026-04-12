@@ -153,7 +153,7 @@ export const specPhaseImplementation: PhaseImplementation = {
 
     // Brand voice inference — run after spec locks, fail-open.
     // Reads the PRD source and writes .planning/BRAND-VOICE.md for downstream
-    // injection into Stitch prompts via build-stitch-prompt.ts.
+    // injection into react-gen prompts.
     const planningDir = path.join(projectRoot, ".planning");
     const prdPath = path.join(planningDir, "PRD.md");
     if (fs.existsSync(prdPath)) {

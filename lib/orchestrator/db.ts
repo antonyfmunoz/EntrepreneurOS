@@ -15,7 +15,7 @@ import {
 } from "../../shared/design-schema.js";
 import { getDatabaseUrl } from "../env.js";
 
-export type Phase = "spec" | "copy" | "ui-gen" | "integration" | "backend" | "deploy";
+export type Phase = "spec" | "copy" | "react-gen" | "integration" | "backend" | "deploy";
 export type RunStatus = "running" | "paused" | "complete" | "failed";
 export type PageStatus = "pending" | "in_progress" | "complete" | "failed";
 

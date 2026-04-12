@@ -1,4 +1,4 @@
-// Run spec + copy phases for EntrepreneurOS, then stop before ui-gen.
+// Run spec + copy phases for EntrepreneurOS, then stop before react-gen.
 import "dotenv/config";
 import { loadProjectConfig } from "../lib/project-config.js";
 import { registerAllPhases } from "../lib/orchestrator/phases/register.js";
@@ -48,14 +48,14 @@ async function main() {
   }
   console.log(`\n[pipeline] Copy complete: ${copyResult.completedPages}/${copyResult.totalPages} pages`);
 
-  // Pause run at copy — ui-gen requires approval
+  // Pause run at copy — react-gen requires approval
   await updateRun(run.id, { phase: "copy", status: "paused" });
 
   console.log("\n════════════════════════════════════════");
   console.log("  PIPELINE PAUSED — COPY READY FOR REVIEW");
   console.log("════════════════════════════════════════");
   console.log(`\nRun ID: ${run.id}`);
-  console.log("Next phase: ui-gen (requires approval)");
+  console.log("Next phase: react-gen (requires approval)");
   console.log("Copy output: .planning/output/copy/PROJECT-COPY.json\n");
 
   process.exit(0);

@@ -22,7 +22,7 @@ async function main() {
   } catch (err) {
     if (err instanceof ApprovalRequiredError) {
       console.log("Approval gate hit at:", err.phase);
-      console.log("Spec phase completed successfully — paused at ui-gen approval gate");
+      console.log("Spec phase completed successfully — paused at react-gen approval gate");
     } else {
       console.error("Error:", (err as Error).message);
     }

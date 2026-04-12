@@ -1,46 +1,57 @@
 ---
 name: saas-dev:orchestrator
-description: Orchestrates the SaaS development pipeline from spec to deployment. Routes to the correct phase-specific skill at each pipeline stage. Use when starting a new SaaS build or resuming an existing pipeline run.
+description: Orchestrates the SaaS development pipeline from spec to deployment. Runs direct React generation with live Vite preview. Single entry point builds the full app.
 ---
 
 # saas-dev:orchestrator
 
-Orchestrates the complete SaaS development pipeline. Currently a skeleton -- phase-specific sub-skills are created in their respective phases (D-19).
+Orchestrates the complete SaaS development pipeline. One command takes a product from spec to deployed app with live preview.
 
 ## Pipeline Phases
 
-0. **intake** -- Unified intake: collect everything upfront before generation starts. Produces a `ProjectBrief` consumed by all downstream phases. Three modes:
-   - **Greenfield** (no code, no docs): structured conversation collecting product, pages, tech stack, brand, auth, deployment
-   - **Docs-only** (PRD/design-system present): scan .planning/, gap-fill missing info, synthesize brief
-   - **Existing codebase**: scan code + docs, detect framework/auth/db, synthesize brief with brownfield context
-   See `lib/intake/intake-orchestrator.ts` for implementation.
-1. spec -- Parse or collaboratively create a page spec, routes to saas-dev:spec-parser (Phase 2). Spec is now produced BY intake for docs-only and existing-codebase modes. Spec-parser is still used internally by intake for restructuring and gap analysis.
-2. ui-gen -- Generate UI via Stitch with design memory, routes to saas-dev:ui-generator (Phase 3)
-3. integration -- Integrate generated code into existing repo, routes to saas-dev:integrator (Phase 4)
-4. backend -- Wire backend routes and schemas, routes to saas-dev:backend-wirer (Phase 5)
-5. deploy -- Instrument analytics and deploy, routes to saas-dev:deployer (Phase 6)
+1. **spec** — Parse or collaboratively create a page spec from PRD/requirements. Produces validated SpecOutput consumed by all downstream phases.
+2. **copy** — Generate all UI copy in one pass for cross-page voice coherence. Brand voice applied, reviewed, persisted.
+3. **react-gen** — Generate React/TypeScript page components directly via Claude. Writes .tsx files to disk — Vite hot-reloads them into the browser as each completes. Shared layout components built first (sequential), then pages in parallel (p-limit 5).
+4. **integration** — Route injection, nav wiring, shadcn component installation. Handles brownfield merges.
+5. **backend** — Generate API routes, schemas, and run database migrations.
+6. **deploy** — Instrument analytics and deploy the application.
+
+## Single Entry Point
+
+```bash
+npx tsx scripts/saas-dev-build.ts
+```
+
+Full flow:
+1. Run intake (auto-detects mode: greenfield/docs/existing)
+2. Run spec phase — parse and validate
+3. Run copy phase — generate brand-voice-aligned copy
+4. Start Vite dev server — live preview URL printed
+5. Build shared components (sequential): design-tokens, agent-chat-stub, floating-ai-panel, left-rail, right-rail, header, universal-layout
+6. Build pages (parallel, p-limit 5) — each appears in browser as it completes
+7. Run integration phase — routes, nav, shadcn
+8. Run backend phase — API endpoints
+9. Print completion summary
+
+## Live Preview
+
+The react-gen phase starts a Vite dev server before generating any components. As each page file is written to `client/src/pages/`, Vite hot-reloads it into the browser. A build status overlay shows real-time progress (bottom-right corner, auto-removed on completion).
+
+## Edit Mode
+
+After the build completes, describe changes in the Claude Code chat. The edit-mode system reads the current component, applies surgical changes via Claude, and writes the updated file — Vite hot-reloads instantly.
 
 ## State Management
 
-- Pipeline state persisted in Neon PostgreSQL (pipeline_runs + pipeline_pages tables) -- NOT in JSON files (D-06)
-- Each page tracks its own checkpoint within each phase (D-07)
-- Resuming a paused run continues from last completed page, not the beginning (D-09)
-- Failed pages include an error field for retry context (D-10)
+- Pipeline state persisted in Neon PostgreSQL (pipeline_runs + pipeline_pages tables)
+- Each page tracks its own checkpoint within each phase
+- Resuming a paused run continues from last completed page
+- Failed pages include an error field for retry context
 
 ## Project Config
 
 Required fields validated by ProjectConfigSchema in shared/design-schema.ts:
 
-- `projectId` -- unique identifier for the project (min 1 char)
-- `repoPath` -- absolute path to the project repository
-- `framework` -- detected framework enum (currently only "react-vite-tailwind-shadcn")
-- `stitchProjectId` -- (optional) Stitch project ID for UI generation phase
-
-## Current Sub-Skills
-
-- saas-dev:detect-framework
-- saas-dev:spec-parser
-
-## Usage
-
-This skill is a Phase 1 skeleton. Full orchestration logic is implemented incrementally across phases 2-6. To start a pipeline run, provide a ProjectConfig and call the appropriate phase-specific sub-skill directly until the orchestrator is wired up in Phase 2.
+- `projectId` — unique identifier for the project
+- `repoPath` — absolute path to the project repository
+- `framework` — detected framework enum (currently only "react-vite-tailwind-shadcn")

@@ -1,8 +1,8 @@
 // lib/orchestrator/phases/copy-adapter.ts
 // Phase: copy
 //
-// Generates and reviews all UI copy before Stitch runs. Copy is a planning
-// artifact — written, reviewed, approved, then injected into Stitch prompts
+// Generates and reviews all UI copy before react-gen runs. Copy is a planning
+// artifact — written, reviewed, approved, then injected into react-gen prompts
 // as the single source of truth for visible text.
 
 import fs from "node:fs";

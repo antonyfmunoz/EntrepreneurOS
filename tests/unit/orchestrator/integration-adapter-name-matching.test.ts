@@ -32,7 +32,7 @@ function spec(names: string[]): SpecOutput {
   };
 }
 
-describe("resolveRowToSpecPage — ui-gen row → spec page lookup", () => {
+describe("resolveRowToSpecPage — react-gen row → spec page lookup", () => {
   it("matches by pageName, ignoring stale pageIndex", () => {
     // Spec reordered: what used to be at index 5 is now at index 7
     const s = spec([
@@ -46,7 +46,7 @@ describe("resolveRowToSpecPage — ui-gen row → spec page lookup", () => {
       "CommandCenter",
     ]);
 
-    // ui-gen row was written when CommandCenter was at index 5
+    // react-gen row was written when CommandCenter was at index 5
     const staleRow = { pageIndex: 5, pageName: "CommandCenter" };
 
     const result = resolveRowToSpecPage(staleRow, s);
@@ -95,13 +95,13 @@ describe("resolveRowToSpecPage — ui-gen row → spec page lookup", () => {
       "NotFound",       // 13 (was 12)
     ]);
 
-    // A ui-gen row written against the OLD spec, when NotFound was at index 12
+    // A react-gen row written against the OLD spec, when NotFound was at index 12
     const staleNotFound = { pageIndex: 12, pageName: "NotFound" };
     const resolvedNotFound = resolveRowToSpecPage(staleNotFound, afterSpec);
     expect(resolvedNotFound?.page.name).toBe("NotFound");
     expect(resolvedNotFound?.currentSpecIndex).toBe(13);
 
-    // A ui-gen row for a now-removed page
+    // A react-gen row for a now-removed page
     const oldPortfolioDashboard = { pageIndex: 5, pageName: "PortfolioDashboard" };
     expect(resolveRowToSpecPage(oldPortfolioDashboard, afterSpec)).toBeNull();
 

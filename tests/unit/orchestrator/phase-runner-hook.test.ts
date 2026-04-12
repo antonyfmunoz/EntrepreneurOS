@@ -39,7 +39,7 @@ function makePage(overrides: Partial<{ id: number; pageIndex: number; status: st
     projectId: "test-proj",
     pageName: "TestPage",
     pageIndex: overrides.pageIndex ?? 0,
-    phase: "ui-gen",
+    phase: "react-gen",
     status: overrides.status ?? "pending",
     error: null,
     output: null,
@@ -69,7 +69,7 @@ describe("phase-runner onPageComplete hook", () => {
     mockGetPagesForPhase.mockResolvedValue([]);
     mockCreatePage.mockResolvedValue(makePage());
 
-    const result = await runPhase(1, "ui-gen", impl, stubConfig);
+    const result = await runPhase(1, "react-gen", impl, stubConfig);
 
     expect(onPageComplete).toHaveBeenCalledTimes(1);
     expect(onPageComplete).toHaveBeenCalledWith(
@@ -95,7 +95,7 @@ describe("phase-runner onPageComplete hook", () => {
     mockGetPagesForPhase.mockResolvedValue([]);
     mockCreatePage.mockResolvedValue(makePage());
 
-    const result = await runPhase(1, "ui-gen", impl, stubConfig);
+    const result = await runPhase(1, "react-gen", impl, stubConfig);
 
     expect(runPage).toHaveBeenCalledTimes(2);
     expect(result.completedPages).toBe(1);
@@ -119,7 +119,7 @@ describe("phase-runner onPageComplete hook", () => {
     mockGetPagesForPhase.mockResolvedValue([]);
     mockCreatePage.mockResolvedValue(makePage());
 
-    const result = await runPhase(1, "ui-gen", impl, stubConfig);
+    const result = await runPhase(1, "react-gen", impl, stubConfig);
 
     expect(result.completedPages).toBe(1);
     expect(mockUpdatePage).toHaveBeenCalledWith(1, expect.objectContaining({
@@ -139,7 +139,7 @@ describe("phase-runner onPageComplete hook", () => {
     mockGetPagesForPhase.mockResolvedValue([]);
     mockCreatePage.mockResolvedValue(makePage());
 
-    const result = await runPhase(1, "ui-gen", impl, stubConfig);
+    const result = await runPhase(1, "react-gen", impl, stubConfig);
 
     expect(result.completedPages).toBe(1);
     expect(mockUpdatePage).toHaveBeenCalledWith(1, expect.objectContaining({
@@ -173,7 +173,7 @@ describe("phase-runner onPageComplete hook", () => {
     let pageId = 1;
     mockCreatePage.mockImplementation(() => Promise.resolve(makePage({ id: pageId++, pageIndex: pageId - 2 })));
 
-    const result = await runPhase(1, "ui-gen", impl, stubConfig);
+    const result = await runPhase(1, "react-gen", impl, stubConfig);
 
     expect(onPageComplete).toHaveBeenCalledTimes(3);
     expect(result.completedPages).toBe(3);

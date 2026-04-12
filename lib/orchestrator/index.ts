@@ -37,14 +37,14 @@ import { loadProjectConfig } from "../project-config.js";
 const PHASE_ORDER: Phase[] = [
   "spec",
   "copy",
-  "ui-gen",
+  "react-gen",
   "integration",
   "backend",
   "deploy",
 ];
 
 const DESTRUCTIVE_PHASES = new Set<Phase>([
-  "ui-gen",      // generates Stitch screens that cannot be deleted (no MCP delete tool)
+  "react-gen",   // writes React component files into client/src
   "integration", // writes files into client/src
   "backend",     // writes routes + DB migrations
   "deploy",      // pushes, instruments, deploys
@@ -103,7 +103,7 @@ function notWiredImpl(phase: Phase): PhaseImplementation {
 export const PHASE_IMPLEMENTATIONS: Record<Phase, PhaseImplementation> = {
   spec: notWiredImpl("spec"),
   copy: notWiredImpl("copy"),
-  "ui-gen": notWiredImpl("ui-gen"),
+  "react-gen": notWiredImpl("react-gen"),
   integration: notWiredImpl("integration"),
   backend: notWiredImpl("backend"),
   deploy: notWiredImpl("deploy"),
@@ -306,6 +306,8 @@ function splitPhases(current: Phase | "complete"): {
 
 function describeAction(phase: Phase): string {
   switch (phase) {
+    case "react-gen":
+      return "Generate React page components and write them into client/src/pages";
     case "integration":
       return "Write generated pages into client/src and create per-page commits";
     case "backend":

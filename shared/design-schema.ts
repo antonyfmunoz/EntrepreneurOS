@@ -128,7 +128,6 @@ export const ProjectConfigSchema = z.object({
   projectId: z.string().min(1),
   repoPath: z.string().min(1),
   framework: z.enum(["react-vite-tailwind-shadcn"]),
-  stitchProjectId: z.string().optional(),
   // Path overrides — defaults work for the standard project layout
   designSystemPath: z.string().default(".planning/design-system.md"),
   outputPath: z.string().default(".planning/output"),
@@ -140,7 +139,7 @@ export const ProjectConfigSchema = z.object({
 
 export const PipelineRunSchema = z.object({
   projectId: z.string().min(1),
-  phase: z.enum(["spec", "copy", "ui-gen", "integration", "backend", "deploy"]),
+  phase: z.enum(["spec", "copy", "react-gen", "integration", "backend", "deploy"]),
   status: z.enum(["running", "paused", "complete", "failed"]).default("running"),
   config: z.lazy(() => ProjectConfigSchema),
 });
@@ -155,14 +154,14 @@ export const SpecPhaseOutputSchema = z.object({
   })),
 });
 
-// Stitch returns presigned URLs, not raw HTML (Pitfall #4, Review concern #6)
-export const UiGenPhaseOutputSchema = z.object({
-  htmlUrl: z.string().url(),
-  screenshotUrl: z.string().url(),
-  tokenVersion: z.number().int(),
-  approved: z.boolean(),
-  scoreSummary: z.string().optional(),
-  localHtmlPath: z.string().optional(),
+// React-gen phase output — direct React component generation (replaces Stitch)
+export const ReactGenPhaseOutputSchema = z.object({
+  filePath: z.string(),
+  componentCode: z.string(),
+  reviewScore: z.number().min(0).max(1),
+  reviewFeedback: z.array(z.string()).default([]),
+  passed: z.boolean(),
+  retried: z.boolean().default(false),
 });
 
 // ─── SECTION 5: Type Exports ──────────────────────────────────────────────────
@@ -171,4 +170,4 @@ export type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
 export type PageState = z.infer<typeof PageStateSchema>;
 export type PipelineRun = z.infer<typeof PipelineRunSchema>;
 export type SpecPhaseOutput = z.infer<typeof SpecPhaseOutputSchema>;
-export type UiGenPhaseOutput = z.infer<typeof UiGenPhaseOutputSchema>;
+export type ReactGenPhaseOutput = z.infer<typeof ReactGenPhaseOutputSchema>;

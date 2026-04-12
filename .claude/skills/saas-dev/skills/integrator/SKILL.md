@@ -1,15 +1,15 @@
 ---
 name: saas-dev:integrator
-description: Takes approved Stitch HTML from Phase 3 and integrates it as working React pages — translating HTML to shadcn/ui TSX, wiring routes into App.tsx, adding sidebar nav items, and managing the git branch lifecycle. Use after ui-generator completes with approved pages.
+description: Takes generated React TSX from Phase 3 (react-gen) and integrates it as working React pages — wiring routes into App.tsx, adding sidebar nav items, and managing the git branch lifecycle. Use after react-gen completes with generated pages.
 ---
 
 # Skill: saas-dev:integrator
 
-Takes approved Stitch HTML from Phase 3 and integrates it as working React pages with proper routing, navigation, and atomic git commits.
+Takes generated React TSX from Phase 3 (react-gen) and integrates it as working React pages with proper routing, navigation, and atomic git commits.
 
 ## Prerequisites
 
-- Phase 3 (ui-generator) complete: `pipeline_pages` table has rows with `phase="ui-gen"` AND `status="complete"`
+- Phase 3 (react-gen) complete: `pipeline_pages` table has rows with `phase="react-gen"` AND `status="complete"`
 - `AI_INTEGRATIONS_ANTHROPIC_API_KEY` configured in .env — required for HTML-to-TSX translation
 - `DATABASE_URL` configured for Neon PostgreSQL
 - `git` CLI available in PATH
@@ -71,14 +71,14 @@ await createBranch(baseBranch, featureBranch);
 Then load pages to integrate from the database:
 
 ```typescript
-// Query pipeline_pages where phase="ui-gen" AND status="complete" AND projectId matches
+// Query pipeline_pages where phase="react-gen" AND status="complete" AND projectId matches
 const pages = await db
   .select()
   .from(pipelinePages)
   .where(
     and(
       eq(pipelinePages.projectId, projectId),
-      eq(pipelinePages.phase, "ui-gen"),
+      eq(pipelinePages.phase, "react-gen"),
       eq(pipelinePages.status, "complete"),
     ),
   );
@@ -447,8 +447,8 @@ Use remixicon classes (ri-* format) — sidebar uses remixicon not Lucide React 
 
 ## Pitfalls
 
-### Pitfall 1: Stitch Presigned URL Expiry
-Presigned URLs from Stitch expire (typically 1 hour). Check HTTP status before reading HTML.
+### Pitfall 1: Generated File Freshness
+React-gen output files in client/src/pages/ may be stale from a prior run. Verify file timestamps before integration.
 - If 403 or 410: notify user to re-run Phase 3 for that page OR paste HTML directly.
 - Never silently fail — escalate to user so they can unblock.
 
@@ -510,7 +510,7 @@ The `injectNavItem` function generates `<i className="${input.iconClass}">` — 
 ```sql
 SELECT * FROM pipeline_pages
 WHERE project_id = $projectId
-  AND phase = 'ui-gen'
+  AND phase = 'react-gen'
   AND status = 'complete';
 ```
 

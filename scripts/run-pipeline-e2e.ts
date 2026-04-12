@@ -1,7 +1,7 @@
 // scripts/run-pipeline-e2e.ts
 // Drives the full SaaS-dev skill pipeline against the current repo.
-// Uses resumePipeline so spec/ui-gen pages marked complete on prior
-// loops are skipped — no re-spend on Anthropic / Stitch across retries.
+// Uses resumePipeline so spec/react-gen pages marked complete on prior
+// loops are skipped — no re-spend on Anthropic across retries.
 // Usage: npx tsx scripts/run-pipeline-e2e.ts
 import "dotenv/config";
 import { resumePipeline, runPipeline } from "../lib/orchestrator/index.js";
@@ -12,7 +12,7 @@ import { getLastIncompleteRun } from "../lib/orchestrator/db.js";
 async function main() {
   registerAllPhases();
   const config = loadProjectConfig(process.cwd());
-  const approvedPhases = ["ui-gen", "integration", "backend", "deploy"] as const;
+  const approvedPhases = ["react-gen", "integration", "backend", "deploy"] as const;
 
   const existing = await getLastIncompleteRun(config.projectId);
   const status = existing

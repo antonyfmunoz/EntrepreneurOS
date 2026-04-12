@@ -8,7 +8,7 @@ import {
   PageStateSchema,
   PipelineRunSchema,
   SpecPhaseOutputSchema,
-  UiGenPhaseOutputSchema,
+  ReactGenPhaseOutputSchema,
 } from "@shared/design-schema";
 
 describe("design memory insert schemas", () => {
@@ -63,9 +63,9 @@ describe("design memory insert schemas", () => {
       projectId: "test-project-01",
       pageName: "dashboard",
       pageIndex: 0,
-      phase: "ui-gen",
+      phase: "react-gen",
       status: "failed",
-      error: "Stitch API returned 429",
+      error: "Claude API returned 429",
     });
     expect(result.success).toBe(true);
   });
@@ -104,7 +104,7 @@ describe("pipeline state Zod contracts", () => {
   it("validates PipelineRun phase enum rejects invalid phase", () => {
     const valid = PipelineRunSchema.safeParse({
       projectId: "test",
-      phase: "ui-gen",
+      phase: "react-gen",
       config: {
         projectId: "test",
         repoPath: "/opt/test",
@@ -125,22 +125,25 @@ describe("pipeline state Zod contracts", () => {
     expect(invalid.success).toBe(false);
   });
 
-  it("validates UiGenPhaseOutput with URL fields", () => {
-    const result = UiGenPhaseOutputSchema.safeParse({
-      htmlUrl: "https://storage.googleapis.com/stitch/abc.html",
-      screenshotUrl: "https://storage.googleapis.com/stitch/abc.png",
-      tokenVersion: 1,
-      approved: true,
+  it("validates ReactGenPhaseOutput shape", () => {
+    const result = ReactGenPhaseOutputSchema.safeParse({
+      filePath: "/tmp/client/src/pages/login-page.tsx",
+      componentCode: "export default function LoginPage() { return <div />; }",
+      reviewScore: 0.92,
+      reviewFeedback: [],
+      passed: true,
+      retried: false,
     });
     expect(result.success).toBe(true);
   });
 
-  it("rejects UiGenPhaseOutput with non-URL htmlUrl", () => {
-    const result = UiGenPhaseOutputSchema.safeParse({
-      htmlUrl: "not-a-url",
-      screenshotUrl: "https://example.com/img.png",
-      tokenVersion: 1,
-      approved: true,
+  it("rejects ReactGenPhaseOutput with score out of range", () => {
+    const result = ReactGenPhaseOutputSchema.safeParse({
+      filePath: "/tmp/test.tsx",
+      componentCode: "code",
+      reviewScore: 1.5,
+      reviewFeedback: [],
+      passed: true,
     });
     expect(result.success).toBe(false);
   });

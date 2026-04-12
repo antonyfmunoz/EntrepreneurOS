@@ -1,7 +1,7 @@
 // lib/orchestrator/phases/integration-adapter.ts
 // Phase 3: integration
 //
-// prepare(): pull every completed ui-gen page output for the project, fetch
+// prepare(): pull every completed react-gen page output for the project, fetch
 //   each HTML by URL (presigned, can expire — surface 403/410 cleanly), and
 //   audit the brownfield once. Read-only. The fetched HTMLs are passed in the
 //   work unit input so runPage doesn't redo network work on retry.
@@ -103,7 +103,7 @@ async function loadUiGenOutputs(
     .where(
       and(
         eq(pipelinePages.projectId, projectId),
-        eq(pipelinePages.phase, "ui-gen"),
+        eq(pipelinePages.phase, "react-gen"),
         eq(pipelinePages.status, "complete"),
       ),
     )
@@ -118,11 +118,11 @@ async function loadUiGenOutputs(
 }
 
 /**
- * Resolve a ui-gen row to its spec page by **pageName**, not pageIndex.
+ * Resolve a react-gen row to its spec page by **pageName**, not pageIndex.
  *
  * Historically the adapter did `spec.pages[row.pageIndex]`, which broke the
  * moment the spec was reordered or had pages inserted/removed between runs —
- * every ui-gen row after the shift would map to the wrong spec page (wrong
+ * every react-gen row after the shift would map to the wrong spec page (wrong
  * filename, wrong content, silent data corruption).
  *
  * Name-based matching is stable across spec edits. Also returns the page's
@@ -233,7 +233,7 @@ async function buildIntegrationPreview(config: ProjectConfig): Promise<string> {
   const spec = await loadLatestSpec(config.projectId);
   const uiGenRows = await loadUiGenOutputs(config.projectId);
   if (uiGenRows.length === 0) {
-    return "(no completed ui-gen pages — preview unavailable)";
+    return "(no completed react-gen pages — preview unavailable)";
   }
 
   const inventory = await auditBrownfield(projectRoot);
@@ -275,8 +275,8 @@ export const integrationPhaseImplementation: PhaseImplementation = {
 
     if (uiGenRows.length === 0) {
       throw new Error(
-        `Phase "integration": no completed ui-gen pages for projectId=${config.projectId}. ` +
-          `Run the ui-gen phase first.`,
+        `Phase "integration": no completed react-gen pages for projectId=${config.projectId}. ` +
+          `Run the react-gen phase first.`,
       );
     }
 
@@ -309,7 +309,7 @@ export const integrationPhaseImplementation: PhaseImplementation = {
       }
     }
 
-    // Resolve each ui-gen row to its current spec page by NAME.
+    // Resolve each react-gen row to its current spec page by NAME.
     // Orphaned rows (page removed from spec) are logged and dropped.
     const resolvedRows: Array<{
       row: (typeof uiGenRows)[number];
@@ -320,7 +320,7 @@ export const integrationPhaseImplementation: PhaseImplementation = {
       const match = resolveRowToSpecPage(row, spec);
       if (!match) {
         console.warn(
-          `[integration] ui-gen row "${row.pageName}" (stored pageIndex=${row.pageIndex}) ` +
+          `[integration] react-gen row "${row.pageName}" (stored pageIndex=${row.pageIndex}) ` +
             `no longer exists in the spec — skipping. Delete the row if this is intentional.`,
         );
         continue;
@@ -397,9 +397,9 @@ export const integrationPhaseImplementation: PhaseImplementation = {
     const planByName = new Map(plan.entries.map((e) => [e.pageName, e]));
     const sharedComponentNames = SHARED_LAYOUT_COMPONENTS.map((c) => c.name);
 
-    // Build base work unit inputs for every ui-gen page. HTML is loaded from
-    // the locally cached file (written by ui-gen phase at generation time),
-    // which is immune to Stitch presigned URL expiry.
+    // Build base work unit inputs for every react-gen page. HTML is loaded from
+    // the locally cached file (written by react-gen phase at generation time),
+    // which is immune to URL expiry.
     //
     // Iterate over the name-resolved rows, NOT the raw uiGenRows — the raw
     // row's pageIndex may be stale relative to the current spec order, so we

@@ -89,7 +89,7 @@ export async function detectContext(
 
   // ─── Suggested phase ────────────────────────────────────────────────────
   let suggestedPhase: Phase = "spec";
-  if (hasSpec) suggestedPhase = "ui-gen";
+  if (hasSpec) suggestedPhase = "react-gen";
   if (hasApprovedUI) suggestedPhase = "integration";
   if (hasIntegratedCode) suggestedPhase = "backend";
   if (hasBackend) suggestedPhase = "deploy";

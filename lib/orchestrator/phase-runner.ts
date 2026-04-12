@@ -43,7 +43,7 @@ export interface PhaseImplementation {
   /** Compute the work units for this phase from the project state.
    *  `runId` is passed so implementations can query pipeline_pages to skip
    *  already-complete pages when batching expensive work (e.g. parallel
-   *  Stitch generation in ui-gen, parallel sub-agents in integration). */
+   *  React generation in react-gen, parallel sub-agents in integration). */
   prepare(
     config: ProjectConfig,
     runId?: number,

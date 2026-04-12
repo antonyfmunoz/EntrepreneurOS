@@ -22,7 +22,10 @@
       "mcp__magicui__searchRegistryItems",
       "mcp__magic21__21st_magic_component_inspiration",
       "Bash(SKIP_GAP_ANALYSIS=true npx tsx scripts/run-intake.ts)",
-      "Read(//c/Users/antonys beast pc/dev/EntrepreneurOS/.planning/**)"
+      "Read(//c/Users/antonys beast pc/dev/EntrepreneurOS/.planning/**)",
+      "Bash(rm .planning/output/previews/*.html)",
+      "Bash(rm \".claude/skills/saas-dev/skills/warm-cache/SKILL.md\")",
+      "Bash(rmdir \".claude/skills/saas-dev/skills/warm-cache\")"
     ]
   }
 }

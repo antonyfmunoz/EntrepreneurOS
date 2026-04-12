@@ -23,18 +23,6 @@ export function getDatabaseUrl(): string {
   return url;
 }
 
-export function getStitchApiKey(): string {
-  const key = process.env.STITCH_API_KEY;
-  if (!key) throw new Error('Missing STITCH_API_KEY in .env');
-  return key;
-}
-
-export function getStitchProjectId(): string {
-  const id = process.env.STITCH_PROJECT_ID;
-  if (!id) throw new Error('Missing STITCH_PROJECT_ID in .env');
-  return id;
-}
-
 export function getGeminiApiKey(): string | undefined {
   return process.env.GEMINI_API_KEY;
 }
