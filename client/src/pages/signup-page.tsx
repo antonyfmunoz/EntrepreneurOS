@@ -15,7 +15,6 @@ declare global {
 }
 
 interface SignupFormData {
-  username: string;
   email: string;
   fullName: string;
   company: string;
@@ -31,7 +30,6 @@ export default function SignupPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [formData, setFormData] = useState<SignupFormData>({
-    username: '',
     email: '',
     fullName: '',
     company: '',
@@ -42,10 +40,6 @@ export default function SignupPage() {
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
-
-    if (formData.username.length < 3) {
-      errors.username = 'Username must be at least 3 characters';
-    }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
@@ -79,7 +73,6 @@ export default function SignupPage() {
 
     registerMutation.mutate(
       {
-        username: formData.username,
         email: formData.email,
         password: formData.password,
         fullName: formData.fullName,
@@ -178,31 +171,6 @@ export default function SignupPage() {
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div>
-            <Label htmlFor="username" style={{ color: '#2c2f30', fontSize: '0.875rem', fontWeight: 500 }}>
-              Username
-            </Label>
-            <Input
-              id="username"
-              type="text"
-              value={formData.username}
-              onChange={handleInputChange('username')}
-              placeholder="e.g., jsmith"
-              disabled={registerMutation.isPending}
-              style={{
-                marginTop: '6px',
-                backgroundColor: fieldErrors.username ? 'rgba(220, 38, 38, 0.05)' : '#eff1f2',
-                borderRadius: '12px',
-                fontFamily: 'inherit',
-              }}
-            />
-            {fieldErrors.username && (
-              <p style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '4px' }}>
-                {fieldErrors.username}
-              </p>
-            )}
-          </div>
-
           <div>
             <Label htmlFor="email" style={{ color: '#2c2f30', fontSize: '0.875rem', fontWeight: 500 }}>
               Email

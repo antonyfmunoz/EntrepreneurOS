@@ -101,7 +101,6 @@ export default function AuthPage() {
 
   function onRegisterSubmit(data: RegisterFormValues) {
     registerMutation.mutate({
-      username: data.username,
       email: data.email,
       password: data.password,
       fullName: data.fullName,

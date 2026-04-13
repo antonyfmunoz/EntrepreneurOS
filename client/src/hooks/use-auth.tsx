@@ -30,7 +30,6 @@ type LoginData = {
 };
 
 type RegisterData = {
-  username: string;
   password: string;
   email: string;
   fullName?: string;
@@ -132,7 +131,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const firstName = data.fullName?.split(" ")[0];
         const lastName = data.fullName?.split(" ").slice(1).join(" ");
         const result = await signUp.create({
-          username: data.username,
           emailAddress: data.email,
           password: data.password,
           firstName,
