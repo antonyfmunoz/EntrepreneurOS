@@ -51,7 +51,7 @@ export default function LoginPage() {
       { username: email, password },
       {
         onSuccess: () => {
-          setLocation('/');
+          window.location.href = '/';
         },
         onError: (error: Error) => {
           const msg = error.message || 'Unable to sign in. Try again.';
