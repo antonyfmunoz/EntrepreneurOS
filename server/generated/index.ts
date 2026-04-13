@@ -2,8 +2,6 @@
 import type { Express } from "express";
 
 // __GENERATED_ROUTE_IMPORTS__
-import { registerPostApiAuthRegisterRoutes } from "./routes/post_api_auth_register.js";
-import { registerPostApiAuthLoginRoutes } from "./routes/post_api_auth_login.js";
 import { registerPostApiAuthLogoutRoutes } from "./routes/post_api_auth_logout.js";
 import { registerGetApiUsersMeRoutes } from "./routes/get_api_users_me.js";
 import { registerPutApiUsersMeRoutes } from "./routes/put_api_users_me.js";
@@ -49,8 +47,6 @@ import { registerPostApiCompaniesIdConversationsRoutes } from "./routes/post_api
 // with real imports + registrations.
 export function registerGeneratedRoutes(app: Express): void {
   // __GENERATED_ROUTE_REGISTRATIONS__
-registerPostApiAuthRegisterRoutes(app);
-registerPostApiAuthLoginRoutes(app);
 registerPostApiAuthLogoutRoutes(app);
 registerGetApiUsersMeRoutes(app);
 registerPutApiUsersMeRoutes(app);

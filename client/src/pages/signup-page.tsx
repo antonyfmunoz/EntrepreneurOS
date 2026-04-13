@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
-import { useMutation } from '@tanstack/react-query';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 
 declare global {
   interface Window {
@@ -23,47 +23,13 @@ interface SignupFormData {
   confirmPassword: string;
 }
 
-interface SignupResponse {
-  userId: string;
-  token: string;
-}
-
-interface SignupError {
-  field?: string;
-  message: string;
-  code?: string;
-}
-
-async function registerUser(data: SignupFormData): Promise<SignupResponse> {
-  const response = await fetch('/api/auth/register', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      username: data.username,
-      email: data.email,
-      fullName: data.fullName,
-      company: data.company || undefined,
-      password: data.password,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw error;
-  }
-
-  return response.json();
-}
-
-async function handleGoogleSignIn(): Promise<void> {
-  window.location.href = '/api/auth/google';
-}
-
 export default function SignupPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { registerMutation, signInWithGoogle } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [formData, setFormData] = useState<SignupFormData>({
     username: '',
     email: '',
@@ -73,43 +39,6 @@ export default function SignupPage() {
     confirmPassword: '',
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const signupMutation = useMutation({
-    mutationFn: registerUser,
-    onSuccess: (data) => {
-      if (window.plausible) {
-        window.plausible('signup_succeeded', { props: { userId: data.userId } });
-      }
-      localStorage.setItem('auth_token', data.token);
-      setLocation('/company-setup');
-    },
-    onError: (error: SignupError) => {
-      if (window.plausible) {
-        window.plausible('signup_failed', { props: { errorCode: error.code || 'unknown' } });
-      }
-      
-      if (error.field) {
-        setFieldErrors({ [error.field]: error.message });
-      } else {
-        toast({
-          title: 'Registration failed',
-          description: error.message || 'An unexpected error occurred. Try again.',
-          variant: 'destructive',
-        });
-      }
-    },
-  });
-
-  const googleMutation = useMutation({
-    mutationFn: handleGoogleSignIn,
-    onError: () => {
-      toast({
-        title: 'Google sign-in failed',
-        description: 'Unable to connect to Google. Try again or use email registration.',
-        variant: 'destructive',
-      });
-    },
-  });
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
@@ -148,14 +77,51 @@ export default function SignupPage() {
       window.plausible('signup_attempted', { props: { method: 'email' } });
     }
 
-    signupMutation.mutate(formData);
+    registerMutation.mutate(
+      {
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+        fullName: formData.fullName,
+        company: formData.company || undefined,
+      },
+      {
+        onSuccess: () => {
+          if (window.plausible) {
+            window.plausible('signup_succeeded', { props: { userId: 'clerk' } });
+          }
+          setLocation('/');
+        },
+        onError: (error: Error) => {
+          if (window.plausible) {
+            window.plausible('signup_failed', { props: { errorCode: 'unknown' } });
+          }
+          toast({
+            title: 'Registration failed',
+            description: error.message || 'An unexpected error occurred. Try again.',
+            variant: 'destructive',
+          });
+        },
+      },
+    );
   };
 
-  const handleGoogleClick = () => {
+  const handleGoogleClick = async () => {
     if (window.plausible) {
       window.plausible('signup_attempted', { props: { method: 'google' } });
     }
-    googleMutation.mutate();
+    setGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Unable to connect. Try again.';
+      toast({
+        title: 'Google sign-in failed',
+        description: msg,
+        variant: 'destructive',
+      });
+      setGoogleLoading(false);
+    }
   };
 
   const handleInputChange = (field: keyof SignupFormData) => (
@@ -222,7 +188,7 @@ export default function SignupPage() {
               value={formData.username}
               onChange={handleInputChange('username')}
               placeholder="e.g., jsmith"
-              disabled={signupMutation.isPending}
+              disabled={registerMutation.isPending}
               style={{
                 marginTop: '6px',
                 backgroundColor: fieldErrors.username ? 'rgba(220, 38, 38, 0.05)' : '#eff1f2',
@@ -247,7 +213,7 @@ export default function SignupPage() {
               value={formData.email}
               onChange={handleInputChange('email')}
               placeholder="you@company.com"
-              disabled={signupMutation.isPending}
+              disabled={registerMutation.isPending}
               style={{
                 marginTop: '6px',
                 backgroundColor: fieldErrors.email ? 'rgba(220, 38, 38, 0.05)' : '#eff1f2',
@@ -272,7 +238,7 @@ export default function SignupPage() {
               value={formData.fullName}
               onChange={handleInputChange('fullName')}
               placeholder="Jane Smith"
-              disabled={signupMutation.isPending}
+              disabled={registerMutation.isPending}
               style={{
                 marginTop: '6px',
                 backgroundColor: fieldErrors.fullName ? 'rgba(220, 38, 38, 0.05)' : '#eff1f2',
@@ -297,7 +263,7 @@ export default function SignupPage() {
               value={formData.company}
               onChange={handleInputChange('company')}
               placeholder="e.g., Acme Labs"
-              disabled={signupMutation.isPending}
+              disabled={registerMutation.isPending}
               style={{
                 marginTop: '6px',
                 backgroundColor: '#eff1f2',
@@ -318,7 +284,7 @@ export default function SignupPage() {
                 value={formData.password}
                 onChange={handleInputChange('password')}
                 placeholder="At least 8 characters"
-                disabled={signupMutation.isPending}
+                disabled={registerMutation.isPending}
                 style={{
                   backgroundColor: fieldErrors.password ? 'rgba(220, 38, 38, 0.05)' : '#eff1f2',
                   borderRadius: '12px',
@@ -366,7 +332,7 @@ export default function SignupPage() {
                 value={formData.confirmPassword}
                 onChange={handleInputChange('confirmPassword')}
                 placeholder="Re-enter password"
-                disabled={signupMutation.isPending}
+                disabled={registerMutation.isPending}
                 style={{
                   backgroundColor: fieldErrors.confirmPassword ? 'rgba(220, 38, 38, 0.05)' : '#eff1f2',
                   borderRadius: '12px',
@@ -405,7 +371,7 @@ export default function SignupPage() {
 
           <Button
             type="submit"
-            disabled={signupMutation.isPending}
+            disabled={registerMutation.isPending}
             style={{
               width: '100%',
               backgroundColor: '#6a37d4',
@@ -417,7 +383,7 @@ export default function SignupPage() {
               marginTop: '8px',
             }}
           >
-            {signupMutation.isPending ? (
+            {registerMutation.isPending ? (
               <>
                 <Loader2 className="animate-spin" size={18} style={{ marginRight: '8px' }} />
                 Creating account...
@@ -459,7 +425,7 @@ export default function SignupPage() {
             type="button"
             variant="outline"
             onClick={handleGoogleClick}
-            disabled={googleMutation.isPending}
+            disabled={googleLoading}
             style={{
               width: '100%',
               borderRadius: '12px',
@@ -469,7 +435,7 @@ export default function SignupPage() {
               color: '#2c2f30',
             }}
           >
-            {googleMutation.isPending ? (
+            {googleLoading ? (
               <>
                 <Loader2 className="animate-spin" size={18} style={{ marginRight: '8px' }} />
                 Connecting...
