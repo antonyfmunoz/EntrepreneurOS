@@ -54,9 +54,9 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
-  const { signOut: clerkSignOut } = useClerkAuth();
-  const { signIn } = useSignIn();
-  const { signUp } = useSignUp();
+  const { signOut: clerkSignOut, getToken } = useClerkAuth();
+  const { signIn, setActive: setActiveFromSignIn } = useSignIn();
+  const { signUp, setActive: setActiveFromSignUp } = useSignUp();
   const clerkReady = isClerkConfigured() && clerkLoaded;
 
   // The backend /api/user endpoint reads the Clerk session from cookies via
@@ -94,9 +94,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (result.status !== "complete") {
           throw new Error("Sign in not complete — check your email for verification");
         }
-        // Clerk sets its session cookie immediately. Refetch /api/user so
-        // attachClerkUser can sync the local row and return it.
-        const res = await fetch("/api/user", { credentials: "include" });
+        // Activate the new session and grab its JWT for the immediate fetch
+        // (the Clerk cookie hasn't propagated yet).
+        await setActiveFromSignIn!({ session: result.createdSessionId });
+        const token = await getToken();
+        const res = await fetch("/api/user", {
+          credentials: "include",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         if (!res.ok) throw new Error(`Sync failed with status ${res.status}`);
         return await res.json();
       } catch (err: any) {
@@ -146,7 +151,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             "Registration requires email verification — check your inbox",
           );
         }
-        const res = await fetch("/api/user", { credentials: "include" });
+        await setActiveFromSignUp!({ session: result.createdSessionId });
+        const token = await getToken();
+        const res = await fetch("/api/user", {
+          credentials: "include",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         if (!res.ok) throw new Error(`Sync failed with status ${res.status}`);
         return await res.json();
       } catch (err: any) {
