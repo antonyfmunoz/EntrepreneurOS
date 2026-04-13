@@ -105,6 +105,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!res.ok) throw new Error(`Sync failed with status ${res.status}`);
         return await res.json();
       } catch (err: any) {
+        // If a session already exists, the user is already logged in — fetch
+        // the local user row and treat it as a successful login.
+        const errMsg = err?.errors?.[0]?.message ?? err?.message ?? "";
+        if (errMsg.toLowerCase().includes("session already exists") ||
+            errMsg.toLowerCase().includes("single session mode")) {
+          const token = await getToken();
+          const res = await fetch("/api/user", {
+            credentials: "include",
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          if (res.ok) return await res.json();
+        }
         if (err?.errors?.[0]?.message) {
           throw new Error(err.errors[0].message);
         }
