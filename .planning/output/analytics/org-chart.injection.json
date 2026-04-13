@@ -1,0 +1,79 @@
+{
+  "pageFilePath": "C:\\Users\\antonys beast pc\\dev\\EntrepreneurOS\\client\\src\\pages\\org-chart-page.tsx",
+  "pageName": "OrgChart",
+  "importCode": "import { usePostHog } from \"posthog-js/react\";\nimport { useEffect, useRef } from \"react\";",
+  "hookCode": "const posthog = usePostHog();",
+  "captureCode": "",
+  "manualCaptures": [
+    {
+      "eventName": "page_viewed",
+      "trigger": "Page load",
+      "captureSnippet": "posthog?.capture(\"page_viewed\", { companyId: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId"
+      ]
+    },
+    {
+      "eventName": "department_created",
+      "trigger": "User adds a department",
+      "captureSnippet": "posthog?.capture(\"department_created\", { companyId: undefined /* TODO: wire */, departmentName: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId",
+        "departmentName"
+      ]
+    },
+    {
+      "eventName": "role_created",
+      "trigger": "User adds a role",
+      "captureSnippet": "posthog?.capture(\"role_created\", { companyId: undefined /* TODO: wire */, roleTitle: undefined /* TODO: wire */, departmentId: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId",
+        "roleTitle",
+        "departmentId"
+      ]
+    },
+    {
+      "eventName": "default_structure_generated",
+      "trigger": "User generates default org structure",
+      "captureSnippet": "posthog?.capture(\"default_structure_generated\", { companyId: undefined /* TODO: wire */, stage: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId",
+        "stage"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "page_viewed",
+      "trigger": "Page load",
+      "properties": [
+        "companyId"
+      ]
+    },
+    {
+      "name": "department_created",
+      "trigger": "User adds a department",
+      "properties": [
+        "companyId",
+        "departmentName"
+      ]
+    },
+    {
+      "name": "role_created",
+      "trigger": "User adds a role",
+      "properties": [
+        "companyId",
+        "roleTitle",
+        "departmentId"
+      ]
+    },
+    {
+      "name": "default_structure_generated",
+      "trigger": "User generates default org structure",
+      "properties": [
+        "companyId",
+        "stage"
+      ]
+    }
+  ]
+}

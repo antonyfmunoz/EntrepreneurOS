@@ -6,57 +6,81 @@
   "captureCode": "",
   "manualCaptures": [
     {
-      "eventName": "login_attempted",
-      "trigger": "user clicks login button",
-      "captureSnippet": "posthog?.capture(\"login_attempted\", { email: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "eventName": "page_viewed",
+      "trigger": "Page load",
+      "captureSnippet": "posthog?.capture(\"page_viewed\", { referrer: undefined /* TODO: wire */ })",
       "properties": [
-        "email",
-        "timestamp"
+        "referrer"
+      ]
+    },
+    {
+      "eventName": "login_attempted",
+      "trigger": "User clicks login button",
+      "captureSnippet": "posthog?.capture(\"login_attempted\", { method: undefined /* TODO: wire */ })",
+      "properties": [
+        "method"
       ]
     },
     {
       "eventName": "login_succeeded",
-      "trigger": "successful authentication",
-      "captureSnippet": "posthog?.capture(\"login_succeeded\", { user_id: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "trigger": "Server returns success",
+      "captureSnippet": "posthog?.capture(\"login_succeeded\", { method: undefined /* TODO: wire */, userId: undefined /* TODO: wire */ })",
       "properties": [
-        "user_id",
-        "timestamp"
+        "method",
+        "userId"
       ]
     },
     {
       "eventName": "login_failed",
-      "trigger": "authentication failure",
-      "captureSnippet": "posthog?.capture(\"login_failed\", { error_type: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "trigger": "Server returns error",
+      "captureSnippet": "posthog?.capture(\"login_failed\", { method: undefined /* TODO: wire */, errorCode: undefined /* TODO: wire */ })",
       "properties": [
-        "error_type",
-        "timestamp"
+        "method",
+        "errorCode"
       ]
+    },
+    {
+      "eventName": "oauth_initiated",
+      "trigger": "User clicks Google OAuth button",
+      "captureSnippet": "posthog?.capture(\"oauth_initiated\")",
+      "properties": []
     }
   ],
   "events": [
     {
-      "name": "login_attempted",
-      "trigger": "user clicks login button",
+      "name": "page_viewed",
+      "trigger": "Page load",
       "properties": [
-        "email",
-        "timestamp"
+        "referrer"
+      ]
+    },
+    {
+      "name": "login_attempted",
+      "trigger": "User clicks login button",
+      "properties": [
+        "method"
       ]
     },
     {
       "name": "login_succeeded",
-      "trigger": "successful authentication",
+      "trigger": "Server returns success",
       "properties": [
-        "user_id",
-        "timestamp"
+        "method",
+        "userId"
       ]
     },
     {
       "name": "login_failed",
-      "trigger": "authentication failure",
+      "trigger": "Server returns error",
       "properties": [
-        "error_type",
-        "timestamp"
+        "method",
+        "errorCode"
       ]
+    },
+    {
+      "name": "oauth_initiated",
+      "trigger": "User clicks Google OAuth button",
+      "properties": []
     }
   ]
 }

@@ -1,0 +1,96 @@
+{
+  "pageFilePath": "C:\\Users\\antonys beast pc\\dev\\EntrepreneurOS\\client\\src\\pages\\workflows-page.tsx",
+  "pageName": "Workflows",
+  "importCode": "import { usePostHog } from \"posthog-js/react\";\nimport { useEffect, useRef } from \"react\";",
+  "hookCode": "const posthog = usePostHog();",
+  "captureCode": "",
+  "manualCaptures": [
+    {
+      "eventName": "page_viewed",
+      "trigger": "Page load",
+      "captureSnippet": "posthog?.capture(\"page_viewed\", { companyId: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId"
+      ]
+    },
+    {
+      "eventName": "workflow_created",
+      "trigger": "User creates a workflow",
+      "captureSnippet": "posthog?.capture(\"workflow_created\", { companyId: undefined /* TODO: wire */, workflowName: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId",
+        "workflowName"
+      ]
+    },
+    {
+      "eventName": "workflow_started",
+      "trigger": "User starts running a workflow",
+      "captureSnippet": "posthog?.capture(\"workflow_started\", { companyId: undefined /* TODO: wire */, workflowId: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId",
+        "workflowId"
+      ]
+    },
+    {
+      "eventName": "workflow_step_completed",
+      "trigger": "User marks a step complete",
+      "captureSnippet": "posthog?.capture(\"workflow_step_completed\", { companyId: undefined /* TODO: wire */, workflowId: undefined /* TODO: wire */, stepType: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId",
+        "workflowId",
+        "stepType"
+      ]
+    },
+    {
+      "eventName": "workflow_completed",
+      "trigger": "All steps in workflow marked done",
+      "captureSnippet": "posthog?.capture(\"workflow_completed\", { companyId: undefined /* TODO: wire */, workflowId: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId",
+        "workflowId"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "page_viewed",
+      "trigger": "Page load",
+      "properties": [
+        "companyId"
+      ]
+    },
+    {
+      "name": "workflow_created",
+      "trigger": "User creates a workflow",
+      "properties": [
+        "companyId",
+        "workflowName"
+      ]
+    },
+    {
+      "name": "workflow_started",
+      "trigger": "User starts running a workflow",
+      "properties": [
+        "companyId",
+        "workflowId"
+      ]
+    },
+    {
+      "name": "workflow_step_completed",
+      "trigger": "User marks a step complete",
+      "properties": [
+        "companyId",
+        "workflowId",
+        "stepType"
+      ]
+    },
+    {
+      "name": "workflow_completed",
+      "trigger": "All steps in workflow marked done",
+      "properties": [
+        "companyId",
+        "workflowId"
+      ]
+    }
+  ]
+}

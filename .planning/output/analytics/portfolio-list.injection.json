@@ -1,0 +1,67 @@
+{
+  "pageFilePath": "C:\\Users\\antonys beast pc\\dev\\EntrepreneurOS\\client\\src\\pages\\portfolio-list-page.tsx",
+  "pageName": "PortfolioList",
+  "importCode": "import { usePostHog } from \"posthog-js/react\";\nimport { useEffect, useRef } from \"react\";",
+  "hookCode": "const posthog = usePostHog();",
+  "captureCode": "",
+  "manualCaptures": [
+    {
+      "eventName": "page_viewed",
+      "trigger": "Page load",
+      "captureSnippet": "posthog?.capture(\"page_viewed\", { portfolioCount: undefined /* TODO: wire */ })",
+      "properties": [
+        "portfolioCount"
+      ]
+    },
+    {
+      "eventName": "portfolio_opened",
+      "trigger": "User clicks a portfolio node",
+      "captureSnippet": "posthog?.capture(\"portfolio_opened\", { portfolioId: undefined /* TODO: wire */ })",
+      "properties": [
+        "portfolioId"
+      ]
+    },
+    {
+      "eventName": "create_portfolio_clicked",
+      "trigger": "User clicks create portfolio button",
+      "captureSnippet": "posthog?.capture(\"create_portfolio_clicked\")",
+      "properties": []
+    },
+    {
+      "eventName": "portfolio_created",
+      "trigger": "Server returns success for new portfolio",
+      "captureSnippet": "posthog?.capture(\"portfolio_created\", { portfolioId: undefined /* TODO: wire */ })",
+      "properties": [
+        "portfolioId"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "page_viewed",
+      "trigger": "Page load",
+      "properties": [
+        "portfolioCount"
+      ]
+    },
+    {
+      "name": "portfolio_opened",
+      "trigger": "User clicks a portfolio node",
+      "properties": [
+        "portfolioId"
+      ]
+    },
+    {
+      "name": "create_portfolio_clicked",
+      "trigger": "User clicks create portfolio button",
+      "properties": []
+    },
+    {
+      "name": "portfolio_created",
+      "trigger": "Server returns success for new portfolio",
+      "properties": [
+        "portfolioId"
+      ]
+    }
+  ]
+}

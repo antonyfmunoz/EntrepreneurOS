@@ -1,0 +1,37 @@
+{
+  "pageFilePath": "C:\\Users\\antonys beast pc\\dev\\EntrepreneurOS\\client\\src\\pages\\not-found-page.tsx",
+  "pageName": "NotFound",
+  "importCode": "import { usePostHog } from \"posthog-js/react\";\nimport { useEffect, useRef } from \"react\";",
+  "hookCode": "const posthog = usePostHog();",
+  "captureCode": "",
+  "manualCaptures": [
+    {
+      "eventName": "page_viewed",
+      "trigger": "User lands on a non-existent route",
+      "captureSnippet": "posthog?.capture(\"page_viewed\", { attemptedRoute: undefined /* TODO: wire */ })",
+      "properties": [
+        "attemptedRoute"
+      ]
+    },
+    {
+      "eventName": "back_to_home_clicked",
+      "trigger": "User clicks back to home button",
+      "captureSnippet": "posthog?.capture(\"back_to_home_clicked\")",
+      "properties": []
+    }
+  ],
+  "events": [
+    {
+      "name": "page_viewed",
+      "trigger": "User lands on a non-existent route",
+      "properties": [
+        "attemptedRoute"
+      ]
+    },
+    {
+      "name": "back_to_home_clicked",
+      "trigger": "User clicks back to home button",
+      "properties": []
+    }
+  ]
+}

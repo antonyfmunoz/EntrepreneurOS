@@ -1,22 +1,21 @@
 import { useState } from 'react';
-import { useLocation } from 'wouter';
+import { useSignIn } from '@clerk/clerk-react';
 import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/use-auth';
 import designTokens from '@/lib/design-tokens';
 
 export default function LoginPage() {
-  const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { loginMutation, signInWithGoogle } = useAuth();
+  const { signIn, setActive, isLoaded } = useSignIn();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [authError, setAuthError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
   const validateEmail = (value: string): boolean => {
@@ -38,40 +37,56 @@ export default function LoginPage() {
     return true;
   };
 
-  const handleEmailLogin = (e: React.FormEvent) => {
+  const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const isEmailValid = validateEmail(email);
     const isPasswordValid = validatePassword(password);
 
     if (!isEmailValid || !isPasswordValid) return;
+    if (!isLoaded || !signIn || !setActive) return;
 
     setAuthError('');
-    loginMutation.mutate(
-      { username: email, password },
-      {
-        onSuccess: () => {
-          window.location.href = '/';
-        },
-        onError: (error: Error) => {
-          const msg = error.message || 'Unable to sign in. Try again.';
-          if (msg.toLowerCase().includes('credentials') || msg.toLowerCase().includes('password')) {
-            setAuthError('Email or password is incorrect');
-          } else if (msg.toLowerCase().includes('not found')) {
-            setAuthError('No account found with this email');
-          } else {
-            setAuthError(msg);
-          }
-        },
-      },
-    );
+    setLoading(true);
+    try {
+      const result = await signIn.create({
+        identifier: email,
+        password,
+      });
+      if (result.status === 'complete') {
+        await setActive({ session: result.createdSessionId });
+        window.location.href = '/portfolios';
+      } else {
+        setAuthError('Sign in not complete — check your email for verification');
+        setLoading(false);
+      }
+    } catch (err: any) {
+      const msg = err?.errors?.[0]?.message || err?.message || 'Unable to sign in. Try again.';
+      if (msg.toLowerCase().includes('credentials') || msg.toLowerCase().includes('password')) {
+        setAuthError('Email or password is incorrect');
+      } else if (msg.toLowerCase().includes('not found')) {
+        setAuthError('No account found with this email');
+      } else if (msg.toLowerCase().includes('session already exists') ||
+                 msg.toLowerCase().includes('single session mode')) {
+        window.location.href = '/portfolios';
+        return;
+      } else {
+        setAuthError(msg);
+      }
+      setLoading(false);
+    }
   };
 
   const handleGoogleLogin = async () => {
+    if (!isLoaded || !signIn) return;
     setGoogleLoading(true);
     setAuthError('');
     try {
-      await signInWithGoogle();
+      await signIn.authenticateWithRedirect({
+        strategy: 'oauth_google',
+        redirectUrl: '/sso-callback',
+        redirectUrlComplete: '/portfolios',
+      });
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Unable to connect. Try again.';
       toast({
@@ -83,7 +98,7 @@ export default function LoginPage() {
     }
   };
 
-  const isLoading = loginMutation.isPending || googleLoading;
+  const isLoading = loading || googleLoading;
 
   return (
     <div
@@ -333,7 +348,7 @@ export default function LoginPage() {
                 opacity: isLoading ? 0.7 : 1,
               }}
             >
-              {loginMutation.isPending ? (
+              {loading ? (
                 <>
                   <Loader2 size={20} style={{ marginRight: '8px', animation: 'spin 1s linear infinite' }} />
                   Signing in...

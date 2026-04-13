@@ -1,0 +1,71 @@
+{
+  "pageFilePath": "C:\\Users\\antonys beast pc\\dev\\EntrepreneurOS\\client\\src\\pages\\command-center-page.tsx",
+  "pageName": "CommandCenter",
+  "importCode": "import { usePostHog } from \"posthog-js/react\";\nimport { useEffect, useRef } from \"react\";",
+  "hookCode": "const posthog = usePostHog();",
+  "captureCode": "",
+  "manualCaptures": [
+    {
+      "eventName": "page_viewed",
+      "trigger": "Page load",
+      "captureSnippet": "posthog?.capture(\"page_viewed\", { companyId: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId"
+      ]
+    },
+    {
+      "eventName": "kpi_card_clicked",
+      "trigger": "User clicks a KPI card",
+      "captureSnippet": "posthog?.capture(\"kpi_card_clicked\", { kpiType: undefined /* TODO: wire */ })",
+      "properties": [
+        "kpiType"
+      ]
+    },
+    {
+      "eventName": "quick_action_clicked",
+      "trigger": "User clicks a quick action button",
+      "captureSnippet": "posthog?.capture(\"quick_action_clicked\", { actionType: undefined /* TODO: wire */ })",
+      "properties": [
+        "actionType"
+      ]
+    },
+    {
+      "eventName": "ai_panel_toggled",
+      "trigger": "User expands/collapses floating AI panel",
+      "captureSnippet": "posthog?.capture(\"ai_panel_toggled\", { state: undefined /* TODO: wire */ })",
+      "properties": [
+        "state"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "page_viewed",
+      "trigger": "Page load",
+      "properties": [
+        "companyId"
+      ]
+    },
+    {
+      "name": "kpi_card_clicked",
+      "trigger": "User clicks a KPI card",
+      "properties": [
+        "kpiType"
+      ]
+    },
+    {
+      "name": "quick_action_clicked",
+      "trigger": "User clicks a quick action button",
+      "properties": [
+        "actionType"
+      ]
+    },
+    {
+      "name": "ai_panel_toggled",
+      "trigger": "User expands/collapses floating AI panel",
+      "properties": [
+        "state"
+      ]
+    }
+  ]
+}

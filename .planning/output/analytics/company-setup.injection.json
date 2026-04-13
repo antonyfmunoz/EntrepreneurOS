@@ -1,0 +1,90 @@
+{
+  "pageFilePath": "C:\\Users\\antonys beast pc\\dev\\EntrepreneurOS\\client\\src\\pages\\company-setup-page.tsx",
+  "pageName": "CompanySetup",
+  "importCode": "import { usePostHog } from \"posthog-js/react\";\nimport { useEffect, useRef } from \"react\";",
+  "hookCode": "const posthog = usePostHog();",
+  "captureCode": "",
+  "manualCaptures": [
+    {
+      "eventName": "page_viewed",
+      "trigger": "Page load",
+      "captureSnippet": "posthog?.capture(\"page_viewed\")",
+      "properties": []
+    },
+    {
+      "eventName": "portfolio_selected",
+      "trigger": "User selects an existing portfolio",
+      "captureSnippet": "posthog?.capture(\"portfolio_selected\", { portfolioId: undefined /* TODO: wire */ })",
+      "properties": [
+        "portfolioId"
+      ]
+    },
+    {
+      "eventName": "portfolio_created_inline",
+      "trigger": "User creates a new portfolio during company setup",
+      "captureSnippet": "posthog?.capture(\"portfolio_created_inline\", { portfolioId: undefined /* TODO: wire */ })",
+      "properties": [
+        "portfolioId"
+      ]
+    },
+    {
+      "eventName": "setup_step_completed",
+      "trigger": "User advances wizard step",
+      "captureSnippet": "posthog?.capture(\"setup_step_completed\", { stepIndex: undefined /* TODO: wire */, stepName: undefined /* TODO: wire */ })",
+      "properties": [
+        "stepIndex",
+        "stepName"
+      ]
+    },
+    {
+      "eventName": "company_created",
+      "trigger": "User submits wizard and server returns success",
+      "captureSnippet": "posthog?.capture(\"company_created\", { companyId: undefined /* TODO: wire */, portfolioId: undefined /* TODO: wire */, stage: undefined /* TODO: wire */, industry: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId",
+        "portfolioId",
+        "stage",
+        "industry"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "page_viewed",
+      "trigger": "Page load",
+      "properties": []
+    },
+    {
+      "name": "portfolio_selected",
+      "trigger": "User selects an existing portfolio",
+      "properties": [
+        "portfolioId"
+      ]
+    },
+    {
+      "name": "portfolio_created_inline",
+      "trigger": "User creates a new portfolio during company setup",
+      "properties": [
+        "portfolioId"
+      ]
+    },
+    {
+      "name": "setup_step_completed",
+      "trigger": "User advances wizard step",
+      "properties": [
+        "stepIndex",
+        "stepName"
+      ]
+    },
+    {
+      "name": "company_created",
+      "trigger": "User submits wizard and server returns success",
+      "properties": [
+        "companyId",
+        "portfolioId",
+        "stage",
+        "industry"
+      ]
+    }
+  ]
+}

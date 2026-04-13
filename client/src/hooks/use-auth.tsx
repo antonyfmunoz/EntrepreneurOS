@@ -7,7 +7,7 @@ import {
 import type { User } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useUser, useAuth as useClerkAuth, useSignIn, useSignUp } from "@clerk/clerk-react";
+import { useUser, useAuth as useClerkAuth, useSignIn } from "@clerk/clerk-react";
 import { isClerkConfigured } from "@/lib/clerk";
 
 type UserWithoutPassword = Omit<User, "password">;
@@ -16,53 +16,30 @@ type AuthContextType = {
   user: UserWithoutPassword | null;
   isLoading: boolean;
   error: Error | null;
-  loginMutation: UseMutationResult<UserWithoutPassword | null, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
-  registerMutation: UseMutationResult<UserWithoutPassword | null, Error, RegisterData>;
-  signInWithGoogle: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   isClerkReady: boolean;
-};
-
-type LoginData = {
-  username: string;
-  password: string;
-};
-
-type RegisterData = {
-  password: string;
-  email: string;
-  fullName?: string;
-  company?: string;
 };
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
 /**
- * AuthProvider — Clerk-only auth context.
+ * AuthProvider — slim Clerk auth context.
  *
- * The legacy Passport local + scrypt path has been removed. Every auth
- * mutation now goes through Clerk's React SDK (useSignIn / useSignUp /
- * useClerkAuth.signOut). The server-side user row is synced lazily on the
- * first authenticated request to /api/user via attachClerkUser middleware —
- * no explicit POST /api/auth/clerk round-trip from the frontend is needed.
- *
- * The context surface (user / loginMutation / registerMutation / etc.) is
- * preserved so existing consumers (auth-page.tsx, settings-page.tsx,
- * sidebar.tsx, protected-route.tsx) continue to compile unchanged.
+ * Login and signup pages call Clerk SDK hooks directly (useSignIn / useSignUp).
+ * This provider handles:
+ *   - Local DB user row sync (via /api/user query)
+ *   - Logout
+ *   - Password reset
+ *   - isClerkReady flag
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
   const { signOut: clerkSignOut } = useClerkAuth();
-  const { signIn, setActive: setActiveFromSignIn } = useSignIn();
-  const { signUp, setActive: setActiveFromSignUp } = useSignUp();
+  const { signIn } = useSignIn();
   const clerkReady = isClerkConfigured() && clerkLoaded;
 
-  // The backend /api/user endpoint reads the Clerk session from cookies via
-  // attachClerkUser and returns the local user row. When Clerk is still
-  // loading or the user is signed out, we skip the query to avoid a wasted
-  // 401. Refetch whenever Clerk auth state flips.
   const {
     data: userData,
     error,
@@ -81,100 +58,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const user = clerkUser ? userData ?? null : null;
   const isLoading = !clerkLoaded || (clerkReady && Boolean(clerkUser) && queryLoading);
 
-  const loginMutation = useMutation<UserWithoutPassword | null, Error, LoginData>({
-    mutationFn: async (credentials: LoginData) => {
-      if (!clerkReady || !signIn) {
-        throw new Error("Authentication is not available — Clerk is not configured");
-      }
-      try {
-        const result = await signIn.create({
-          identifier: credentials.username,
-          password: credentials.password,
-        });
-        if (result.status !== "complete") {
-          throw new Error("Sign in not complete — check your email for verification");
-        }
-        await setActiveFromSignIn!({ session: result.createdSessionId });
-        return null;
-      } catch (err: any) {
-        // If a session already exists, the user is already logged in.
-        const errMsg = err?.errors?.[0]?.message ?? err?.message ?? "";
-        if (errMsg.toLowerCase().includes("session already exists") ||
-            errMsg.toLowerCase().includes("single session mode")) {
-          return null;
-        }
-        if (err?.errors?.[0]?.message) {
-          throw new Error(err.errors[0].message);
-        }
-        throw err;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-      toast({ title: "Login successful" });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Login failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const registerMutation = useMutation<UserWithoutPassword | null, Error, RegisterData>({
-    mutationFn: async (data: RegisterData) => {
-      if (!clerkReady || !signUp) {
-        throw new Error("Registration is not available — Clerk is not configured");
-      }
-      try {
-        const firstName = data.fullName?.split(" ")[0];
-        const lastName = data.fullName?.split(" ").slice(1).join(" ");
-        const result = await signUp.create({
-          emailAddress: data.email,
-          password: data.password,
-          firstName,
-          lastName,
-        });
-        if (result.status !== "complete") {
-          toast({
-            title: "Check your email",
-            description:
-              "Please verify your email address to complete registration.",
-          });
-          throw new Error(
-            "Registration requires email verification — check your inbox",
-          );
-        }
-        await setActiveFromSignUp!({ session: result.createdSessionId });
-        return null;
-      } catch (err: any) {
-        console.error('Clerk signup error:', JSON.stringify(err, null, 2));
-        if (err?.errors?.[0]?.message) {
-          throw new Error(err.errors[0].message);
-        }
-        throw err;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-      toast({ title: "Account created" });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Registration failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
   const logoutMutation = useMutation<void, Error, void>({
     mutationFn: async () => {
       if (clerkReady) {
         await clerkSignOut();
       }
-      // Server no-op for parity; cookie cleanup happens client-side via Clerk.
       await apiRequest("POST", "/api/logout");
     },
     onSuccess: () => {
@@ -190,30 +78,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     },
   });
-
-  const signInWithGoogle = async (): Promise<void> => {
-    if (!clerkReady || !signIn) {
-      toast({
-        title: "Google Sign In not available",
-        description: "Clerk is not configured",
-        variant: "destructive",
-      });
-      return;
-    }
-    try {
-      await signIn.authenticateWithRedirect({
-        strategy: "oauth_google",
-        redirectUrl: "/sso-callback",
-        redirectUrlComplete: "/",
-      });
-    } catch (error) {
-      toast({
-        title: "Google Sign In failed",
-        description: error instanceof Error ? error.message : "Unknown error",
-        variant: "destructive",
-      });
-    }
-  };
 
   const resetPassword = async (email: string): Promise<void> => {
     if (!clerkReady || !signIn) {
@@ -249,10 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isLoading,
         error: error ?? null,
-        loginMutation,
         logoutMutation,
-        registerMutation,
-        signInWithGoogle,
         resetPassword,
         isClerkReady: clerkReady,
       }}

@@ -1,0 +1,58 @@
+{
+  "pageFilePath": "C:\\Users\\antonys beast pc\\dev\\EntrepreneurOS\\client\\src\\pages\\agent-chat-page.tsx",
+  "pageName": "AgentChat",
+  "importCode": "import { usePostHog } from \"posthog-js/react\";\nimport { useEffect, useRef } from \"react\";",
+  "hookCode": "const posthog = usePostHog();",
+  "captureCode": "",
+  "manualCaptures": [
+    {
+      "eventName": "page_viewed",
+      "trigger": "Page load",
+      "captureSnippet": "posthog?.capture(\"page_viewed\", { companyId: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId"
+      ]
+    },
+    {
+      "eventName": "message_sent",
+      "trigger": "User sends a message",
+      "captureSnippet": "posthog?.capture(\"message_sent\", { companyId: undefined /* TODO: wire */, messageLength: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId",
+        "messageLength"
+      ]
+    },
+    {
+      "eventName": "suggested_action_clicked",
+      "trigger": "User clicks a suggested action",
+      "captureSnippet": "posthog?.capture(\"suggested_action_clicked\", { actionLabel: undefined /* TODO: wire */ })",
+      "properties": [
+        "actionLabel"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "page_viewed",
+      "trigger": "Page load",
+      "properties": [
+        "companyId"
+      ]
+    },
+    {
+      "name": "message_sent",
+      "trigger": "User sends a message",
+      "properties": [
+        "companyId",
+        "messageLength"
+      ]
+    },
+    {
+      "name": "suggested_action_clicked",
+      "trigger": "User clicks a suggested action",
+      "properties": [
+        "actionLabel"
+      ]
+    }
+  ]
+}

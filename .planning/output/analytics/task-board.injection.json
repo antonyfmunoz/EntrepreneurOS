@@ -1,0 +1,100 @@
+{
+  "pageFilePath": "C:\\Users\\antonys beast pc\\dev\\EntrepreneurOS\\client\\src\\pages\\task-board-page.tsx",
+  "pageName": "TaskBoard",
+  "importCode": "import { usePostHog } from \"posthog-js/react\";\nimport { useEffect, useRef } from \"react\";",
+  "hookCode": "const posthog = usePostHog();",
+  "captureCode": "",
+  "manualCaptures": [
+    {
+      "eventName": "page_viewed",
+      "trigger": "Page load",
+      "captureSnippet": "posthog?.capture(\"page_viewed\", { companyId: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId"
+      ]
+    },
+    {
+      "eventName": "task_created",
+      "trigger": "User creates a task",
+      "captureSnippet": "posthog?.capture(\"task_created\", { companyId: undefined /* TODO: wire */, priority: undefined /* TODO: wire */, hasAssignee: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId",
+        "priority",
+        "hasAssignee"
+      ]
+    },
+    {
+      "eventName": "task_moved",
+      "trigger": "User drags task to new column",
+      "captureSnippet": "posthog?.capture(\"task_moved\", { companyId: undefined /* TODO: wire */, taskId: undefined /* TODO: wire */, fromStatus: undefined /* TODO: wire */, toStatus: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId",
+        "taskId",
+        "fromStatus",
+        "toStatus"
+      ]
+    },
+    {
+      "eventName": "task_assigned_to_ai",
+      "trigger": "User assigns task to DEX",
+      "captureSnippet": "posthog?.capture(\"task_assigned_to_ai\", { companyId: undefined /* TODO: wire */, taskId: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId",
+        "taskId"
+      ]
+    },
+    {
+      "eventName": "filter_applied",
+      "trigger": "User applies a filter",
+      "captureSnippet": "posthog?.capture(\"filter_applied\", { filterType: undefined /* TODO: wire */, filterValue: undefined /* TODO: wire */ })",
+      "properties": [
+        "filterType",
+        "filterValue"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "page_viewed",
+      "trigger": "Page load",
+      "properties": [
+        "companyId"
+      ]
+    },
+    {
+      "name": "task_created",
+      "trigger": "User creates a task",
+      "properties": [
+        "companyId",
+        "priority",
+        "hasAssignee"
+      ]
+    },
+    {
+      "name": "task_moved",
+      "trigger": "User drags task to new column",
+      "properties": [
+        "companyId",
+        "taskId",
+        "fromStatus",
+        "toStatus"
+      ]
+    },
+    {
+      "name": "task_assigned_to_ai",
+      "trigger": "User assigns task to DEX",
+      "properties": [
+        "companyId",
+        "taskId"
+      ]
+    },
+    {
+      "name": "filter_applied",
+      "trigger": "User applies a filter",
+      "properties": [
+        "filterType",
+        "filterValue"
+      ]
+    }
+  ]
+}

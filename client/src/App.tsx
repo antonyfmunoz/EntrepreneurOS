@@ -6,10 +6,10 @@ import { Loader2 } from "lucide-react";
 import SettingsPage from "@/pages/settings-page";
 import CompanySetupPage from "@/pages/company-setup-page";
 
-import { AuthProvider, useAuth } from "@/hooks/use-auth";
-import { useCompany } from "@/hooks/use-company";
+import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { CompanyGate } from "@/lib/company-guard";
+import { useUser } from "@clerk/clerk-react";
 import Login from "@/pages/login-page";
 import Signup from "@/pages/signup-page";
 import ForgotPassword from "@/pages/forgot-password-page";
@@ -26,10 +26,9 @@ import OrgChartPage from "@/pages/org-chart-page";
 import TaskBoard from "@/pages/task-board-page-new";
 
 function RootRedirect() {
-  const { user, isLoading } = useAuth();
-  const { hasCompany, isLoading: companyLoading } = useCompany();
+  const { isLoaded, isSignedIn } = useUser();
 
-  if (isLoading || companyLoading) {
+  if (!isLoaded) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-border" />
@@ -37,8 +36,7 @@ function RootRedirect() {
     );
   }
 
-  if (!user) return <Redirect to="/login" />;
-  if (!hasCompany) return <Redirect to="/company-setup" />;
+  if (!isSignedIn) return <Redirect to="/login" />;
   return <Redirect to="/portfolios" />;
 }
 

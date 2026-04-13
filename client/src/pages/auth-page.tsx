@@ -59,12 +59,14 @@ export default function AuthPage() {
   const {
     user,
     isLoading,
-    loginMutation,
-    registerMutation,
-    signInWithGoogle,
     resetPassword,
     isClerkReady,
   } = useAuth();
+  // loginMutation, registerMutation, signInWithGoogle removed — auth pages
+  // now call Clerk SDK directly. This orphaned page is not routed.
+  const loginMutation = { mutate: (..._args: any[]) => {}, isPending: false } as any;
+  const registerMutation = { mutate: (..._args: any[]) => {}, isPending: false } as any;
+  const signInWithGoogle = async () => {};
   const { hasCompany, isLoading: companyLoading } = useCompany();
   const [, navigate] = useLocation();
 

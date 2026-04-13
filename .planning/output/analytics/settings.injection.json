@@ -6,77 +6,76 @@
   "captureCode": "",
   "manualCaptures": [
     {
-      "eventName": "settings_viewed",
-      "trigger": "page load",
-      "captureSnippet": "posthog?.capture(\"settings_viewed\", { user_id: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "eventName": "page_viewed",
+      "trigger": "Page load",
+      "captureSnippet": "posthog?.capture(\"page_viewed\", { activeTab: undefined /* TODO: wire */ })",
       "properties": [
-        "user_id",
-        "timestamp"
+        "activeTab"
+      ]
+    },
+    {
+      "eventName": "settings_tab_changed",
+      "trigger": "User switches tab",
+      "captureSnippet": "posthog?.capture(\"settings_tab_changed\", { tabName: undefined /* TODO: wire */ })",
+      "properties": [
+        "tabName"
       ]
     },
     {
       "eventName": "profile_updated",
-      "trigger": "user saves profile changes",
-      "captureSnippet": "posthog?.capture(\"profile_updated\", { user_id: undefined /* TODO: wire */, fields_changed: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "trigger": "User saves profile changes",
+      "captureSnippet": "posthog?.capture(\"profile_updated\")",
+      "properties": []
+    },
+    {
+      "eventName": "company_settings_updated",
+      "trigger": "User saves company settings",
+      "captureSnippet": "posthog?.capture(\"company_settings_updated\", { companyId: undefined /* TODO: wire */ })",
       "properties": [
-        "user_id",
-        "fields_changed",
-        "timestamp"
+        "companyId"
       ]
     },
     {
-      "eventName": "password_changed",
-      "trigger": "user successfully changes password",
-      "captureSnippet": "posthog?.capture(\"password_changed\", { user_id: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
+      "eventName": "autonomy_level_changed",
+      "trigger": "User changes autonomy level",
+      "captureSnippet": "posthog?.capture(\"autonomy_level_changed\", { level: undefined /* TODO: wire */ })",
       "properties": [
-        "user_id",
-        "timestamp"
-      ]
-    },
-    {
-      "eventName": "notification_preferences_updated",
-      "trigger": "user changes notification settings",
-      "captureSnippet": "posthog?.capture(\"notification_preferences_updated\", { user_id: undefined /* TODO: wire */, preferences: undefined /* TODO: wire */, timestamp: undefined /* TODO: wire */ })",
-      "properties": [
-        "user_id",
-        "preferences",
-        "timestamp"
+        "level"
       ]
     }
   ],
   "events": [
     {
-      "name": "settings_viewed",
-      "trigger": "page load",
+      "name": "page_viewed",
+      "trigger": "Page load",
       "properties": [
-        "user_id",
-        "timestamp"
+        "activeTab"
+      ]
+    },
+    {
+      "name": "settings_tab_changed",
+      "trigger": "User switches tab",
+      "properties": [
+        "tabName"
       ]
     },
     {
       "name": "profile_updated",
-      "trigger": "user saves profile changes",
+      "trigger": "User saves profile changes",
+      "properties": []
+    },
+    {
+      "name": "company_settings_updated",
+      "trigger": "User saves company settings",
       "properties": [
-        "user_id",
-        "fields_changed",
-        "timestamp"
+        "companyId"
       ]
     },
     {
-      "name": "password_changed",
-      "trigger": "user successfully changes password",
+      "name": "autonomy_level_changed",
+      "trigger": "User changes autonomy level",
       "properties": [
-        "user_id",
-        "timestamp"
-      ]
-    },
-    {
-      "name": "notification_preferences_updated",
-      "trigger": "user changes notification settings",
-      "properties": [
-        "user_id",
-        "preferences",
-        "timestamp"
+        "level"
       ]
     }
   ]

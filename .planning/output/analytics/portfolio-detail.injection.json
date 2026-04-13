@@ -1,0 +1,75 @@
+{
+  "pageFilePath": "C:\\Users\\antonys beast pc\\dev\\EntrepreneurOS\\client\\src\\pages\\portfolio-detail-page.tsx",
+  "pageName": "PortfolioDetail",
+  "importCode": "import { usePostHog } from \"posthog-js/react\";\nimport { useEffect, useRef } from \"react\";",
+  "hookCode": "const posthog = usePostHog();",
+  "captureCode": "",
+  "manualCaptures": [
+    {
+      "eventName": "page_viewed",
+      "trigger": "Page load",
+      "captureSnippet": "posthog?.capture(\"page_viewed\", { portfolioId: undefined /* TODO: wire */, companyCount: undefined /* TODO: wire */ })",
+      "properties": [
+        "portfolioId",
+        "companyCount"
+      ]
+    },
+    {
+      "eventName": "company_opened",
+      "trigger": "User clicks a company node",
+      "captureSnippet": "posthog?.capture(\"company_opened\", { companyId: undefined /* TODO: wire */ })",
+      "properties": [
+        "companyId"
+      ]
+    },
+    {
+      "eventName": "add_company_clicked",
+      "trigger": "User clicks add company button",
+      "captureSnippet": "posthog?.capture(\"add_company_clicked\", { portfolioId: undefined /* TODO: wire */ })",
+      "properties": [
+        "portfolioId"
+      ]
+    },
+    {
+      "eventName": "company_attached",
+      "trigger": "Existing company attached to this portfolio",
+      "captureSnippet": "posthog?.capture(\"company_attached\", { portfolioId: undefined /* TODO: wire */, companyId: undefined /* TODO: wire */ })",
+      "properties": [
+        "portfolioId",
+        "companyId"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "page_viewed",
+      "trigger": "Page load",
+      "properties": [
+        "portfolioId",
+        "companyCount"
+      ]
+    },
+    {
+      "name": "company_opened",
+      "trigger": "User clicks a company node",
+      "properties": [
+        "companyId"
+      ]
+    },
+    {
+      "name": "add_company_clicked",
+      "trigger": "User clicks add company button",
+      "properties": [
+        "portfolioId"
+      ]
+    },
+    {
+      "name": "company_attached",
+      "trigger": "Existing company attached to this portfolio",
+      "properties": [
+        "portfolioId",
+        "companyId"
+      ]
+    }
+  ]
+}

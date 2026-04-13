@@ -1,16 +1,16 @@
 {
   "mcpServers": {
     "shadcn": {
-      "command": "npx",
-      "args": ["-y", "@shadcn/mcp"]
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@shadcn/mcp"]
     },
     "magic21": {
-      "command": "npx",
-      "args": ["-y", "@21st-dev/mcp"]
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@21st-dev/mcp"]
     },
     "magicui": {
-      "command": "npx",
-      "args": ["-y", "@magicui/mcp"]
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@magicui/mcp"]
     }
   }
 }
