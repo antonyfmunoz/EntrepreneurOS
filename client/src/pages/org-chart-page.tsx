@@ -1,286 +1,774 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "wouter";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
-  type Node,
-  type Edge,
-  type NodeProps,
-  Handle,
-  Position,
-  useNodesState,
-  useEdgesState,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
-
-import { UniversalLayout } from "@/components/layout/universal-layout";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Building2,
-  UserCircle2,
   Plus,
-  Sparkles,
+  ChevronDown,
+  ChevronRight,
+  User,
   Bot,
+  Trash2,
+  Sparkles,
+  Building2,
   Home,
   CheckSquare,
   Workflow,
   Settings as SettingsIcon,
   X,
+  UserCircle2,
 } from "lucide-react";
-import { usePostHog } from "posthog-js/react";
-
-// ── Domain types ─────────────────────────────────────────────────────────────
+import { UniversalLayout } from "@/components/layout/universal-layout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 
 interface Department {
   id: string;
-  companyId: string;
   name: string;
-  description: string | null;
+  description?: string;
 }
 
 interface Role {
   id: string;
-  companyId: string;
-  departmentId: string;
   title: string;
-  parentRoleId: string | null;
-  responsibilities: string | null;
-  assignedUserId: string | null;
-  agentSlot: string | null;
+  departmentId: string;
+  parentRoleId?: string;
+  responsibilities?: string;
+  assignedUserId?: string;
+  agentSlot?: boolean;
 }
 
-type OrgNodeData =
-  | { kind: "department"; department: Department; roleCount: number }
-  | { kind: "role"; role: Role };
+interface AgentSlotBadgeProps {
+  active?: boolean;
+}
 
-// ── Custom node components ───────────────────────────────────────────────────
-// Glassmorphism cards on a neutral canvas, matching the Ethereal Professional
-// design system. No gradients — solid #6a37d4 accents only.
-
-function DepartmentNode({ data }: NodeProps<Node<Extract<OrgNodeData, { kind: "department" }>>>) {
-  const posthog = usePostHog();
-  const { department, roleCount } = data;
+function AgentSlotBadge({ active }: AgentSlotBadgeProps) {
   return (
     <div
-      className="rounded-[20px] px-6 py-5 min-w-[240px]"
+      className="flex items-center gap-1 text-xs px-2 py-1 rounded-full"
       style={{
-        background: "rgba(255, 255, 255, 0.7)",
-        backdropFilter: "blur(16px)",
-        boxShadow: "0 8px 32px rgba(106, 55, 212, 0.08)",
-        border: "1px solid #6a37d4",
+        background: active
+          ? "rgba(106, 55, 212, 0.12)"
+          : "rgba(171, 173, 174, 0.1)",
+        color: active ? "#6a37d4" : "#595c5d",
       }}
     >
-      <Handle type="target" position={Position.Top} style={{ background: "#6a37d4" }} />
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-[#6a37d4]">
-          Department
-        </span>
-        <Building2 className="w-4 h-4 text-[#6a37d4]" />
-      </div>
-      <h3 className="text-lg font-bold text-[#2c2f30] leading-tight mb-1">{department.name}</h3>
-      {department.description && (
-        <p className="text-xs text-[#595c5d] line-clamp-2 mb-3">{department.description}</p>
-      )}
-      <div className="flex items-center gap-2 pt-3 border-t border-[#abadae]/20">
-        <UserCircle2 className="w-3.5 h-3.5 text-[#595c5d]" />
-        <span className="text-xs font-medium text-[#595c5d]">
-          {roleCount} {roleCount === 1 ? "role" : "roles"}
-        </span>
-      </div>
-      <Handle type="source" position={Position.Bottom} style={{ background: "#6a37d4" }} />
+      <Bot className="w-3 h-3" />
+      <span>{active ? "AI slot" : "Open"}</span>
     </div>
   );
 }
 
-function RoleNode({ data }: NodeProps<Node<Extract<OrgNodeData, { kind: "role" }>>>) {
-  const { role } = data;
-  const assigned = role.assignedUserId ?? "Unassigned";
+interface RoleCardProps {
+  role: Role;
+  onSelect: (role: Role) => void;
+  onDelete: (id: string) => void;
+  isSelected: boolean;
+}
+
+function RoleCard({ role, onSelect, onDelete, isSelected }: RoleCardProps) {
   return (
     <div
-      className="rounded-[16px] px-5 py-4 min-w-[220px]"
+      onClick={() => onSelect(role)}
+      className="relative cursor-pointer transition-all duration-200 group"
       style={{
-        background: "rgba(255, 255, 255, 0.8)",
+        padding: "20px 24px",
+        background: isSelected
+          ? "rgba(106, 55, 212, 0.08)"
+          : "rgba(255, 255, 255, 0.7)",
         backdropFilter: "blur(16px)",
-        boxShadow: "0 8px 32px rgba(106, 55, 212, 0.06)",
+        borderRadius: "12px",
+        boxShadow: isSelected
+          ? "0 8px 32px rgba(106, 55, 212, 0.12)"
+          : "0 8px 32px rgba(106, 55, 212, 0.06)",
+        border: isSelected
+          ? "1px solid rgba(106, 55, 212, 0.2)"
+          : "1px solid transparent",
       }}
     >
-      <Handle type="target" position={Position.Top} style={{ background: "#abadae" }} />
-      <div className="flex items-start justify-between gap-3 mb-1">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-[#595c5d]">
-          Role
-        </span>
-        <UserCircle2 className="w-4 h-4 text-[#6448b2]" />
-      </div>
-      <h4 className="text-sm font-bold text-[#2c2f30] leading-tight mb-2">{role.title}</h4>
-      {role.responsibilities && (
-        <p className="text-[11px] text-[#595c5d] line-clamp-2 mb-3">{role.responsibilities}</p>
-      )}
-      <div className="flex items-center gap-2 flex-wrap">
-        <Badge
-          className="text-[10px] font-medium"
-          style={{
-            background: "#eceeef",
-            color: "#2c2f30",
-            border: "none",
-          }}
-        >
-          <UserCircle2 className="w-3 h-3 mr-1" />
-          {assigned}
-        </Badge>
-        {role.agentSlot && (
-          <Badge
-            className="text-[10px] font-medium"
-            style={{
-              background: "#6a37d4",
-              color: "#ffffff",
-              border: "none",
-            }}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <h4
+            className="font-semibold text-sm mb-1"
+            style={{ color: "#2c2f30" }}
           >
-            <Bot className="w-3 h-3 mr-1" />
-            {role.agentSlot}
-          </Badge>
-        )}
+            {role.title}
+          </h4>
+          {role.responsibilities && (
+            <p
+              className="text-xs line-clamp-2 mb-2"
+              style={{ color: "#595c5d" }}
+            >
+              {role.responsibilities}
+            </p>
+          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {role.assignedUserId ? (
+              <div
+                className="flex items-center gap-1 text-xs px-2 py-1 rounded-full"
+                style={{
+                  background: "rgba(171, 173, 174, 0.1)",
+                  color: "#595c5d",
+                }}
+              >
+                <User className="w-3 h-3" />
+                <span>Assigned</span>
+              </div>
+            ) : (
+              <AgentSlotBadge active={role.agentSlot} />
+            )}
+          </div>
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(role.id);
+          }}
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-white/60 rounded-lg"
+        >
+          <Trash2 className="w-4 h-4" style={{ color: "#595c5d" }} />
+        </button>
       </div>
-      <Handle type="source" position={Position.Bottom} style={{ background: "#abadae" }} />
     </div>
   );
 }
 
-const NODE_TYPES = {
-  department: DepartmentNode,
-  role: RoleNode,
-};
-
-// ── Static placeholder data ──────────────────────────────────────────────────
-// The page is stub-first — real fetches will be wired in a later pass.
-
-const PLACEHOLDER_DEPARTMENTS: Department[] = [];
-const PLACEHOLDER_ROLES: Role[] = [];
-
-function computeGraph(
-  departments: Department[],
-  roles: Role[],
-): { nodes: Node[]; edges: Edge[] } {
-  const nodes: Node[] = [];
-  const edges: Edge[] = [];
-
-  // Departments across the top row, roles stacked under each.
-  const xStep = 320;
-  const yDept = 40;
-  const yRoleStart = 220;
-  const yRoleStep = 160;
-
-  departments.forEach((dept, i) => {
-    const rolesInDept = roles.filter((r) => r.departmentId === dept.id);
-    nodes.push({
-      id: `dept-${dept.id}`,
-      type: "department",
-      position: { x: i * xStep, y: yDept },
-      data: { kind: "department", department: dept, roleCount: rolesInDept.length },
-    });
-
-    rolesInDept.forEach((role, j) => {
-      const roleNodeId = `role-${role.id}`;
-      nodes.push({
-        id: roleNodeId,
-        type: "role",
-        position: { x: i * xStep, y: yRoleStart + j * yRoleStep },
-        data: { kind: "role", role },
-      });
-      edges.push({
-        id: `edge-${dept.id}-${role.id}`,
-        source: `dept-${dept.id}`,
-        target: roleNodeId,
-        style: { stroke: "#abadae", strokeWidth: 1.5 },
-        animated: false,
-      });
-    });
-  });
-
-  return { nodes, edges };
+interface AddRoleButtonProps {
+  departmentId: string;
+  onAdd: (departmentId: string) => void;
 }
 
-// ── Page ─────────────────────────────────────────────────────────────────────
+function AddRoleButton({ departmentId, onAdd }: AddRoleButtonProps) {
+  return (
+    <button
+      onClick={() => onAdd(departmentId)}
+      className="w-full transition-all duration-200 hover:border-[#6a37d4]/30"
+      style={{
+        padding: "12px",
+        background: "rgba(255, 255, 255, 0.5)",
+        backdropFilter: "blur(16px)",
+        borderRadius: "12px",
+        border: "1px dashed rgba(171, 173, 174, 0.3)",
+      }}
+    >
+      <div className="flex items-center justify-center gap-2">
+        <Plus className="w-4 h-4" style={{ color: "#6a37d4" }} />
+        <span className="text-sm font-medium" style={{ color: "#6a37d4" }}>
+          Add role
+        </span>
+      </div>
+    </button>
+  );
+}
+
+interface DepartmentCardProps {
+  department: Department;
+  roles: Role[];
+  onSelectRole: (role: Role) => void;
+  onDeleteRole: (id: string) => void;
+  onDeleteDepartment: (id: string) => void;
+  onAddRole: (departmentId: string) => void;
+  selectedRoleId?: string;
+}
+
+function DepartmentCard({
+  department,
+  roles,
+  onSelectRole,
+  onDeleteRole,
+  onDeleteDepartment,
+  onAddRole,
+  selectedRoleId,
+}: DepartmentCardProps) {
+  const [expanded, setExpanded] = useState(true);
+
+  return (
+    <div
+      className="group transition-all duration-200"
+      style={{
+        padding: "24px",
+        background: "#eff1f2",
+        borderRadius: "12px",
+      }}
+    >
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-2 flex-1">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="p-1 hover:bg-white/50 rounded-lg transition-colors"
+          >
+            {expanded ? (
+              <ChevronDown className="w-5 h-5" style={{ color: "#2c2f30" }} />
+            ) : (
+              <ChevronRight
+                className="w-5 h-5"
+                style={{ color: "#2c2f30" }}
+              />
+            )}
+          </button>
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-0.5">
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest"
+                style={{ color: "#6a37d4" }}
+              >
+                Department
+              </span>
+            </div>
+            <h3
+              className="font-semibold text-base"
+              style={{ color: "#2c2f30" }}
+            >
+              {department.name}
+            </h3>
+            {department.description && (
+              <p className="text-sm mt-1" style={{ color: "#595c5d" }}>
+                {department.description}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+              style={{ background: "rgba(255, 255, 255, 0.6)" }}
+            >
+              <UserCircle2
+                className="w-3.5 h-3.5"
+                style={{ color: "#595c5d" }}
+              />
+              <span
+                className="text-xs font-medium"
+                style={{ color: "#595c5d" }}
+              >
+                {roles.length} {roles.length === 1 ? "role" : "roles"}
+              </span>
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={() => onDeleteDepartment(department.id)}
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-white/50 rounded-lg ml-2"
+        >
+          <Trash2 className="w-4 h-4" style={{ color: "#595c5d" }} />
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="space-y-3 pl-8">
+          {roles.length === 0 ? (
+            <div
+              className="text-center py-8"
+              style={{
+                background: "rgba(255, 255, 255, 0.5)",
+                borderRadius: "12px",
+              }}
+            >
+              <Bot
+                className="w-8 h-8 mx-auto mb-2"
+                style={{ color: "#abadae" }}
+              />
+              <p className="text-sm mb-3" style={{ color: "#595c5d" }}>
+                No roles yet. Add your first role to define responsibilities.
+              </p>
+              <AddRoleButton departmentId={department.id} onAdd={onAddRole} />
+            </div>
+          ) : (
+            <>
+              {roles.map((role) => (
+                <RoleCard
+                  key={role.id}
+                  role={role}
+                  onSelect={onSelectRole}
+                  onDelete={onDeleteRole}
+                  isSelected={selectedRoleId === role.id}
+                />
+              ))}
+              <AddRoleButton departmentId={department.id} onAdd={onAddRole} />
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface RoleDetailPanelProps {
+  role: Role | null;
+  open: boolean;
+  onClose: () => void;
+  onUpdate: (role: Role) => void;
+}
+
+function RoleDetailPanel({
+  role,
+  open,
+  onClose,
+  onUpdate,
+}: RoleDetailPanelProps) {
+  const [title, setTitle] = useState("");
+  const [responsibilities, setResponsibilities] = useState("");
+  const [agentSlot, setAgentSlot] = useState(false);
+
+  useEffect(() => {
+    if (role) {
+      setTitle(role.title);
+      setResponsibilities(role.responsibilities || "");
+      setAgentSlot(role.agentSlot || false);
+    }
+  }, [role]);
+
+  const handleSave = () => {
+    if (!role) return;
+    onUpdate({
+      ...role,
+      title,
+      responsibilities,
+      agentSlot,
+    });
+    onClose();
+  };
+
+  if (!role) return null;
+
+  return (
+    <Sheet open={open} onOpenChange={onClose}>
+      <SheetContent className="w-full sm:max-w-md" style={{ background: "#f5f6f7" }}>
+        <SheetHeader>
+          <SheetTitle style={{ color: "#2c2f30" }}>
+            <span
+              className="text-[10px] font-bold uppercase tracking-widest block mb-1"
+              style={{ color: "#6a37d4" }}
+            >
+              Role detail
+            </span>
+            Edit role
+          </SheetTitle>
+        </SheetHeader>
+        <div className="space-y-6 mt-6">
+          <div>
+            <Label
+              htmlFor="role-title-edit"
+              className="text-sm font-medium"
+              style={{ color: "#2c2f30" }}
+            >
+              Role title
+            </Label>
+            <Input
+              id="role-title-edit"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g., Head of Engineering"
+              className="mt-2"
+              style={{ borderRadius: "12px" }}
+            />
+          </div>
+          <div>
+            <Label
+              htmlFor="role-responsibilities-edit"
+              className="text-sm font-medium"
+              style={{ color: "#2c2f30" }}
+            >
+              Responsibilities
+            </Label>
+            <Textarea
+              id="role-responsibilities-edit"
+              value={responsibilities}
+              onChange={(e) => setResponsibilities(e.target.value)}
+              placeholder="Key areas of ownership and expected outcomes"
+              className="mt-2 min-h-[120px]"
+              style={{ borderRadius: "12px" }}
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="agentSlot-edit"
+              checked={agentSlot}
+              onChange={(e) => setAgentSlot(e.target.checked)}
+              className="w-4 h-4 rounded"
+              style={{ accentColor: "#6a37d4" }}
+            />
+            <Label
+              htmlFor="agentSlot-edit"
+              className="text-sm cursor-pointer"
+              style={{ color: "#2c2f30" }}
+            >
+              Enable AI agent slot for this role
+            </Label>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <Button
+              onClick={handleSave}
+              className="flex-1 text-white"
+              style={{ background: "#6a37d4", borderRadius: "12px" }}
+            >
+              Save changes
+            </Button>
+            <Button
+              onClick={onClose}
+              variant="outline"
+              className="flex-1"
+              style={{
+                borderColor: "#abadae",
+                color: "#2c2f30",
+                borderRadius: "12px",
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
 
 export default function OrgChartPage() {
   const params = useParams<{ companyId?: string }>();
   const companyId = params.companyId ?? "default";
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  // Stub state — will be fed by GET /api/companies/:id/departments and
-  // /api/companies/:id/roles in a follow-up pass.
-  const [departments] = useState<Department[]>(PLACEHOLDER_DEPARTMENTS);
-  const [roles] = useState<Role[]>(PLACEHOLDER_ROLES);
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [showAddDepartment, setShowAddDepartment] = useState(false);
+  const [showAddRole, setShowAddRole] = useState(false);
+  const [targetDepartmentId, setTargetDepartmentId] = useState<string>("");
+  const [newDepartmentName, setNewDepartmentName] = useState("");
+  const [newDepartmentDesc, setNewDepartmentDesc] = useState("");
+  const [newRoleTitle, setNewRoleTitle] = useState("");
 
-  const initialGraph = useMemo(() => computeGraph(departments, roles), [departments, roles]);
-  const [nodes, , onNodesChange] = useNodesState<Node>(initialGraph.nodes);
-  const [edges, , onEdgesChange] = useEdgesState<Edge>(initialGraph.edges);
+  const {
+    data: departments = [],
+    isLoading: loadingDepartments,
+    error: departmentsError,
+  } = useQuery({
+    queryKey: ["departments", companyId],
+    queryFn: async () => {
+      const res = await fetch(`/api/companies/${companyId}/departments`);
+      if (!res.ok) throw new Error("Failed to load departments");
+      return res.json();
+    },
+  });
 
-  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
-  const selectedRole = useMemo(
-    () => roles.find((r) => r.id === selectedRoleId) ?? null,
-    [roles, selectedRoleId],
-  );
+  const {
+    data: roles = [],
+    isLoading: loadingRoles,
+    error: rolesError,
+  } = useQuery({
+    queryKey: ["roles", companyId],
+    queryFn: async () => {
+      const res = await fetch(`/api/companies/${companyId}/roles`);
+      if (!res.ok) throw new Error("Failed to load roles");
+      return res.json();
+    },
+  });
 
-  const onNodeClick = useCallback((_: unknown, node: Node) => {
-    if (node.type === "role") {
-      const data = node.data as Extract<OrgNodeData, { kind: "role" }>;
-      setSelectedRoleId(data.role.id);
-    }
-  }, []);
+  const createDepartmentMutation = useMutation({
+    mutationFn: async (data: { name: string; description?: string }) => {
+      const res = await fetch(`/api/companies/${companyId}/departments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to create department");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["departments", companyId] });
+      setShowAddDepartment(false);
+      setNewDepartmentName("");
+      setNewDepartmentDesc("");
+      toast({ title: "Department created" });
+    },
+    onError: () => {
+      toast({ title: "Failed to create department", variant: "destructive" });
+    },
+  });
+
+  const createRoleMutation = useMutation({
+    mutationFn: async (data: { title: string; departmentId: string }) => {
+      const res = await fetch(`/api/companies/${companyId}/roles`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to create role");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["roles", companyId] });
+      setShowAddRole(false);
+      setNewRoleTitle("");
+      toast({ title: "Role created" });
+    },
+    onError: () => {
+      toast({ title: "Failed to create role", variant: "destructive" });
+    },
+  });
+
+  const updateRoleMutation = useMutation({
+    mutationFn: async (role: Role) => {
+      const res = await fetch(`/api/companies/${companyId}/roles/${role.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(role),
+      });
+      if (!res.ok) throw new Error("Failed to update role");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["roles", companyId] });
+      toast({ title: "Role updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update role", variant: "destructive" });
+    },
+  });
+
+  const deleteDepartmentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(
+        `/api/companies/${companyId}/departments/${id}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) throw new Error("Failed to delete department");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["departments", companyId] });
+      queryClient.invalidateQueries({ queryKey: ["roles", companyId] });
+      toast({ title: "Department deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete department", variant: "destructive" });
+    },
+  });
+
+  const deleteRoleMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/companies/${companyId}/roles/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete role");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["roles", companyId] });
+      toast({ title: "Role deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete role", variant: "destructive" });
+    },
+  });
+
+  const generateDefaultStructureMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/companies/${companyId}/org/generate`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed to generate structure");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["departments", companyId] });
+      queryClient.invalidateQueries({ queryKey: ["roles", companyId] });
+      toast({ title: "Org structure generated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to generate structure", variant: "destructive" });
+    },
+  });
+
+  const isLoading = loadingDepartments || loadingRoles;
+  const error = departmentsError || rolesError;
+
+  const handleAddRole = (departmentId: string) => {
+    setTargetDepartmentId(departmentId);
+    setShowAddRole(true);
+  };
+
+  const handleCreateDepartment = () => {
+    if (!newDepartmentName.trim()) return;
+    createDepartmentMutation.mutate({
+      name: newDepartmentName,
+      description: newDepartmentDesc || undefined,
+    });
+  };
+
+  const handleCreateRole = () => {
+    if (!newRoleTitle.trim()) return;
+    createRoleMutation.mutate({
+      title: newRoleTitle,
+      departmentId: targetDepartmentId,
+    });
+  };
 
   const leftRailItems = [
-    { icon: Home, label: "Home", href: `/company/${companyId}`, active: false },
-    { icon: CheckSquare, label: "Tasks", href: `/company/${companyId}/tasks`, active: false },
-    { icon: Workflow, label: "Workflows", href: `/company/${companyId}/workflows`, active: false },
-    { icon: Building2, label: "Org Chart", href: `/company/${companyId}/org`, active: true },
-    { icon: SettingsIcon, label: "Settings", href: `/settings`, active: false },
+    {
+      icon: Home,
+      label: "Home",
+      href: `/company/${companyId}`,
+      active: false,
+    },
+    {
+      icon: CheckSquare,
+      label: "Tasks",
+      href: `/company/${companyId}/tasks`,
+      active: false,
+    },
+    {
+      icon: Workflow,
+      label: "Workflows",
+      href: `/company/${companyId}/workflows`,
+      active: false,
+    },
+    {
+      icon: Building2,
+      label: "Org Chart",
+      href: `/company/${companyId}/org`,
+      active: true,
+    },
+    {
+      icon: SettingsIcon,
+      label: "Settings",
+      href: `/settings`,
+      active: false,
+    },
   ];
 
-  const isEmpty = departments.length === 0;
+  const isEmpty = !isLoading && !error && departments.length === 0;
 
   return (
     <UniversalLayout title="Org Chart" leftRailItems={leftRailItems}>
       <div className="flex flex-col h-[calc(100vh-8rem)] -mx-8 -my-8">
-        {/* Header band */}
-        <header className="flex items-center justify-between px-10 py-6 border-b border-[#abadae]/10 bg-white">
+        <header
+          className="flex items-center justify-between px-10 py-6 border-b bg-white"
+          style={{ borderColor: "rgba(171, 173, 174, 0.1)" }}
+        >
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#6a37d4] block mb-2">
+            <span
+              className="text-[10px] font-bold uppercase tracking-[0.2em] block mb-2"
+              style={{ color: "#6a37d4" }}
+            >
               Structure Over Discipline
             </span>
-            <h1 className="text-3xl font-bold text-[#2c2f30]">Org Chart</h1>
-            <p className="text-sm text-[#595c5d] mt-1">
-              Your company's operating structure — departments, roles, and agent slots.
+            <h1
+              className="text-3xl font-bold leading-tight"
+              style={{ color: "#2c2f30" }}
+            >
+              Org Chart
+            </h1>
+            <p className="text-sm mt-1" style={{ color: "#595c5d" }}>
+              Your company's operating structure — departments, roles, and agent
+              slots.
             </p>
           </div>
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
-              className="rounded-xl text-sm font-semibold"
-              style={{ borderColor: "#abadae", color: "#2c2f30" }}
+              className="text-sm font-semibold"
+              style={{
+                borderColor: "#abadae",
+                color: "#2c2f30",
+                borderRadius: "12px",
+              }}
+              onClick={() => setShowAddDepartment(true)}
             >
               <Plus className="w-4 h-4 mr-2" /> Add department
             </Button>
             <Button
-              className="rounded-xl text-sm font-semibold text-white"
-              style={{ background: "#6a37d4" }}
+              className="text-sm font-semibold text-white"
+              style={{ background: "#6a37d4", borderRadius: "12px" }}
+              onClick={() => {
+                if (departments.length > 0) {
+                  setTargetDepartmentId(departments[0].id);
+                  setShowAddRole(true);
+                } else {
+                  toast({
+                    title: "Create a department first",
+                    variant: "destructive",
+                  });
+                }
+              }}
             >
               <Plus className="w-4 h-4 mr-2" /> Add role
             </Button>
           </div>
         </header>
 
-        {/* Canvas */}
-        <div className="flex-1 relative" style={{ background: "#f5f6f7" }}>
-          {isEmpty ? (
+        <div
+          className="flex-1 overflow-auto"
+          style={{ background: "#f5f6f7", padding: "32px" }}
+        >
+          {isLoading && (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="animate-pulse"
+                  style={{
+                    height: "200px",
+                    background: "#eff1f2",
+                    borderRadius: "12px",
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {error && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div
-                className="max-w-md text-center rounded-[24px] px-10 py-12"
+                className="max-w-md text-center px-10 py-12"
                 style={{
                   background: "rgba(255, 255, 255, 0.75)",
                   backdropFilter: "blur(16px)",
+                  borderRadius: "24px",
+                  boxShadow: "0 8px 32px rgba(106, 55, 212, 0.08)",
+                }}
+              >
+                <p className="text-sm mb-4" style={{ color: "#595c5d" }}>
+                  Failed to load org chart. Check your connection and try again.
+                </p>
+                <Button
+                  className="text-white"
+                  style={{ background: "#6a37d4", borderRadius: "12px" }}
+                  onClick={() => {
+                    queryClient.invalidateQueries({
+                      queryKey: ["departments", companyId],
+                    });
+                    queryClient.invalidateQueries({
+                      queryKey: ["roles", companyId],
+                    });
+                  }}
+                >
+                  Retry
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {isEmpty && (
+            <div className="flex items-center justify-center h-full">
+              <div
+                className="max-w-md text-center px-10 py-12"
+                style={{
+                  background: "rgba(255, 255, 255, 0.75)",
+                  backdropFilter: "blur(16px)",
+                  borderRadius: "24px",
                   boxShadow: "0 8px 32px rgba(106, 55, 212, 0.08)",
                 }}
               >
@@ -288,124 +776,232 @@ export default function OrgChartPage() {
                   className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-5"
                   style={{ background: "#eceeef" }}
                 >
-                  <Building2 className="w-7 h-7 text-[#6a37d4]" />
+                  <Building2 className="w-7 h-7" style={{ color: "#6a37d4" }} />
                 </div>
-                <h2 className="text-xl font-bold text-[#2c2f30] mb-2">No structure yet</h2>
-                <p className="text-sm text-[#595c5d] mb-6 leading-relaxed">
-                  No structure yet. Generate a recommended org based on your company stage, or
-                  build from scratch.
+                <h2
+                  className="text-xl font-bold mb-2"
+                  style={{ color: "#2c2f30" }}
+                >
+                  No structure yet
+                </h2>
+                <p
+                  className="text-sm mb-6 leading-relaxed"
+                  style={{ color: "#595c5d" }}
+                >
+                  Generate a recommended org structure based on your company
+                  stage and business model, or start from scratch.
                 </p>
                 <div className="flex items-center justify-center gap-3">
                   <Button
-                    className="rounded-xl text-sm font-semibold text-white"
-                    style={{ background: "#6a37d4" }}
+                    className="text-sm font-semibold text-white"
+                    style={{ background: "#6a37d4", borderRadius: "12px" }}
+                    onClick={() =>
+                      generateDefaultStructureMutation.mutate()
+                    }
+                    disabled={generateDefaultStructureMutation.isPending}
                   >
                     <Sparkles className="w-4 h-4 mr-2" /> Generate recommended
                   </Button>
                   <Button
                     variant="outline"
-                    className="rounded-xl text-sm font-semibold"
-                    style={{ borderColor: "#abadae", color: "#2c2f30" }}
+                    className="text-sm font-semibold"
+                    style={{
+                      borderColor: "#abadae",
+                      color: "#2c2f30",
+                      borderRadius: "12px",
+                    }}
+                    onClick={() => setShowAddDepartment(true)}
                   >
                     <Plus className="w-4 h-4 mr-2" /> Start from scratch
                   </Button>
                 </div>
               </div>
             </div>
-          ) : (
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onNodeClick={onNodeClick}
-              nodeTypes={NODE_TYPES}
-              fitView
-              proOptions={{ hideAttribution: true }}
-            >
-              <Background color="#abadae" gap={24} size={1} />
-              <Controls
-                showInteractive={false}
+          )}
+
+          {!isLoading && !error && departments.length > 0 && (
+            <div className="space-y-4">
+              {departments.map((dept: Department) => (
+                <DepartmentCard
+                  key={dept.id}
+                  department={dept}
+                  roles={roles.filter(
+                    (r: Role) => r.departmentId === dept.id
+                  )}
+                  onSelectRole={setSelectedRole}
+                  onDeleteRole={(id) => deleteRoleMutation.mutate(id)}
+                  onDeleteDepartment={(id) =>
+                    deleteDepartmentMutation.mutate(id)
+                  }
+                  onAddRole={handleAddRole}
+                  selectedRoleId={selectedRole?.id}
+                />
+              ))}
+              <button
+                onClick={() => setShowAddDepartment(true)}
+                className="w-full transition-all duration-200 hover:border-[#6a37d4]/30"
                 style={{
-                  background: "rgba(255,255,255,0.8)",
+                  padding: "24px",
+                  background: "rgba(255, 255, 255, 0.7)",
                   backdropFilter: "blur(16px)",
                   borderRadius: "12px",
-                  border: "none",
+                  border: "1px dashed rgba(171, 173, 174, 0.3)",
                 }}
-              />
-              <MiniMap
-                nodeColor="#6a37d4"
-                maskColor="rgba(245, 246, 247, 0.7)"
-                style={{
-                  background: "rgba(255,255,255,0.8)",
-                  borderRadius: "12px",
-                }}
-              />
-            </ReactFlow>
-          )}
-
-          {/* Detail drawer for selected role */}
-          {selectedRole && (
-            <aside
-              className="absolute top-0 right-0 bottom-0 w-[360px] border-l border-[#abadae]/10 p-8 overflow-y-auto"
-              style={{
-                background: "rgba(255, 255, 255, 0.85)",
-                backdropFilter: "blur(16px)",
-              }}
-            >
-              <div className="flex items-start justify-between mb-6">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#6a37d4] block mb-1">
-                    Role detail
-                  </span>
-                  <h3 className="text-xl font-bold text-[#2c2f30]">{selectedRole.title}</h3>
-                </div>
-                <button
-                  className="p-2 rounded-lg hover:bg-[#eceeef] transition-colors"
-                  onClick={() => setSelectedRoleId(null)}
-                  aria-label="Close role detail"
-                >
-                  <X className="w-4 h-4 text-[#595c5d]" />
-                </button>
-              </div>
-
-              {selectedRole.responsibilities && (
-                <section className="mb-6">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#595c5d] mb-2">
-                    Responsibilities
-                  </h4>
-                  <p className="text-sm text-[#2c2f30] leading-relaxed">
-                    {selectedRole.responsibilities}
-                  </p>
-                </section>
-              )}
-
-              <section className="mb-6">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-[#595c5d] mb-2">
-                  Assignment
-                </h4>
-                <div className="flex items-center gap-2 p-3 rounded-xl bg-[#f5f6f7]">
-                  <UserCircle2 className="w-5 h-5 text-[#6a37d4]" />
-                  <span className="text-sm font-medium text-[#2c2f30]">
-                    {selectedRole.assignedUserId ?? "Unassigned"}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <Plus className="w-5 h-5" style={{ color: "#6a37d4" }} />
+                  <span
+                    className="font-medium"
+                    style={{ color: "#6a37d4" }}
+                  >
+                    Add department
                   </span>
                 </div>
-              </section>
-
-              <section>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-[#595c5d] mb-2">
-                  AI agent slot
-                </h4>
-                <div className="flex items-center gap-2 p-3 rounded-xl bg-[#f5f6f7]">
-                  <Bot className="w-5 h-5 text-[#6a37d4]" />
-                  <span className="text-sm font-medium text-[#2c2f30]">
-                    {selectedRole.agentSlot ?? "No agent assigned"}
-                  </span>
-                </div>
-              </section>
-            </aside>
+              </button>
+            </div>
           )}
         </div>
+
+        <RoleDetailPanel
+          role={selectedRole}
+          open={!!selectedRole}
+          onClose={() => setSelectedRole(null)}
+          onUpdate={(role) => updateRoleMutation.mutate(role)}
+        />
+
+        <Dialog open={showAddDepartment} onOpenChange={setShowAddDepartment}>
+          <DialogContent style={{ background: "#f5f6f7", borderRadius: "16px" }}>
+            <DialogHeader>
+              <DialogTitle style={{ color: "#2c2f30" }}>
+                <span
+                  className="text-[10px] font-bold uppercase tracking-widest block mb-1"
+                  style={{ color: "#6a37d4" }}
+                >
+                  New
+                </span>
+                Add department
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label
+                  htmlFor="dept-name"
+                  className="text-sm font-medium"
+                  style={{ color: "#2c2f30" }}
+                >
+                  Department name
+                </Label>
+                <Input
+                  id="dept-name"
+                  value={newDepartmentName}
+                  onChange={(e) => setNewDepartmentName(e.target.value)}
+                  placeholder="e.g., Engineering"
+                  className="mt-2"
+                  style={{ borderRadius: "12px" }}
+                />
+              </div>
+              <div>
+                <Label
+                  htmlFor="dept-desc"
+                  className="text-sm font-medium"
+                  style={{ color: "#2c2f30" }}
+                >
+                  Description (optional)
+                </Label>
+                <Textarea
+                  id="dept-desc"
+                  value={newDepartmentDesc}
+                  onChange={(e) => setNewDepartmentDesc(e.target.value)}
+                  placeholder="Brief description of this department's purpose"
+                  className="mt-2"
+                  style={{ borderRadius: "12px" }}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={handleCreateDepartment}
+                disabled={
+                  !newDepartmentName.trim() ||
+                  createDepartmentMutation.isPending
+                }
+                className="text-white"
+                style={{ background: "#6a37d4", borderRadius: "12px" }}
+              >
+                Create department
+              </Button>
+              <Button
+                onClick={() => setShowAddDepartment(false)}
+                variant="outline"
+                style={{
+                  borderColor: "#abadae",
+                  color: "#2c2f30",
+                  borderRadius: "12px",
+                }}
+              >
+                Cancel
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showAddRole} onOpenChange={setShowAddRole}>
+          <DialogContent style={{ background: "#f5f6f7", borderRadius: "16px" }}>
+            <DialogHeader>
+              <DialogTitle style={{ color: "#2c2f30" }}>
+                <span
+                  className="text-[10px] font-bold uppercase tracking-widest block mb-1"
+                  style={{ color: "#6a37d4" }}
+                >
+                  New
+                </span>
+                Add role
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label
+                  htmlFor="role-title"
+                  className="text-sm font-medium"
+                  style={{ color: "#2c2f30" }}
+                >
+                  Role title
+                </Label>
+                <Input
+                  id="role-title"
+                  value={newRoleTitle}
+                  onChange={(e) => setNewRoleTitle(e.target.value)}
+                  placeholder="e.g., Senior Backend Engineer"
+                  className="mt-2"
+                  style={{ borderRadius: "12px" }}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={handleCreateRole}
+                disabled={
+                  !newRoleTitle.trim() || createRoleMutation.isPending
+                }
+                className="text-white"
+                style={{ background: "#6a37d4", borderRadius: "12px" }}
+              >
+                Create role
+              </Button>
+              <Button
+                onClick={() => setShowAddRole(false)}
+                variant="outline"
+                style={{
+                  borderColor: "#abadae",
+                  color: "#2c2f30",
+                  borderRadius: "12px",
+                }}
+              >
+                Cancel
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </UniversalLayout>
   );

@@ -1,29 +1,36 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, AlertCircle, CheckCircle2, Mail, Shield } from "lucide-react";
+import {
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  Mail,
+  Shield,
+  User,
+  Building2,
+  Bell,
+  Sparkles,
+} from "lucide-react";
 
 import { UniversalLayout } from "@/components/layout/universal-layout";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import {
+  colors,
+  glassmorphism,
+  borderRadius,
+  applyGlassmorphism,
+} from "@/lib/design-tokens";
 import type { Company } from "@shared/schema";
 import { usePostHog } from "posthog-js/react";
 
-// Company PATCH shape — matches the updateCompanySchema in
-// server/routes/companies.ts without pulling the schema import
-// because the shape is flat + minimal.
 interface CompanyUpdateInput {
   name?: string;
   type?: string | null;
@@ -34,16 +41,514 @@ interface CompanyUpdateInput {
   assistantName?: string | null;
 }
 
+interface NotificationSettings {
+  emailNotifications: boolean;
+  pushNotifications: boolean;
+  taskAlerts: boolean;
+  workflowAlerts: boolean;
+}
+
+interface AutonomySettings {
+  autonomyLevel: "observe" | "recommend" | "assist" | "execute";
+}
+
+const surfaceContainerHigh = "#e2e4e5";
+const surfaceContainerHighest = "#dcdee0";
+
+const Skeleton = ({ className = "" }: { className?: string }) => (
+  <div
+    className={`animate-pulse ${className}`}
+    style={{
+      backgroundColor: surfaceContainerHigh,
+      borderRadius: borderRadius.default,
+    }}
+  />
+);
+
+const GlassCard = ({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) => (
+  <div
+    className={`p-8 ${className}`}
+    style={{
+      ...applyGlassmorphism(),
+      borderRadius: borderRadius.lg,
+    }}
+  >
+    {children}
+  </div>
+);
+
+const ErrorState = ({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) => (
+  <div className="flex flex-col items-center justify-center py-16 px-4">
+    <div
+      className="rounded-full p-4 mb-4"
+      style={{ backgroundColor: surfaceContainerHigh }}
+    >
+      <AlertCircle size={32} style={{ color: colors.primary }} />
+    </div>
+    <p
+      className="text-center mb-4"
+      style={{ color: colors.onSurfaceVariant }}
+    >
+      {message}
+    </p>
+    <Button
+      onClick={onRetry}
+      style={{
+        borderRadius: borderRadius.default,
+        backgroundColor: colors.primary,
+        color: "#ffffff",
+      }}
+    >
+      Retry
+    </Button>
+  </div>
+);
+
+const inputStyle: React.CSSProperties = {
+  borderRadius: borderRadius.default,
+  backgroundColor: surfaceContainerHighest,
+  border: "none",
+};
+
+function CompanyTab({
+  company,
+  companyLoading,
+  companyError,
+  companyRefetch,
+  companyName,
+  setCompanyName,
+  companyType,
+  setCompanyType,
+  companyStage,
+  setCompanyStage,
+  assistantName,
+  setAssistantName,
+  offer,
+  setOffer,
+  targetCustomer,
+  setTargetCustomer,
+  goals,
+  setGoals,
+  handleCompanySubmit,
+  updateCompanyMutation,
+}: {
+  company: Company | undefined;
+  companyLoading: boolean;
+  companyError: Error | null;
+  companyRefetch: () => void;
+  companyName: string;
+  setCompanyName: (v: string) => void;
+  companyType: string;
+  setCompanyType: (v: string) => void;
+  companyStage: string;
+  setCompanyStage: (v: string) => void;
+  assistantName: string;
+  setAssistantName: (v: string) => void;
+  offer: string;
+  setOffer: (v: string) => void;
+  targetCustomer: string;
+  setTargetCustomer: (v: string) => void;
+  goals: string;
+  setGoals: (v: string) => void;
+  handleCompanySubmit: (e: React.FormEvent) => void;
+  updateCompanyMutation: ReturnType<
+    typeof useMutation<Company, Error, CompanyUpdateInput>
+  >;
+}) {
+  if (companyLoading) {
+    return (
+      <GlassCard>
+        <div className="space-y-6">
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+      </GlassCard>
+    );
+  }
+
+  if (companyError && !companyLoading) {
+    return (
+      <GlassCard>
+        <ErrorState
+          message={companyError.message || "Failed to load company settings"}
+          onRetry={companyRefetch}
+        />
+      </GlassCard>
+    );
+  }
+
+  if (!company) {
+    return null;
+  }
+
+  return (
+    <GlassCard>
+      <form onSubmit={handleCompanySubmit} className="space-y-6">
+        <div className="space-y-2">
+          <Label
+            htmlFor="company-name"
+            style={{ color: colors.onSurface }}
+          >
+            Company name
+          </Label>
+          <Input
+            id="company-name"
+            value={companyName}
+            onChange={(e) => setCompanyName(e.target.value)}
+            disabled={updateCompanyMutation.isPending}
+            required
+            style={inputStyle}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <Label
+              htmlFor="company-stage"
+              style={{ color: colors.onSurface }}
+            >
+              Stage
+            </Label>
+            <Input
+              id="company-stage"
+              value={companyStage}
+              onChange={(e) => setCompanyStage(e.target.value)}
+              placeholder="Pre-seed, Seed, Series A..."
+              disabled={updateCompanyMutation.isPending}
+              style={inputStyle}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label
+              htmlFor="company-type"
+              style={{ color: colors.onSurface }}
+            >
+              Type
+            </Label>
+            <Input
+              id="company-type"
+              value={companyType}
+              onChange={(e) => setCompanyType(e.target.value)}
+              placeholder="SaaS, Agency, D2C..."
+              disabled={updateCompanyMutation.isPending}
+              style={inputStyle}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label
+            htmlFor="assistant-name"
+            style={{ color: colors.onSurface }}
+          >
+            Assistant name
+          </Label>
+          <Input
+            id="assistant-name"
+            value={assistantName}
+            onChange={(e) => setAssistantName(e.target.value)}
+            placeholder="OS-1"
+            disabled={updateCompanyMutation.isPending}
+            style={inputStyle}
+          />
+          <p
+            className="text-xs"
+            style={{ color: colors.onSurfaceVariant }}
+          >
+            What you want to call your AI assistant throughout the app.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label
+            htmlFor="company-offer"
+            style={{ color: colors.onSurface }}
+          >
+            Offer
+          </Label>
+          <Textarea
+            id="company-offer"
+            value={offer}
+            onChange={(e) => setOffer(e.target.value)}
+            placeholder="What you sell and to whom."
+            rows={3}
+            disabled={updateCompanyMutation.isPending}
+            style={inputStyle}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label
+            htmlFor="company-customer"
+            style={{ color: colors.onSurface }}
+          >
+            Target customer
+          </Label>
+          <Textarea
+            id="company-customer"
+            value={targetCustomer}
+            onChange={(e) => setTargetCustomer(e.target.value)}
+            placeholder="Who buys from you and why."
+            rows={3}
+            disabled={updateCompanyMutation.isPending}
+            style={inputStyle}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label
+            htmlFor="company-goals"
+            style={{ color: colors.onSurface }}
+          >
+            Goals
+          </Label>
+          <Textarea
+            id="company-goals"
+            value={goals}
+            onChange={(e) => setGoals(e.target.value)}
+            placeholder="What you're building toward this quarter."
+            rows={3}
+            disabled={updateCompanyMutation.isPending}
+            style={inputStyle}
+          />
+        </div>
+
+        <div className="flex items-center justify-end gap-3 pt-2">
+          {updateCompanyMutation.isSuccess && (
+            <span
+              className="text-xs flex items-center gap-1"
+              style={{ color: "#16a34a" }}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Saved
+            </span>
+          )}
+          <Button
+            type="submit"
+            disabled={
+              updateCompanyMutation.isPending || !companyName.trim()
+            }
+            style={{
+              borderRadius: borderRadius.default,
+              backgroundColor: colors.primary,
+              color: "#ffffff",
+            }}
+            className="hover:opacity-90 disabled:opacity-50"
+          >
+            {updateCompanyMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save changes"
+            )}
+          </Button>
+        </div>
+      </form>
+    </GlassCard>
+  );
+}
+
+function ProfileTab({
+  user,
+}: {
+  user: { fullName?: string | null; username?: string | null; email?: string | null } | null;
+}) {
+  return (
+    <GlassCard>
+      <div className="space-y-6">
+        <div className="flex items-center gap-6 mb-2">
+          <div
+            className="w-20 h-20 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: surfaceContainerHigh }}
+          >
+            <User size={28} style={{ color: colors.onSurfaceVariant }} />
+          </div>
+          <div>
+            <div
+              className="text-lg font-semibold"
+              style={{ color: colors.onSurface }}
+            >
+              {user?.fullName ?? user?.username ?? "User"}
+            </div>
+            <div className="text-sm" style={{ color: colors.onSurfaceVariant }}>
+              {user?.email ?? ""}
+            </div>
+          </div>
+        </div>
+
+        <p className="text-sm" style={{ color: colors.onSurfaceVariant }}>
+          Profile details are managed by Clerk. Update them from Clerk's user
+          settings to change them here.
+        </p>
+
+        <div className="space-y-2">
+          <Label htmlFor="profile-name" style={{ color: colors.onSurface }}>
+            Name
+          </Label>
+          <Input
+            id="profile-name"
+            value={user?.fullName ?? user?.username ?? ""}
+            readOnly
+            style={{
+              ...inputStyle,
+              opacity: 0.7,
+              cursor: "default",
+            }}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="profile-email" style={{ color: colors.onSurface }}>
+            Email
+          </Label>
+          <Input
+            id="profile-email"
+            value={user?.email ?? ""}
+            readOnly
+            style={{
+              ...inputStyle,
+              opacity: 0.7,
+              cursor: "default",
+            }}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="profile-username" style={{ color: colors.onSurface }}>
+            Username
+          </Label>
+          <Input
+            id="profile-username"
+            value={user?.username ?? ""}
+            readOnly
+            style={{
+              ...inputStyle,
+              opacity: 0.7,
+              cursor: "default",
+            }}
+          />
+        </div>
+      </div>
+    </GlassCard>
+  );
+}
+
+function SecurityTab({
+  isClerkReady,
+  userEmail,
+  handlePasswordReset,
+}: {
+  isClerkReady: boolean;
+  userEmail: string | null | undefined;
+  handlePasswordReset: () => void;
+}) {
+  const notificationOptions = [
+    {
+      icon: <Mail size={20} style={{ color: colors.primary }} />,
+      label: "Email verification",
+      description: isClerkReady
+        ? "Your email is verified through your Clerk account."
+        : "Email verification is available when Clerk is configured.",
+    },
+    {
+      icon: <Shield size={20} style={{ color: colors.primary }} />,
+      label: "Two-factor authentication",
+      description:
+        "Clerk supports TOTP authenticator apps and SMS verification. Configure 2FA from your Clerk account settings.",
+    },
+  ];
+
+  return (
+    <GlassCard>
+      <div className="space-y-6">
+        {notificationOptions.map((option) => (
+          <div
+            key={option.label}
+            className="flex items-start gap-4 py-4"
+            style={{
+              borderBottom: `1px solid ${colors.surfaceContainerLow}`,
+            }}
+          >
+            <div
+              className="rounded-full p-2.5 flex-shrink-0"
+              style={{ backgroundColor: surfaceContainerHigh }}
+            >
+              {option.icon}
+            </div>
+            <div className="flex-1">
+              <div
+                className="font-medium mb-1"
+                style={{ color: colors.onSurface }}
+              >
+                {option.label}
+              </div>
+              <div
+                className="text-sm"
+                style={{ color: colors.onSurfaceVariant }}
+              >
+                {option.description}
+              </div>
+            </div>
+          </div>
+        ))}
+
+        <div className="pt-2">
+          <div
+            className="font-medium mb-2"
+            style={{ color: colors.onSurface }}
+          >
+            Password
+          </div>
+          <p
+            className="text-sm mb-4"
+            style={{ color: colors.onSurfaceVariant }}
+          >
+            Send yourself a password reset email.
+          </p>
+          <Button
+            variant="outline"
+            onClick={handlePasswordReset}
+            disabled={!isClerkReady || !userEmail}
+            style={{ borderRadius: borderRadius.default }}
+          >
+            Send password reset email
+          </Button>
+        </div>
+      </div>
+    </GlassCard>
+  );
+}
+
 export default function SettingsPage() {
   const posthog = usePostHog();
   const { user, isClerkReady, resetPassword } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState("company");
 
   const {
     data: company,
     isLoading: companyLoading,
     error: companyError,
+    refetch: companyRefetch,
   } = useQuery<Company, Error>({
     queryKey: ["/api/company"],
     queryFn: async () => {
@@ -52,7 +557,6 @@ export default function SettingsPage() {
     },
   });
 
-  // Local form state, seeded from the company query whenever it lands.
   const [companyName, setCompanyName] = useState("");
   const [companyType, setCompanyType] = useState("");
   const [companyStage, setCompanyStage] = useState("");
@@ -128,278 +632,103 @@ export default function SettingsPage() {
     await resetPassword(user.email);
   }
 
+  function handleTabChange(value: string) {
+    setActiveTab(value);
+    window.dispatchEvent(
+      new CustomEvent("analytics", {
+        detail: {
+          event: "settings_tab_changed",
+          properties: { tabName: value },
+        },
+      }),
+    );
+  }
+
   return (
     <UniversalLayout title="Settings">
-      <div className="max-w-[900px] mx-auto">
+      <div className="p-8 max-w-4xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-[2.5rem] font-semibold leading-[1.1] tracking-tight text-[#2c2f30] mb-3">
+          <h1
+            className="text-3xl font-semibold mb-2"
+            style={{ color: colors.onSurface }}
+          >
             Settings
           </h1>
-          <p className="text-base text-[#595c5d] max-w-xl">
-            Manage your profile and company settings.
+          <p style={{ color: colors.onSurfaceVariant }}>
+            Manage your profile, company settings, and preferences.
           </p>
         </div>
 
-        <Tabs defaultValue="company" className="w-full">
-          <TabsList className="mb-6">
-            <TabsTrigger value="company">Company</TabsTrigger>
-            <TabsTrigger value="profile">Profile</TabsTrigger>
-            <TabsTrigger value="security">Security</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={handleTabChange}>
+          <TabsList
+            className="w-full mb-8 overflow-x-auto flex-nowrap"
+            style={{
+              backgroundColor: colors.surfaceContainerLow,
+              borderRadius: borderRadius.default,
+              padding: "4px",
+            }}
+          >
+            <TabsTrigger
+              value="company"
+              className="flex items-center gap-2 whitespace-nowrap"
+              style={{ borderRadius: borderRadius.default }}
+            >
+              <Building2 size={16} />
+              <span className="hidden sm:inline">Company</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="profile"
+              className="flex items-center gap-2 whitespace-nowrap"
+              style={{ borderRadius: borderRadius.default }}
+            >
+              <User size={16} />
+              <span className="hidden sm:inline">Profile</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="security"
+              className="flex items-center gap-2 whitespace-nowrap"
+              style={{ borderRadius: borderRadius.default }}
+            >
+              <Shield size={16} />
+              <span className="hidden sm:inline">Security</span>
+            </TabsTrigger>
           </TabsList>
 
-          {/* Company tab — editable, PATCH /api/company/:id */}
-          <TabsContent value="company" className="space-y-4">
-            {companyLoading && (
-              <div className="flex items-center justify-center py-16 text-slate-500">
-                <Loader2 className="h-5 w-5 animate-spin mr-3" />
-                <span className="text-sm">Loading company…</span>
-              </div>
-            )}
-
-            {companyError && !companyLoading && (
-              <Card className="p-6 bg-red-50 border border-red-200">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-semibold text-red-900">
-                      Couldn't load company
-                    </p>
-                    <p className="text-sm text-red-700 mt-1">
-                      {companyError.message}
-                    </p>
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {company && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Company details</CardTitle>
-                  <CardDescription>
-                    These fields are used across the app to personalize your
-                    workspace.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form
-                    onSubmit={handleCompanySubmit}
-                    className="space-y-5"
-                  >
-                    <div className="grid gap-2">
-                      <Label htmlFor="company-name">Company name</Label>
-                      <Input
-                        id="company-name"
-                        value={companyName}
-                        onChange={(e) => setCompanyName(e.target.value)}
-                        disabled={updateCompanyMutation.isPending}
-                        required
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      <div className="grid gap-2">
-                        <Label htmlFor="company-stage">Stage</Label>
-                        <Input
-                          id="company-stage"
-                          value={companyStage}
-                          onChange={(e) => setCompanyStage(e.target.value)}
-                          placeholder="Pre-seed, Seed, Series A…"
-                          disabled={updateCompanyMutation.isPending}
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="company-type">Type</Label>
-                        <Input
-                          id="company-type"
-                          value={companyType}
-                          onChange={(e) => setCompanyType(e.target.value)}
-                          placeholder="SaaS, Agency, D2C…"
-                          disabled={updateCompanyMutation.isPending}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label htmlFor="assistant-name">Assistant name</Label>
-                      <Input
-                        id="assistant-name"
-                        value={assistantName}
-                        onChange={(e) => setAssistantName(e.target.value)}
-                        placeholder="OS-1"
-                        disabled={updateCompanyMutation.isPending}
-                      />
-                      <p className="text-xs text-slate-500">
-                        What you want to call your AI assistant throughout the app.
-                      </p>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label htmlFor="company-offer">Offer</Label>
-                      <Textarea
-                        id="company-offer"
-                        value={offer}
-                        onChange={(e) => setOffer(e.target.value)}
-                        placeholder="What you sell and to whom."
-                        rows={3}
-                        disabled={updateCompanyMutation.isPending}
-                      />
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label htmlFor="company-customer">
-                        Target customer
-                      </Label>
-                      <Textarea
-                        id="company-customer"
-                        value={targetCustomer}
-                        onChange={(e) => setTargetCustomer(e.target.value)}
-                        placeholder="Who buys from you and why."
-                        rows={3}
-                        disabled={updateCompanyMutation.isPending}
-                      />
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label htmlFor="company-goals">Goals</Label>
-                      <Textarea
-                        id="company-goals"
-                        value={goals}
-                        onChange={(e) => setGoals(e.target.value)}
-                        placeholder="What you're building toward this quarter."
-                        rows={3}
-                        disabled={updateCompanyMutation.isPending}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-end gap-3 pt-2">
-                      {updateCompanyMutation.isSuccess && (
-                        <span className="text-xs text-emerald-600 flex items-center gap-1">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          Saved
-                        </span>
-                      )}
-                      <Button
-                        type="submit"
-                        disabled={
-                          updateCompanyMutation.isPending ||
-                          !companyName.trim()
-                        }
-                        className="bg-[#6a37d4] text-white hover:bg-[#5a2dc0] disabled:opacity-50"
-                      >
-                        {updateCompanyMutation.isPending ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          "Save changes"
-                        )}
-                      </Button>
-                    </div>
-                  </form>
-                </CardContent>
-              </Card>
-            )}
+          <TabsContent value="company">
+            <CompanyTab
+              company={company}
+              companyLoading={companyLoading}
+              companyError={companyError}
+              companyRefetch={companyRefetch}
+              companyName={companyName}
+              setCompanyName={setCompanyName}
+              companyType={companyType}
+              setCompanyType={setCompanyType}
+              companyStage={companyStage}
+              setCompanyStage={setCompanyStage}
+              assistantName={assistantName}
+              setAssistantName={setAssistantName}
+              offer={offer}
+              setOffer={setOffer}
+              targetCustomer={targetCustomer}
+              setTargetCustomer={setTargetCustomer}
+              goals={goals}
+              setGoals={setGoals}
+              handleCompanySubmit={handleCompanySubmit}
+              updateCompanyMutation={updateCompanyMutation}
+            />
           </TabsContent>
 
-          {/* Profile tab — read-only, Clerk owns identity */}
-          <TabsContent value="profile" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Your profile</CardTitle>
-                <CardDescription>
-                  Profile details are managed by Clerk. Update them from
-                  Clerk's user settings to change them here.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="profile-name">Name</Label>
-                  <Input
-                    id="profile-name"
-                    value={user?.fullName ?? user?.username ?? ""}
-                    readOnly
-                    className="bg-slate-50"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="profile-email">Email</Label>
-                  <Input
-                    id="profile-email"
-                    value={user?.email ?? ""}
-                    readOnly
-                    className="bg-slate-50"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="profile-username">Username</Label>
-                  <Input
-                    id="profile-username"
-                    value={user?.username ?? ""}
-                    readOnly
-                    className="bg-slate-50"
-                  />
-                </div>
-              </CardContent>
-            </Card>
+          <TabsContent value="profile">
+            <ProfileTab user={user} />
           </TabsContent>
 
-          {/* Security tab — delegated to Clerk */}
-          <TabsContent value="security" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Mail className="h-5 w-5" />
-                  Email verification
-                </CardTitle>
-                <CardDescription>
-                  Managed automatically by Clerk during signup.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-slate-500">
-                  {isClerkReady
-                    ? "Your email is verified through your Clerk account."
-                    : "Email verification is available when Clerk is configured."}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5" />
-                  Two-factor authentication
-                </CardTitle>
-                <CardDescription>
-                  Configure 2FA from your Clerk account settings.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-slate-500">
-                  Clerk supports TOTP authenticator apps and SMS verification.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Password</CardTitle>
-                <CardDescription>
-                  Send yourself a password reset email.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button
-                  variant="outline"
-                  onClick={handlePasswordReset}
-                  disabled={!isClerkReady || !user?.email}
-                >
-                  Send password reset email
-                </Button>
-              </CardContent>
-            </Card>
+          <TabsContent value="security">
+            <SecurityTab
+              isClerkReady={isClerkReady}
+              userEmail={user?.email}
+              handlePasswordReset={handlePasswordReset}
+            />
           </TabsContent>
         </Tabs>
       </div>

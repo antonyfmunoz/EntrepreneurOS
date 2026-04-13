@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
@@ -8,12 +8,14 @@ import {
   Workflow as WorkflowIcon,
   CheckCircle2,
   Pause,
+  MoreVertical,
+  ChevronRight,
 } from "lucide-react";
 
 import { UniversalLayout } from "@/components/layout/universal-layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,10 +24,134 @@ import { useToast } from "@/hooks/use-toast";
 import type { Company, Workflow, InsertWorkflow } from "@shared/schema";
 import { usePostHog } from "posthog-js/react";
 
-// The real /api/workflows endpoint in server/routes/workflows.ts exposes
-// GET (list) and POST (create). There's no PATCH/DELETE yet, and the
-// schema has no `steps` table — workflows are flat rows with a status
-// enum of "active" | "paused". Per the wiring rules: no step builder.
+function WorkflowStatusBadge({ status }: { status: string }) {
+  if (status === "active") {
+    return (
+      <div
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+        style={{ backgroundColor: "#6a37d4" }}
+      >
+        <div className="w-1.5 h-1.5 rounded-full bg-white" />
+        <span className="text-xs font-medium text-white uppercase tracking-wide">
+          Active
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100">
+      <Pause className="h-2.5 w-2.5 text-amber-800" />
+      <span className="text-xs font-medium text-amber-800 uppercase tracking-wide">
+        Paused
+      </span>
+    </div>
+  );
+}
+
+function WorkflowCard({ workflow }: { workflow: Workflow }) {
+  return (
+    <Card
+      className="bg-white transition-all duration-200 hover:shadow-[0_8px_32px_rgba(106,55,212,0.08)] group"
+      style={{
+        backdropFilter: "none",
+        border: "none",
+        borderRadius: "12px",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "rgba(255,255,255,0.7)";
+        e.currentTarget.style.backdropFilter = "blur(16px)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "#ffffff";
+        e.currentTarget.style.backdropFilter = "none";
+      }}
+    >
+      <CardContent className="p-8">
+        <div className="flex items-start justify-between mb-4">
+          <div className="w-10 h-10 bg-[#e9ddff] rounded-[12px] flex items-center justify-center">
+            <WorkflowIcon className="h-5 w-5 text-[#6a37d4]" />
+          </div>
+          <div className="flex items-center gap-2 ml-4">
+            <WorkflowStatusBadge status={workflow.status ?? "active"} />
+          </div>
+        </div>
+
+        <h3 className="text-xl font-semibold text-[#2c2f30] mb-2">
+          {workflow.name}
+        </h3>
+        {workflow.description ? (
+          <p className="text-sm text-[#595c5d] leading-relaxed line-clamp-3">
+            {workflow.description}
+          </p>
+        ) : (
+          <p className="text-sm text-[#abadae] italic">No description</p>
+        )}
+
+        {workflow.createdAt && (
+          <p className="text-[10px] text-[#abadae] uppercase tracking-widest mt-6">
+            Created {new Date(workflow.createdAt).toLocaleDateString()}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmptyState({ onCreateClick, disabled }: { onCreateClick: () => void; disabled: boolean }) {
+  const templates = [
+    { name: "Client Onboarding", description: "Welcome new clients and set up their accounts" },
+    { name: "Content Publishing", description: "Draft, review, approve, and publish content" },
+    { name: "Sales Pipeline", description: "Lead qualification to close" },
+  ];
+
+  return (
+    <div className="text-center py-16 max-w-2xl mx-auto">
+      <div className="mb-8">
+        <WorkflowIcon className="h-10 w-10 text-[#abadae] mx-auto mb-4" />
+        <h2 className="text-2xl font-semibold text-[#2c2f30] mb-3">
+          No workflows yet
+        </h2>
+        <p className="text-[#595c5d] leading-relaxed mb-8">
+          Workflows capture repeatable processes — onboarding, publishing,
+          sales — so your team can run them the same way every time.
+        </p>
+        <Button
+          onClick={onCreateClick}
+          disabled={disabled}
+          className="bg-[#6a37d4] text-white px-5 py-2.5 font-semibold text-sm hover:bg-[#5a2dc0] disabled:opacity-50"
+          style={{ borderRadius: "12px" }}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Create your first workflow
+        </Button>
+      </div>
+
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-[#2c2f30] mb-4">
+          Suggested templates
+        </h3>
+        <div className="grid gap-4">
+          {templates.map((template) => (
+            <div
+              key={template.name}
+              className="p-6 bg-white text-left"
+              style={{
+                borderRadius: "12px",
+                boxShadow: "0 8px 32px rgba(106,55,212,0.08)",
+              }}
+            >
+              <h4 className="font-medium text-[#2c2f30] mb-1">
+                {template.name}
+              </h4>
+              <p className="text-sm text-[#595c5d]">{template.description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function WorkflowsPage() {
   const posthog = usePostHog();
@@ -35,8 +161,6 @@ export default function WorkflowsPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
-  // Need the company to attach the new workflow to — POST /api/workflows
-  // requires a companyId per insertWorkflowSchema.
   const { data: company } = useQuery<Company, Error>({
     queryKey: ["/api/company"],
     queryFn: async () => {
@@ -49,6 +173,7 @@ export default function WorkflowsPage() {
     data: workflows,
     isLoading,
     error,
+    refetch,
   } = useQuery<Workflow[], Error>({
     queryKey: ["/api/workflows"],
     queryFn: async () => {
@@ -102,9 +227,59 @@ export default function WorkflowsPage() {
     });
   }
 
+  if (isLoading) {
+    return (
+      <UniversalLayout title="Workflows">
+        <div className="p-8">
+          <div className="flex items-center justify-between mb-8">
+            <div className="h-9 bg-[#eff1f2] rounded w-32 animate-pulse" />
+            <div className="h-10 bg-[#eff1f2] rounded w-40 animate-pulse" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(3)].map((_, i) => (
+              <div
+                key={i}
+                className="bg-white p-8 animate-pulse"
+                style={{ borderRadius: "12px", minHeight: "200px" }}
+              >
+                <div className="h-10 w-10 bg-[#eff1f2] rounded-[12px] mb-4" />
+                <div className="h-6 bg-[#eff1f2] rounded w-3/4 mb-3" />
+                <div className="h-4 bg-[#eff1f2] rounded w-full mb-2" />
+                <div className="h-4 bg-[#eff1f2] rounded w-2/3" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </UniversalLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <UniversalLayout title="Workflows">
+        <div className="p-8">
+          <div className="text-center py-16">
+            <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-4" />
+            <p className="text-[#595c5d] mb-2 font-semibold">
+              Failed to load workflows
+            </p>
+            <p className="text-sm text-[#595c5d] mb-6">{error.message}</p>
+            <Button
+              onClick={() => refetch()}
+              variant="outline"
+              style={{ borderRadius: "12px" }}
+            >
+              Retry
+            </Button>
+          </div>
+        </div>
+      </UniversalLayout>
+    );
+  }
+
   return (
     <UniversalLayout title="Workflows">
-      <div className="max-w-[1200px] mx-auto">
+      <div className="max-w-[1200px] mx-auto p-8">
         <div className="flex items-start justify-between mb-10">
           <div>
             <h1 className="text-[2.5rem] font-semibold leading-[1.1] tracking-tight text-[#2c2f30] mb-3">
@@ -115,18 +290,27 @@ export default function WorkflowsPage() {
               to capture a process you run repeatedly.
             </p>
           </div>
-          <Button
-            onClick={() => setShowCreate((v) => !v)}
-            disabled={!company}
-            className="bg-[#6a37d4] text-white px-5 py-3 rounded-xl flex items-center gap-2 font-semibold text-sm hover:bg-[#5a2dc0] disabled:opacity-50"
-          >
-            <Plus className="h-4 w-4" />
-            {showCreate ? "Cancel" : "New Workflow"}
-          </Button>
+          {workflows && workflows.length > 0 && (
+            <Button
+              onClick={() => setShowCreate((v) => !v)}
+              disabled={!company}
+              className="bg-[#6a37d4] text-white px-5 py-3 flex items-center gap-2 font-semibold text-sm hover:bg-[#5a2dc0] disabled:opacity-50"
+              style={{ borderRadius: "12px" }}
+            >
+              <Plus className="h-4 w-4" />
+              {showCreate ? "Cancel" : "New Workflow"}
+            </Button>
+          )}
         </div>
 
         {showCreate && (
-          <Card className="p-6 mb-8 bg-white shadow-[0_8px_32px_rgba(106,55,212,0.08)]">
+          <Card
+            className="p-6 mb-8 bg-white"
+            style={{
+              borderRadius: "12px",
+              boxShadow: "0 8px 32px rgba(106,55,212,0.08)",
+            }}
+          >
             <form onSubmit={handleCreate} className="space-y-4">
               <div className="flex items-start justify-between">
                 <h3 className="text-lg font-semibold text-[#2c2f30]">
@@ -144,7 +328,7 @@ export default function WorkflowsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                <Label className="text-xs font-semibold uppercase tracking-widest text-[#595c5d]">
                   Name
                 </Label>
                 <Input
@@ -158,9 +342,9 @@ export default function WorkflowsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                <Label className="text-xs font-semibold uppercase tracking-widest text-[#595c5d]">
                   Description{" "}
-                  <span className="text-slate-400 normal-case font-normal">
+                  <span className="text-[#abadae] normal-case font-normal">
                     (optional)
                   </span>
                 </Label>
@@ -177,7 +361,8 @@ export default function WorkflowsPage() {
                 <Button
                   type="submit"
                   disabled={createMutation.isPending || !name.trim()}
-                  className="bg-[#6a37d4] text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#5a2dc0] disabled:opacity-50"
+                  className="bg-[#6a37d4] text-white px-5 py-2.5 font-semibold text-sm hover:bg-[#5a2dc0] disabled:opacity-50"
+                  style={{ borderRadius: "12px" }}
                 >
                   {createMutation.isPending ? (
                     <>
@@ -193,102 +378,16 @@ export default function WorkflowsPage() {
           </Card>
         )}
 
-        {isLoading && (
-          <div className="flex items-center justify-center py-24 text-slate-500">
-            <Loader2 className="h-6 w-6 animate-spin mr-3" />
-            <span className="text-sm">Loading workflows…</span>
-          </div>
-        )}
-
-        {error && !isLoading && (
-          <Card className="p-6 bg-red-50 border border-red-200 max-w-2xl">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-semibold text-red-900">
-                  Couldn't load workflows
-                </p>
-                <p className="text-sm text-red-700 mt-1">{error.message}</p>
-              </div>
-            </div>
-          </Card>
-        )}
-
-        {!isLoading && !error && workflows && workflows.length === 0 && (
-          <Card className="p-12 text-center bg-[#f8f9fa] border border-dashed border-slate-200">
-            <WorkflowIcon className="h-10 w-10 text-slate-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-[#2c2f30] mb-2">
-              No workflows yet
-            </h3>
-            <p className="text-sm text-slate-500 max-w-md mx-auto mb-6">
-              Workflows capture repeatable processes — onboarding, publishing,
-              sales — so your team can run them the same way every time.
-            </p>
-            <Button
-              onClick={() => setShowCreate(true)}
-              disabled={!company}
-              className="bg-[#6a37d4] text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#5a2dc0] disabled:opacity-50"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Create your first workflow
-            </Button>
-          </Card>
-        )}
-
-        {!isLoading && !error && workflows && workflows.length > 0 && (
+        {!workflows || workflows.length === 0 ? (
+          <EmptyState
+            onCreateClick={() => setShowCreate(true)}
+            disabled={!company}
+          />
+        ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {workflows.map((workflow) => {
-              const isPaused = workflow.status === "paused";
-              return (
-                <Card
-                  key={workflow.id}
-                  className="p-6 bg-white hover:shadow-[0_12px_40px_rgba(106,55,212,0.12)] transition-shadow"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-10 h-10 bg-[#e9ddff] rounded-lg flex items-center justify-center">
-                      <WorkflowIcon className="h-5 w-5 text-[#6a37d4]" />
-                    </div>
-                    <Badge
-                      className={
-                        isPaused
-                          ? "bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wider"
-                          : "bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider"
-                      }
-                    >
-                      {isPaused ? (
-                        <>
-                          <Pause className="h-2.5 w-2.5 mr-1 inline" />
-                          Paused
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle2 className="h-2.5 w-2.5 mr-1 inline" />
-                          Active
-                        </>
-                      )}
-                    </Badge>
-                  </div>
-                  <h3 className="text-lg font-semibold text-[#2c2f30] mb-2">
-                    {workflow.name}
-                  </h3>
-                  {workflow.description ? (
-                    <p className="text-sm text-slate-500 line-clamp-3">
-                      {workflow.description}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-slate-400 italic">
-                      No description
-                    </p>
-                  )}
-                  {workflow.createdAt && (
-                    <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-4">
-                      Created{" "}
-                      {new Date(workflow.createdAt).toLocaleDateString()}
-                    </p>
-                  )}
-                </Card>
-              );
-            })}
+            {workflows.map((workflow) => (
+              <WorkflowCard key={workflow.id} workflow={workflow} />
+            ))}
           </div>
         )}
       </div>

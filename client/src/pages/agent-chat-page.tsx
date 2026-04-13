@@ -1,22 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useParams } from "wouter";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bolt, Send, Loader2, AlertCircle } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Bolt, Send, Sparkles } from "lucide-react";
 
 import { UniversalLayout } from "@/components/layout/universal-layout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Company } from "@shared/schema";
-import { usePostHog } from "posthog-js/react";
 
-// Chat is backed by the existing /api/agents/:id/chat + messages endpoints
-// rather than the generated /api/companies/:id/conversations routes, which
-// are 501 stubs until storage.createConversation lands. Using the "direct-
-// claude" virtual agent id gives us a stable per-user conversation without
-// requiring an agent row in the DB.
 const CHAT_AGENT_ID = "direct-claude";
 
 interface AgentMessage {
@@ -32,14 +26,258 @@ interface ChatResponse {
   messageId: string;
 }
 
+interface SuggestedAction {
+  id: string;
+  label: string;
+  prompt: string;
+}
+
+const SUGGESTED_STARTERS: SuggestedAction[] = [
+  { id: "1", label: "Review my org chart", prompt: "Can you review my current org chart and identify any gaps?" },
+  { id: "2", label: "Analyze task load", prompt: "Show me who on my team is overloaded with tasks" },
+  { id: "3", label: "Create workflow", prompt: "Help me create a workflow for customer onboarding" },
+  { id: "4", label: "Review goals", prompt: "What progress have we made on our quarterly goals?" },
+];
+
 function formatTimestamp(iso: string): string {
-  const posthog = usePostHog();
   try {
     const d = new Date(iso);
-    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   } catch {
     return "";
   }
+}
+
+function ChatMessageBubble({ message, assistantName }: { message: AgentMessage; assistantName: string }) {
+  const isUser = message.role === "user";
+
+  return (
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-6`}>
+      {!isUser && (
+        <div
+          className="w-8 h-8 flex-shrink-0 flex items-center justify-center mr-3 mt-1"
+          style={{ backgroundColor: "#6a37d4", borderRadius: "12px" }}
+        >
+          <Bolt className="w-4 h-4 text-white" />
+        </div>
+      )}
+      <div
+        className={`max-w-[80%] px-6 py-4 ${isUser ? "bg-[#6a37d4] text-white" : "bg-[#f5f6f7] text-[#2c2f30]"}`}
+        style={{ borderRadius: "12px" }}
+      >
+        {!isUser && (
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[#6a37d4] mb-2">
+            {assistantName}
+          </p>
+        )}
+        <p className="text-base leading-relaxed whitespace-pre-wrap">{message.content}</p>
+        <time className={`text-xs mt-2 block ${isUser ? "text-white/70" : "text-[#595c5d]"}`}>
+          {formatTimestamp(message.timestamp)}
+        </time>
+      </div>
+    </div>
+  );
+}
+
+function TypingIndicator({ assistantName }: { assistantName: string }) {
+  return (
+    <div className="flex justify-start mb-6">
+      <div
+        className="w-8 h-8 flex-shrink-0 flex items-center justify-center mr-3 mt-1"
+        style={{ backgroundColor: "#6a37d4", borderRadius: "12px" }}
+      >
+        <Bolt className="w-4 h-4 text-white" />
+      </div>
+      <div
+        className="bg-[#f5f6f7] px-6 py-4"
+        style={{ borderRadius: "12px" }}
+      >
+        <p className="text-xs text-[#595c5d] mb-2">{assistantName} is thinking...</p>
+        <div className="flex gap-1">
+          <span className="w-2 h-2 bg-[#595c5d] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+          <span className="w-2 h-2 bg-[#595c5d] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+          <span className="w-2 h-2 bg-[#595c5d] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AgentStatusIndicator({ status, assistantName }: { status: "online" | "thinking" | "offline"; assistantName: string }) {
+  const statusConfig = {
+    online: { color: "#10b981", label: "Online" },
+    thinking: { color: "#6a37d4", label: "Thinking..." },
+    offline: { color: "#6b7280", label: "Offline" },
+  };
+
+  const config = statusConfig[status];
+
+  return (
+    <div className="flex items-center gap-3 px-6 py-4 bg-[#eff1f2]" style={{ borderRadius: "12px" }}>
+      <Sparkles className="w-5 h-5" style={{ color: config.color }} />
+      <div className="flex-1">
+        <p className="text-sm font-semibold text-[#2c2f30]">{assistantName}</p>
+        <p className="text-xs text-[#595c5d]">{config.label}</p>
+      </div>
+      <div
+        className="w-2 h-2 rounded-full"
+        style={{ backgroundColor: config.color }}
+      />
+    </div>
+  );
+}
+
+function SuggestedActionsPanel({ suggestions, onSelect }: { suggestions: SuggestedAction[]; onSelect: (prompt: string) => void }) {
+  return (
+    <div className="mb-4">
+      <p className="text-xs uppercase tracking-wider text-[#595c5d] mb-3 px-1">Suggested</p>
+      <div className="flex flex-wrap gap-2 md:grid md:grid-cols-2 lg:grid-cols-4">
+        {suggestions.map((action) => (
+          <button
+            key={action.id}
+            onClick={() => onSelect(action.prompt)}
+            className="px-4 py-3 bg-white text-[#2c2f30] text-sm font-medium hover:bg-[#f5f6f7] transition-colors text-left"
+            style={{ borderRadius: "12px" }}
+            aria-label={`Suggested action: ${action.label}`}
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ChatInput({ onSend, disabled, assistantName }: { onSend: (message: string) => void; disabled: boolean; assistantName: string }) {
+  const [input, setInput] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleSend = () => {
+    if (input.trim() && !disabled) {
+      onSend(input.trim());
+      setInput("");
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    e.target.style.height = "auto";
+    e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
+  };
+
+  return (
+    <div
+      className="sticky bottom-0 bg-white/70 backdrop-blur-[16px] p-6"
+      style={{
+        boxShadow: "0 8px 32px rgba(106,55,212,0.08)",
+        borderRadius: "12px",
+      }}
+    >
+      <div className="max-w-4xl mx-auto flex gap-3 items-end">
+        <Textarea
+          ref={textareaRef}
+          value={input}
+          onChange={handleInput}
+          onKeyDown={handleKeyDown}
+          placeholder={`Message ${assistantName}...`}
+          disabled={disabled}
+          className="flex-1 min-h-[52px] max-h-[200px] resize-none bg-[#f5f6f7] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#6a37d4]/20 focus:ring-offset-0 text-base text-[#2c2f30] placeholder:text-[#595c5d]"
+          style={{ borderRadius: "12px", border: "none" }}
+          rows={1}
+          maxLength={4000}
+        />
+        <Button
+          onClick={handleSend}
+          disabled={!input.trim() || disabled}
+          className="h-[52px] w-[52px] p-0 flex-shrink-0 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
+          style={{
+            backgroundColor: "#6a37d4",
+            borderRadius: "12px",
+          }}
+          aria-label="Send message"
+        >
+          <Send className="w-5 h-5" />
+        </Button>
+      </div>
+      {input.length > 3800 && (
+        <p className="text-xs text-[#595c5d] mt-2 text-right max-w-4xl mx-auto">
+          {input.length}/4000 characters
+        </p>
+      )}
+    </div>
+  );
+}
+
+function EmptyState({ onSelectSuggestion, assistantName, companyName }: { onSelectSuggestion: (prompt: string) => void; assistantName: string; companyName: string }) {
+  return (
+    <div className="flex-1 flex items-center justify-center px-6 py-12">
+      <Card className="max-w-2xl w-full p-8 bg-white" style={{ borderRadius: "12px", border: "none" }}>
+        <div className="flex items-center gap-4 mb-6">
+          <div
+            className="w-12 h-12 flex items-center justify-center bg-[#ae8dff]/20"
+            style={{ borderRadius: "12px" }}
+          >
+            <Sparkles className="w-6 h-6 text-[#6a37d4]" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-[#2c2f30]">{assistantName}</h2>
+            <p className="text-sm text-[#595c5d]">Your AI executive assistant</p>
+          </div>
+        </div>
+        <p className="text-base text-[#2c2f30] mb-8 leading-relaxed">
+          Hi, I'm {assistantName}. Ask me anything about {companyName} — goals, tasks,
+          workflows, or the next best action.
+        </p>
+        <SuggestedActionsPanel suggestions={SUGGESTED_STARTERS} onSelect={onSelectSuggestion} />
+      </Card>
+    </div>
+  );
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="flex-1 px-6 py-12 space-y-6">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className={`flex ${i % 2 === 0 ? "justify-end" : "justify-start"}`}>
+          <div
+            className="w-[60%] h-20 bg-[#f5f6f7] animate-pulse"
+            style={{ borderRadius: "12px" }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ErrorRetry({ onRetry, errorMessage }: { onRetry: () => void; errorMessage: string }) {
+  return (
+    <div className="flex-1 flex items-center justify-center px-6 py-12">
+      <Card className="max-w-md w-full p-8 bg-white text-center" style={{ borderRadius: "12px", border: "none" }}>
+        <p className="text-base font-semibold text-[#2c2f30] mb-2">Couldn't load chat history</p>
+        <p className="text-sm text-[#595c5d] mb-6">{errorMessage}</p>
+        <Button
+          onClick={onRetry}
+          className="text-white"
+          style={{
+            backgroundColor: "#6a37d4",
+            borderRadius: "12px",
+          }}
+        >
+          Retry
+        </Button>
+      </Card>
+    </div>
+  );
 }
 
 export default function AgentChatPage() {
@@ -47,8 +285,8 @@ export default function AgentChatPage() {
   const companyId = params.companyId;
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [input, setInput] = useState("");
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [agentStatus, setAgentStatus] = useState<"online" | "thinking" | "offline">("online");
 
   const { data: company } = useQuery<Company, Error>({
     queryKey: ["/api/company"],
@@ -66,6 +304,7 @@ export default function AgentChatPage() {
     data: messages,
     isLoading: messagesLoading,
     error: messagesError,
+    refetch: messagesRefetch,
   } = useQuery<AgentMessage[], Error>({
     queryKey: messagesQueryKey,
     queryFn: async () => {
@@ -87,9 +326,7 @@ export default function AgentChatPage() {
       return (await res.json()) as ChatResponse;
     },
     onMutate: async (text) => {
-      // Optimistic append — user sees their message immediately. The full
-      // assistant reply arrives in onSuccess and invalidates the query.
-      setInput("");
+      setAgentStatus("thinking");
       await queryClient.cancelQueries({ queryKey: messagesQueryKey });
       const previous = queryClient.getQueryData<AgentMessage[]>(messagesQueryKey) ?? [];
       const optimistic: AgentMessage = {
@@ -107,14 +344,15 @@ export default function AgentChatPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: messagesQueryKey });
+      setAgentStatus("online");
     },
     onError: (err, _vars, ctx) => {
-      // Roll back the optimistic message so the user can retry.
       const previous = (ctx as { previous?: AgentMessage[] } | undefined)
         ?.previous;
       if (previous) {
         queryClient.setQueryData(messagesQueryKey, previous);
       }
+      setAgentStatus("online");
       toast({
         title: "Couldn't send message",
         description: err.message,
@@ -123,20 +361,22 @@ export default function AgentChatPage() {
     },
   });
 
-  // Auto-scroll to the latest message whenever the list grows.
+  const handleSendMessage = (content: string) => {
+    if (!content || sendMutation.isPending) return;
+    sendMutation.mutate(content);
+  };
+
+  const handleSuggestedAction = (prompt: string) => {
+    handleSendMessage(prompt);
+  };
+
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages?.length]);
 
-  function handleSend() {
-    const text = input.trim();
-    if (!text || sendMutation.isPending) return;
-    sendMutation.mutate(text);
-  }
-
   const assistantName = company?.assistantName ?? "DEX Assistant";
+  const displayCompanyName = company?.name ?? "your company";
+
   const leftRailItems = companyId
     ? [
         { icon: Bolt, label: "Home", href: `/company/${companyId}`, active: false },
@@ -155,147 +395,49 @@ export default function AgentChatPage() {
       companyName={company?.name}
       leftRailItems={leftRailItems}
     >
-      <div className="flex flex-col h-[calc(100vh-160px)] relative overflow-hidden bg-[#f3f4f5]">
-        <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#6a37d4]/5 blur-[120px] rounded-full pointer-events-none" />
-
-        {/* Header */}
-        <div className="px-8 lg:px-24 pt-8 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 bg-[#6a37d4] rounded-lg flex items-center justify-center text-white">
-              <Bolt className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-[#2c2f30]">
-                {assistantName}
-              </h1>
-              <p className="text-xs text-slate-500">
-                Your company's AI executive assistant
-              </p>
-            </div>
-          </div>
+      <div className="flex flex-col h-full">
+        <div className="px-6 py-4 bg-white">
+          <AgentStatusIndicator status={agentStatus} assistantName={assistantName} />
         </div>
 
-        {/* Thread */}
-        <div
-          ref={scrollRef}
-          className="flex-1 px-8 lg:px-24 pb-32 overflow-y-auto space-y-6"
-        >
-          {messagesLoading && (
-            <div className="flex items-center justify-center py-16 text-slate-500">
-              <Loader2 className="h-5 w-5 animate-spin mr-3" />
-              <span className="text-sm">Loading conversation…</span>
-            </div>
-          )}
-
-          {messagesError && !messagesLoading && (
-            <Card className="p-6 bg-red-50 border border-red-200 max-w-2xl">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-red-900">
-                    Couldn't load chat history
-                  </p>
-                  <p className="text-sm text-red-700 mt-1">
-                    {messagesError.message}
-                  </p>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {!messagesLoading &&
-            messages &&
-            messages.length === 0 && (
-              <div className="max-w-2xl">
-                <Card className="bg-white p-8 rounded-2xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] border border-[#abadae]/10">
-                  <p className="text-base text-[#2c2f30] mb-2">
-                    Hi, I'm {assistantName}. Ask me anything about{" "}
-                    {company?.name ?? "your company"} — goals, tasks,
-                    workflows, or the next best action.
-                  </p>
-                </Card>
-              </div>
-            )}
-
-          {messages?.map((message) => {
-            const isUser = message.role === "user";
-            return (
-              <div
-                key={message.id}
-                className={
-                  "flex flex-col gap-2 " +
-                  (isUser ? "items-end" : "max-w-2xl items-start")
-                }
-              >
-                {!isUser && (
-                  <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 bg-[#6a37d4] rounded-md flex items-center justify-center text-white">
-                      <Bolt className="h-3 w-3" />
-                    </div>
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#6a37d4]">
-                      {assistantName}
-                    </span>
-                  </div>
-                )}
-                {isUser ? (
-                  <div className="px-5 py-3 rounded-2xl rounded-tr-none bg-[#6a37d4] text-white max-w-xl">
-                    <p className="text-sm whitespace-pre-wrap">
-                      {message.content}
-                    </p>
-                  </div>
-                ) : (
-                  <Card className="bg-white p-5 rounded-2xl shadow-[0_8px_32px_rgba(106,55,212,0.06)] border border-[#abadae]/10">
-                    <p className="text-sm text-[#2c2f30] whitespace-pre-wrap">
-                      {message.content}
-                    </p>
-                  </Card>
-                )}
-                <span className="text-[10px] uppercase tracking-widest text-[#abadae]">
-                  {formatTimestamp(message.timestamp)}
-                </span>
-              </div>
-            );
-          })}
-
-          {sendMutation.isPending && (
-            <div className="flex items-center gap-2 text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-xs">{assistantName} is thinking…</span>
+        <div className="flex-1 overflow-y-auto px-6 py-6">
+          {messagesLoading ? (
+            <LoadingSkeleton />
+          ) : messagesError ? (
+            <ErrorRetry onRetry={() => messagesRefetch()} errorMessage={messagesError.message} />
+          ) : !messages || messages.length === 0 ? (
+            <EmptyState
+              onSelectSuggestion={handleSuggestedAction}
+              assistantName={assistantName}
+              companyName={displayCompanyName}
+            />
+          ) : (
+            <div className="max-w-4xl mx-auto">
+              {messages.map((message) => (
+                <ChatMessageBubble key={message.id} message={message} assistantName={assistantName} />
+              ))}
+              {sendMutation.isPending && <TypingIndicator assistantName={assistantName} />}
+              <div ref={messagesEndRef} />
             </div>
           )}
         </div>
 
-        {/* Input */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 pointer-events-none">
-          <div className="max-w-3xl mx-auto bg-white/90 backdrop-blur-[16px] p-2 rounded-2xl border border-[#abadae]/15 shadow-[0_8px_48px_rgba(106,55,212,0.12)] pointer-events-auto">
-            <div className="flex items-center gap-2">
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                disabled={sendMutation.isPending}
-                className="flex-1 bg-transparent border-none focus-visible:ring-0 text-[#2c2f30] text-base placeholder:text-[#abadae] px-4 h-auto"
-                placeholder={`Message ${assistantName}…`}
+        {messages && messages.length > 0 && (
+          <div className="px-6 pb-6">
+            <div className="max-w-4xl mx-auto">
+              <SuggestedActionsPanel
+                suggestions={SUGGESTED_STARTERS}
+                onSelect={handleSuggestedAction}
               />
-              <Button
-                onClick={handleSend}
-                disabled={!input.trim() || sendMutation.isPending}
-                className="bg-[#6a37d4] hover:bg-[#6448b2] text-white p-3 rounded-xl shadow-lg shadow-[#6a37d4]/20 h-auto disabled:opacity-50"
-              >
-                {sendMutation.isPending ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <Send className="h-5 w-5" />
-                )}
-              </Button>
             </div>
           </div>
-        </div>
+        )}
+
+        <ChatInput
+          onSend={handleSendMessage}
+          disabled={sendMutation.isPending}
+          assistantName={assistantName}
+        />
       </div>
     </UniversalLayout>
   );
