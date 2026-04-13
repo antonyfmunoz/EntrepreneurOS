@@ -115,7 +115,7 @@ export function Header({
                   borderRadius: DESIGN_TOKENS.borderRadius,
                 }}
               >
-                {currentContext.type === "company" ? (
+                {currentContext?.type === "company" ? (
                   <Building2
                     className="h-4 w-4 flex-shrink-0"
                     style={{ color: DESIGN_TOKENS.colors.onSurfaceVariant }}
@@ -130,7 +130,7 @@ export function Header({
                   className="truncate text-sm font-medium"
                   style={{ color: DESIGN_TOKENS.colors.onSurface }}
                 >
-                  {currentContext.name}
+                  {currentContext?.name}
                 </span>
                 <ChevronDown
                   className="h-4 w-4 flex-shrink-0"
@@ -167,7 +167,7 @@ export function Header({
                       className="flex items-center gap-2 cursor-pointer"
                       style={{
                         background:
-                          context.id === currentContext.id
+                          context.id === currentContext?.id
                             ? "rgba(106, 55, 212, 0.08)"
                             : "transparent",
                       }}
@@ -206,7 +206,7 @@ export function Header({
                       className="flex items-center gap-2 cursor-pointer"
                       style={{
                         background:
-                          context.id === currentContext.id
+                          context.id === currentContext?.id
                             ? "rgba(106, 55, 212, 0.08)"
                             : "transparent",
                       }}
