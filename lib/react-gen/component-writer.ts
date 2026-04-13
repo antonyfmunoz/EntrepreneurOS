@@ -7,6 +7,7 @@ import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 import { DESIGN_RULES } from "./design-tokens.js";
+import { loadDesignSkills } from "./skill-loader.js";
 import type { PageSpecFull } from "@shared/spec-schema.js";
 import type { PageCopy } from "../copy-planner/types.js";
 import type { ProjectBrief } from "../intake/types.js";
@@ -94,14 +95,38 @@ function validateComponent(code: string): ValidationResult {
   return { valid: errors.length === 0, errors };
 }
 
-function buildSystemPrompt(input: ComponentWriterInput): string {
+async function buildSystemPrompt(input: ComponentWriterInput): Promise<string> {
+  const skillContent = await loadDesignSkills(input.projectRoot);
+
   const parts = [
     "You are a world-class React/TypeScript developer and UI designer.",
     "You write production-quality, pixel-perfect React components.",
     "You follow design systems without deviation.",
     "",
-    DESIGN_RULES,
   ];
+
+  // Inject skill-loaded design philosophy BEFORE mandatory rules
+  // Skills provide spatial composition, motion, depth, anti-generic-AI principles
+  // Mandatory design rules (colors, fonts, tokens) override any conflicting skill suggestions
+  if (skillContent) {
+    parts.push(skillContent, "");
+  }
+
+  // Visual intent from intake (reference sites, feel, avoidances)
+  const vi = input.projectBrief.visualIntent;
+  if (vi) {
+    const intentParts = ["VISUAL INTENT — match this aesthetic direction:"];
+    if (vi.feelWord) intentParts.push(`Feel: ${vi.feelWord}`);
+    if (vi.colorMode) intentParts.push(`Color mode: ${vi.colorMode}`);
+    if (vi.avoidances.length > 0) intentParts.push(`Avoid: ${vi.avoidances.join(", ")}`);
+    parts.push(intentParts.join("\n"), "");
+  }
+  const vr = input.projectBrief.visualResearch;
+  if (vr && vr.length > 0) {
+    parts.push("REFERENCE SITE OBSERVATIONS:", ...vr.map((r) => `- ${r.url}: ${r.observations}`), "");
+  }
+
+  parts.push(DESIGN_RULES);
 
   if (input.designSystem) {
     parts.push("", "DESIGN SYSTEM:", input.designSystem);
@@ -220,7 +245,7 @@ export async function writeReactComponent(
   const kebabName = toKebabCase(page.name);
   const filePath = path.join(projectRoot, "client", "src", "pages", `${kebabName}-page.tsx`);
 
-  const systemPrompt = buildSystemPrompt(input);
+  const systemPrompt = await buildSystemPrompt(input);
   const userPrompt = buildUserPrompt(input);
 
   async function generate(extraInstructions?: string): Promise<string> {

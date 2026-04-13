@@ -34,9 +34,22 @@ import type { ProjectConfig } from "../../shared/design-schema.js";
 
 export { type IntakeMode } from "./types.js";
 
+export interface VisualIntentInput {
+  /** 1-3 URLs of sites/apps whose UI the user admires. */
+  referenceUrls?: string[];
+  /** One word to describe the desired feel: minimal, bold, editorial, luxury, technical, warm, clinical, futuristic. */
+  feelWord?: string;
+  /** Things the user hates in UI design. */
+  avoidances?: string[];
+  /** Color mode preference. */
+  colorMode?: "light" | "dark" | "user-choice";
+}
+
 export interface IntakeOptions {
   /** Competitor URLs to research during intake. */
   competitorUrls?: string[];
+  /** Visual intent answers from the user. */
+  visualIntent?: VisualIntentInput;
 }
 
 export interface IntakeResult {
@@ -64,7 +77,7 @@ export async function runIntake(
 
   switch (mode) {
     case "greenfield":
-      return runGreenfieldIntake(config, projectRoot);
+      return runGreenfieldIntake(config, projectRoot, options);
     case "docs-only":
       return runDocsOnlyIntake(config, projectRoot, options);
     case "existing-codebase":
@@ -75,10 +88,13 @@ export async function runIntake(
 async function runGreenfieldIntake(
   _config: ProjectConfig,
   _projectRoot: string,
+  options: IntakeOptions = {},
 ): Promise<IntakeResult> {
   // Greenfield mode produces a skeleton brief. The spec field needs a valid
   // SpecOutput — use a minimal placeholder that the collaborative flow will
   // replace once the conversation completes.
+  const { visualIntent, visualResearch } = await resolveVisualIntent(options.visualIntent);
+
   const brief = ProjectBriefSchema.parse({
     productName: "Untitled Project",
     productDescription: "No description yet — run collaborative intake to define.",
@@ -92,6 +108,8 @@ async function runGreenfieldIntake(
     dbProvider: "neon",
     deployTarget: "vps",
     spec: { pages: [{ name: "Placeholder", route: "/", purpose: "Placeholder for greenfield intake", components: [], authLevel: "public", priority: 1, dependsOn: [], specVersion: 1, source: "inferred", dataRequirements: [], apiEndpoints: [], validationRules: [], events: [], featureFlagCandidates: [] }] },
+    visualIntent,
+    visualResearch,
     isGreenfield: true,
     existingCodeScanned: false,
     sourceDocs: [],
@@ -147,6 +165,9 @@ async function runDocsOnlyIntake(
     options.competitorUrls, brandVoice, spec, projectRoot,
   );
 
+  // Visual intent
+  const { visualIntent, visualResearch } = await resolveVisualIntent(options.visualIntent);
+
   const brief = ProjectBriefSchema.parse({
     ...productMeta,
     brandVoice,
@@ -157,6 +178,8 @@ async function runDocsOnlyIntake(
     deployTarget: "vps",
     spec,
     competitiveIntel,
+    visualIntent,
+    visualResearch,
     isGreenfield: false,
     existingCodeScanned: false,
     sourceDocs: docs.sourceDocs,
@@ -215,6 +238,9 @@ async function runExistingCodebaseIntake(
   const authProvider = codeScan.hasAuth ? "clerk" : "none";
   const dbProvider = codeScan.hasDatabase ? "neon" : "other";
 
+  // Visual intent
+  const { visualIntent, visualResearch } = await resolveVisualIntent(options.visualIntent);
+
   const brief = ProjectBriefSchema.parse({
     ...productMeta,
     brandVoice,
@@ -231,12 +257,63 @@ async function runExistingCodebaseIntake(
     deployTarget: "vps",
     spec,
     competitiveIntel,
+    visualIntent,
+    visualResearch,
     isGreenfield: false,
     existingCodeScanned: true,
     sourceDocs: docs.sourceDocs,
   });
 
   return { brief, mode: "existing-codebase", gapReport };
+}
+
+// ─── Visual Intent ───────────────────────────────────────────────────────────
+
+interface VisualResearchEntry {
+  url: string;
+  observations: string;
+}
+
+async function resolveVisualIntent(
+  input: VisualIntentInput | undefined,
+): Promise<{
+  visualIntent?: { referenceUrls: string[]; feelWord: string; avoidances: string[]; colorMode: "light" | "dark" | "user-choice" };
+  visualResearch?: VisualResearchEntry[];
+}> {
+  if (!input) return {};
+
+  const visualIntent = {
+    referenceUrls: input.referenceUrls ?? [],
+    feelWord: input.feelWord ?? "",
+    avoidances: input.avoidances ?? [],
+    colorMode: input.colorMode ?? "light" as const,
+  };
+
+  // If reference URLs provided, fetch and extract visual observations
+  let visualResearch: VisualResearchEntry[] | undefined;
+  if (visualIntent.referenceUrls.length > 0) {
+    visualResearch = [];
+    for (const url of visualIntent.referenceUrls) {
+      try {
+        const observations = await fetchVisualObservations(url);
+        if (observations) {
+          visualResearch.push({ url, observations });
+        }
+      } catch {
+        console.warn(`[intake] Could not fetch visual reference: ${url}`);
+      }
+    }
+    if (visualResearch.length === 0) visualResearch = undefined;
+  }
+
+  return { visualIntent, visualResearch };
+}
+
+async function fetchVisualObservations(url: string): Promise<string | null> {
+  // Best-effort: describe what we'd observe at the URL
+  // In a full implementation this would use web_fetch + Claude vision.
+  // For now, record the URL as a reference for the generation prompt.
+  return `Reference site provided — apply layout patterns, color usage, typography choices, and spacing density observed at this URL.`;
 }
 
 // ─── Competitive Research ─────────────────────────────────────────────────────

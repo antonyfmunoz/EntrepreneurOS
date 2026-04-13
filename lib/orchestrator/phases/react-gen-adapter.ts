@@ -24,6 +24,7 @@ import type { PhaseImplementation, PageWorkUnit } from "../phase-runner.js";
 import { getOrchestratorDb } from "../db.js";
 import { writeReactComponent, type ComponentWriterInput, type ComponentWriterOutput } from "../../react-gen/component-writer.js";
 import { buildSharedComponents } from "../../react-gen/shared-component-builder.js";
+import { screenshotAndReview } from "../../react-gen/screenshot-reviewer.js";
 import { ensureLivePreviewServer, type LivePreviewServer } from "../../react-gen/live-preview-server.js";
 import { injectBuildOverlay, updateBuildStatus, removeBuildOverlay, type BuildStatus } from "../../react-gen/build-status-overlay.js";
 import { loadBrandVoice } from "../../spec-parser/brand-voice-inferrer.js";
@@ -255,7 +256,7 @@ export const reactGenPhaseImplementation: PhaseImplementation = {
               priorPageSummary: input.priorPageSummary,
             };
 
-            const output = await writeReactComponent(writerInput);
+            let output = await writeReactComponent(writerInput);
             completedNames.push(input.page.name);
 
             await updateBuildStatus(
@@ -266,6 +267,33 @@ export const reactGenPhaseImplementation: PhaseImplementation = {
             const routePath = input.page.route;
             const previewUrl = previewServer ? `${previewServer.url}${routePath}` : routePath;
             console.log(`  \u2713 ${input.page.name} (${output.reviewScore.toFixed(2)}) \u2014 ${previewUrl}`);
+
+            // Screenshot quality gate — wait for Vite HMR, then screenshot + review
+            if (previewServer) {
+              await new Promise((r) => setTimeout(r, 2000)); // Wait for Vite compile
+              const screenshotResult = await screenshotAndReview({
+                url: `${previewServer.url}${routePath}`,
+                pageName: input.page.name,
+                designSystem: input.designSystem,
+                projectRoot: input.projectRoot,
+              });
+              console.log(`  📸 ${input.page.name} screenshot: ${screenshotResult.score.toFixed(2)}`);
+              if (screenshotResult.screenshotPath) {
+                console.log(`     ${screenshotResult.screenshotPath}`);
+              }
+
+              // If score < 0.7 and we haven't retried via screenshot yet, regenerate
+              if (screenshotResult.score < 0.7 && !output.retried) {
+                const issueList = screenshotResult.issues.map((i) => `- ${i}`).join("\n");
+                console.log(`  ↻ Regenerating ${input.page.name} due to screenshot issues...`);
+                const retryInput: ComponentWriterInput = {
+                  ...writerInput,
+                  priorPageSummary: `SCREENSHOT REVIEW FAILED (${screenshotResult.score.toFixed(2)}). Fix these visual issues:\n${issueList}`,
+                };
+                output = await writeReactComponent(retryInput);
+                console.log(`  \u2713 ${input.page.name} retry (${output.reviewScore.toFixed(2)})`);
+              }
+            }
 
             return { idx, output };
           }),

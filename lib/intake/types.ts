@@ -40,6 +40,20 @@ export const ProjectBriefSchema = z.object({
   // Competitive Intelligence
   competitiveIntel: CompetitiveIntelSchema.optional(),
 
+  // Visual Intent (from intake questions)
+  visualIntent: z.object({
+    referenceUrls: z.array(z.string()).default([]),
+    feelWord: z.string().default(""),
+    avoidances: z.array(z.string()).default([]),
+    colorMode: z.enum(["light", "dark", "user-choice"]).default("light"),
+  }).optional(),
+
+  // Visual Research (observations from reference URLs)
+  visualResearch: z.array(z.object({
+    url: z.string(),
+    observations: z.string(),
+  })).optional(),
+
   // Meta
   isGreenfield: z.boolean(),
   existingCodeScanned: z.boolean().default(false),
