@@ -1,225 +1,543 @@
-import { useEffect, useRef } from "react";
-import { useLocation, Link } from "wouter";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { Bot, Terminal, AlertCircle, Loader2 } from "lucide-react";
+import { useState } from 'react';
+import { useLocation } from 'wouter';
+import { useMutation } from '@tanstack/react-query';
+import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
+import designTokens from '@/lib/design-tokens';
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Layout } from "@/components/layout";
-import { useAuth } from "@/hooks/use-auth";
-import { usePostHog } from "posthog-js/react";
+interface LoginCredentials {
+  email: string;
+  password: string;
+}
 
-const loginSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(1, "Password is required"),
-});
+interface LoginResponse {
+  userId: string;
+  token: string;
+}
 
-type LoginFormValues = z.infer<typeof loginSchema>;
+interface LoginError {
+  code: string;
+  message: string;
+}
 
-export default function Login() {
-  const posthog = usePostHog();
-  const { user, isLoading, loginMutation, signInWithGoogle, isClerkReady } =
-    useAuth();
-  const [, navigate] = useLocation();
-
-  // If already authenticated, bounce to the portfolios list. This covers
-  // users who land on /login by accident after logging in elsewhere.
-  useEffect(() => {
-    if (user && !isLoading) {
-      navigate("/portfolios");
-    }
-  }, [user, isLoading, navigate]);
-
-  const form = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "" },
+const loginWithEmail = async (credentials: LoginCredentials): Promise<LoginResponse> => {
+  const response = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(credentials),
   });
 
-  function onSubmit(values: LoginFormValues) {
-    loginMutation.mutate(
-      { username: values.email, password: values.password },
-      {
-        onSuccess: () => {
-          navigate("/portfolios");
-        },
-      },
-    );
+  if (!response.ok) {
+    const error = await response.json();
+    throw error;
   }
 
-  const isPending = loginMutation.isPending;
-  const serverError = loginMutation.error?.message ?? null;
-  const emailError = form.formState.errors.email?.message;
-  const passwordError = form.formState.errors.password?.message;
-  const displayError = serverError ?? emailError ?? passwordError ?? null;
+  return response.json();
+};
+
+const loginWithGoogle = async (): Promise<LoginResponse> => {
+  const response = await fetch('/api/auth/google', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw error;
+  }
+
+  return response.json();
+};
+
+const trackEvent = (name: string, properties: Record<string, unknown>) => {
+  console.log(`[Analytics] ${name}`, properties);
+};
+
+export default function LoginPage() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [authError, setAuthError] = useState('');
+
+  const emailMutation = useMutation({
+    mutationFn: loginWithEmail,
+    onMutate: () => {
+      trackEvent('login_attempted', { method: 'email' });
+      setAuthError('');
+      setEmailError('');
+      setPasswordError('');
+    },
+    onSuccess: (data) => {
+      trackEvent('login_succeeded', { method: 'email', userId: data.userId });
+      localStorage.setItem('auth_token', data.token);
+      setLocation('/portfolio');
+    },
+    onError: (error: LoginError) => {
+      trackEvent('login_failed', { method: 'email', errorCode: error.code });
+      
+      if (error.code === 'INVALID_EMAIL') {
+        setEmailError('Email is not valid');
+      } else if (error.code === 'INVALID_CREDENTIALS') {
+        setAuthError('Email or password is incorrect');
+      } else if (error.code === 'USER_NOT_FOUND') {
+        setAuthError('No account found with this email');
+      } else {
+        toast({
+          title: 'Login failed',
+          description: error.message || 'Unable to sign in. Try again.',
+          variant: 'destructive',
+        });
+      }
+    },
+  });
+
+  const googleMutation = useMutation({
+    mutationFn: loginWithGoogle,
+    onMutate: () => {
+      trackEvent('oauth_initiated', {});
+      trackEvent('login_attempted', { method: 'google' });
+      setAuthError('');
+    },
+    onSuccess: (data) => {
+      trackEvent('login_succeeded', { method: 'google', userId: data.userId });
+      localStorage.setItem('auth_token', data.token);
+      setLocation('/portfolio');
+    },
+    onError: (error: LoginError) => {
+      trackEvent('login_failed', { method: 'google', errorCode: error.code });
+      toast({
+        title: 'Google sign-in failed',
+        description: error.message || 'Unable to connect. Try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const validateEmail = (value: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(value)) {
+      setEmailError('Enter a valid email address');
+      return false;
+    }
+    setEmailError('');
+    return true;
+  };
+
+  const validatePassword = (value: string): boolean => {
+    if (value.length === 0) {
+      setPasswordError('Password is required');
+      return false;
+    }
+    setPasswordError('');
+    return true;
+  };
+
+  const handleEmailLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const isEmailValid = validateEmail(email);
+    const isPasswordValid = validatePassword(password);
+
+    if (!isEmailValid || !isPasswordValid) {
+      return;
+    }
+
+    emailMutation.mutate({ email, password });
+  };
+
+  const handleGoogleLogin = () => {
+    googleMutation.mutate();
+  };
+
+  const isLoading = emailMutation.isPending || googleMutation.isPending;
 
   return (
-    <Layout title="Sign In">
-      <div className="bg-surface-container-low min-h-screen flex items-center justify-center p-6 selection:bg-primary-fixed selection:text-primary">
-        <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-[120px] pointer-events-none"></div>
-        <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-secondary/5 blur-[120px] pointer-events-none"></div>
+    <div 
+      style={{ 
+        backgroundColor: designTokens.colors.surface,
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '448px',
+          marginLeft: 'auto',
+          marginRight: '0',
+          marginTop: '-64px',
+        }}
+      >
+        <div style={{ marginBottom: '48px' }}>
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 48 48"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect width="48" height="48" rx="12" fill={designTokens.colors.primary} />
+            <path
+              d="M24 12L32 20L24 28M24 28L16 20L24 12"
+              stroke="white"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M16 28L24 36L32 28"
+              stroke="white"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <h1
+            style={{
+              fontFamily: designTokens.typography.fontFamily,
+              fontSize: '2.25rem',
+              fontWeight: 600,
+              color: designTokens.colors.onSurface,
+              marginTop: '24px',
+              marginBottom: '8px',
+              letterSpacing: '-0.02em',
+            }}
+          >
+            Sign in
+          </h1>
+          <p
+            style={{
+              fontFamily: designTokens.typography.fontFamily,
+              fontSize: '1rem',
+              color: designTokens.colors.onSurfaceVariant,
+              lineHeight: 1.6,
+            }}
+          >
+            Access your portfolio and companies
+          </p>
+        </div>
 
-        <main className="w-full max-w-[480px] z-10">
-          <div className="flex flex-col items-center mb-12 space-y-4">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-surface-container-lowest shadow-md text-primary-container">
-              <Bot className="w-9 h-9" />
-            </div>
-            <h1 className="text-[2.25rem] font-semibold tracking-[-0.02em] text-on-surface leading-tight">
-              Lucid
-            </h1>
-            <p className="text-on-surface-variant text-sm font-medium tracking-wide">
-              THE ETHEREAL PROFESSIONAL
-            </p>
-          </div>
-
-          <div className="bg-white/70 backdrop-blur-[16px] shadow-[0_8px_32px_rgba(106,55,212,0.08)] rounded-[24px] p-10 md:p-12 outline outline-1 outline-[rgba(171,173,174,0.1)]">
-            <header className="mb-10 text-center">
-              <h2 className="text-2xl font-semibold text-on-surface mb-2">
-                Welcome Back
-              </h2>
-              <p className="text-on-surface-variant text-[0.875rem] leading-relaxed">
-                Sign in to continue building the future.
-              </p>
-            </header>
-
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="space-y-2">
-                <Label
-                  htmlFor="email"
-                  className="block text-[0.75rem] font-semibold uppercase tracking-widest text-on-surface-variant px-1"
-                >
-                  Email Address
-                </Label>
-                <div className="relative group">
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="name@architecture.ai"
-                    autoComplete="email"
-                    disabled={isPending}
-                    className="w-full h-14 px-5 bg-surface-container-highest border-0 rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-lowest transition-all duration-300 placeholder:text-outline text-on-surface"
-                    {...form.register("email")}
-                  />
-                  <div className="absolute inset-0 rounded-xl outline outline-1 outline-[rgba(171,173,174,0.1)] pointer-events-none"></div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between items-center px-1">
-                  <Label
-                    htmlFor="password"
-                    className="block text-[0.75rem] font-semibold uppercase tracking-widest text-on-surface-variant"
-                  >
-                    Password
-                  </Label>
-                  <Link
-                    href="/forgot-password"
-                    className="text-[0.75rem] font-medium text-primary hover:text-primary-container transition-colors"
-                  >
-                    Forgot?
-                  </Link>
-                </div>
-                <div className="relative group">
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    autoComplete="current-password"
-                    disabled={isPending}
-                    className="w-full h-14 px-5 bg-surface-container-highest border-0 rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-lowest transition-all duration-300 placeholder:text-outline text-on-surface"
-                    {...form.register("password")}
-                  />
-                  <div className="absolute inset-0 rounded-xl outline outline-1 outline-[rgba(171,173,174,0.1)] pointer-events-none"></div>
-                </div>
-              </div>
-
-              {displayError && (
-                <div className="flex items-start gap-3 px-1 py-1">
-                  <AlertCircle className="w-[18px] h-[18px] text-error mt-0.5 flex-shrink-0" />
-                  <p className="text-[0.8125rem] text-error font-medium leading-tight">
-                    {displayError}
-                  </p>
-                </div>
-              )}
-
-              <Button
-                type="submit"
-                disabled={isPending}
-                className="w-full h-14 bg-gradient-to-br from-[#6a37d4] to-[#ae8dff] text-white font-semibold rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 tracking-wide mt-4 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
+        <div
+          style={{
+            background: 'rgba(255, 255, 255, 0.7)',
+            backdropFilter: 'blur(16px)',
+            borderRadius: '12px',
+            padding: '32px',
+            boxShadow: '0 8px 32px rgba(106, 55, 212, 0.08)',
+          }}
+        >
+          {authError && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '12px',
+                padding: '16px',
+                backgroundColor: '#fee',
+                borderRadius: '12px',
+                marginBottom: '24px',
+              }}
+            >
+              <AlertCircle size={20} color="#c00" style={{ flexShrink: 0, marginTop: '2px' }} />
+              <p
+                style={{
+                  fontFamily: designTokens.typography.fontFamily,
+                  fontSize: '0.875rem',
+                  color: '#c00',
+                  lineHeight: 1.6,
+                  margin: 0,
+                }}
               >
-                {isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Signing in...
-                  </>
-                ) : (
-                  "Sign Into Console"
-                )}
-              </Button>
-            </form>
-
-            <footer className="mt-10 text-center">
-              <p className="text-on-surface-variant text-[0.875rem]">
-                New to the architecture?
-                <Link
-                  href="/signup"
-                  className="text-primary font-semibold hover:underline decoration-2 underline-offset-4 ml-1 transition-all"
-                >
-                  Create Account
-                </Link>
+                {authError}
               </p>
-            </footer>
-          </div>
-
-          <div className="mt-8 flex flex-col items-center gap-6">
-            <div className="flex items-center gap-4 w-full">
-              <div className="h-[1px] flex-1 bg-outline-variant/20"></div>
-              <span className="text-[0.75rem] font-medium text-outline uppercase tracking-widest">
-                Or continue with
-              </span>
-              <div className="h-[1px] flex-1 bg-outline-variant/20"></div>
             </div>
+          )}
 
-            <div className="flex gap-4 w-full">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!isClerkReady || isPending}
-                onClick={() => void signInWithGoogle()}
-                className="flex-1 h-12 flex items-center justify-center gap-2 bg-surface-container-lowest rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] outline outline-1 outline-[rgba(171,173,174,0.1)] hover:bg-surface-container-low transition-all"
+          <form onSubmit={handleEmailLogin}>
+            <div style={{ marginBottom: '24px' }}>
+              <Label
+                htmlFor="email"
+                style={{
+                  fontFamily: designTokens.typography.fontFamily,
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  color: designTokens.colors.onSurface,
+                  marginBottom: '8px',
+                  display: 'block',
+                }}
               >
-                <img
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBDhbDpyyrKXpoJLq15x5MpT6UVjgvkrrnQP26rmwOCiImww1bzVgEU_B9UT0RnJvxE4HvXs69t-Xk410QwbDf4NvxuOSqaGUq1uE5vqWbNAzk6Yzzylw397vTyI4J08z5aM9ZoG4UvvXJG5hoKbxEY-g1IFlSbqZS99rwWqU0B8cRhzbvAZMPewembneCQ7PH7UP4v-zw6ay8rGPsQDc-Vx4jythLvcy812vjOm-1_TNzrCZsFUt2MTLuOWC7DyCVLZMbheI6wWJA"
-                  alt="Google"
-                  className="w-5 h-5 opacity-80"
+                Email
+              </Label>
+              <div style={{ position: 'relative' }}>
+                <Mail
+                  size={20}
+                  style={{
+                    position: 'absolute',
+                    left: '16px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: designTokens.colors.onSurfaceVariant,
+                    pointerEvents: 'none',
+                  }}
                 />
-                <span className="text-[0.875rem] font-medium text-on-surface">
-                  Google
-                </span>
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                disabled
-                className="flex-1 h-12 flex items-center justify-center gap-2 bg-surface-container-lowest rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] outline outline-1 outline-[rgba(171,173,174,0.1)] hover:bg-surface-container-low transition-all opacity-50"
-                title="GitHub sign-in coming soon"
-              >
-                <Terminal className="w-5 h-5 text-on-surface" />
-                <span className="text-[0.875rem] font-medium text-on-surface">
-                  GitHub
-                </span>
-              </Button>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (emailError) validateEmail(e.target.value);
+                  }}
+                  onBlur={(e) => validateEmail(e.target.value)}
+                  placeholder="you@company.com"
+                  disabled={isLoading}
+                  style={{
+                    paddingLeft: '48px',
+                    backgroundColor: emailError ? '#fee' : designTokens.colors.surfaceContainerLow,
+                    fontFamily: designTokens.typography.fontFamily,
+                    fontSize: '1rem',
+                    color: designTokens.colors.onSurface,
+                  }}
+                />
+              </div>
+              {emailError && (
+                <p
+                  style={{
+                    fontFamily: designTokens.typography.fontFamily,
+                    fontSize: '0.75rem',
+                    color: '#c00',
+                    marginTop: '8px',
+                    marginBottom: 0,
+                  }}
+                >
+                  {emailError}
+                </p>
+              )}
             </div>
-          </div>
-        </main>
 
-        <div className="fixed bottom-8 text-outline text-[0.6875rem] tracking-[0.2em] font-medium uppercase text-center w-full">
-          Architected by Lucid Systems — V 2.4.0
+            <div style={{ marginBottom: '24px' }}>
+              <Label
+                htmlFor="password"
+                style={{
+                  fontFamily: designTokens.typography.fontFamily,
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  color: designTokens.colors.onSurface,
+                  marginBottom: '8px',
+                  display: 'block',
+                }}
+              >
+                Password
+              </Label>
+              <div style={{ position: 'relative' }}>
+                <Lock
+                  size={20}
+                  style={{
+                    position: 'absolute',
+                    left: '16px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: designTokens.colors.onSurfaceVariant,
+                    pointerEvents: 'none',
+                  }}
+                />
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (passwordError) validatePassword(e.target.value);
+                  }}
+                  onBlur={(e) => validatePassword(e.target.value)}
+                  placeholder="Enter your password"
+                  disabled={isLoading}
+                  style={{
+                    paddingLeft: '48px',
+                    backgroundColor: passwordError ? '#fee' : designTokens.colors.surfaceContainerLow,
+                    fontFamily: designTokens.typography.fontFamily,
+                    fontSize: '1rem',
+                    color: designTokens.colors.onSurface,
+                  }}
+                />
+              </div>
+              {passwordError && (
+                <p
+                  style={{
+                    fontFamily: designTokens.typography.fontFamily,
+                    fontSize: '0.75rem',
+                    color: '#c00',
+                    marginTop: '8px',
+                    marginBottom: 0,
+                  }}
+                >
+                  {passwordError}
+                </p>
+              )}
+            </div>
+
+            <div style={{ marginBottom: '24px' }}>
+              <a
+                href="/forgot-password"
+                style={{
+                  fontFamily: designTokens.typography.fontFamily,
+                  fontSize: '0.875rem',
+                  color: designTokens.colors.primary,
+                  textDecoration: 'none',
+                }}
+              >
+                Forgot password?
+              </a>
+            </div>
+
+            <Button
+              type="submit"
+              disabled={isLoading}
+              style={{
+                width: '100%',
+                backgroundColor: designTokens.colors.primary,
+                color: 'white',
+                fontFamily: designTokens.typography.fontFamily,
+                fontSize: '1rem',
+                fontWeight: 600,
+                borderRadius: '12px',
+                padding: '12px 24px',
+                border: 'none',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                opacity: isLoading ? 0.7 : 1,
+              }}
+            >
+              {emailMutation.isPending ? (
+                <>
+                  <Loader2 size={20} style={{ marginRight: '8px', animation: 'spin 1s linear infinite' }} />
+                  Signing in...
+                </>
+              ) : (
+                'Sign in'
+              )}
+            </Button>
+          </form>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16px',
+              marginTop: '32px',
+              marginBottom: '32px',
+            }}
+          >
+            <div style={{ flex: 1, height: '1px', backgroundColor: designTokens.colors.surfaceContainerLow }} />
+            <span
+              style={{
+                fontFamily: designTokens.typography.fontFamily,
+                fontSize: '0.875rem',
+                color: designTokens.colors.onSurfaceVariant,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              or
+            </span>
+            <div style={{ flex: 1, height: '1px', backgroundColor: designTokens.colors.surfaceContainerLow }} />
+          </div>
+
+          <Button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={isLoading}
+            style={{
+              width: '100%',
+              backgroundColor: designTokens.colors.surfaceContainerLow,
+              color: designTokens.colors.primary,
+              fontFamily: designTokens.typography.fontFamily,
+              fontSize: '1rem',
+              fontWeight: 600,
+              borderRadius: '12px',
+              padding: '12px 24px',
+              border: 'none',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              opacity: isLoading ? 0.7 : 1,
+            }}
+          >
+            {googleMutation.isPending ? (
+              <>
+                <Loader2 size={20} style={{ marginRight: '8px', animation: 'spin 1s linear infinite' }} />
+                Connecting...
+              </>
+            ) : (
+              <>
+                <svg width="20" height="20" viewBox="0 0 20 20" style={{ marginRight: '8px' }}>
+                  <path
+                    d="M19.6 10.23c0-.82-.1-1.42-.25-2.05H10v3.72h5.5c-.15.96-.74 2.31-2.04 3.22v2.45h3.16c1.89-1.73 2.98-4.3 2.98-7.34z"
+                    fill="#4285F4"
+                  />
+                  <path
+                    d="M13.46 15.13c-.83.59-1.96 1-3.46 1-2.64 0-4.88-1.74-5.68-4.15H1.07v2.52C2.72 17.75 6.09 20 10 20c2.7 0 4.96-.89 6.62-2.42l-3.16-2.45z"
+                    fill="#34A853"
+                  />
+                  <path
+                    d="M3.99 10c0-.69.12-1.35.32-1.97V5.51H1.07A9.973 9.973 0 000 10c0 1.61.39 3.14 1.07 4.49l3.24-2.52c-.2-.62-.32-1.28-.32-1.97z"
+                    fill="#FBBC05"
+                  />
+                  <path
+                    d="M10 3.88c1.88 0 3.13.81 3.85 1.48l2.84-2.76C14.96.99 12.7 0 10 0 6.09 0 2.72 2.25 1.07 5.51l3.24 2.52C5.12 5.62 7.36 3.88 10 3.88z"
+                    fill="#EA4335"
+                  />
+                </svg>
+                Continue with Google
+              </>
+            )}
+          </Button>
+
+          <p
+            style={{
+              fontFamily: designTokens.typography.fontFamily,
+              fontSize: '0.875rem',
+              color: designTokens.colors.onSurfaceVariant,
+              textAlign: 'center',
+              marginTop: '32px',
+              marginBottom: 0,
+            }}
+          >
+            Don't have an account?{' '}
+            <a
+              href="/signup"
+              style={{
+                color: designTokens.colors.primary,
+                textDecoration: 'none',
+                fontWeight: 600,
+              }}
+            >
+              Create one
+            </a>
+          </p>
         </div>
       </div>
-    </Layout>
+
+      <style>
+        {`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          
+          @media (max-width: 768px) {
+            body {
+              padding: 16px;
+            }
+          }
+        `}
+      </style>
+    </div>
   );
 }

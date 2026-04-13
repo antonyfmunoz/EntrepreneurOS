@@ -1,269 +1,532 @@
-import { useEffect, useRef } from "react";
-import { useLocation, Link } from "wouter";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { Bot, AlertCircle, Loader2 } from "lucide-react";
+import { useState } from 'react';
+import { useLocation } from 'wouter';
+import { useMutation } from '@tanstack/react-query';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
 
-import { Layout } from "@/components/layout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useAuth } from "@/hooks/use-auth";
-import { usePostHog } from "posthog-js/react";
-
-const signupSchema = z.object({
-  fullName: z
-    .string()
-    .min(2, "Please enter your full name")
-    .max(100, "Name is too long"),
-  email: z.string().email("Please enter a valid email address"),
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters")
-    .max(256, "Password is too long"),
-});
-
-type SignupFormValues = z.infer<typeof signupSchema>;
-
-// Derive a username from the email — Clerk requires a unique username and
-// asking the user for one just adds friction. Local-part of the email is
-// the simplest stable default; downstream code can let users rename later.
-function deriveUsernameFromEmail(email: string): string {
-  const posthog = usePostHog();
-  const local = email.split("@")[0] || "user";
-  const suffix = Math.floor(Math.random() * 10000)
-    .toString()
-    .padStart(4, "0");
-  return `${local.replace(/[^a-zA-Z0-9_-]/g, "")}_${suffix}`;
+declare global {
+  interface Window {
+    plausible?: (event: string, options?: { props: Record<string, string | number> }) => void;
+  }
 }
 
-// Very rough password strength signal — purely advisory for the progress bar.
-function passwordStrength(password: string): {
-  score: 0 | 1 | 2 | 3 | 4;
-  label: string;
-} {
-  let score = 0;
-  if (password.length >= 8) score++;
-  if (password.length >= 12) score++;
-  if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score++;
-  if (/\d/.test(password) && /[^A-Za-z0-9]/.test(password)) score++;
-  const clamped = Math.min(4, score) as 0 | 1 | 2 | 3 | 4;
-  const labels = ["None", "Weak", "Medium", "Strong", "Very strong"];
-  return { score: clamped, label: labels[clamped] };
+interface SignupFormData {
+  username: string;
+  email: string;
+  fullName: string;
+  company: string;
+  password: string;
+  confirmPassword: string;
 }
 
-export default function Signup() {
-  const { user, isLoading, registerMutation } = useAuth();
-  const [, navigate] = useLocation();
+interface SignupResponse {
+  userId: string;
+  token: string;
+}
 
-  // If already signed in, push to company setup (or straight to portfolios
-  // if a company already exists — the company-setup ProtectedRoute will
-  // redirect to /portfolios in that case).
-  useEffect(() => {
-    if (user && !isLoading) {
-      navigate("/company-setup");
-    }
-  }, [user, isLoading, navigate]);
+interface SignupError {
+  field?: string;
+  message: string;
+  code?: string;
+}
 
-  const form = useForm<SignupFormValues>({
-    resolver: zodResolver(signupSchema),
-    defaultValues: { fullName: "", email: "", password: "" },
+async function registerUser(data: SignupFormData): Promise<SignupResponse> {
+  const response = await fetch('/api/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: data.username,
+      email: data.email,
+      fullName: data.fullName,
+      company: data.company || undefined,
+      password: data.password,
+    }),
   });
 
-  const passwordValue = form.watch("password");
-  const strength = passwordStrength(passwordValue ?? "");
-
-  function onSubmit(values: SignupFormValues) {
-    registerMutation.mutate(
-      {
-        username: deriveUsernameFromEmail(values.email),
-        email: values.email,
-        password: values.password,
-        fullName: values.fullName,
-      },
-      {
-        onSuccess: () => {
-          navigate("/company-setup");
-        },
-      },
-    );
+  if (!response.ok) {
+    const error = await response.json();
+    throw error;
   }
 
-  const isPending = registerMutation.isPending;
-  const serverError = registerMutation.error?.message ?? null;
-  const nameError = form.formState.errors.fullName?.message;
-  const emailError = form.formState.errors.email?.message;
-  const passwordError = form.formState.errors.password?.message;
-  const displayError =
-    serverError ?? nameError ?? emailError ?? passwordError ?? null;
+  return response.json();
+}
+
+async function handleGoogleSignIn(): Promise<void> {
+  window.location.href = '/api/auth/google';
+}
+
+export default function SignupPage() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [formData, setFormData] = useState<SignupFormData>({
+    username: '',
+    email: '',
+    fullName: '',
+    company: '',
+    password: '',
+    confirmPassword: '',
+  });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const signupMutation = useMutation({
+    mutationFn: registerUser,
+    onSuccess: (data) => {
+      if (window.plausible) {
+        window.plausible('signup_succeeded', { props: { userId: data.userId } });
+      }
+      localStorage.setItem('auth_token', data.token);
+      setLocation('/company-setup');
+    },
+    onError: (error: SignupError) => {
+      if (window.plausible) {
+        window.plausible('signup_failed', { props: { errorCode: error.code || 'unknown' } });
+      }
+      
+      if (error.field) {
+        setFieldErrors({ [error.field]: error.message });
+      } else {
+        toast({
+          title: 'Registration failed',
+          description: error.message || 'An unexpected error occurred. Try again.',
+          variant: 'destructive',
+        });
+      }
+    },
+  });
+
+  const googleMutation = useMutation({
+    mutationFn: handleGoogleSignIn,
+    onError: () => {
+      toast({
+        title: 'Google sign-in failed',
+        description: 'Unable to connect to Google. Try again or use email registration.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (formData.username.length < 3) {
+      errors.username = 'Username must be at least 3 characters';
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      errors.email = 'Enter a valid email address';
+    }
+
+    if (!formData.fullName.trim()) {
+      errors.fullName = 'Full name is required';
+    }
+
+    if (formData.password.length < 8) {
+      errors.password = 'Password must be at least 8 characters';
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+
+    if (window.plausible) {
+      window.plausible('signup_attempted', { props: { method: 'email' } });
+    }
+
+    signupMutation.mutate(formData);
+  };
+
+  const handleGoogleClick = () => {
+    if (window.plausible) {
+      window.plausible('signup_attempted', { props: { method: 'google' } });
+    }
+    googleMutation.mutate();
+  };
+
+  const handleInputChange = (field: keyof SignupFormData) => (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setFormData((prev) => ({ ...prev, [field]: e.target.value }));
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
 
   return (
-    <Layout title="Signup">
-      <div className="min-h-screen flex flex-col items-center justify-center selection:bg-primary-fixed selection:text-primary overflow-x-hidden bg-background">
-        <main className="flex-grow flex items-center justify-center w-full px-6 py-12">
-          <div className="w-full max-w-[480px] flex flex-col items-center gap-8">
-            <div className="flex flex-col items-center gap-2 group">
-              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#6a37d4] to-[#ae8dff] flex items-center justify-center shadow-[0_8px_32px_rgba(106,55,212,0.08)] transform transition-transform duration-300 group-hover:scale-105">
-                <Bot className="text-white w-8 h-8" />
-              </div>
-              <h2 className="text-2xl font-extrabold tracking-tight text-primary">
-                Lucid
-              </h2>
-            </div>
+    <div
+      style={{
+        minHeight: '100vh',
+        backgroundColor: '#f5f6f7',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
+        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      }}
+    >
+      <Card
+        style={{
+          width: '100%',
+          maxWidth: '400px',
+          padding: '32px',
+          background: 'rgba(255, 255, 255, 0.7)',
+          backdropFilter: 'blur(16px)',
+          borderRadius: '12px',
+          boxShadow: '0 8px 32px rgba(106, 55, 212, 0.08)',
+        }}
+      >
+        <div style={{ marginBottom: '32px', textAlign: 'center' }}>
+          <h1
+            style={{
+              fontSize: '2rem',
+              fontWeight: 600,
+              color: '#2c2f30',
+              marginBottom: '8px',
+              letterSpacing: '-0.02em',
+            }}
+          >
+            Start operating
+          </h1>
+          <p style={{ fontSize: '1rem', color: '#595c5d', lineHeight: 1.6 }}>
+            Create your account to get started
+          </p>
+        </div>
 
-            <div className="bg-white/70 backdrop-blur-[16px] shadow-[0_8px_32px_rgba(106,55,212,0.08)] rounded-xl p-8 w-full">
-              <header className="mb-8 text-center">
-                <h1 className="text-3xl font-semibold tracking-tight text-on-surface mb-2">
-                  Join the Architecture
-                </h1>
-                <p className="text-on-surface-variant leading-relaxed text-sm">
-                  Experience the clarity of vision with our automated insights engine.
-                </p>
-              </header>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div>
+            <Label htmlFor="username" style={{ color: '#2c2f30', fontSize: '0.875rem', fontWeight: 500 }}>
+              Username
+            </Label>
+            <Input
+              id="username"
+              type="text"
+              value={formData.username}
+              onChange={handleInputChange('username')}
+              placeholder="e.g., jsmith"
+              disabled={signupMutation.isPending}
+              style={{
+                marginTop: '6px',
+                backgroundColor: fieldErrors.username ? 'rgba(220, 38, 38, 0.05)' : '#eff1f2',
+                borderRadius: '12px',
+                fontFamily: 'inherit',
+              }}
+            />
+            {fieldErrors.username && (
+              <p style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '4px' }}>
+                {fieldErrors.username}
+              </p>
+            )}
+          </div>
 
-              <form
-                onSubmit={form.handleSubmit(onSubmit)}
-                className="space-y-6"
+          <div>
+            <Label htmlFor="email" style={{ color: '#2c2f30', fontSize: '0.875rem', fontWeight: 500 }}>
+              Email
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              value={formData.email}
+              onChange={handleInputChange('email')}
+              placeholder="you@company.com"
+              disabled={signupMutation.isPending}
+              style={{
+                marginTop: '6px',
+                backgroundColor: fieldErrors.email ? 'rgba(220, 38, 38, 0.05)' : '#eff1f2',
+                borderRadius: '12px',
+                fontFamily: 'inherit',
+              }}
+            />
+            {fieldErrors.email && (
+              <p style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '4px' }}>
+                {fieldErrors.email}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Label htmlFor="fullName" style={{ color: '#2c2f30', fontSize: '0.875rem', fontWeight: 500 }}>
+              Full name
+            </Label>
+            <Input
+              id="fullName"
+              type="text"
+              value={formData.fullName}
+              onChange={handleInputChange('fullName')}
+              placeholder="Jane Smith"
+              disabled={signupMutation.isPending}
+              style={{
+                marginTop: '6px',
+                backgroundColor: fieldErrors.fullName ? 'rgba(220, 38, 38, 0.05)' : '#eff1f2',
+                borderRadius: '12px',
+                fontFamily: 'inherit',
+              }}
+            />
+            {fieldErrors.fullName && (
+              <p style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '4px' }}>
+                {fieldErrors.fullName}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Label htmlFor="company" style={{ color: '#2c2f30', fontSize: '0.875rem', fontWeight: 500 }}>
+              Company (optional)
+            </Label>
+            <Input
+              id="company"
+              type="text"
+              value={formData.company}
+              onChange={handleInputChange('company')}
+              placeholder="e.g., Acme Labs"
+              disabled={signupMutation.isPending}
+              style={{
+                marginTop: '6px',
+                backgroundColor: '#eff1f2',
+                borderRadius: '12px',
+                fontFamily: 'inherit',
+              }}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="password" style={{ color: '#2c2f30', fontSize: '0.875rem', fontWeight: 500 }}>
+              Password
+            </Label>
+            <div style={{ position: 'relative', marginTop: '6px' }}>
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                value={formData.password}
+                onChange={handleInputChange('password')}
+                placeholder="At least 8 characters"
+                disabled={signupMutation.isPending}
+                style={{
+                  backgroundColor: fieldErrors.password ? 'rgba(220, 38, 38, 0.05)' : '#eff1f2',
+                  borderRadius: '12px',
+                  paddingRight: '40px',
+                  fontFamily: 'inherit',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#595c5d',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
-                {displayError && (
-                  <Alert className="flex items-center gap-3 p-4 bg-error-container/30 rounded-lg text-on-error-container text-sm border-none">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{displayError}</AlertDescription>
-                  </Alert>
-                )}
-
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label className="block text-[0.75rem] font-semibold tracking-wider text-on-surface-variant uppercase ml-1">
-                      Full Name
-                    </Label>
-                    <Input
-                      type="text"
-                      autoComplete="name"
-                      disabled={isPending}
-                      placeholder="John Architect"
-                      className="w-full px-4 py-3.5 bg-surface-container-highest border-none rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all outline-none text-on-surface placeholder:text-outline-variant"
-                      {...form.register("fullName")}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="block text-[0.75rem] font-semibold tracking-wider text-on-surface-variant uppercase ml-1">
-                      Mail Address
-                    </Label>
-                    <Input
-                      type="email"
-                      autoComplete="email"
-                      disabled={isPending}
-                      placeholder="hello@lucid.design"
-                      className="w-full px-4 py-3.5 bg-surface-container-highest border-none rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all outline-none text-on-surface placeholder:text-outline-variant"
-                      {...form.register("email")}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="block text-[0.75rem] font-semibold tracking-wider text-on-surface-variant uppercase ml-1">
-                      Password
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        type="password"
-                        autoComplete="new-password"
-                        disabled={isPending}
-                        placeholder="••••••••"
-                        className="w-full px-4 py-3.5 bg-surface-container-highest border-none rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all outline-none text-on-surface placeholder:text-outline-variant"
-                        {...form.register("password")}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 pt-1 px-1">
-                    <div className="flex gap-1.5 h-1">
-                      {[1, 2, 3, 4].map((i) => (
-                        <div
-                          key={i}
-                          className={
-                            "flex-1 rounded-full " +
-                            (i <= strength.score
-                              ? "bg-gradient-to-br from-[#6a37d4] to-[#ae8dff]"
-                              : "bg-surface-container-high")
-                          }
-                        />
-                      ))}
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-[0.75rem] text-on-surface-variant">
-                        Security: {strength.label}
-                      </span>
-                      <span className="text-[0.75rem] text-on-surface-variant">
-                        8+ characters
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={isPending}
-                  className="w-full py-4 px-6 bg-gradient-to-br from-[#6a37d4] to-[#ae8dff] text-white font-semibold rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
-                >
-                  {isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin inline" />
-                      Creating Account...
-                    </>
-                  ) : (
-                    "Create Account"
-                  )}
-                </Button>
-
-                <div className="pt-4 text-center">
-                  <p className="text-on-surface-variant text-sm">
-                    Already have an account?
-                    <Link
-                      href="/login"
-                      className="text-primary font-semibold hover:text-primary-container transition-colors ml-1"
-                    >
-                      Sign In
-                    </Link>
-                  </p>
-                </div>
-              </form>
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
+            {fieldErrors.password && (
+              <p style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '4px' }}>
+                {fieldErrors.password}
+              </p>
+            )}
           </div>
-        </main>
 
-        <footer className="flex flex-col md:flex-row justify-center items-center gap-6 w-full py-8 mt-auto bg-transparent font-inter leading-relaxed text-sm">
-          <div className="text-slate-400 dark:text-slate-500">
-            © 2024 Lucid Architecture. All rights reserved.
+          <div>
+            <Label htmlFor="confirmPassword" style={{ color: '#2c2f30', fontSize: '0.875rem', fontWeight: 500 }}>
+              Confirm password
+            </Label>
+            <div style={{ position: 'relative', marginTop: '6px' }}>
+              <Input
+                id="confirmPassword"
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={formData.confirmPassword}
+                onChange={handleInputChange('confirmPassword')}
+                placeholder="Re-enter password"
+                disabled={signupMutation.isPending}
+                style={{
+                  backgroundColor: fieldErrors.confirmPassword ? 'rgba(220, 38, 38, 0.05)' : '#eff1f2',
+                  borderRadius: '12px',
+                  paddingRight: '40px',
+                  fontFamily: 'inherit',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                aria-label={showConfirmPassword ? 'Hide password confirmation' : 'Show password confirmation'}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#595c5d',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+            {fieldErrors.confirmPassword && (
+              <p style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '4px' }}>
+                {fieldErrors.confirmPassword}
+              </p>
+            )}
           </div>
-          <div className="flex gap-6">
-            <a
-              className="text-slate-400 dark:text-slate-500 hover:text-violet-600 dark:hover:text-violet-300 transition-all opacity-80 hover:opacity-100"
-              href="#"
-            >
-              Terms
-            </a>
-            <a
-              className="text-slate-400 dark:text-slate-500 hover:text-violet-600 dark:hover:text-violet-300 transition-all opacity-80 hover:opacity-100"
-              href="#"
-            >
-              Privacy
-            </a>
-            <a
-              className="text-slate-400 dark:text-slate-500 hover:text-violet-600 dark:hover:text-violet-300 transition-all opacity-80 hover:opacity-100"
-              href="#"
-            >
-              Support
-            </a>
-          </div>
-        </footer>
 
-        <div className="fixed -z-10 top-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-primary-container/5 blur-[120px]"></div>
-        <div className="fixed -z-10 bottom-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-secondary-container/5 blur-[120px]"></div>
-      </div>
-    </Layout>
+          <Button
+            type="submit"
+            disabled={signupMutation.isPending}
+            style={{
+              width: '100%',
+              backgroundColor: '#6a37d4',
+              color: '#ffffff',
+              borderRadius: '12px',
+              padding: '12px',
+              fontSize: '1rem',
+              fontWeight: 500,
+              marginTop: '8px',
+            }}
+          >
+            {signupMutation.isPending ? (
+              <>
+                <Loader2 className="animate-spin" size={18} style={{ marginRight: '8px' }} />
+                Creating account...
+              </>
+            ) : (
+              'Create account'
+            )}
+          </Button>
+
+          <div style={{ position: 'relative', margin: '8px 0' }}>
+            <div
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: 0,
+                right: 0,
+                height: '1px',
+                background: 'linear-gradient(to right, transparent, #abadae, transparent)',
+                opacity: 0.2,
+              }}
+            />
+            <span
+              style={{
+                position: 'relative',
+                display: 'inline-block',
+                padding: '0 12px',
+                backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                color: '#595c5d',
+                fontSize: '0.875rem',
+                left: '50%',
+                transform: 'translateX(-50%)',
+              }}
+            >
+              or
+            </span>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleGoogleClick}
+            disabled={googleMutation.isPending}
+            style={{
+              width: '100%',
+              borderRadius: '12px',
+              padding: '12px',
+              fontSize: '1rem',
+              backgroundColor: '#ffffff',
+              color: '#2c2f30',
+            }}
+          >
+            {googleMutation.isPending ? (
+              <>
+                <Loader2 className="animate-spin" size={18} style={{ marginRight: '8px' }} />
+                Connecting...
+              </>
+            ) : (
+              <>
+                <svg width="18" height="18" viewBox="0 0 18 18" style={{ marginRight: '8px' }}>
+                  <path
+                    fill="#4285F4"
+                    d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M9 3.582c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.29C4.672 5.163 6.656 3.582 9 3.582z"
+                  />
+                </svg>
+                Continue with Google
+              </>
+            )}
+          </Button>
+        </form>
+
+        <p
+          style={{
+            marginTop: '24px',
+            textAlign: 'center',
+            fontSize: '0.875rem',
+            color: '#595c5d',
+          }}
+        >
+          Already have an account?{' '}
+          <a
+            href="/login"
+            style={{
+              color: '#6a37d4',
+              textDecoration: 'none',
+              fontWeight: 500,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.textDecoration = 'underline';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.textDecoration = 'none';
+            }}
+          >
+            Log in
+          </a>
+        </p>
+      </Card>
+    </div>
   );
 }

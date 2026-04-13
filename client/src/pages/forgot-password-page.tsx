@@ -1,109 +1,216 @@
-import { Layout } from "@/components/layout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card";
-import { Bot as SmartToy, ArrowRight as ArrowForward, ArrowLeft as KeyboardBackspace, CheckCircle } from "lucide-react";
-import { Link } from "wouter";
+import React, { useState } from 'react';
+import { useLocation } from 'wouter';
+import { ArrowLeft, Check } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 
-export default function ForgotPassword() {
-  return (
-    <Layout title="ForgotPassword">
-      <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-surface-container-lowest">
-        {/* Background Architectural Elements (Visual Planes) */}
-        <div className="absolute inset-0 z-0">
-          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-[120px]"></div>
-          <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-secondary/5 blur-[120px]"></div>
-          <div className="absolute top-[20%] right-[15%] w-px h-[60%] bg-outline-variant/10 hidden md:block"></div>
-          <div className="absolute left-[10%] bottom-[20%] w-[80%] h-px bg-outline-variant/10 hidden md:block"></div>
-        </div>
-
-        {/* Main Content Canvas */}
-        <main className="relative z-10 w-full max-w-md px-6">
-          {/* The Lucid Card */}
-          <Card className="glass-panel p-8 rounded-xl ambient-shadow flex flex-col items-center bg-white/70 backdrop-blur-xl border-0">
-            {/* Branding / Iconography */}
-            <div className="mb-8 w-16 h-16 flex items-center justify-center rounded-xl bg-surface-container-low text-primary">
-              <SmartToy className="w-9 h-9" />
-            </div>
-
-            {/* Typography Cluster */}
-            <header className="text-center mb-8">
-              <h1 className="text-[2rem] font-semibold text-on-surface tracking-tight leading-tight mb-3">
-                Recover Your Access
-              </h1>
-              <p className="text-on-surface-variant leading-relaxed text-sm">
-                Enter your architectural credentials to receive a reset link.
-              </p>
-            </header>
-
-            {/* Form Interface */}
-            <form className="w-full space-y-6">
-              <div className="space-y-2">
-                <Label 
-                  htmlFor="email" 
-                  className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant ml-1"
-                >
-                  Email Address
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="name@architecture.com"
-                  required
-                  className="w-full h-14 px-4 rounded-xl bg-surface-container-highest border-none focus:ring-2 focus:ring-primary/20 text-on-surface placeholder:text-outline transition-all duration-300"
-                />
-              </div>
-
-              {/* Success Placeholder (Tonal Layering, No Lines) */}
-              <div className="hidden bg-surface-container-low p-4 rounded-xl flex items-start gap-3">
-                <CheckCircle className="text-primary text-xl flex-shrink-0" />
-                <p className="text-xs text-on-surface-variant leading-normal">
-                  If an account exists for this email, you will receive a recovery link shortly. Please check your inbox and spam folder.
-                </p>
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full h-14 bg-gradient-to-br from-[#6a37d4] to-[#ae8dff] text-white font-semibold rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2"
-              >
-                Send Reset Link
-                <ArrowForward className="w-5 h-5" />
-              </Button>
-            </form>
-
-            {/* Secondary Navigation */}
-            <footer className="mt-8">
-              <Link 
-                href="/login" 
-                className="flex items-center gap-2 text-sm font-medium text-secondary hover:text-primary transition-colors duration-200"
-              >
-                <KeyboardBackspace className="w-5 h-5" />
-                Back to Login
-              </Link>
-            </footer>
-          </Card>
-
-          {/* Decorative Surface Plane */}
-          <div className="mt-12 text-center">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-surface-container-low rounded-full">
-              <span className="w-2 h-2 rounded-full bg-primary/40"></span>
-              <span className="text-[10px] font-bold text-outline-variant uppercase tracking-[0.2em]">
-                Lucid Architecture v4.0
-              </span>
-            </div>
-          </div>
-        </main>
-
-        {/* Visual Anchor Background Image (Editorial Style) */}
-        <div className="fixed bottom-0 right-0 p-12 opacity-20 pointer-events-none select-none hidden lg:block">
-          <img
-            alt="Minimalist architectural detail of white geometric concrete structures with clean shadows and ethereal lighting"
-            className="w-96 h-96 object-cover rounded-[32px] grayscale contrast-125"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuA1wD-6eEbEr01AzPN3U1dhvS6HaatxPJScKRDJPnLyAFGpC2uNzjCsCKirLDHKuydC_QZ7a4zvxSIpsvZPLj6A1PC_wgmHp2YYAQZCWN3OYnpX__FcpAndzl4RRV4sG9hxdVwkBoKkVQttxAJ4kibxXI_pCXvTXfJy3JL3zB6Y3_cKyhXu0rHkSogns4LUprUSnqFVA_sGRiYclyQjB2XUDVND1_KfFOYKaQAM8-7yiMve8XLgQluf3cXJJYnoAeIQUx4RTTm4ZCE"
-          />
-        </div>
+const BrandLogo: React.FC = () => (
+  <div className="flex items-center justify-center mb-12">
+    <div className="flex items-center gap-3">
+      <div
+        className="w-10 h-10 rounded-xl flex items-center justify-center"
+        style={{ backgroundColor: '#6a37d4' }}
+      >
+        <span className="text-white text-xl font-semibold">E</span>
       </div>
-    </Layout>
+      <span className="text-2xl font-semibold" style={{ color: '#2c2f30' }}>
+        EntrepreneurOS
+      </span>
+    </div>
+  </div>
+);
+
+const BackToLoginLink: React.FC = () => {
+  const [, setLocation] = useLocation();
+
+  return (
+    <button
+      onClick={() => setLocation('/login')}
+      className="inline-flex items-center gap-2 text-sm transition-colors hover:opacity-70"
+      style={{ color: '#6a37d4' }}
+    >
+      <ArrowLeft className="w-4 h-4" />
+      Back to login
+    </button>
+  );
+};
+
+const SuccessMessage: React.FC<{ email: string }> = ({ email }) => (
+  <div className="flex flex-col items-center text-center">
+    <div
+      className="w-16 h-16 rounded-full flex items-center justify-center mb-6"
+      style={{ backgroundColor: 'rgba(106, 55, 212, 0.1)' }}
+    >
+      <div
+        className="w-12 h-12 rounded-full flex items-center justify-center"
+        style={{ backgroundColor: '#6a37d4' }}
+      >
+        <Check className="w-6 h-6 text-white" />
+      </div>
+    </div>
+
+    <h2 className="text-2xl font-semibold mb-3" style={{ color: '#2c2f30' }}>
+      Check your email
+    </h2>
+
+    <p className="text-base mb-6" style={{ color: '#595c5d', lineHeight: '1.6' }}>
+      We sent a password reset code to <span className="font-medium" style={{ color: '#2c2f30' }}>{email}</span>
+    </p>
+
+    <p className="text-sm mb-8" style={{ color: '#595c5d', lineHeight: '1.6' }}>
+      Check your inbox for the reset code. If you don't see it, check your spam folder.
+    </p>
+
+    <BackToLoginLink />
+  </div>
+);
+
+const ForgotPasswordForm: React.FC<{ onSuccess: (email: string) => void }> = ({ onSuccess }) => {
+  const [email, setEmail] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const { toast } = useToast();
+  const { resetPassword } = useAuth();
+
+  const validateEmail = (value: string): boolean => {
+    if (!value) {
+      setEmailError('Email required');
+      return false;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(value)) {
+      setEmailError('Enter a valid email address');
+      return false;
+    }
+
+    setEmailError('');
+    return true;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validateEmail(email)) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await resetPassword(email);
+      onSuccess(email);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to send reset email. Try again.';
+      toast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="w-full">
+      <div className="mb-6">
+        <Label
+          htmlFor="email"
+          className="block text-sm font-medium mb-2"
+          style={{ color: '#2c2f30' }}
+        >
+          Email
+        </Label>
+        <Input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            if (emailError) setEmailError('');
+          }}
+          onBlur={() => email && validateEmail(email)}
+          disabled={isSubmitting}
+          className="w-full transition-colors"
+          style={{
+            backgroundColor: emailError ? 'rgba(220, 38, 38, 0.05)' : '#f5f6f7',
+            color: '#2c2f30',
+          }}
+          aria-label="Email address"
+          aria-invalid={!!emailError}
+          aria-describedby={emailError ? 'email-error' : undefined}
+        />
+        {emailError && (
+          <p
+            id="email-error"
+            className="text-sm mt-2"
+            style={{ color: '#dc2626' }}
+            role="alert"
+          >
+            {emailError}
+          </p>
+        )}
+      </div>
+
+      <Button
+        type="submit"
+        disabled={isSubmitting}
+        className="w-full text-base font-medium transition-colors"
+        style={{
+          backgroundColor: '#6a37d4',
+          color: '#ffffff',
+          opacity: isSubmitting ? 0.7 : 1,
+        }}
+      >
+        {isSubmitting ? 'Sending...' : 'Send reset code'}
+      </Button>
+
+      <div className="mt-6 text-center">
+        <BackToLoginLink />
+      </div>
+    </form>
+  );
+};
+
+export default function ForgotPasswordPage() {
+  const [resetEmail, setResetEmail] = useState<string | null>(null);
+
+  return (
+    <div
+      className="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8"
+      style={{ backgroundColor: '#ffffff' }}
+    >
+      <div
+        className="w-full max-w-md rounded-xl p-8 sm:p-12"
+        style={{
+          backgroundColor: 'rgba(255, 255, 255, 0.7)',
+          backdropFilter: 'blur(16px)',
+          boxShadow: '0 8px 32px rgba(106, 55, 212, 0.08)',
+        }}
+      >
+        <BrandLogo />
+
+        {resetEmail ? (
+          <SuccessMessage email={resetEmail} />
+        ) : (
+          <>
+            <div className="text-center mb-8">
+              <h1 className="text-2xl font-semibold mb-3" style={{ color: '#2c2f30' }}>
+                Reset your password
+              </h1>
+              <p className="text-base" style={{ color: '#595c5d', lineHeight: '1.6' }}>
+                Enter your email and we'll send you a code to reset your password.
+              </p>
+            </div>
+
+            <ForgotPasswordForm onSuccess={setResetEmail} />
+          </>
+        )}
+      </div>
+    </div>
   );
 }

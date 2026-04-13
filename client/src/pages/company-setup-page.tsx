@@ -1,342 +1,679 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useLocation } from "wouter";
-import { useEffect, useRef, useState } from "react";
-import { Loader2, Briefcase, Plus } from "lucide-react";
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
+import { ChevronRight, Plus, AlertCircle, Building2, TrendingUp, Target, Briefcase, DollarSign } from 'lucide-react';
+import { UniversalLayout } from '@/components/universal-layout';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Card } from '@/components/ui/card';
+import designTokens from '@/lib/design-tokens';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { usePostHog } from "posthog-js/react";
+const STEPS = [
+  { name: 'Portfolio', description: 'Select or create portfolio' },
+  { name: 'Company', description: 'Name your company' },
+  { name: 'Stage', description: 'Current stage' },
+  { name: 'Industry', description: 'Industry and model' },
+  { name: 'Goals', description: 'Strategic goals' },
+] as const;
+
+const STAGES = [
+  { value: 'idea', label: 'Idea', description: 'Validating concept' },
+  { value: 'pre-revenue', label: 'Pre-revenue', description: 'Building, not selling yet' },
+  { value: 'revenue', label: 'Revenue', description: 'Early customers' },
+  { value: 'scaling', label: 'Scaling', description: 'Product-market fit, growing' },
+  { value: 'mature', label: 'Mature', description: 'Established business' },
+] as const;
+
+const BUSINESS_MODELS = [
+  { value: 'saas', label: 'SaaS', icon: Building2 },
+  { value: 'services', label: 'Services', icon: Briefcase },
+  { value: 'product', label: 'Product', icon: DollarSign },
+  { value: 'hybrid', label: 'Hybrid', icon: TrendingUp },
+  { value: 'other', label: 'Other', icon: Target },
+] as const;
 
 interface Portfolio {
-  id: number;
-  ownerId: string;
+  id: string;
   name: string;
-  description: string | null;
-  createdAt: string;
-  updatedAt: string;
+  description?: string;
 }
 
-const companySetupSchema = z.object({
-  name: z.string().min(1, "Company name is required"),
-  type: z.string().optional(),
-  stage: z.string().optional(),
-  offer: z.string().optional(),
-  targetCustomer: z.string().optional(),
-  goals: z.string().optional(),
-  assistantName: z.string().optional(),
-});
+interface CompanyFormData {
+  portfolioId: string;
+  name: string;
+  stage: string;
+  industry: string;
+  businessModel: string;
+  goals: string;
+}
 
-type CompanySetupValues = z.infer<typeof companySetupSchema>;
+interface StepIndicatorProps {
+  currentStep: number;
+  totalSteps: number;
+}
 
-// Sentinel values for the portfolio select — mapped onto actual behavior
-// before the mutation runs. Kept as string literals so the shadcn Select
-// primitive (which only accepts string values) stays happy.
-const PORTFOLIO_SKIP = "__skip__";
-const PORTFOLIO_CREATE_NEW = "__new__";
-
-export default function CompanySetupPage() {
-  const posthog = usePostHog();
-  const { toast } = useToast();
-  const [, setLocation] = useLocation();
-
-  const form = useForm<CompanySetupValues>({
-    resolver: zodResolver(companySetupSchema),
-    defaultValues: {
-      name: "",
-      type: "",
-      stage: "",
-      offer: "",
-      targetCustomer: "",
-      goals: "",
-      assistantName: "",
-    },
-  });
-
-  // ── Portfolio step state ───────────────────────────────────────────────
-  // Optional — users can skip and attach to a portfolio later.
-  const [selectedPortfolio, setSelectedPortfolio] = useState<string>(PORTFOLIO_SKIP);
-  const [newPortfolioName, setNewPortfolioName] = useState("");
-
-  const { data: portfolios = [], isLoading: portfoliosLoading } = useQuery<Portfolio[]>({
-    queryKey: ["/api/portfolios"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/portfolios");
-      return (await res.json()) as Portfolio[];
-    },
-  });
-
-  const createCompanyMutation = useMutation({
-    mutationFn: async (values: CompanySetupValues) => {
-      // Step 1: optionally create the portfolio first so we have an id to
-      // attach the company to on the very next call. Any failure here is
-      // surfaced to the user — we do NOT silently drop the portfolio link.
-      let portfolioId: number | null = null;
-      if (selectedPortfolio === PORTFOLIO_CREATE_NEW) {
-        const trimmed = newPortfolioName.trim();
-        if (!trimmed) {
-          throw new Error("Portfolio name is required when creating a new portfolio");
-        }
-        const created = await apiRequest("POST", "/api/portfolios", { name: trimmed });
-        const json = (await created.json()) as Portfolio;
-        portfolioId = json.id;
-      } else if (selectedPortfolio !== PORTFOLIO_SKIP) {
-        portfolioId = Number(selectedPortfolio);
-      }
-
-      // Step 2: create the company (preserves the original request shape).
-      const res = await apiRequest("POST", "/api/company", values);
-      const company = await res.json();
-
-      // Step 3: if we have a portfolio, attach the new company to it. Best-
-      // effort — if this fails, the company is still created and the toast
-      // tells the user to attach it later from the Portfolio page.
-      if (portfolioId !== null && company?.id) {
-        try {
-          await apiRequest("POST", `/api/portfolios/${portfolioId}/companies`, {
-            companyId: company.id,
-          });
-        } catch (attachErr) {
-          toast({
-            title: "Company created, but not attached to portfolio",
-            description:
-              attachErr instanceof Error
-                ? attachErr.message
-                : "Try attaching it later from the Portfolio page.",
-            variant: "destructive",
-          });
-        }
-      }
-
-      return company;
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/company"] });
-      await queryClient.invalidateQueries({ queryKey: ["/api/portfolios"] });
-      setLocation("/home");
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Couldn't create company",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const onSubmit = (values: CompanySetupValues) => {
-    createCompanyMutation.mutate(values);
-  };
-
+function StepIndicator({ currentStep, totalSteps }: StepIndicatorProps) {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(1200px_circle_at_50%_-20%,hsl(var(--primary))_0%,transparent_55%)] opacity-20" />
-      <div className="relative mx-auto flex min-h-screen max-w-2xl items-center justify-center px-4 py-12">
-        <Card className="w-full border-border/60 bg-card/70 backdrop-blur supports-[backdrop-filter]:bg-card/60">
-          <CardHeader className="space-y-2 text-center">
-            <CardTitle className="text-2xl">Create Your Company</CardTitle>
-            <CardDescription className="text-muted-foreground">
-              Set up the basics so your workspace can personalize everything else.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Acme Inc." autoComplete="organization" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+    <div className="flex items-center justify-center gap-2">
+      {Array.from({ length: totalSteps }).map((_, index) => (
+        <div
+          key={index}
+          className="h-2 w-8 rounded-full transition-all"
+          style={{
+            backgroundColor: index <= currentStep ? designTokens.colors.primary : designTokens.colors.outlineVariant,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="type"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Type</FormLabel>
-                        <FormControl>
-                          <Input placeholder="SaaS, Agency, Marketplace…" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="stage"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Stage</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Idea, MVP, Growth…" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+interface PortfolioSelectorProps {
+  portfolios: Portfolio[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}
 
-                <FormField
-                  control={form.control}
-                  name="offer"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Offer</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="What do you sell, in one clear sentence?"
-                          className="min-h-[90px] resize-y"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+function PortfolioSelector({ portfolios, selectedId, onSelect }: PortfolioSelectorProps) {
+  return (
+    <RadioGroup value={selectedId} onValueChange={onSelect} className="space-y-3">
+      {portfolios.map((portfolio) => (
+        <label
+          key={portfolio.id}
+          className="flex items-start gap-3 rounded-xl p-4 cursor-pointer transition-all"
+          style={{
+            background: selectedId === portfolio.id ? 'rgba(255, 255, 255, 0.7)' : designTokens.colors.surface,
+            backdropFilter: selectedId === portfolio.id ? 'blur(16px)' : 'none',
+            boxShadow: selectedId === portfolio.id ? designTokens.shadows.ambient : 'none',
+          }}
+        >
+          <RadioGroupItem value={portfolio.id} className="mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold" style={{ color: designTokens.colors.onSurface }}>
+              {portfolio.name}
+            </div>
+            {portfolio.description && (
+              <div className="text-sm mt-1" style={{ color: designTokens.colors.onSurfaceVariant }}>
+                {portfolio.description}
+              </div>
+            )}
+          </div>
+        </label>
+      ))}
+    </RadioGroup>
+  );
+}
 
-                <FormField
-                  control={form.control}
-                  name="targetCustomer"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Target customer</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Who is this for? (roles, segments, industries)"
-                          className="min-h-[90px] resize-y"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+interface CreatePortfolioInlineProps {
+  name: string;
+  description: string;
+  onNameChange: (value: string) => void;
+  onDescriptionChange: (value: string) => void;
+  error?: string;
+}
 
-                <FormField
-                  control={form.control}
-                  name="goals"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Goals</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="What would success look like over the next 30–90 days?"
-                          className="min-h-[90px] resize-y"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="assistantName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Name your AI assistant</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g., DEX, ARIA, MAX" {...field} />
-                      </FormControl>
-                      <p className="text-xs text-muted-foreground">
-                        Your assistant handles tasks, recommendations, and workflows. Defaults to "Assistant" if left blank.
-                      </p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* ── Step: Add to portfolio (optional) ─────────────────── */}
-                <div className="space-y-3 rounded-xl border border-border/60 bg-background/60 p-4">
-                  <div className="flex items-center gap-2">
-                    <Briefcase className="h-4 w-4 text-muted-foreground" />
-                    <FormLabel className="m-0">Add to portfolio</FormLabel>
-                    <span className="text-xs text-muted-foreground">(optional)</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    A portfolio groups related companies. Pick one, create a new portfolio, or
-                    skip and attach this company later from the Portfolio page.
-                  </p>
-
-                  <Select
-                    value={selectedPortfolio}
-                    onValueChange={setSelectedPortfolio}
-                    disabled={portfoliosLoading}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Skip — attach later" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={PORTFOLIO_SKIP}>Skip — attach later</SelectItem>
-                      {portfolios.map((p) => (
-                        <SelectItem key={p.id} value={String(p.id)}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                      <SelectItem value={PORTFOLIO_CREATE_NEW}>
-                        <span className="inline-flex items-center gap-2">
-                          <Plus className="h-3.5 w-3.5" />
-                          Create new portfolio…
-                        </span>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  {selectedPortfolio === PORTFOLIO_CREATE_NEW && (
-                    <Input
-                      placeholder="e.g., Main Operating Group"
-                      autoComplete="off"
-                      value={newPortfolioName}
-                      onChange={(e) => setNewPortfolioName(e.target.value)}
-                    />
-                  )}
-                </div>
-
-                <div className="pt-2">
-                  <Button type="submit" className="w-full" disabled={createCompanyMutation.isPending}>
-                    {createCompanyMutation.isPending && (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    )}
-                    Create Company
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
+function CreatePortfolioInline({ name, description, onNameChange, onDescriptionChange, error }: CreatePortfolioInlineProps) {
+  return (
+    <div
+      className="rounded-xl p-6 space-y-4"
+      style={{
+        background: 'rgba(255, 255, 255, 0.7)',
+        backdropFilter: 'blur(16px)',
+        boxShadow: designTokens.shadows.ambient,
+      }}
+    >
+      <div className="flex items-center gap-2" style={{ color: designTokens.colors.onSurface }}>
+        <Plus size={20} />
+        <h3 className="font-semibold text-lg">Create new portfolio</h3>
+      </div>
+      <div className="space-y-3">
+        <div>
+          <Label htmlFor="portfolio-name">Portfolio name</Label>
+          <Input
+            id="portfolio-name"
+            value={name}
+            onChange={(e) => onNameChange(e.target.value)}
+            placeholder="e.g., My Ventures"
+            className="mt-1.5"
+          />
+        </div>
+        <div>
+          <Label htmlFor="portfolio-description">Description (optional)</Label>
+          <Textarea
+            id="portfolio-description"
+            value={description}
+            onChange={(e) => onDescriptionChange(e.target.value)}
+            placeholder="e.g., My active portfolio companies"
+            className="mt-1.5 resize-none"
+            rows={2}
+          />
+        </div>
+        {error && (
+          <div className="flex items-start gap-2 text-sm p-3 rounded-lg" style={{ color: '#dc2626', background: `${'#dc2626'}1A` }}>
+            <AlertCircle size={16} className="mt-0.5 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
+interface CompanyNameInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+}
+
+function CompanyNameInput({ value, onChange, error }: CompanyNameInputProps) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="company-name">Company name</Label>
+      <Input
+        id="company-name"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="e.g., Acme Labs"
+        className="text-lg"
+      />
+      {error && (
+        <div className="flex items-start gap-2 text-sm" style={{ color: '#dc2626' }}>
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface StageSelectorProps {
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+}
+
+function StageSelector({ value, onChange, error }: StageSelectorProps) {
+  return (
+    <div className="space-y-3">
+      <Label>What stage?</Label>
+      <RadioGroup value={value} onValueChange={onChange} className="space-y-3">
+        {STAGES.map((stage) => (
+          <label
+            key={stage.value}
+            className="flex items-start gap-3 rounded-xl p-4 cursor-pointer transition-all"
+            style={{
+              background: value === stage.value ? 'rgba(255, 255, 255, 0.7)' : designTokens.colors.surface,
+              backdropFilter: value === stage.value ? 'blur(16px)' : 'none',
+              boxShadow: value === stage.value ? designTokens.shadows.ambient : 'none',
+            }}
+          >
+            <RadioGroupItem value={stage.value} className="mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold" style={{ color: designTokens.colors.onSurface }}>
+                {stage.label}
+              </div>
+              <div className="text-sm mt-1" style={{ color: designTokens.colors.onSurfaceVariant }}>
+                {stage.description}
+              </div>
+            </div>
+          </label>
+        ))}
+      </RadioGroup>
+      {error && (
+        <div className="flex items-start gap-2 text-sm" style={{ color: '#dc2626' }}>
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface IndustryInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+}
+
+function IndustryInput({ value, onChange, error }: IndustryInputProps) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="industry">What industry?</Label>
+      <Input
+        id="industry"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="e.g., B2B SaaS, Consumer Hardware, Healthcare"
+      />
+      {error && (
+        <div className="flex items-start gap-2 text-sm" style={{ color: '#dc2626' }}>
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface BusinessModelInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+}
+
+function BusinessModelInput({ value, onChange, error }: BusinessModelInputProps) {
+  return (
+    <div className="space-y-3">
+      <Label>How do you make money?</Label>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {BUSINESS_MODELS.map((model) => {
+          const Icon = model.icon;
+          const isSelected = value === model.value;
+          return (
+            <button
+              key={model.value}
+              type="button"
+              onClick={() => onChange(model.value)}
+              className="flex flex-col items-center gap-2 rounded-xl p-4 transition-all"
+              style={{
+                background: isSelected ? 'rgba(255, 255, 255, 0.7)' : designTokens.colors.surface,
+                backdropFilter: isSelected ? 'blur(16px)' : 'none',
+                boxShadow: isSelected ? designTokens.shadows.ambient : 'none',
+                color: isSelected ? designTokens.colors.primary : designTokens.colors.onSurface,
+              }}
+            >
+              <Icon size={24} />
+              <span className="text-sm font-medium">{model.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      {error && (
+        <div className="flex items-start gap-2 text-sm" style={{ color: '#dc2626' }}>
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface GoalsTextareaProps {
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+}
+
+function GoalsTextarea({ value, onChange, error }: GoalsTextareaProps) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="goals">What are your top 3 goals for the next quarter?</Label>
+      <div className="text-sm mb-3" style={{ color: designTokens.colors.onSurfaceVariant }}>
+        These shape your AI agent's recommendations.
+      </div>
+      <Textarea
+        id="goals"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="e.g., 10x revenue, hire 5 engineers, launch product line"
+        className="resize-none min-h-[120px]"
+      />
+      {error && (
+        <div className="flex items-start gap-2 text-sm" style={{ color: '#dc2626' }}>
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface SubmitButtonProps {
+  onClick: () => void;
+  isLoading: boolean;
+  disabled?: boolean;
+}
+
+function SubmitButton({ onClick, isLoading, disabled }: SubmitButtonProps) {
+  return (
+    <Button
+      onClick={onClick}
+      disabled={disabled || isLoading}
+      className="w-full sm:w-auto sm:min-w-[200px]"
+      style={{
+        backgroundColor: designTokens.colors.primary,
+        color: '#ffffff',
+      }}
+    >
+      {isLoading ? 'Creating...' : 'Create company'}
+    </Button>
+  );
+}
+
+export default function CompanySetupPage() {
+  const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const [currentStep, setCurrentStep] = useState(0);
+  const [isCreatingPortfolio, setIsCreatingPortfolio] = useState(false);
+  const [newPortfolioName, setNewPortfolioName] = useState('');
+  const [newPortfolioDescription, setNewPortfolioDescription] = useState('');
+  const [formData, setFormData] = useState<CompanyFormData>({
+    portfolioId: '',
+    name: '',
+    stage: '',
+    industry: '',
+    businessModel: '',
+    goals: '',
+  });
+  const [errors, setErrors] = useState<Partial<Record<keyof CompanyFormData | 'portfolio', string>>>({});
+
+  const { data: portfolios, isLoading: portfoliosLoading, error: portfoliosError, refetch: refetchPortfolios } = useQuery<Portfolio[]>({
+    queryKey: ['portfolios'],
+    queryFn: async () => {
+      const res = await fetch('/api/portfolios');
+      if (!res.ok) throw new Error('Failed to fetch portfolios');
+      return res.json();
+    },
+  });
+
+  const createPortfolioMutation = useMutation({
+    mutationFn: async (data: { name: string; description?: string }) => {
+      const res = await fetch('/api/portfolios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to create portfolio');
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['portfolios'] });
+      setFormData({ ...formData, portfolioId: data.id });
+      setIsCreatingPortfolio(false);
+      setNewPortfolioName('');
+      setNewPortfolioDescription('');
+      setCurrentStep(1);
+    },
+  });
+
+  const createCompanyMutation = useMutation({
+    mutationFn: async (data: CompanyFormData) => {
+      const res = await fetch(`/api/portfolios/${data.portfolioId}/companies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: data.name,
+          stage: data.stage,
+          industry: data.industry,
+          businessModel: data.businessModel,
+          goals: data.goals,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to create company');
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setLocation(`/portfolios/${formData.portfolioId}`);
+    },
+  });
+
+  const validateStep = (step: number): boolean => {
+    const newErrors: typeof errors = {};
+    
+    if (step === 0) {
+      if (!isCreatingPortfolio && !formData.portfolioId) {
+        newErrors.portfolio = 'Select a portfolio or create a new one';
+      }
+      if (isCreatingPortfolio && !newPortfolioName.trim()) {
+        newErrors.portfolio = 'Portfolio name is required';
+      }
+    } else if (step === 1) {
+      if (!formData.name.trim()) {
+        newErrors.name = 'Company name is required';
+      }
+    } else if (step === 2) {
+      if (!formData.stage) {
+        newErrors.stage = 'Select a stage';
+      }
+    } else if (step === 3) {
+      if (!formData.industry.trim()) {
+        newErrors.industry = 'Industry is required';
+      }
+      if (!formData.businessModel) {
+        newErrors.businessModel = 'Select a business model';
+      }
+    } else if (step === 4) {
+      if (!formData.goals.trim()) {
+        newErrors.goals = 'Goals should be provided';
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleNext = async () => {
+    if (!validateStep(currentStep)) return;
+
+    if (currentStep === 0 && isCreatingPortfolio) {
+      createPortfolioMutation.mutate({
+        name: newPortfolioName,
+        description: newPortfolioDescription || undefined,
+      });
+      return;
+    }
+
+    if (currentStep < STEPS.length - 1) {
+      setCurrentStep(currentStep + 1);
+      setErrors({});
+    }
+  };
+
+  const handleSubmit = () => {
+    if (!validateStep(currentStep)) return;
+    createCompanyMutation.mutate(formData);
+  };
+
+  const handleBack = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+      setErrors({});
+    }
+  };
+
+  if (portfoliosLoading) {
+    return (
+      <UniversalLayout>
+        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: designTokens.colors.surface }}>
+          <div className="w-full max-w-2xl px-6 space-y-6 animate-pulse">
+            <div className="h-8 rounded" style={{ backgroundColor: designTokens.colors.surface }} />
+            <div className="h-64 rounded-xl" style={{ backgroundColor: designTokens.colors.surface }} />
+          </div>
+        </div>
+      </UniversalLayout>
+    );
+  }
+
+  if (portfoliosError) {
+    return (
+      <UniversalLayout>
+        <div className="min-h-screen flex items-center justify-center p-6" style={{ backgroundColor: designTokens.colors.surface }}>
+          <Card className="w-full max-w-md p-8 text-center space-y-4">
+            <div className="flex justify-center">
+              <div className="p-3 rounded-full" style={{ backgroundColor: `${'#dc2626'}1A` }}>
+                <AlertCircle size={32} style={{ color: '#dc2626' }} />
+              </div>
+            </div>
+            <h2 className="text-xl font-semibold" style={{ color: designTokens.colors.onSurface }}>
+              Failed to load portfolios
+            </h2>
+            <p className="text-sm" style={{ color: designTokens.colors.onSurfaceVariant }}>
+              We couldn't fetch your portfolios. Check your connection and try again.
+            </p>
+            <Button onClick={() => refetchPortfolios()} variant="outline" className="w-full">
+              Retry
+            </Button>
+          </Card>
+        </div>
+      </UniversalLayout>
+    );
+  }
+
+  const showEmptyState = !portfolios || portfolios.length === 0;
+
+  return (
+    <UniversalLayout>
+      <div className="min-h-screen flex items-center justify-center p-4 sm:p-6" style={{ backgroundColor: designTokens.colors.surface }}>
+        <div className="w-full max-w-2xl">
+          <div className="mb-8 text-center space-y-4">
+            <h1 className="text-3xl sm:text-4xl font-semibold" style={{ color: designTokens.colors.onSurface }}>
+              {currentStep === 0 ? 'Start operating' : 'Create your company'}
+            </h1>
+            <p className="text-base sm:text-lg" style={{ color: designTokens.colors.onSurfaceVariant }}>
+              {STEPS[currentStep].description}
+            </p>
+            <StepIndicator currentStep={currentStep} totalSteps={STEPS.length} />
+          </div>
+
+          <div
+            className="rounded-2xl p-6 sm:p-8 space-y-6"
+            style={{
+              background: 'rgba(255, 255, 255, 0.7)',
+              backdropFilter: 'blur(16px)',
+              boxShadow: designTokens.shadows.ambient,
+            }}
+          >
+            {currentStep === 0 && (
+              <div className="space-y-6">
+                {showEmptyState ? (
+                  <div className="text-center space-y-4 py-8">
+                    <div className="flex justify-center">
+                      <div className="p-4 rounded-full" style={{ backgroundColor: designTokens.colors.surfaceContainerLow }}>
+                        <Building2 size={32} style={{ color: designTokens.colors.primary }} />
+                      </div>
+                    </div>
+                    <h3 className="text-lg font-semibold" style={{ color: designTokens.colors.onSurface }}>
+                      Create your first portfolio
+                    </h3>
+                    <p className="text-sm" style={{ color: designTokens.colors.onSurfaceVariant }}>
+                      Portfolios organize your companies. Start by creating one.
+                    </p>
+                  </div>
+                ) : (
+                  !isCreatingPortfolio && (
+                    <>
+                      <PortfolioSelector
+                        portfolios={portfolios}
+                        selectedId={formData.portfolioId}
+                        onSelect={(id) => setFormData({ ...formData, portfolioId: id })}
+                      />
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t" style={{ borderColor: designTokens.colors.outlineVariant }} />
+                        </div>
+                        <div className="relative flex justify-center">
+                          <span className="px-4 text-sm" style={{ backgroundColor: 'rgba(255, 255, 255, 0.7)', color: designTokens.colors.onSurfaceVariant }}>
+                            or
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  )
+                )}
+
+                {(isCreatingPortfolio || showEmptyState) ? (
+                  <CreatePortfolioInline
+                    name={newPortfolioName}
+                    description={newPortfolioDescription}
+                    onNameChange={setNewPortfolioName}
+                    onDescriptionChange={setNewPortfolioDescription}
+                    error={errors.portfolio}
+                  />
+                ) : (
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsCreatingPortfolio(true)}
+                    className="w-full"
+                  >
+                    <Plus size={18} className="mr-2" />
+                    Create new portfolio
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {currentStep === 1 && (
+              <CompanyNameInput
+                value={formData.name}
+                onChange={(value) => setFormData({ ...formData, name: value })}
+                error={errors.name}
+              />
+            )}
+
+            {currentStep === 2 && (
+              <StageSelector
+                value={formData.stage}
+                onChange={(value) => setFormData({ ...formData, stage: value })}
+                error={errors.stage}
+              />
+            )}
+
+            {currentStep === 3 && (
+              <div className="space-y-6">
+                <IndustryInput
+                  value={formData.industry}
+                  onChange={(value) => setFormData({ ...formData, industry: value })}
+                  error={errors.industry}
+                />
+                <BusinessModelInput
+                  value={formData.businessModel}
+                  onChange={(value) => setFormData({ ...formData, businessModel: value })}
+                  error={errors.businessModel}
+                />
+              </div>
+            )}
+
+            {currentStep === 4 && (
+              <GoalsTextarea
+                value={formData.goals}
+                onChange={(value) => setFormData({ ...formData, goals: value })}
+                error={errors.goals}
+              />
+            )}
+
+            <div className="flex flex-col-reverse sm:flex-row gap-3 pt-4">
+              {currentStep > 0 && (
+                <Button variant="outline" onClick={handleBack} className="w-full sm:w-auto">
+                  Back
+                </Button>
+              )}
+              <div className="flex-1" />
+              {currentStep < STEPS.length - 1 ? (
+                <Button
+                  onClick={handleNext}
+                  disabled={createPortfolioMutation.isPending}
+                  className="w-full sm:w-auto sm:min-w-[200px]"
+                  style={{
+                    backgroundColor: designTokens.colors.primary,
+                    color: '#ffffff',
+                  }}
+                >
+                  {createPortfolioMutation.isPending ? 'Creating portfolio...' : 'Continue'}
+                  <ChevronRight size={18} className="ml-2" />
+                </Button>
+              ) : (
+                <SubmitButton
+                  onClick={handleSubmit}
+                  isLoading={createCompanyMutation.isPending}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </UniversalLayout>
+  );
+}
