@@ -63,7 +63,7 @@ export function Header({
       .slice(0, 2);
   };
 
-  const contextsByType = availableContexts.reduce(
+  const contextsByType = (availableContexts ?? []).reduce(
     (acc, context) => {
       acc[context.type].push(context);
       return acc;
