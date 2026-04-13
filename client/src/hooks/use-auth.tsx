@@ -152,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!res.ok) throw new Error(`Sync failed with status ${res.status}`);
         return await res.json();
       } catch (err: any) {
+        console.error('Clerk signup error:', JSON.stringify(err, null, 2));
         if (err?.errors?.[0]?.message) {
           throw new Error(err.errors[0].message);
         }
