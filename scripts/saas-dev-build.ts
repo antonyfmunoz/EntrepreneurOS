@@ -4,6 +4,7 @@
 // Usage: npx tsx scripts/saas-dev-build.ts
 // Or in Claude Code: /saas-dev:build
 
+import "dotenv/config";
 import path from "node:path";
 import { loadProjectConfig } from "../lib/project-config.js";
 import { registerAllPhases } from "../lib/orchestrator/phases/register.js";
