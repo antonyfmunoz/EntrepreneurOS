@@ -16,9 +16,9 @@ type AuthContextType = {
   user: UserWithoutPassword | null;
   isLoading: boolean;
   error: Error | null;
-  loginMutation: UseMutationResult<UserWithoutPassword, Error, LoginData>;
+  loginMutation: UseMutationResult<UserWithoutPassword | null, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
-  registerMutation: UseMutationResult<UserWithoutPassword, Error, RegisterData>;
+  registerMutation: UseMutationResult<UserWithoutPassword | null, Error, RegisterData>;
   signInWithGoogle: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   isClerkReady: boolean;
@@ -54,7 +54,7 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
-  const { signOut: clerkSignOut, getToken } = useClerkAuth();
+  const { signOut: clerkSignOut } = useClerkAuth();
   const { signIn, setActive: setActiveFromSignIn } = useSignIn();
   const { signUp, setActive: setActiveFromSignUp } = useSignUp();
   const clerkReady = isClerkConfigured() && clerkLoaded;
@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const user = clerkUser ? userData ?? null : null;
   const isLoading = !clerkLoaded || (clerkReady && Boolean(clerkUser) && queryLoading);
 
-  const loginMutation = useMutation<UserWithoutPassword, Error, LoginData>({
+  const loginMutation = useMutation<UserWithoutPassword | null, Error, LoginData>({
     mutationFn: async (credentials: LoginData) => {
       if (!clerkReady || !signIn) {
         throw new Error("Authentication is not available — Clerk is not configured");
@@ -94,28 +94,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (result.status !== "complete") {
           throw new Error("Sign in not complete — check your email for verification");
         }
-        // Activate the new session and grab its JWT for the immediate fetch
-        // (the Clerk cookie hasn't propagated yet).
         await setActiveFromSignIn!({ session: result.createdSessionId });
-        const token = await getToken();
-        const res = await fetch("/api/user", {
-          credentials: "include",
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (!res.ok) throw new Error(`Sync failed with status ${res.status}`);
-        return await res.json();
+        return null;
       } catch (err: any) {
-        // If a session already exists, the user is already logged in — fetch
-        // the local user row and treat it as a successful login.
+        // If a session already exists, the user is already logged in.
         const errMsg = err?.errors?.[0]?.message ?? err?.message ?? "";
         if (errMsg.toLowerCase().includes("session already exists") ||
             errMsg.toLowerCase().includes("single session mode")) {
-          const token = await getToken();
-          const res = await fetch("/api/user", {
-            credentials: "include",
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          });
-          if (res.ok) return await res.json();
+          return null;
         }
         if (err?.errors?.[0]?.message) {
           throw new Error(err.errors[0].message);
@@ -123,12 +109,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     },
-    onSuccess: (userData: UserWithoutPassword) => {
-      queryClient.setQueryData(["/api/user", clerkUser?.id ?? null], userData);
-      toast({
-        title: "Login successful",
-        description: `Welcome back, ${userData.username}!`,
-      });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      toast({ title: "Login successful" });
     },
     onError: (error: Error) => {
       toast({
@@ -139,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const registerMutation = useMutation<UserWithoutPassword, Error, RegisterData>({
+  const registerMutation = useMutation<UserWithoutPassword | null, Error, RegisterData>({
     mutationFn: async (data: RegisterData) => {
       if (!clerkReady || !signUp) {
         throw new Error("Registration is not available — Clerk is not configured");
@@ -164,13 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           );
         }
         await setActiveFromSignUp!({ session: result.createdSessionId });
-        const token = await getToken();
-        const res = await fetch("/api/user", {
-          credentials: "include",
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (!res.ok) throw new Error(`Sync failed with status ${res.status}`);
-        return await res.json();
+        return null;
       } catch (err: any) {
         console.error('Clerk signup error:', JSON.stringify(err, null, 2));
         if (err?.errors?.[0]?.message) {
@@ -179,12 +156,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     },
-    onSuccess: (userData: UserWithoutPassword) => {
-      queryClient.setQueryData(["/api/user", clerkUser?.id ?? null], userData);
-      toast({
-        title: "Account created",
-        description: `Welcome, ${userData.username}!`,
-      });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      toast({ title: "Account created" });
     },
     onError: (error: Error) => {
       toast({
