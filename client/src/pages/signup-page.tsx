@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/hooks/use-auth";
+import { usePostHog } from "posthog-js/react";
 
 const signupSchema = z.object({
   fullName: z
@@ -30,6 +31,7 @@ type SignupFormValues = z.infer<typeof signupSchema>;
 // asking the user for one just adds friction. Local-part of the email is
 // the simplest stable default; downstream code can let users rename later.
 function deriveUsernameFromEmail(email: string): string {
+  const posthog = usePostHog();
   const local = email.split("@")[0] || "user";
   const suffix = Math.floor(Math.random() * 10000)
     .toString()

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Layout } from "@/components/layout";
 import { useAuth } from "@/hooks/use-auth";
+import { usePostHog } from "posthog-js/react";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -19,6 +20,7 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function Login() {
+  const posthog = usePostHog();
   const { user, isLoading, loginMutation, signInWithGoogle, isClerkReady } =
     useAuth();
   const [, navigate] = useLocation();

@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Company } from "@shared/schema";
+import { usePostHog } from "posthog-js/react";
 
 // Chat is backed by the existing /api/agents/:id/chat + messages endpoints
 // rather than the generated /api/companies/:id/conversations routes, which
@@ -32,6 +33,7 @@ interface ChatResponse {
 }
 
 function formatTimestamp(iso: string): string {
+  const posthog = usePostHog();
   try {
     const d = new Date(iso);
     return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });

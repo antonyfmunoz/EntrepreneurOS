@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation } from "wouter";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, Briefcase, Plus } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { usePostHog } from "posthog-js/react";
 
 interface Portfolio {
   id: number;
@@ -56,6 +57,7 @@ const PORTFOLIO_SKIP = "__skip__";
 const PORTFOLIO_CREATE_NEW = "__new__";
 
 export default function CompanySetupPage() {
+  const posthog = usePostHog();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 

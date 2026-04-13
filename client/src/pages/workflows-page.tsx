@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Company, Workflow, InsertWorkflow } from "@shared/schema";
+import { usePostHog } from "posthog-js/react";
 
 // The real /api/workflows endpoint in server/routes/workflows.ts exposes
 // GET (list) and POST (create). There's no PATCH/DELETE yet, and the
@@ -27,6 +28,7 @@ import type { Company, Workflow, InsertWorkflow } from "@shared/schema";
 // enum of "active" | "paused". Per the wiring rules: no step builder.
 
 export default function WorkflowsPage() {
+  const posthog = usePostHog();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);

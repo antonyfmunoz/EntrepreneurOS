@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "wouter";
 import {
   ReactFlow,
@@ -30,6 +30,7 @@ import {
   Settings as SettingsIcon,
   X,
 } from "lucide-react";
+import { usePostHog } from "posthog-js/react";
 
 // ── Domain types ─────────────────────────────────────────────────────────────
 
@@ -60,6 +61,7 @@ type OrgNodeData =
 // design system. No gradients — solid #6a37d4 accents only.
 
 function DepartmentNode({ data }: NodeProps<Node<Extract<OrgNodeData, { kind: "department" }>>>) {
+  const posthog = usePostHog();
   const { department, roleCount } = data;
   return (
     <div

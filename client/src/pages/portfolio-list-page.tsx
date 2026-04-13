@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Loader2, AlertCircle, Briefcase, ChevronRight, X } from "lucide-react";
@@ -12,8 +12,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Portfolio, InsertPortfolio } from "@shared/schema";
+import { usePostHog } from "posthog-js/react";
 
 export default function PortfolioList() {
+  const posthog = usePostHog();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();

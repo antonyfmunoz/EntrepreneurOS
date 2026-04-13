@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, AlertCircle, CheckCircle2, Mail, Shield } from "lucide-react";
 
@@ -19,6 +19,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Company } from "@shared/schema";
+import { usePostHog } from "posthog-js/react";
 
 // Company PATCH shape — matches the updateCompanySchema in
 // server/routes/companies.ts without pulling the schema import
@@ -34,6 +35,7 @@ interface CompanyUpdateInput {
 }
 
 export default function SettingsPage() {
+  const posthog = usePostHog();
   const { user, isClerkReady, resetPassword } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
