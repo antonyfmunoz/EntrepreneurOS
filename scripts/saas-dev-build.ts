@@ -1,40 +1,188 @@
 #!/usr/bin/env npx tsx
 // scripts/saas-dev-build.ts
-// Single entry point for the SaaS dev pipeline.
-// Usage: npx tsx scripts/saas-dev-build.ts [--resume]
+// Single entry point for the SaaS dev pipeline (v3 multi-agent architecture).
+// Usage:
+//   npx tsx scripts/saas-dev-build.ts           # New build
+//   npx tsx scripts/saas-dev-build.ts --resume   # Resume from checkpoint
+//   npx tsx scripts/saas-dev-build.ts --edit     # Edit mode
 
 import "dotenv/config";
-import { loadProjectConfig } from "../lib/project-config.js";
-import { registerAllPhases } from "../lib/orchestrator/phases/register.js";
-import {
-  runPipeline,
-  resumePipeline,
-  ApprovalRequiredError,
-  type RunPipelineOptions,
-} from "../lib/orchestrator/index.js";
-import { runIntake } from "../lib/intake/intake-orchestrator.js";
+import { createInterface } from "node:readline/promises";
+import { stdin, stdout } from "node:process";
+import { PMOrchestrator } from "../lib/agents/pm-orchestrator.js";
+import { ensureLivePreviewServer, type LivePreviewServer } from "../lib/react-gen/live-preview-server.js";
+import type { BuildResult, EditResult } from "../lib/agents/types.js";
 
 const BAR = "\u2501".repeat(35);
 
+let previewServer: LivePreviewServer | null = null;
+
 function printBanner(): void {
   console.log("");
-  console.log("saas-dev \u2014 AI Development Pipeline");
-  console.log(BAR);
+  console.log(`${BAR}`);
+  console.log("  saas-dev \u2014 v3 Multi-Agent Pipeline");
+  console.log(`${BAR}`);
   console.log("");
 }
 
-function printCompletion(url?: string): void {
+function printBuildSummary(result: BuildResult): void {
   console.log("");
-  console.log(BAR);
-  console.log("Build complete");
+  console.log(`${BAR}`);
+  console.log("  Build Complete");
+  console.log(`${BAR}`);
   console.log("");
-  if (url) {
-    console.log(`Review your app: ${url}`);
-    console.log("");
+  console.log(`  Pages built:      ${result.pagesBuilt}`);
+  console.log(`  Backend routes:   ${result.backendRoutes}`);
+  console.log(`  QA passed:        ${result.qaReport?.allPassed ? "yes" : "no"}`);
+  if (result.qaReport && !result.qaReport.allPassed) {
+    console.log(`  Issues remaining: ${result.qaReport.remainingIssues.length}`);
   }
-  console.log("To make changes, describe them in the chat.");
-  console.log(BAR);
+  if (result.errors.length > 0) {
+    console.log("");
+    console.log("  Errors:");
+    for (const err of result.errors) {
+      console.log(`    - ${err}`);
+    }
+  }
   console.log("");
+  if (previewServer) {
+    console.log(`  Preview: ${previewServer.url}`);
+  }
+  console.log(`${BAR}`);
+  console.log("");
+}
+
+function printEditSummary(result: EditResult): void {
+  console.log("");
+  console.log(`${BAR}`);
+  if (result.success) {
+    console.log(`  Edit applied`);
+    if (result.pagesEdited.length > 0) {
+      console.log(`  Pages edited: ${result.pagesEdited.join(", ")}`);
+    }
+    if (result.qaReport) {
+      console.log(`  QA passed: ${result.qaReport.allPassed ? "yes" : "no"}`);
+    }
+  } else {
+    console.log("  Edit failed");
+    for (const err of result.errors) {
+      console.log(`    - ${err}`);
+    }
+  }
+  console.log(`${BAR}`);
+  console.log("");
+}
+
+async function ask(rl: ReturnType<typeof createInterface>, prompt: string): Promise<string> {
+  const answer = await rl.question(prompt);
+  return answer.trim();
+}
+
+async function runNewBuild(orchestrator: PMOrchestrator): Promise<void> {
+  const rl = createInterface({ input: stdin, output: stdout });
+
+  try {
+    // ── Intake ────────────────────────────────────────────────────────────────
+    console.log("[intake] Running intake phase...");
+    const brief = await orchestrator.runIntake();
+
+    console.log("");
+    console.log(`  Product:    ${brief.productName}`);
+    console.log(`  Pages:      ${brief.spec.pages.length}`);
+    console.log(`  Endpoints:  ${brief.spec.endpoints?.length ?? 0}`);
+    console.log("");
+
+    // ── Approval gate ─────────────────────────────────────────────────────────
+    const approval = await ask(rl, "Proceed with build? [Y/n] ");
+    if (approval.toLowerCase() === "n" || approval.toLowerCase() === "no") {
+      console.log("");
+      console.log("Build cancelled. Run again when ready.");
+      console.log("");
+      return;
+    }
+
+    // ── Build ─────────────────────────────────────────────────────────────────
+    console.log("");
+    console.log("[build] Starting multi-agent build...");
+    const result: BuildResult = await orchestrator.runBuild(brief);
+    printBuildSummary(result);
+  } finally {
+    rl.close();
+  }
+}
+
+async function runResume(orchestrator: PMOrchestrator): Promise<void> {
+  console.log("[resume] Loading existing build state...");
+  const state = orchestrator.getStatus();
+
+  if (!state || !state.brief) {
+    console.error("");
+    console.error("No existing build state found. Run a new build first:");
+    console.error("  npx tsx scripts/saas-dev-build.ts");
+    console.error("");
+    process.exit(1);
+  }
+
+  console.log("");
+  console.log(`  Product:           ${state.brief.productName}`);
+  console.log(`  Current phase:     ${state.status.phase}`);
+  console.log(`  Completed agents:  ${state.status.completedAgents.length}/${state.status.totalAgents}`);
+  if (state.status.failedAgents.length > 0) {
+    console.log(`  Failed agents:     ${state.status.failedAgents.join(", ")}`);
+  }
+  console.log(`  Checkpoints:       ${state.checkpoints.length}`);
+  console.log("");
+
+  console.log("[resume] Continuing build from last checkpoint...");
+  const result: BuildResult = await orchestrator.runBuild(state.brief);
+  printBuildSummary(result);
+}
+
+async function runEditMode(orchestrator: PMOrchestrator): Promise<void> {
+  const state = orchestrator.getStatus();
+
+  if (!state || !state.brief) {
+    console.error("");
+    console.error("No existing build state found. Run a build first before editing:");
+    console.error("  npx tsx scripts/saas-dev-build.ts");
+    console.error("");
+    process.exit(1);
+  }
+
+  console.log(`[edit] Loaded build: ${state.brief.productName}`);
+  console.log("[edit] Enter edit instructions below. Type 'exit' or 'quit' to stop.");
+  console.log("");
+
+  const rl = createInterface({ input: stdin, output: stdout });
+
+  try {
+    while (true) {
+      const instruction = await ask(rl, "edit> ");
+
+      if (!instruction) continue;
+      if (instruction === "exit" || instruction === "quit") {
+        console.log("");
+        console.log("Edit session ended.");
+        console.log("");
+        break;
+      }
+
+      console.log("");
+      console.log(`[edit] Applying: ${instruction}`);
+      const result: EditResult = await orchestrator.runEdit(instruction);
+      printEditSummary(result);
+    }
+  } finally {
+    rl.close();
+  }
+}
+
+async function shutdown(): Promise<void> {
+  if (previewServer?.isNew) {
+    console.log("");
+    console.log("[shutdown] Stopping live preview server...");
+    await previewServer.shutdown();
+  }
 }
 
 async function main(): Promise<void> {
@@ -42,89 +190,53 @@ async function main(): Promise<void> {
 
   const args = process.argv.slice(2);
   const isResume = args.includes("--resume");
+  const isEdit = args.includes("--edit");
 
   const projectRoot = process.cwd();
-  const config = loadProjectConfig(projectRoot);
 
-  // Wire all phase implementations
-  registerAllPhases();
+  // ── Live preview ──────────────────────────────────────────────────────────
+  console.log("[preview] Starting Vite dev server...");
+  previewServer = await ensureLivePreviewServer(projectRoot);
+  console.log(`Open ${previewServer.url} to watch the build live`);
+  console.log("");
 
-  if (isResume) {
-    console.log("Resuming from last checkpoint...");
-    try {
-      const status = await resumePipeline(config, {
-        // spec and copy are non-destructive — auto-approve.
-        // react-gen writes files but user watches live — auto-approve.
-        // integration, backend, deploy require human oversight.
-        approvedPhases: ["react-gen"],
-      });
-      printCompletion();
-      console.log(`Pipeline status: ${status.currentPhase}`);
-      console.log(`Completed phases: ${status.completedPhases.join(", ")}`);
-    } catch (err) {
-      if (err instanceof ApprovalRequiredError) {
-        console.log(`\n${err.message}`);
-        console.log(`\nRe-run with: npx tsx scripts/saas-dev-build.ts --resume`);
-        console.log(`The pipeline will ask for approval before proceeding.`);
-        process.exit(0);
-      }
-      throw err;
-    }
-    return;
-  }
-
-  // ── Intake phase ──────────────────────────────────────────────────────────
-  console.log("[intake] Running intake phase...");
-  try {
-    const intakeResult = await runIntake(config);
-    console.log(`[intake] Mode: ${intakeResult.mode}`);
-
-    if (intakeResult.gapReport) {
-      console.log(`[intake] Gap analysis complete — see .planning/output/spec/GAP-ANALYSIS.md`);
-    }
-
-    console.log(`[intake] Product: ${intakeResult.brief.productName}`);
-    console.log(`[intake] Pages in spec: ${intakeResult.brief.spec.pages.length}`);
+  // ── Handle graceful shutdown ──────────────────────────────────────────────
+  process.on("SIGINT", async () => {
     console.log("");
-  } catch (err) {
-    if (err instanceof Error) {
-      console.error(`\n[intake] Failed: ${err.message}`);
-      if (err.message.includes("blocking")) {
-        console.error(`\nResolve blocking gaps in .planning/output/spec/GAP-ANALYSIS.md and re-run.`);
-      }
-    }
-    process.exit(1);
+    console.log("[signal] Caught SIGINT, shutting down...");
+    await shutdown();
+    process.exit(0);
+  });
+
+  // ── Orchestrator ──────────────────────────────────────────────────────────
+  const orchestrator = new PMOrchestrator(projectRoot);
+
+  if (isEdit) {
+    await runEditMode(orchestrator);
+  } else if (isResume) {
+    await runResume(orchestrator);
+  } else {
+    await runNewBuild(orchestrator);
   }
 
-  // ── Pipeline run ──────────────────────────────────────────────────────────
-  const options: RunPipelineOptions = {
-    // spec and copy are non-destructive — auto-approve.
-    // react-gen writes files but user watches live — auto-approve.
-    // integration, backend, deploy are destructive and need approval.
-    approvedPhases: ["react-gen"],
-  };
-
-  try {
-    const status = await runPipeline(config, options);
-    printCompletion();
-    console.log(`Pipeline status: ${status.currentPhase}`);
-    console.log(`Completed phases: ${status.completedPhases.join(", ")}`);
-  } catch (err) {
-    if (err instanceof ApprovalRequiredError) {
-      console.log(`\n${err.message}`);
-      console.log(`\nApprove and continue with: npx tsx scripts/saas-dev-build.ts --resume`);
-      process.exit(0);
-    }
-    if (err instanceof Error) {
-      console.error(`\nPipeline failed: ${err.message}`);
-      if (err.stack) {
-        console.error(err.stack);
-      }
-    } else {
-      console.error("\nPipeline failed:", err);
-    }
-    process.exit(1);
-  }
+  await shutdown();
 }
 
-main();
+main().catch(async (err: unknown) => {
+  console.error("");
+  console.error(`${BAR}`);
+  console.error("  Pipeline failed");
+  console.error(`${BAR}`);
+  console.error("");
+  if (err instanceof Error) {
+    console.error(err.message);
+    if (err.stack) {
+      console.error("");
+      console.error(err.stack);
+    }
+  } else {
+    console.error(err);
+  }
+  await shutdown();
+  process.exit(1);
+});
