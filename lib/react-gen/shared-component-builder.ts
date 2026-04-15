@@ -2,12 +2,21 @@
 // Builds shared layout components before any pages. Sequential — each can
 // import the previous. Written to disk immediately so downstream page
 // generation can reference them.
+//
+// Shared components go through the same validation pipeline as pages:
+// autoFixImports → validateImports → scanForNullUnsafePatterns → tsc check.
 
 import fs from "node:fs";
 import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 import { DESIGN_RULES, DESIGN_TOKENS } from "./design-tokens.js";
+import {
+  autoFixImports,
+  validateImports,
+  scanForNullUnsafePatterns,
+  runTscCheck,
+} from "./component-writer.js";
 import type { ProjectBrief } from "../intake/types.js";
 
 function getClient(): Anthropic {
@@ -96,9 +105,7 @@ async function generateComponent(
     .map((dep) => {
       const depDef = SHARED_COMPONENTS.find((c) => c.name === dep);
       if (!depDef) return "";
-      const importPath = depDef.relativePath.startsWith("lib/")
-        ? `@/${depDef.relativePath}`
-        : `@/${depDef.relativePath}`;
+      const importPath = `@/${depDef.relativePath}`;
       return `// Available: import from "${importPath}"`;
     })
     .join("\n");
@@ -116,7 +123,24 @@ DESIGN TOKENS (use these exact values):
 ${tokensJson}
 
 Product: ${projectBrief.productName}
-${projectBrief.brandVoice ? `Brand voice: ${projectBrief.brandVoice.slice(0, 500)}` : ""}`,
+${projectBrief.brandVoice ? `Brand voice: ${projectBrief.brandVoice.slice(0, 500)}` : ""}
+
+ALLOWED IMPORTS — only these are permitted:
+- react (useState, useEffect, useCallback, useMemo, useRef, etc.)
+- lucide-react (icons only)
+- @/components/ui/* (shadcn primitives)
+- @/components/* (shared components)
+- @/lib/* (utilities)
+- wouter (Link, useLocation)
+- @clerk/clerk-react (useUser, useClerk)
+- framer-motion (animations)
+- clsx, tailwind-merge (className utilities)
+
+NULL SAFETY RULES:
+1. Every prop interface must use optional types unless guaranteed by parent
+2. Every array must be guarded: (items ?? []).map(...)
+3. Every object property access on potentially undefined data must use ?. chaining
+4. Components must handle missing data gracefully`,
     messages: [
       {
         role: "user",
@@ -151,6 +175,65 @@ Return ONLY the TypeScript/React code. No markdown fences.`,
     .trim();
 }
 
+const MAX_FIX_ATTEMPTS = 3;
+
+async function validateAndFixComponent(
+  code: string,
+  def: SharedComponentDef,
+  projectBrief: ProjectBrief,
+  existingComponents: Record<string, string>,
+  projectRoot: string,
+  filePath: string,
+): Promise<{ code: string; fixAttempts: number; compiledClean: boolean }> {
+  let current = code;
+  let fixAttempts = 0;
+
+  // Step 1: Auto-fix known bad imports
+  current = autoFixImports(current);
+
+  // Step 2: Validate imports — regenerate if violations
+  const importCheck = validateImports(current);
+  if (!importCheck.valid) {
+    console.log(`    ⚠ Import violations in ${def.name}: ${importCheck.violations.join(", ")}`);
+    current = await generateComponent(def, projectBrief, existingComponents);
+    current = autoFixImports(current);
+    fixAttempts++;
+  }
+
+  // Step 3: Null safety scan — regenerate if issues
+  const nullIssues = scanForNullUnsafePatterns(current);
+  if (nullIssues.length > 0) {
+    console.log(`    ⚠ Null safety issues in ${def.name}: ${nullIssues.length} found`);
+    current = await generateComponent(def, projectBrief, existingComponents);
+    current = autoFixImports(current);
+    fixAttempts++;
+  }
+
+  // Step 4: Write to disk and run tsc check with fix loop
+  fs.writeFileSync(filePath, current, "utf-8");
+
+  // Only .tsx files get tsc checked (design-tokens.ts is pure constants)
+  if (!filePath.endsWith(".tsx")) {
+    return { code: current, fixAttempts, compiledClean: true };
+  }
+
+  let tscResult = runTscCheck(projectRoot, filePath);
+
+  while (!tscResult.clean && fixAttempts < MAX_FIX_ATTEMPTS) {
+    fixAttempts++;
+    const errorList = tscResult.errors.slice(0, 15).map((e) => `- ${e}`).join("\n");
+    console.log(`    ⚠ TSC errors in ${def.name} (attempt ${fixAttempts}/${MAX_FIX_ATTEMPTS})`);
+
+    // Regenerate with error feedback
+    current = await generateComponent(def, projectBrief, existingComponents);
+    current = autoFixImports(current);
+    fs.writeFileSync(filePath, current, "utf-8");
+    tscResult = runTscCheck(projectRoot, filePath);
+  }
+
+  return { code: current, fixAttempts, compiledClean: tscResult.clean };
+}
+
 export async function buildSharedComponents(
   projectBrief: ProjectBrief,
   projectRoot: string,
@@ -167,9 +250,17 @@ export async function buildSharedComponents(
 
     console.log(`  [react-gen] Building shared: ${def.name}...`);
     const code = await generateComponent(def, projectBrief, result);
-    fs.writeFileSync(filePath, code, "utf-8");
+
+    const validated = await validateAndFixComponent(
+      code, def, projectBrief, result, projectRoot, filePath,
+    );
+
+    if (!validated.compiledClean) {
+      console.warn(`  ⚠ ${def.name}: compiled with errors after ${validated.fixAttempts} fix attempts`);
+    }
+
     result[def.name] = filePath;
-    console.log(`  \u2713 ${def.name}`);
+    console.log(`  ✓ ${def.name}${validated.fixAttempts > 0 ? ` (${validated.fixAttempts} fixes)` : ""}`);
   }
 
   return result;
