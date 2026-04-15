@@ -4,6 +4,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { execSync } from "node:child_process";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 import { DESIGN_RULES } from "./design-tokens.js";
@@ -32,6 +33,11 @@ export interface ComponentWriterOutput {
   reviewFeedback: string[];
   passed: boolean;
   retried: boolean;
+  tsErrors: string[];
+  fixAttempts: number;
+  compiledClean: boolean;
+  importViolations: string[];
+  nullSafetyIssues: string[];
 }
 
 function getClient(): Anthropic {
@@ -95,6 +101,176 @@ function validateComponent(code: string): ValidationResult {
   return { valid: errors.length === 0, errors };
 }
 
+// ─── Import Allowlist ─────────────────────────────────────────────────────────
+
+const ALLOWED_IMPORT_PATTERNS = [
+  /^react$/,
+  /^lucide-react$/,
+  /^@\/components\/ui\/.+/,
+  /^@\/components\/.+/,
+  /^wouter$/,
+  /^@tanstack\/react-query$/,
+  /^@clerk\/clerk-react$/,
+  /^@\/hooks\/.+/,
+  /^@\/lib\/.+/,
+  /^@xyflow\/react$/,
+  /^posthog-js$/,
+  /^date-fns/,
+  /^recharts/,
+  /^react-beautiful-dnd/,
+  /^embla-carousel-react/,
+  /^react-resizable-panels/,
+  /^framer-motion/,
+  /^class-variance-authority/,
+  /^clsx$/,
+  /^tailwind-merge$/,
+  /^cmdk$/,
+  /^vaul$/,
+  /^input-otp$/,
+  /^react-day-picker/,
+  /^@radix-ui\/.+/,
+  /^react-hook-form/,
+  /^@hookform\/resolvers/,
+  /^zod$/,
+];
+
+const IMPORT_AUTO_FIXES: Array<{ pattern: RegExp; replacement: string; importFix?: (line: string) => string }> = [
+  {
+    pattern: /from\s+['"]firebase\/auth['"]/,
+    replacement: `from '@clerk/clerk-react'`,
+    importFix: (line) => line.replace(/import\s*\{[^}]+\}/, "import { useUser, useClerk }"),
+  },
+  {
+    pattern: /from\s+['"]next\/link['"]/,
+    replacement: `from 'wouter'`,
+    importFix: (line) => line.replace(/import\s+\w+/, "import { Link }"),
+  },
+  {
+    pattern: /from\s+['"]next\/router['"]/,
+    replacement: `from 'wouter'`,
+    importFix: (line) => line.replace(/import\s*\{[^}]+\}/, "import { useLocation }"),
+  },
+  {
+    pattern: /from\s+['"]posthog-js\/react['"]/,
+    replacement: `from 'posthog-js'`,
+  },
+  {
+    pattern: /from\s+['"]react-router-dom['"]/,
+    replacement: `from 'wouter'`,
+    importFix: (line) => line.replace(/import\s*\{[^}]+\}/, "import { Link, useLocation }"),
+  },
+];
+
+export function autoFixImports(code: string): string {
+  const lines = code.split("\n");
+  return lines
+    .map((line) => {
+      for (const fix of IMPORT_AUTO_FIXES) {
+        if (fix.pattern.test(line)) {
+          let fixed = line.replace(fix.pattern, fix.replacement);
+          if (fix.importFix) fixed = fix.importFix(fixed);
+          return fixed;
+        }
+      }
+      return line;
+    })
+    .join("\n");
+}
+
+export function validateImports(code: string): { valid: boolean; violations: string[] } {
+  const violations: string[] = [];
+  const importRegex = /import\s+(?:(?:\{[^}]*\}|[\w*]+)\s+from\s+)?['"]([^'"]+)['"]/g;
+
+  let match: RegExpExecArray | null;
+  while ((match = importRegex.exec(code)) !== null) {
+    const source = match[1];
+    // Relative imports are always allowed
+    if (source.startsWith(".") || source.startsWith("/")) continue;
+    const allowed = ALLOWED_IMPORT_PATTERNS.some((p) => p.test(source));
+    if (!allowed) {
+      violations.push(source);
+    }
+  }
+
+  return { valid: violations.length === 0, violations };
+}
+
+// ─── Null Safety Scanner ──────────────────────────────────────────────────────
+
+const NULL_UNSAFE_PATTERNS: Array<{ pattern: RegExp; description: string }> = [
+  { pattern: /(?<!\?\.\s*)(?<!\?\?[^)]*)\b(\w+)\.map\s*\(/g, description: "Unguarded .map() call" },
+  { pattern: /(?<!\?\.\s*)(?<!\?\?[^)]*)\b(\w+)\.reduce\s*\(/g, description: "Unguarded .reduce() call" },
+  { pattern: /(?<!\?\.\s*)(?<!\?\?[^)]*)\b(\w+)\.filter\s*\(/g, description: "Unguarded .filter() call" },
+  { pattern: /(?<!\?\.\s*)(?<!\?\?[^)]*)\b(\w+)\.find\s*\(/g, description: "Unguarded .find() call" },
+  { pattern: /(?<!\?\.\s*)(?<!\?\?[^)]*)\b(\w+)\.length\b/g, description: "Unguarded .length access" },
+];
+
+// Safe prefixes that don't need guarding (known non-null array sources)
+const SAFE_PREFIXES = new Set([
+  "Object", "Array", "String", "Math", "JSON", "Date",
+  "console", "window", "document", "navigator",
+  "React", "Promise",
+]);
+
+// Known safe patterns: string literals, chained methods on guaranteed values
+const SAFE_LINE_PATTERNS = [
+  /\[\]\./, // [].method — empty array literal
+  /\)\s*\.\s*(?:map|filter|reduce|find)\s*\(/, // chained after function call that returns array
+  /\?\?\s*\[.*?\]\s*\)\s*\./, // (x ?? []).method — already guarded
+  /\?\.\s*(?:map|filter|reduce|find)\s*\(/, // optional chaining
+];
+
+export function scanForNullUnsafePatterns(code: string): string[] {
+  const issues: string[] = [];
+  const lines = code.split("\n");
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // Skip import lines and comments
+    if (/^\s*(import\s|\/\/|\/\*|\*)/.test(line)) continue;
+
+    for (const { pattern, description } of NULL_UNSAFE_PATTERNS) {
+      // Reset regex state
+      pattern.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = pattern.exec(line)) !== null) {
+        const varName = m[1];
+        if (SAFE_PREFIXES.has(varName)) continue;
+        // Check if the line has a safe pattern around this usage
+        const lineSlice = line.slice(Math.max(0, m.index - 30), m.index + m[0].length + 5);
+        const isSafe = SAFE_LINE_PATTERNS.some((sp) => sp.test(lineSlice));
+        if (!isSafe) {
+          issues.push(`Line ${i + 1}: ${description} on '${varName}' — use optional chaining or nullish coalescing`);
+        }
+      }
+    }
+  }
+
+  return issues;
+}
+
+// ─── TypeScript Compile Check ─────────────────────────────────────────────────
+
+export function runTscCheck(projectRoot: string): { clean: boolean; errors: string[] } {
+  try {
+    execSync("npx tsc --noEmit --skipLibCheck", {
+      cwd: projectRoot,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 60_000,
+    });
+    return { clean: true, errors: [] };
+  } catch (err: unknown) {
+    const execErr = err as { stdout?: string; stderr?: string };
+    const output = (execErr.stdout ?? "") + (execErr.stderr ?? "");
+    const errors = output
+      .split("\n")
+      .filter((line) => /error TS\d+/.test(line))
+      .map((line) => line.trim());
+    return { clean: false, errors };
+  }
+}
+
 async function buildSystemPrompt(input: ComponentWriterInput): Promise<string> {
   const skillContent = await loadDesignSkills(input.projectRoot);
 
@@ -127,6 +303,41 @@ async function buildSystemPrompt(input: ComponentWriterInput): Promise<string> {
   }
 
   parts.push(DESIGN_RULES);
+
+  parts.push(`
+ALLOWED IMPORTS — only these are permitted, any other import is a build failure:
+- react (useState, useEffect, useCallback, useMemo, useRef, etc.)
+- lucide-react (icons only)
+- @/components/ui/* (shadcn primitives)
+- @/components/* (shared components)
+- wouter (Link, useLocation, useRoute, Redirect)
+- @tanstack/react-query (useQuery, useMutation, useQueryClient)
+- @clerk/clerk-react (useUser, useClerk, useSignIn, useSignUp)
+- @/hooks/* (custom hooks)
+- @/lib/queryClient (apiRequest)
+- @/lib/design-tokens
+- @xyflow/react (for canvas pages only)
+- framer-motion (animations)
+- recharts (data visualization)
+- date-fns (date utilities)
+- react-beautiful-dnd (drag and drop)
+- react-hook-form, @hookform/resolvers, zod (forms)
+
+FORBIDDEN imports — using these is a build failure:
+- firebase (use @clerk/clerk-react instead)
+- next/* (use wouter instead)
+- posthog-js/react (use posthog-js instead)
+- @mui/* (use lucide-react + shadcn/ui instead)
+- react-router-dom (use wouter instead)
+
+NULL SAFETY RULES — violating these causes runtime crashes:
+1. Every prop interface must use optional types: name?: string (not name: string) unless the prop is guaranteed by a parent
+2. Every array must be guarded before iteration: (items ?? []).map(...) never items.map(...)
+3. Every object property access on potentially undefined data must use optional chaining: user?.name never user.name
+4. Components must have three states: loading (show skeleton), error (show error message with retry), data (show content)
+5. useQuery results must be destructured with defaults: const { data = [], isLoading, error } = useQuery(...)
+6. Never access .length, .map, .filter, .reduce, .find on a value that could be undefined
+`);
 
   if (input.designSystem) {
     parts.push("", "DESIGN SYSTEM:", input.designSystem);
@@ -271,11 +482,14 @@ export async function writeReactComponent(
       .trim();
   }
 
-  // First attempt
   let code = await generate();
   let retried = false;
+  let importViolations: string[] = [];
+  let nullSafetyIssues: string[] = [];
+  let tsErrors: string[] = [];
+  let fixAttempts = 0;
 
-  // Validation pass
+  // Step 1: Basic validation (banned imports, gradients, structure)
   const validation = validateComponent(code);
   if (!validation.valid) {
     retried = true;
@@ -283,25 +497,73 @@ export async function writeReactComponent(
     code = await generate(`The previous attempt had these validation errors. Fix all of them:\n${errorList}`);
   }
 
-  // Self-review
-  const review = await selfReview(code, page);
+  // Step 2: Auto-fix known bad imports, then validate import allowlist
+  code = autoFixImports(code);
+  const importCheck = validateImports(code);
+  importViolations = importCheck.violations;
+  if (!importCheck.valid) {
+    retried = true;
+    code = await generate(
+      `The previous attempt used forbidden imports: ${importViolations.join(", ")}. ` +
+      `Only use imports from the ALLOWED IMPORTS list. Remove or replace all forbidden imports.`,
+    );
+    code = autoFixImports(code);
+    const recheck = validateImports(code);
+    importViolations = recheck.violations;
+  }
 
-  // If score too low and not already retried, regenerate
+  // Step 3: Null safety scan
+  nullSafetyIssues = scanForNullUnsafePatterns(code);
+  if (nullSafetyIssues.length > 0) {
+    retried = true;
+    const issueList = nullSafetyIssues.map((i) => `- ${i}`).join("\n");
+    code = await generate(
+      `The previous attempt has null safety issues that will cause runtime crashes. Fix these:\n${issueList}\n\n` +
+      `Use (arr ?? []).map() for arrays, optional chaining for object access, and default values for useQuery results.`,
+    );
+    code = autoFixImports(code);
+    nullSafetyIssues = scanForNullUnsafePatterns(code);
+  }
+
+  // Step 4: Self-review
+  const review = await selfReview(code, page);
   if (review.score < 0.8 && !retried) {
     retried = true;
     const feedbackList = review.feedback.map((f) => `- ${f}`).join("\n");
     code = await generate(`The previous attempt scored ${review.score.toFixed(2)}. Fix these issues:\n${feedbackList}`);
+    code = autoFixImports(code);
     const secondReview = await selfReview(code, page);
     review.score = secondReview.score;
     review.feedback = secondReview.feedback;
   }
 
-  // Write to disk
+  // Step 5: Write to disk
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
   fs.writeFileSync(filePath, code, "utf-8");
+
+  // Step 6: TypeScript compile check with fix loop (max 3 attempts)
+  let tscResult = runTscCheck(projectRoot);
+  tsErrors = tscResult.errors;
+
+  while (!tscResult.clean && fixAttempts < 3) {
+    fixAttempts++;
+    const errorList = tscResult.errors.slice(0, 20).map((e) => `- ${e}`).join("\n");
+    code = await generate(
+      `The previous attempt has TypeScript compilation errors. Fix these exactly:\n${errorList}`,
+    );
+    code = autoFixImports(code);
+    fs.writeFileSync(filePath, code, "utf-8");
+    tscResult = runTscCheck(projectRoot);
+    tsErrors = tscResult.errors;
+  }
+
+  const compiledClean = tscResult.clean;
+
+  // Only mark passed if: imports clean + tsc clean + review score acceptable
+  const passed = compiledClean && importViolations.length === 0 && review.score >= 0.8;
 
   return {
     pageName: page.name,
@@ -309,7 +571,12 @@ export async function writeReactComponent(
     componentCode: code,
     reviewScore: review.score,
     reviewFeedback: review.feedback,
-    passed: review.score >= 0.8,
+    passed,
     retried,
+    tsErrors,
+    fixAttempts,
+    compiledClean,
+    importViolations,
+    nullSafetyIssues,
   };
 }
