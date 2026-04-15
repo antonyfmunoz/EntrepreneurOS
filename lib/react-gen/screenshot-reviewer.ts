@@ -63,8 +63,8 @@ export async function screenshotAndReview(
     const pw = await import("playwright");
     chromium = pw.chromium;
   } catch {
-    console.warn("[screenshot-reviewer] Playwright not available — skipping screenshot review.");
-    return { score: 1, issues: [], screenshotPath: "" };
+    console.warn("[screenshot-reviewer] Playwright not available — using conservative score 0.5");
+    return { score: 0.5, issues: ["Playwright not available — screenshot review skipped"], screenshotPath: "" };
   }
 
   // Launch browser, take screenshot
@@ -78,8 +78,8 @@ export async function screenshotAndReview(
     await page.screenshot({ path: screenshotPath, fullPage: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[screenshot-reviewer] Screenshot failed for ${pageName}: ${msg}`);
-    return { score: 1, issues: [`Screenshot capture failed: ${msg}`], screenshotPath: "" };
+    console.warn(`[screenshot-reviewer] Screenshot failed for ${pageName}: ${msg} — using conservative score 0.5`);
+    return { score: 0.5, issues: [`Screenshot capture failed: ${msg}`], screenshotPath: "" };
   } finally {
     if (browser) await browser.close();
   }
@@ -133,7 +133,7 @@ Return JSON only: { "score": 0.0-1.0, "issues": ["specific issue 1", "specific i
 
     const text = response.content[0];
     if (text.type !== "text") {
-      return { score: 0.7, issues: ["Vision review returned non-text response"], screenshotPath };
+      return { score: 0.5, issues: ["Vision review returned non-text response"], screenshotPath };
     }
 
     const cleaned = text.text.replace(/```json?\s*/g, "").replace(/```/g, "").trim();
@@ -145,7 +145,7 @@ Return JSON only: { "score": 0.0-1.0, "issues": ["specific issue 1", "specific i
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[screenshot-reviewer] Vision review failed: ${msg}`);
-    return { score: 0.7, issues: [`Vision review failed: ${msg}`], screenshotPath };
+    console.warn(`[screenshot-reviewer] Vision review failed: ${msg} — using conservative score 0.5`);
+    return { score: 0.5, issues: [`Vision review failed: ${msg}`], screenshotPath };
   }
 }

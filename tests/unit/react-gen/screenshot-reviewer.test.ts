@@ -96,8 +96,8 @@ describe("screenshotAndReview", () => {
       projectRoot: TMP,
     });
 
-    // Should not throw — returns a default passing-ish score
-    expect(result.score).toBe(0.7);
+    // Should not throw — returns a conservative score to trigger regeneration
+    expect(result.score).toBe(0.5);
     expect(result.issues[0]).toContain("Vision review failed");
   });
 
@@ -129,7 +129,7 @@ describe("screenshotAndReview", () => {
     });
 
     expect(mockClose).toHaveBeenCalledTimes(1);
-    expect(result.score).toBe(1); // Graceful fallback
+    expect(result.score).toBe(0.5); // Conservative fallback triggers regeneration
   });
 
   it("clamps score to 0-1 range", async () => {
