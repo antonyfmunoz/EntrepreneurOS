@@ -6,6 +6,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 import { extractJsonFromResponse } from "../spec-parser/restructure-spec.js";
+import { generateDesignContract } from "../react-gen/design-linter.js";
 import { ArtifactStore } from "./artifact-store.js";
 import type { DesignSystem, DesignTokens, ProductInsights } from "./types.js";
 import type { ProjectBrief } from "../intake/types.js";
@@ -477,7 +478,27 @@ export async function runDesignSystemAgent(
     parsed.componentDesignGuide,
   );
 
+  // 4. Design contract — TypeScript file that makes design violations compile errors
+  const designContract = generateDesignContract(parsed.tokens);
+  store.writeProjectFile("client/src/lib/design-tokens.ts", designContract);
+
   // ─── Build and persist artifact ─────────────────────────────────────────
+
+  // 5. Tailwind token enforcement — generate CSS-variable-backed color map
+  //    so that arbitrary color values (text-[#FF0000]) are replaced by
+  //    token classes (text-primary, text-secondary, etc.)
+  const tokenColorMap: Record<string, string> = {};
+  for (const [name] of Object.entries(parsed.tokens.colors)) {
+    const cssVar = `--color-${name.replace(/([A-Z])/g, "-$1").toLowerCase()}`;
+    tokenColorMap[name] = `var(${cssVar})`;
+  }
+  // Inject into the tailwind extend block so only design system colors are named
+  if (parsed.tailwindExtend && typeof parsed.tailwindExtend === "object") {
+    (parsed.tailwindExtend as Record<string, unknown>).colors = {
+      ...((parsed.tailwindExtend as Record<string, unknown>).colors as Record<string, unknown> ?? {}),
+      ...tokenColorMap,
+    };
+  }
 
   const designSystem: DesignSystem = {
     tokens: parsed.tokens,

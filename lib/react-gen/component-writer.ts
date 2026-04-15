@@ -8,15 +8,18 @@ import { execSync } from "node:child_process";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 import { DESIGN_RULES } from "./design-tokens.js";
+import { lintDesignSystem, type DesignViolation } from "./design-linter.js";
 import { loadDesignSkills } from "./skill-loader.js";
 import type { PageSpecFull } from "@shared/spec-schema.js";
 import type { PageCopy } from "../copy-planner/types.js";
 import type { ProjectBrief } from "../intake/types.js";
+import type { DesignSystem } from "../agents/types.js";
 
 export interface ComponentWriterInput {
   page: PageSpecFull;
   pageCopy: PageCopy | null;
   designSystem: string;
+  designSystemArtifact?: DesignSystem;
   brandVoice: string;
   sharedComponentPaths: Record<string, string>;
   competitiveIntel?: string;
@@ -38,6 +41,8 @@ export interface ComponentWriterOutput {
   compiledClean: boolean;
   importViolations: string[];
   nullSafetyIssues: string[];
+  designViolations: DesignViolation[];
+  designClean: boolean;
 }
 
 function getClient(): Anthropic {
@@ -584,6 +589,26 @@ export async function writeReactComponent(
     nullSafetyIssues = scanForNullUnsafePatterns(code);
   }
 
+  // Step 3.5: Design system lint (if design system artifact is available)
+  let designViolations: DesignViolation[] = [];
+  let designFixAttempts = 0;
+  if (input.designSystemArtifact) {
+    designViolations = lintDesignSystem(code, input.designSystemArtifact, filePath);
+    while (designViolations.length > 0 && designFixAttempts < 2) {
+      designFixAttempts++;
+      const violationList = designViolations
+        .map((v) => `- Line ${v.line}: ${v.violation} → ${v.suggestion}`)
+        .join("\n");
+      code = await generate(
+        `The previous attempt has design system violations. Fix these design violations:\n${violationList}\n\n` +
+        `Use CSS variables (var(--color-*)) or Tailwind token classes instead of hardcoded values.`,
+      );
+      code = autoFixImports(code);
+      designViolations = lintDesignSystem(code, input.designSystemArtifact, filePath);
+    }
+  }
+  const designClean = designViolations.length === 0;
+
   // Step 4: Self-review
   const review = await selfReview(code, page);
   if (review.score < 0.8 && !retried) {
@@ -622,8 +647,8 @@ export async function writeReactComponent(
 
   const compiledClean = tscResult.clean;
 
-  // Only mark passed if: imports clean + tsc clean + review score acceptable
-  const passed = compiledClean && importViolations.length === 0 && review.score >= 0.8;
+  // Only mark passed if: imports clean + tsc clean + design clean + review score acceptable
+  const passed = compiledClean && importViolations.length === 0 && designClean && review.score >= 0.8;
 
   return {
     pageName: page.name,
@@ -638,5 +663,7 @@ export async function writeReactComponent(
     compiledClean,
     importViolations,
     nullSafetyIssues,
+    designViolations,
+    designClean,
   };
 }

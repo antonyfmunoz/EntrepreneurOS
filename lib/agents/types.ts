@@ -168,9 +168,25 @@ export interface QAIssue {
   file: string;
   line?: number;
   severity: "error" | "warning";
-  category: "typescript" | "import" | "contract" | "state" | "null-safety";
+  category: "typescript" | "import" | "contract" | "state" | "null-safety" | "design" | "consistency";
   message: string;
   autoFixed: boolean;
+}
+
+// ─── Design Consistency ────────────────────────────────────────────────────
+
+export interface ConsistencyFinding {
+  type: "color" | "component" | "spacing" | "typography";
+  description: string;
+  pages: string[];
+  outlierPage: string;
+  fix: string;
+}
+
+export interface ConsistencyReport {
+  consistent: boolean;
+  findings: ConsistencyFinding[];
+  pagesChecked: number;
 }
 
 export interface QAReport {

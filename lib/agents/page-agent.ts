@@ -113,6 +113,7 @@ export async function runPageAgent(
     page: pageSpec,
     pageCopy,
     designSystem: designSystemContent,
+    designSystemArtifact: designSystemArtifact ?? undefined,
     brandVoice: brandVoice || "",
     sharedComponentPaths,
     competitiveIntel: competitiveIntelStr,
