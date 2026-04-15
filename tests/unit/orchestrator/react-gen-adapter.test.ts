@@ -46,6 +46,14 @@ vi.mock("../../../lib/react-gen/build-status-overlay.js", () => ({
   removeBuildOverlay: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("../../../lib/react-gen/screenshot-reviewer.js", () => ({
+  screenshotAndReview: vi.fn().mockResolvedValue({
+    score: 0.9,
+    issues: [],
+    screenshotPath: "",
+  }),
+}));
+
 vi.mock("../../../lib/spec-parser/brand-voice-inferrer.js", () => ({
   loadBrandVoice: () => "# Brand Voice\nBe direct.",
 }));
