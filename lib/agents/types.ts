@@ -53,6 +53,8 @@ export interface DataModel {
   enums: Array<{ name: string; values: string[] }>;
 }
 
+export type InferenceSource = "explicit" | "implied" | "inferred" | "standard";
+
 export interface ApiContract {
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   path: string;
@@ -63,6 +65,7 @@ export interface ApiContract {
   validationRules: string[];
   relatedEntity: string;
   pageRef?: string;
+  source?: InferenceSource;
 }
 
 export interface PageStructure {
@@ -76,6 +79,7 @@ export interface PageStructure {
   layoutHint?: string;
   emptyState?: string;
   errorState?: string;
+  source?: InferenceSource;
 }
 
 export interface ComponentHierarchy {

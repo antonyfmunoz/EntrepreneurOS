@@ -7,12 +7,160 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 import { extractJsonFromResponse } from "../spec-parser/restructure-spec.js";
 import { ArtifactStore } from "./artifact-store.js";
-import type { SystemArchitecture, ProductInsights } from "./types.js";
+import type { SystemArchitecture, ProductInsights, PageStructure, ApiContract } from "./types.js";
 import type { ProjectBrief } from "../intake/types.js";
 
-const SYSTEM_PROMPT = `You are a senior full-stack architect with deep expertise in React, TypeScript, Express, PostgreSQL, and Drizzle ORM. You design complete, production-ready system architectures for SaaS applications.
+// ─── Product Domain Knowledge ──────────────────────────────────────────────
 
-Given a product brief and strategic insights, you produce a SystemArchitecture JSON object that downstream agents consume to build the entire application. Your output must be precise, complete, and directly implementable.
+const PRODUCT_DOMAIN_KNOWLEDGE = `
+PRODUCT DOMAIN KNOWLEDGE — use this to extrapolate from brief descriptions:
+
+SaaS with TEAMS feature implies:
+- Team list page (/settings/team)
+- Invite member flow (modal or page + email)
+- Member role management (owner/admin/member)
+- Remove member confirmation
+- Pending invitations view
+- Accept invitation flow (/invite/:token)
+- Backend: invitations table, team_members table, role enum, invite email
+- Auth: team-scoped middleware on all team routes
+
+SaaS with BILLING feature implies:
+- Pricing page
+- Checkout flow
+- Billing settings (current plan, invoices, payment method)
+- Upgrade/downgrade flow
+- Plan limits enforcement in the UI
+- Backend: subscriptions table, invoices table, Stripe webhook handler
+
+SaaS with NOTIFICATIONS feature implies:
+- Notifications bell with unread count
+- Notifications list page or dropdown
+- Mark as read / mark all read
+- Notification preferences in settings
+- Backend: notifications table, notification types enum
+
+SaaS with SEARCH feature implies:
+- Search input in header
+- Search results page
+- Backend: search endpoint with text matching
+
+SaaS with ACTIVITY/AUDIT feature implies:
+- Activity feed on relevant pages
+- Full activity log page
+- Backend: activity_logs table with actor, action, target, timestamp
+
+SaaS with DASHBOARD/ANALYTICS implies:
+- Date range picker
+- Chart components (line, bar, pie)
+- Export to CSV/PDF
+- Comparison period
+- Backend: aggregation queries, date-bucketed data
+
+MARKETPLACE implies:
+- Browse/discover page with filters
+- Individual listing page
+- Seller profile page
+- Purchase/booking flow
+- Order history
+- Reviews and ratings
+- Messaging between buyer and seller
+- Backend: listings, orders, reviews, messages tables
+
+BOOKING/SCHEDULING implies:
+- Calendar view
+- Availability management (for service providers)
+- Booking flow (select date/time → confirm → pay)
+- Confirmation page and email
+- Upcoming/past bookings list
+- Cancellation/rescheduling flow
+- Backend: availability slots, bookings, reminders
+
+E-COMMERCE implies:
+- Product catalog with filters
+- Product detail page
+- Shopping cart (persistent)
+- Checkout (address → payment → confirm)
+- Order tracking page
+- Order history
+- Returns flow
+- Backend: products, cart_items, orders, order_items, addresses
+
+SOCIAL/COMMUNITY implies:
+- Feed/timeline
+- Post detail page
+- User profiles
+- Follow/unfollow
+- Comments and reactions
+- Notifications (mentions, replies, follows)
+- Direct messages
+- Backend: posts, follows, comments, reactions, messages
+
+AI-POWERED product implies:
+- AI chat interface
+- Conversation history
+- AI settings (model selection, preferences)
+- Usage/credits display
+- Backend: conversations, messages tables, AI gateway integration
+
+ONBOARDING for any SaaS implies:
+- Welcome/setup wizard (multi-step)
+- Progress indicator
+- Completion celebration
+- "What's next" guidance
+- Skip/complete later option
+- Backend: onboarding_progress tracking
+`;
+
+// ─── Feature Inference Process ─────────────────────────────────────────────
+
+const FEATURE_INFERENCE_PROCESS = `
+FEATURE INFERENCE PROCESS:
+
+1. Read the product brief
+2. Identify explicit features (user said these)
+3. Identify implied features (from domain knowledge above)
+4. Identify missing flows (what's needed to make explicit features work)
+   - Every create needs a list view
+   - Every list needs a detail view
+   - Every form needs validation and error handling
+   - Every auth-required page needs a login redirect
+   - Every destructive action needs a confirmation step
+   - Every async operation needs loading and error states
+5. Identify standard SaaS requirements regardless of product type:
+   - Auth (login, signup, forgot password, reset password)
+   - User profile and settings
+   - 404 not found page
+   - Terms/privacy if public-facing
+6. Generate complete page list with source classification:
+   - "explicit": user directly mentioned this page or feature
+   - "implied": domain knowledge says this is needed for a mentioned feature
+   - "inferred": required to make another feature work (e.g. list view for a create flow)
+   - "standard": every product of this type has this (auth, 404, settings)
+
+INFERENCE VALIDATION — after generating the architecture, check:
+1. Does every create flow have a corresponding list view?
+2. Does every feature with settings have a settings section?
+3. Does every auth-required section have proper middleware?
+4. Are there at least: auth pages, a not-found page, and user settings?
+5. If anything is missing, add it with the appropriate source classification.
+
+The output should ALWAYS have MORE pages than the user described — you fill in what they didn't think to mention.
+`;
+
+// ─── System Prompt ─────────────────────────────────────────────────────────
+
+const SYSTEM_PROMPT = `You are a senior full-stack architect with deep expertise in React, TypeScript, Express, PostgreSQL, and Drizzle ORM. You have built 50+ SaaS products and design complete, production-ready system architectures.
+
+When you receive a product brief, you reason like a senior product engineer:
+1. Identify the product category (SaaS, marketplace, booking, e-commerce, social, analytics, etc.)
+2. Apply domain knowledge to derive implied pages and features
+3. Infer what the user didn't say but definitely needs
+4. Validate completeness and fill gaps
+
+${PRODUCT_DOMAIN_KNOWLEDGE}
+
+${FEATURE_INFERENCE_PROCESS}
 
 RESPONSE FORMAT: Return ONLY a valid JSON object matching the schema below — no preamble, no markdown fences, no explanation.
 
@@ -57,7 +205,8 @@ JSON SCHEMA:
       "responseShape": { "fieldName": "type description" },
       "validationRules": ["string"],
       "relatedEntity": "string (table name)",
-      "pageRef": "optional string (route of the page that uses this endpoint)"
+      "pageRef": "optional string (route of the page that uses this endpoint)",
+      "source": "explicit | implied | inferred | standard"
     }
   ],
   "pages": [
@@ -71,7 +220,8 @@ JSON SCHEMA:
       "mutations": ["string (API endpoints this page writes to)"],
       "layoutHint": "optional string (e.g. sidebar-main, centered, full-width)",
       "emptyState": "optional string (what to show when no data)",
-      "errorState": "optional string (what to show on error)"
+      "errorState": "optional string (what to show on error)",
+      "source": "explicit | implied | inferred | standard"
     }
   ],
   "componentHierarchy": [
@@ -104,6 +254,8 @@ DESIGN RULES:
 8. Auth-related entities (users, sessions) are always included if any page requires authentication.
 9. Enums should be used for any field with a fixed set of values (status, role, type fields).
 10. User flows should cover the critical paths: registration, core feature usage, and key admin actions.
+11. Every page and endpoint MUST have a "source" field classifying why it was included.
+12. The output MUST contain more pages than the user explicitly described — fill in implied, inferred, and standard pages.
 
 Return ONLY the JSON object.`;
 
@@ -145,7 +297,7 @@ PRODUCT BRIEF:
 - DB Provider: ${brief.dbProvider}
 - Tech Stack: ${brief.techStack.frontend} + ${brief.techStack.buildTool} + ${brief.techStack.styling} + ${brief.techStack.componentLib}
 
-SPEC PAGES:
+SPEC PAGES (these are EXPLICIT — user requested these directly):
 ${specPages}
 
 BACKEND SPEC ENDPOINTS:
@@ -164,6 +316,8 @@ PRODUCT INSIGHTS:
 ${insights.architectureRecommendations.map((r) => `  - ${r}`).join("\n")}
 - Design Recommendations:
 ${insights.designRecommendations.map((r) => `  - ${r}`).join("\n")}
+
+IMPORTANT: The spec pages above are what the user explicitly requested. You MUST also add implied, inferred, and standard pages using the Product Domain Knowledge and Feature Inference Process. Tag every page and endpoint with its source classification.
 
 Return the SystemArchitecture JSON object now.`;
 }
@@ -202,6 +356,7 @@ export async function runArchitectureAgent(
   try {
     architecture = extractJsonFromResponse(firstContent.text) as SystemArchitecture;
     validateArchitecture(architecture);
+    architecture = runInferenceValidation(architecture);
   } catch (firstError) {
     // Retry once with error context
     const retryMessages: Anthropic.MessageParam[] = [
@@ -229,12 +384,166 @@ export async function runArchitectureAgent(
 
     architecture = extractJsonFromResponse(retryContent.text) as SystemArchitecture;
     validateArchitecture(architecture);
+    architecture = runInferenceValidation(architecture);
   }
 
   store.setArchitecture(architecture);
 
   return architecture;
 }
+
+// ─── Inference Validation ──────────────────────────────────────────────────
+// After the LLM generates the architecture, programmatically verify
+// completeness and fill gaps the model might have missed.
+
+function runInferenceValidation(arch: SystemArchitecture): SystemArchitecture {
+  const pagesByRoute = new Map(arch.pages.map((p) => [p.route, p]));
+  const pagesByName = new Map(arch.pages.map((p) => [p.name, p]));
+
+  // 1. Every create endpoint should have a corresponding list view
+  for (const contract of arch.apiContracts) {
+    if (contract.method === "POST" && contract.path.startsWith("/api/")) {
+      const resource = contract.path.replace("/api/", "").split("/")[0];
+      const hasListEndpoint = arch.apiContracts.some(
+        (c) => c.method === "GET" && c.path === `/api/${resource}`,
+      );
+      if (!hasListEndpoint) {
+        arch.apiContracts.push({
+          method: "GET",
+          path: `/api/${resource}`,
+          description: `List all ${resource}`,
+          authRequired: contract.authRequired,
+          responseShape: { [resource]: `${resource}[]` },
+          validationRules: [],
+          relatedEntity: contract.relatedEntity,
+          source: "inferred",
+        });
+      }
+    }
+  }
+
+  // 2. Auth pages — must have login, signup, forgot-password
+  const hasAuth = arch.pages.some((p) => p.authLevel === "authenticated" || p.authLevel === "admin");
+  if (hasAuth) {
+    const requiredAuthPages: Array<{ name: string; route: string; purpose: string }> = [
+      { name: "LoginPage", route: "/login", purpose: "User login with email/password or OAuth" },
+      { name: "SignupPage", route: "/signup", purpose: "New user registration" },
+      { name: "ForgotPasswordPage", route: "/forgot-password", purpose: "Request password reset email" },
+      { name: "ResetPasswordPage", route: "/reset-password", purpose: "Set new password from reset link" },
+    ];
+
+    for (const required of requiredAuthPages) {
+      if (!pagesByRoute.has(required.route) && !pagesByName.has(required.name)) {
+        const page: PageStructure = {
+          name: required.name,
+          route: required.route,
+          authLevel: "public",
+          purpose: required.purpose,
+          components: [],
+          dataNeeds: [],
+          mutations: [],
+          layoutHint: "centered",
+          source: "standard",
+        };
+        arch.pages.push(page);
+        pagesByRoute.set(page.route, page);
+        pagesByName.set(page.name, page);
+      }
+    }
+  }
+
+  // 3. Not-found page
+  if (!pagesByRoute.has("/404") && !pagesByName.has("NotFoundPage")) {
+    const page: PageStructure = {
+      name: "NotFoundPage",
+      route: "/404",
+      authLevel: "public",
+      purpose: "404 page shown for unmatched routes",
+      components: [],
+      dataNeeds: [],
+      mutations: [],
+      layoutHint: "centered",
+      source: "standard",
+    };
+    arch.pages.push(page);
+    pagesByRoute.set(page.route, page);
+    pagesByName.set(page.name, page);
+  }
+
+  // 4. User settings page (if authenticated pages exist)
+  if (hasAuth && !pagesByRoute.has("/settings") && !pagesByName.has("SettingsPage")) {
+    const page: PageStructure = {
+      name: "SettingsPage",
+      route: "/settings",
+      authLevel: "authenticated",
+      purpose: "User profile and account settings",
+      components: [],
+      dataNeeds: ["/api/users/me"],
+      mutations: ["/api/users/me"],
+      layoutHint: "sidebar-main",
+      source: "standard",
+    };
+    arch.pages.push(page);
+    pagesByRoute.set(page.route, page);
+    pagesByName.set(page.name, page);
+
+    // Ensure the settings API endpoints exist
+    const hasGetMe = arch.apiContracts.some((c) => c.method === "GET" && c.path === "/api/users/me");
+    if (!hasGetMe) {
+      arch.apiContracts.push({
+        method: "GET",
+        path: "/api/users/me",
+        description: "Get current user profile",
+        authRequired: true,
+        responseShape: { user: "User" },
+        validationRules: [],
+        relatedEntity: "users",
+        pageRef: "/settings",
+        source: "standard",
+      });
+    }
+    const hasPatchMe = arch.apiContracts.some(
+      (c) => (c.method === "PUT" || c.method === "PATCH") && c.path === "/api/users/me",
+    );
+    if (!hasPatchMe) {
+      arch.apiContracts.push({
+        method: "PATCH",
+        path: "/api/users/me",
+        description: "Update current user profile",
+        authRequired: true,
+        requestBody: { name: "string", email: "string" },
+        responseShape: { user: "User" },
+        validationRules: ["email must be valid"],
+        relatedEntity: "users",
+        pageRef: "/settings",
+        source: "standard",
+      });
+    }
+  }
+
+  // 5. Ensure users entity exists if auth is required
+  if (hasAuth) {
+    const hasUsersEntity = arch.dataModel.entities.some((e) => e.tableName === "users");
+    if (!hasUsersEntity) {
+      arch.dataModel.entities.push({
+        tableName: "users",
+        fields: [
+          { name: "id", type: "serial", nullable: false },
+          { name: "email", type: "text", nullable: false },
+          { name: "password_hash", type: "text", nullable: true },
+          { name: "name", type: "text", nullable: true },
+          { name: "avatar_url", type: "text", nullable: true },
+        ],
+        indexes: ["unique on email"],
+        timestamps: true,
+      });
+    }
+  }
+
+  return arch;
+}
+
+// ─── Structural Validation ─────────────────────────────────────────────────
 
 /**
  * Lightweight structural validation to catch obvious shape mismatches

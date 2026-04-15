@@ -146,10 +146,26 @@ describe("runArchitectureAgent", () => {
     const result = await runArchitectureAgent(makeBrief(), makeInsights(), store);
 
     expect(result).toBeDefined();
-    expect(result.dataModel.entities).toHaveLength(1);
+    // Users entity from mock — inference validation keeps it (already exists)
     expect(result.dataModel.entities[0].tableName).toBe("users");
-    expect(result.apiContracts).toHaveLength(1);
-    expect(result.pages).toHaveLength(1);
+    // Mock has 1 explicit endpoint; inference validation adds standard
+    // settings endpoints (GET /api/users/me, PATCH /api/users/me)
+    expect(result.apiContracts.length).toBeGreaterThanOrEqual(1);
+    expect(result.apiContracts[0].path).toBe("/api/users");
+    // Mock has 1 explicit page (Dashboard, authenticated); inference
+    // validation adds standard pages: login, signup, forgot-password,
+    // reset-password, 404, settings
+    expect(result.pages.length).toBeGreaterThanOrEqual(1);
+    expect(result.pages[0].name).toBe("Dashboard");
+    // Verify standard pages were added by inference validation
+    const pageRoutes = result.pages.map((p) => p.route);
+    expect(pageRoutes).toContain("/login");
+    expect(pageRoutes).toContain("/signup");
+    expect(pageRoutes).toContain("/404");
+    expect(pageRoutes).toContain("/settings");
+    // Standard pages should be tagged with source: "standard"
+    const settingsPage = result.pages.find((p) => p.route === "/settings");
+    expect(settingsPage?.source).toBe("standard");
     expect(result.componentHierarchy).toHaveLength(1);
     expect(result.userFlows).toHaveLength(1);
   });
