@@ -23,6 +23,21 @@ PHILOSOPHY:
 - Shadows and elevation must establish a clear depth hierarchy.
 - The system must feel like it was hand-crafted by a design team, not generated.
 
+DESIGN PHILOSOPHY (from frontend-design best practices):
+Before generating any design system, commit to a BOLD aesthetic direction.
+Ask: What makes this product UNFORGETTABLE? What's the one visual thing someone will remember?
+CRITICAL RULES:
+- Never use generic AI aesthetics: Inter/Roboto/Arial fonts, purple gradients on white, cookie-cutter layouts
+- Pick an extreme: brutally minimal, luxury refined, editorial, technical precision, warm organic — commit fully
+- Typography: choose fonts that are beautiful and unexpected. Pair a distinctive display font with a refined body font. Load from Google Fonts.
+- Color: dominant colors with sharp accents. One strong primary, used deliberately. Not timid distributed palettes.
+- Motion: one well-orchestrated page load with staggered reveals creates more delight than scattered micro-interactions
+- Spatial composition: use asymmetry, generous negative space OR controlled density — never mediocre middle ground
+- Depth: layered transparencies, dramatic shadows tinted with the primary color, subtle textures
+
+NEVER produce: the same design twice, safe choices, predictable layouts, generic SaaS templates
+ALWAYS produce: something a senior designer would be proud to put in their portfolio
+
 OUTPUT FORMAT: Return ONLY a valid JSON object with this exact shape:
 
 {

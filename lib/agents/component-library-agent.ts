@@ -17,6 +17,206 @@ import { ArtifactStore } from "./artifact-store.js";
 import type { ComponentInterface, SystemArchitecture, DesignSystem } from "./types.js";
 import type { ProjectBrief } from "../intake/types.js";
 
+// ─── Component Design Standards (injected into shared-component-builder context) ─
+
+export const COMPONENT_DESIGN_STANDARDS = `
+COMPONENT DESIGN STANDARDS:
+Every component must be production-grade and visually distinctive:
+
+- Buttons: not flat rectangles. Consider subtle depth, precise hover states, micro-animations on click
+- Cards: use shadow and layering for depth. Hover states should feel satisfying.
+- Inputs: styled focus states with color. Not just a border color change — consider glow, scale.
+- Navigation: clear active states. Smooth transitions between states.
+- Loading states: skeleton screens that match the layout, not generic spinners
+- Empty states: illustrated or typographic — never just "No data found"
+- Motion: use framer-motion for meaningful transitions. Page loads should feel orchestrated.
+
+Import framer-motion for animations: npm install framer-motion
+Use it for: page transitions, list item reveals, modal animations, hover micro-interactions
+`;
+
+export const COMPONENT_LIBRARY_KNOWLEDGE = `
+COMPONENT LIBRARY KNOWLEDGE:
+
+shadcn/ui components available: Button, Input, Label, Card, CardHeader, CardContent, CardFooter, Dialog, DialogContent, DialogHeader, DialogFooter, Sheet, SheetContent, Tabs, TabsList, TabsTrigger, TabsContent, Table, TableHeader, TableBody, TableRow, TableCell, Select, SelectTrigger, SelectContent, SelectItem, Checkbox, RadioGroup, RadioGroupItem, Switch, Slider, Textarea, Badge, Avatar, AvatarImage, AvatarFallback, Separator, Skeleton, Toast, Toaster, ScrollArea, DropdownMenu, DropdownMenuContent, DropdownMenuItem, Tooltip, TooltipContent, Alert, AlertTitle, AlertDescription, Progress, Calendar, Popover, PopoverContent, Command, CommandInput, CommandList, CommandItem
+
+MagicUI components for premium feel:
+- AnimatedGradientText: animated gradient text for hero headings
+- BorderBeam: animated border effect for cards and containers
+- MagicCard: spotlight effect card with hover glow
+- BlurFade: fade-in with blur for page load animations
+- NumberTicker: animated number counting up for stats
+- Marquee: infinite scroll for logos/testimonials
+- TypingAnimation: typewriter effect for AI responses
+- ShimmerButton: shimmer effect on CTAs
+- Particles: background particle effect for hero sections
+- Meteors: meteor shower background effect
+- GridPattern: subtle grid background texture
+
+21st.dev patterns for specific use cases:
+- Sign-in forms: email + password with Google OAuth, clean centered card
+- Dashboard headers: user avatar + notifications + breadcrumb pattern
+- Data tables: sortable columns, row actions, bulk select
+- Stat cards: icon + number + trend indicator + sparkline
+- Empty states: illustration + heading + description + CTA
+- Onboarding wizards: step indicator + progress + back/next
+`;
+
+// ─── MCP Component Discovery ────────────────────────────────────────────────
+
+export interface ComponentReference {
+  name: string;
+  source: "shadcn" | "magicui" | "21st-dev" | "built-in";
+  description: string;
+  installCommand?: string;
+  props?: Array<{ name: string; type: string; optional: boolean }>;
+  usageExample?: string;
+}
+
+export async function discoverComponentsFromMCP(
+  componentNames: string[],
+  mcpInvoker?: (tool: string, args: unknown) => Promise<unknown>,
+): Promise<ComponentReference[]> {
+  if (!mcpInvoker) {
+    console.log("  [component-library] Running headless — using built-in component knowledge");
+    return componentNames.map((name) => resolveFromBuiltInKnowledge(name));
+  }
+
+  const results: ComponentReference[] = [];
+
+  for (const name of componentNames) {
+    let found = false;
+
+    // Query shadcn MCP
+    try {
+      const shadcnResult = await mcpInvoker("mcp__magicui__getRegistryItem", { name: name.toLowerCase() });
+      if (shadcnResult) {
+        results.push({
+          name,
+          source: "shadcn",
+          description: `shadcn/ui ${name} component`,
+          installCommand: `npx shadcn@latest add ${name.toLowerCase()}`,
+          props: extractPropsFromMCPResult(shadcnResult),
+        });
+        found = true;
+      }
+    } catch {
+      // Not found in shadcn, continue
+    }
+
+    // Query MagicUI MCP for animated variants
+    if (!found) {
+      try {
+        const magicResult = await mcpInvoker("mcp__magicui__searchRegistryItems", { query: name });
+        if (magicResult && Array.isArray(magicResult) && magicResult.length > 0) {
+          const item = magicResult[0] as { name?: string; description?: string };
+          results.push({
+            name,
+            source: "magicui",
+            description: item.description ?? `MagicUI ${name} component`,
+            installCommand: `npx magicui-cli@latest add ${(item.name ?? name).toLowerCase()}`,
+          });
+          found = true;
+        }
+      } catch {
+        // Not found in MagicUI, continue
+      }
+    }
+
+    // Query 21st.dev MCP for design patterns
+    if (!found) {
+      try {
+        const patternResult = await mcpInvoker("mcp__magic21__21st_magic_component_inspiration", {
+          message: `${name} component pattern`,
+        });
+        if (patternResult) {
+          results.push({
+            name,
+            source: "21st-dev",
+            description: `21st.dev pattern for ${name}`,
+            usageExample: typeof patternResult === "string" ? patternResult : undefined,
+          });
+          found = true;
+        }
+      } catch {
+        // Not found via 21st.dev, continue
+      }
+    }
+
+    // Fall back to built-in knowledge
+    if (!found) {
+      results.push(resolveFromBuiltInKnowledge(name));
+    }
+  }
+
+  return results;
+}
+
+function resolveFromBuiltInKnowledge(name: string): ComponentReference {
+  // Check against known shadcn components
+  const shadcnComponents = new Set([
+    "Button", "Input", "Label", "Card", "CardHeader", "CardContent", "CardFooter",
+    "Dialog", "DialogContent", "DialogHeader", "DialogFooter", "Sheet", "SheetContent",
+    "Tabs", "TabsList", "TabsTrigger", "TabsContent", "Table", "TableHeader", "TableBody",
+    "TableRow", "TableCell", "Select", "SelectTrigger", "SelectContent", "SelectItem",
+    "Checkbox", "RadioGroup", "RadioGroupItem", "Switch", "Slider", "Textarea", "Badge",
+    "Avatar", "AvatarImage", "AvatarFallback", "Separator", "Skeleton", "Toast", "Toaster",
+    "ScrollArea", "DropdownMenu", "DropdownMenuContent", "DropdownMenuItem", "Tooltip",
+    "TooltipContent", "Alert", "AlertTitle", "AlertDescription", "Progress", "Calendar",
+    "Popover", "PopoverContent", "Command", "CommandInput", "CommandList", "CommandItem",
+  ]);
+
+  const magicUIComponents: Record<string, string> = {
+    AnimatedGradientText: "animated gradient text for hero headings",
+    BorderBeam: "animated border effect for cards and containers",
+    MagicCard: "spotlight effect card with hover glow",
+    BlurFade: "fade-in with blur for page load animations",
+    NumberTicker: "animated number counting up for stats",
+    Marquee: "infinite scroll for logos/testimonials",
+    TypingAnimation: "typewriter effect for AI responses",
+    ShimmerButton: "shimmer effect on CTAs",
+    Particles: "background particle effect for hero sections",
+    Meteors: "meteor shower background effect",
+    GridPattern: "subtle grid background texture",
+  };
+
+  if (shadcnComponents.has(name)) {
+    return {
+      name,
+      source: "shadcn",
+      description: `shadcn/ui ${name} component`,
+      installCommand: `npx shadcn@latest add ${name.toLowerCase()}`,
+    };
+  }
+
+  if (magicUIComponents[name]) {
+    return {
+      name,
+      source: "magicui",
+      description: magicUIComponents[name],
+      installCommand: `npx magicui-cli@latest add ${name.toLowerCase()}`,
+    };
+  }
+
+  return {
+    name,
+    source: "built-in",
+    description: `Custom ${name} component — no external package`,
+  };
+}
+
+function extractPropsFromMCPResult(result: unknown): Array<{ name: string; type: string; optional: boolean }> | undefined {
+  // MCP results vary in shape — extract props if structured data is present
+  if (result && typeof result === "object" && "props" in result && Array.isArray((result as { props: unknown }).props)) {
+    return ((result as { props: Array<{ name?: string; type?: string; optional?: boolean }> }).props).map((p) => ({
+      name: p.name ?? "unknown",
+      type: p.type ?? "unknown",
+      optional: p.optional ?? false,
+    }));
+  }
+  return undefined;
+}
+
 // ─── Interface Extraction ────────────────────────────────────────────────────
 
 interface ExtractedProp {
