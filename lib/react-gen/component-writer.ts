@@ -251,13 +251,72 @@ export function scanForNullUnsafePatterns(code: string): string[] {
 
 // ─── TypeScript Compile Check ─────────────────────────────────────────────────
 
-export function runTscCheck(projectRoot: string): { clean: boolean; errors: string[] } {
+/**
+ * Run tsc --noEmit scoped to a specific file (+ shared deps) to avoid
+ * cross-contamination during parallel generation. When `scopeToFile` is
+ * omitted, checks the entire project (used for post-build health checks).
+ */
+export function runTscCheck(
+  projectRoot: string,
+  scopeToFile?: string,
+): { clean: boolean; errors: string[] } {
   try {
-    execSync("npx tsc --noEmit --skipLibCheck", {
+    let cmd: string;
+
+    if (scopeToFile) {
+      // Write a temporary tsconfig that only includes this file + shared deps.
+      // This prevents errors in other in-progress parallel files from failing
+      // this file's check.
+      const relPath = path.relative(projectRoot, scopeToFile).replace(/\\/g, "/");
+      const tempConfig = {
+        extends: "./tsconfig.json",
+        include: [
+          relPath,
+          "client/src/components/**/*",
+          "client/src/lib/**/*",
+          "client/src/hooks/**/*",
+          "shared/**/*",
+        ],
+      };
+      const tempConfigPath = path.join(projectRoot, `tsconfig.scopecheck.json`);
+      fs.writeFileSync(tempConfigPath, JSON.stringify(tempConfig), "utf-8");
+      cmd = `npx tsc --noEmit --skipLibCheck --project tsconfig.scopecheck.json`;
+
+      try {
+        execSync(cmd, {
+          cwd: projectRoot,
+          encoding: "utf-8",
+          stdio: ["pipe", "pipe", "pipe"],
+          timeout: 60_000,
+        });
+        return { clean: true, errors: [] };
+      } catch (err: unknown) {
+        const execErr = err as { stdout?: string; stderr?: string };
+        const output = (execErr.stdout ?? "") + (execErr.stderr ?? "");
+        // Only report errors from the scoped file, not from shared deps
+        const normalizedScope = relPath.replace(/\\/g, "/");
+        const errors = output
+          .split("\n")
+          .filter((line) => /error TS\d+/.test(line))
+          .filter((line) => {
+            // Include errors from the target file or generic errors
+            const normalized = line.replace(/\\/g, "/");
+            return normalized.includes(normalizedScope) || !normalized.includes(".ts");
+          })
+          .map((line) => line.trim());
+        return { clean: errors.length === 0, errors };
+      } finally {
+        try { fs.unlinkSync(path.join(projectRoot, `tsconfig.scopecheck.json`)); } catch { /* ignore */ }
+      }
+    }
+
+    // Full project check (no scoping)
+    cmd = "npx tsc --noEmit --skipLibCheck";
+    execSync(cmd, {
       cwd: projectRoot,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
-      timeout: 60_000,
+      timeout: 90_000,
     });
     return { clean: true, errors: [] };
   } catch (err: unknown) {
@@ -545,7 +604,8 @@ export async function writeReactComponent(
   fs.writeFileSync(filePath, code, "utf-8");
 
   // Step 6: TypeScript compile check with fix loop (max 3 attempts)
-  let tscResult = runTscCheck(projectRoot);
+  // Scoped to this file to avoid cross-contamination during parallel generation.
+  let tscResult = runTscCheck(projectRoot, filePath);
   tsErrors = tscResult.errors;
 
   while (!tscResult.clean && fixAttempts < 3) {
@@ -556,7 +616,7 @@ export async function writeReactComponent(
     );
     code = autoFixImports(code);
     fs.writeFileSync(filePath, code, "utf-8");
-    tscResult = runTscCheck(projectRoot);
+    tscResult = runTscCheck(projectRoot, filePath);
     tsErrors = tscResult.errors;
   }
 
