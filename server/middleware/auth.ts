@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { randomBytes } from "crypto";
 import { appendFileSync } from "fs";
-import { createClerkClient } from "@clerk/express";
+import { createClerkClient, getAuth } from "@clerk/express";
 import { storage } from "../storage";
 import type { User as SelectUser } from "@shared/schema";
 
@@ -57,12 +57,13 @@ export async function attachClerkUser(req: Request, res: Response, next: NextFun
     return next();
   }
 
-  const clerkUserId = (req as any).auth?.userId as string | undefined;
+  const auth = getAuth(req);
+  const clerkUserId = auth?.userId as string | undefined;
   const debugLog = (msg: string) => {
     appendFileSync('C:/Users/antonys beast pc/dev/EntrepreneurOS/auth-debug.log', msg + '\n');
   };
   debugLog(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-  debugLog(`  req.auth: ${JSON.stringify((req as any).auth)}`);
+  debugLog(`  getAuth(req): ${JSON.stringify(auth)}`);
   debugLog(`  clerkUserId: ${clerkUserId}`);
   debugLog(`  cookies.__session: ${(req as any).cookies?.__session ? 'present' : 'absent'}`);
   debugLog(`  headers.authorization: ${req.headers.authorization ? 'present' : 'absent'}`);
