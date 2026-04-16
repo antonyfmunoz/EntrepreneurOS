@@ -1,679 +1,574 @@
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useLocation } from 'wouter';
-import { ChevronRight, Plus, AlertCircle, Building2, TrendingUp, Target, Briefcase, DollarSign } from 'lucide-react';
-import { UniversalLayout } from '@/components/universal-layout';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Card } from '@/components/ui/card';
-import designTokens from '@/lib/design-tokens';
+import { useState, useCallback, useEffect } from "react";
+import { useLocation } from "wouter";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { apiRequest } from "@/lib/queryClient";
+import { ChevronRight, Check } from "lucide-react";
 
-const STEPS = [
-  { name: 'Portfolio', description: 'Select or create portfolio' },
-  { name: 'Company', description: 'Name your company' },
-  { name: 'Stage', description: 'Current stage' },
-  { name: 'Industry', description: 'Industry and model' },
-  { name: 'Goals', description: 'Strategic goals' },
-] as const;
-
-const STAGES = [
-  { value: 'idea', label: 'Idea', description: 'Validating concept' },
-  { value: 'pre-revenue', label: 'Pre-revenue', description: 'Building, not selling yet' },
-  { value: 'revenue', label: 'Revenue', description: 'Early customers' },
-  { value: 'scaling', label: 'Scaling', description: 'Product-market fit, growing' },
-  { value: 'mature', label: 'Mature', description: 'Established business' },
-] as const;
-
-const BUSINESS_MODELS = [
-  { value: 'saas', label: 'SaaS', icon: Building2 },
-  { value: 'services', label: 'Services', icon: Briefcase },
-  { value: 'product', label: 'Product', icon: DollarSign },
-  { value: 'hybrid', label: 'Hybrid', icon: TrendingUp },
-  { value: 'other', label: 'Other', icon: Target },
-] as const;
-
+// Types
 interface Portfolio {
   id: string;
   name: string;
   description?: string;
 }
 
-interface CompanyFormData {
-  portfolioId: string;
+interface PortfoliosResponse {
+  portfolios: Portfolio[];
+}
+
+interface PortfolioCreatePayload {
+  name: string;
+  description?: string;
+}
+
+interface PortfolioCreateResponse {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+interface CompanyCreatePayload {
   name: string;
   stage: string;
   industry: string;
   businessModel: string;
-  goals: string;
+  goals?: string;
 }
 
-interface StepIndicatorProps {
-  currentStep: number;
-  totalSteps: number;
-}
-
-function StepIndicator({ currentStep, totalSteps }: StepIndicatorProps) {
-  return (
-    <div className="flex items-center justify-center gap-2">
-      {Array.from({ length: totalSteps }).map((_, index) => (
-        <div
-          key={index}
-          className="h-2 w-8 rounded-full transition-all"
-          style={{
-            backgroundColor: index <= currentStep ? designTokens.colors.primary : designTokens.colors.outlineVariant,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-interface PortfolioSelectorProps {
-  portfolios: Portfolio[];
-  selectedId: string;
-  onSelect: (id: string) => void;
-}
-
-function PortfolioSelector({ portfolios, selectedId, onSelect }: PortfolioSelectorProps) {
-  return (
-    <RadioGroup value={selectedId} onValueChange={onSelect} className="space-y-3">
-      {portfolios.map((portfolio) => (
-        <label
-          key={portfolio.id}
-          className="flex items-start gap-3 rounded-xl p-4 cursor-pointer transition-all"
-          style={{
-            background: selectedId === portfolio.id ? 'rgba(255, 255, 255, 0.7)' : designTokens.colors.surface,
-            backdropFilter: selectedId === portfolio.id ? 'blur(16px)' : 'none',
-            boxShadow: selectedId === portfolio.id ? designTokens.shadows.ambient : 'none',
-          }}
-        >
-          <RadioGroupItem value={portfolio.id} className="mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <div className="font-semibold" style={{ color: designTokens.colors.onSurface }}>
-              {portfolio.name}
-            </div>
-            {portfolio.description && (
-              <div className="text-sm mt-1" style={{ color: designTokens.colors.onSurfaceVariant }}>
-                {portfolio.description}
-              </div>
-            )}
-          </div>
-        </label>
-      ))}
-    </RadioGroup>
-  );
-}
-
-interface CreatePortfolioInlineProps {
+interface CompanyResponse {
+  id: string;
   name: string;
-  description: string;
-  onNameChange: (value: string) => void;
-  onDescriptionChange: (value: string) => void;
-  error?: string;
+  portfolioId: string;
+  stage: string;
+  industry: string;
+  businessModel: string;
+  goals?: string;
 }
 
-function CreatePortfolioInline({ name, description, onNameChange, onDescriptionChange, error }: CreatePortfolioInlineProps) {
-  return (
-    <div
-      className="rounded-xl p-6 space-y-4"
-      style={{
-        background: 'rgba(255, 255, 255, 0.7)',
-        backdropFilter: 'blur(16px)',
-        boxShadow: designTokens.shadows.ambient,
-      }}
-    >
-      <div className="flex items-center gap-2" style={{ color: designTokens.colors.onSurface }}>
-        <Plus size={20} />
-        <h3 className="font-semibold text-lg">Create new portfolio</h3>
-      </div>
-      <div className="space-y-3">
-        <div>
-          <Label htmlFor="portfolio-name">Portfolio name</Label>
-          <Input
-            id="portfolio-name"
-            value={name}
-            onChange={(e) => onNameChange(e.target.value)}
-            placeholder="e.g., My Ventures"
-            className="mt-1.5"
-          />
-        </div>
-        <div>
-          <Label htmlFor="portfolio-description">Description (optional)</Label>
-          <Textarea
-            id="portfolio-description"
-            value={description}
-            onChange={(e) => onDescriptionChange(e.target.value)}
-            placeholder="e.g., My active portfolio companies"
-            className="mt-1.5 resize-none"
-            rows={2}
-          />
-        </div>
-        {error && (
-          <div className="flex items-start gap-2 text-sm p-3 rounded-lg" style={{ color: '#dc2626', background: `${'#dc2626'}1A` }}>
-            <AlertCircle size={16} className="mt-0.5 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+const STAGES = [
+  { value: "idea", label: "Idea" },
+  { value: "pre-revenue", label: "Pre-revenue" },
+  { value: "revenue", label: "Revenue" },
+  { value: "scaling", label: "Scaling" },
+  { value: "mature", label: "Mature" }
+];
 
-interface CompanyNameInputProps {
-  value: string;
-  onChange: (value: string) => void;
-  error?: string;
-}
-
-function CompanyNameInput({ value, onChange, error }: CompanyNameInputProps) {
-  return (
-    <div className="space-y-2">
-      <Label htmlFor="company-name">Company name</Label>
-      <Input
-        id="company-name"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="e.g., Acme Labs"
-        className="text-lg"
-      />
-      {error && (
-        <div className="flex items-start gap-2 text-sm" style={{ color: '#dc2626' }}>
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface StageSelectorProps {
-  value: string;
-  onChange: (value: string) => void;
-  error?: string;
-}
-
-function StageSelector({ value, onChange, error }: StageSelectorProps) {
-  return (
-    <div className="space-y-3">
-      <Label>What stage?</Label>
-      <RadioGroup value={value} onValueChange={onChange} className="space-y-3">
-        {STAGES.map((stage) => (
-          <label
-            key={stage.value}
-            className="flex items-start gap-3 rounded-xl p-4 cursor-pointer transition-all"
-            style={{
-              background: value === stage.value ? 'rgba(255, 255, 255, 0.7)' : designTokens.colors.surface,
-              backdropFilter: value === stage.value ? 'blur(16px)' : 'none',
-              boxShadow: value === stage.value ? designTokens.shadows.ambient : 'none',
-            }}
-          >
-            <RadioGroupItem value={stage.value} className="mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold" style={{ color: designTokens.colors.onSurface }}>
-                {stage.label}
-              </div>
-              <div className="text-sm mt-1" style={{ color: designTokens.colors.onSurfaceVariant }}>
-                {stage.description}
-              </div>
-            </div>
-          </label>
-        ))}
-      </RadioGroup>
-      {error && (
-        <div className="flex items-start gap-2 text-sm" style={{ color: '#dc2626' }}>
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface IndustryInputProps {
-  value: string;
-  onChange: (value: string) => void;
-  error?: string;
-}
-
-function IndustryInput({ value, onChange, error }: IndustryInputProps) {
-  return (
-    <div className="space-y-2">
-      <Label htmlFor="industry">What industry?</Label>
-      <Input
-        id="industry"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="e.g., B2B SaaS, Consumer Hardware, Healthcare"
-      />
-      {error && (
-        <div className="flex items-start gap-2 text-sm" style={{ color: '#dc2626' }}>
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface BusinessModelInputProps {
-  value: string;
-  onChange: (value: string) => void;
-  error?: string;
-}
-
-function BusinessModelInput({ value, onChange, error }: BusinessModelInputProps) {
-  return (
-    <div className="space-y-3">
-      <Label>How do you make money?</Label>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {BUSINESS_MODELS.map((model) => {
-          const Icon = model.icon;
-          const isSelected = value === model.value;
-          return (
-            <button
-              key={model.value}
-              type="button"
-              onClick={() => onChange(model.value)}
-              className="flex flex-col items-center gap-2 rounded-xl p-4 transition-all"
-              style={{
-                background: isSelected ? 'rgba(255, 255, 255, 0.7)' : designTokens.colors.surface,
-                backdropFilter: isSelected ? 'blur(16px)' : 'none',
-                boxShadow: isSelected ? designTokens.shadows.ambient : 'none',
-                color: isSelected ? designTokens.colors.primary : designTokens.colors.onSurface,
-              }}
-            >
-              <Icon size={24} />
-              <span className="text-sm font-medium">{model.label}</span>
-            </button>
-          );
-        })}
-      </div>
-      {error && (
-        <div className="flex items-start gap-2 text-sm" style={{ color: '#dc2626' }}>
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface GoalsTextareaProps {
-  value: string;
-  onChange: (value: string) => void;
-  error?: string;
-}
-
-function GoalsTextarea({ value, onChange, error }: GoalsTextareaProps) {
-  return (
-    <div className="space-y-2">
-      <Label htmlFor="goals">What are your top 3 goals for the next quarter?</Label>
-      <div className="text-sm mb-3" style={{ color: designTokens.colors.onSurfaceVariant }}>
-        These shape your AI agent's recommendations.
-      </div>
-      <Textarea
-        id="goals"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="e.g., 10x revenue, hire 5 engineers, launch product line"
-        className="resize-none min-h-[120px]"
-      />
-      {error && (
-        <div className="flex items-start gap-2 text-sm" style={{ color: '#dc2626' }}>
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface SubmitButtonProps {
-  onClick: () => void;
-  isLoading: boolean;
-  disabled?: boolean;
-}
-
-function SubmitButton({ onClick, isLoading, disabled }: SubmitButtonProps) {
-  return (
-    <Button
-      onClick={onClick}
-      disabled={disabled || isLoading}
-      className="w-full sm:w-auto sm:min-w-[200px]"
-      style={{
-        backgroundColor: designTokens.colors.primary,
-        color: '#ffffff',
-      }}
-    >
-      {isLoading ? 'Creating...' : 'Create company'}
-    </Button>
-  );
-}
+const BUSINESS_MODELS = [
+  { value: "saas", label: "SaaS" },
+  { value: "services", label: "Services" },
+  { value: "product", label: "Product" },
+  { value: "hybrid", label: "Hybrid" },
+  { value: "other", label: "Other" }
+];
 
 export default function CompanySetupPage() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+
+  // Wizard state
   const [currentStep, setCurrentStep] = useState(0);
-  const [isCreatingPortfolio, setIsCreatingPortfolio] = useState(false);
-  const [newPortfolioName, setNewPortfolioName] = useState('');
-  const [newPortfolioDescription, setNewPortfolioDescription] = useState('');
-  const [formData, setFormData] = useState<CompanyFormData>({
-    portfolioId: '',
-    name: '',
-    stage: '',
-    industry: '',
-    businessModel: '',
-    goals: '',
-  });
-  const [errors, setErrors] = useState<Partial<Record<keyof CompanyFormData | 'portfolio', string>>>({});
+  const [showCreatePortfolio, setShowCreatePortfolio] = useState(false);
 
-  const { data: portfolios, isLoading: portfoliosLoading, error: portfoliosError, refetch: refetchPortfolios } = useQuery<Portfolio[]>({
-    queryKey: ['portfolios'],
+  // Form state
+  const [selectedPortfolioId, setSelectedPortfolioId] = useState<string>("");
+  const [portfolioName, setPortfolioName] = useState("");
+  const [portfolioDescription, setPortfolioDescription] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [stage, setStage] = useState("");
+  const [industry, setIndustry] = useState("");
+  const [businessModel, setBusinessModel] = useState("");
+  const [goals, setGoals] = useState("");
+
+  // Validation errors
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Data fetching
+  const { data: portfoliosData, isLoading: portfoliosLoading, error: portfoliosError } = useQuery<PortfoliosResponse>({
+    queryKey: ["portfolios"],
     queryFn: async () => {
-      const res = await fetch('/api/portfolios');
-      if (!res.ok) throw new Error('Failed to fetch portfolios');
-      return res.json();
-    },
+      const response = await apiRequest("GET", "/api/portfolios");
+      return await response.json();
+    }
   });
 
-  const createPortfolioMutation = useMutation({
-    mutationFn: async (data: { name: string; description?: string }) => {
-      const res = await fetch('/api/portfolios', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error('Failed to create portfolio');
-      return res.json();
+  const portfolios = portfoliosData?.portfolios ?? [];
+
+  const createPortfolioMutation = useMutation<PortfolioCreateResponse, Error, PortfolioCreatePayload>({
+    mutationFn: async (data: PortfolioCreatePayload) => {
+      const response = await apiRequest("POST", "/api/portfolios", data);
+      return await response.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['portfolios'] });
-      setFormData({ ...formData, portfolioId: data.id });
-      setIsCreatingPortfolio(false);
-      setNewPortfolioName('');
-      setNewPortfolioDescription('');
-      setCurrentStep(1);
-    },
+      queryClient.invalidateQueries({ queryKey: ["portfolios"] });
+      setSelectedPortfolioId(data.id);
+      setShowCreatePortfolio(false);
+      if (typeof window !== "undefined" && (window as any).posthog) {
+        (window as any).posthog.capture("portfolio_created_inline", { portfolioId: data.id });
+      }
+    }
   });
 
-  const createCompanyMutation = useMutation({
-    mutationFn: async (data: CompanyFormData) => {
-      const res = await fetch(`/api/portfolios/${data.portfolioId}/companies`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: data.name,
+  const createCompanyMutation = useMutation<CompanyResponse, Error, CompanyCreatePayload & { portfolioId: string }>({
+    mutationFn: async ({ portfolioId, ...data }) => {
+      const response = await apiRequest("POST", `/api/portfolios/${portfolioId}/companies`, data);
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      if (typeof window !== "undefined" && (window as any).posthog) {
+        (window as any).posthog.capture("company_created", {
+          companyId: data.id,
+          portfolioId: data.portfolioId,
           stage: data.stage,
-          industry: data.industry,
-          businessModel: data.businessModel,
-          goals: data.goals,
-        }),
-      });
-      if (!res.ok) throw new Error('Failed to create company');
-      return res.json();
-    },
-    onSuccess: (data) => {
-      setLocation(`/portfolios/${formData.portfolioId}`);
-    },
+          industry: data.industry
+        });
+      }
+      setLocation(`/company/${data.id}`);
+    }
   });
 
-  const validateStep = (step: number): boolean => {
-    const newErrors: typeof errors = {};
-    
+  // Track page view
+  useEffect(() => {
+    if (typeof window !== "undefined" && (window as any).posthog) {
+      (window as any).posthog.capture("page_viewed");
+    }
+  }, []);
+
+  const validateStep = useCallback((step: number): boolean => {
+    const newErrors: Record<string, string> = {};
+
     if (step === 0) {
-      if (!isCreatingPortfolio && !formData.portfolioId) {
-        newErrors.portfolio = 'Select a portfolio or create a new one';
-      }
-      if (isCreatingPortfolio && !newPortfolioName.trim()) {
-        newErrors.portfolio = 'Portfolio name is required';
-      }
-    } else if (step === 1) {
-      if (!formData.name.trim()) {
-        newErrors.name = 'Company name is required';
-      }
-    } else if (step === 2) {
-      if (!formData.stage) {
-        newErrors.stage = 'Select a stage';
-      }
-    } else if (step === 3) {
-      if (!formData.industry.trim()) {
-        newErrors.industry = 'Industry is required';
-      }
-      if (!formData.businessModel) {
-        newErrors.businessModel = 'Select a business model';
-      }
-    } else if (step === 4) {
-      if (!formData.goals.trim()) {
-        newErrors.goals = 'Goals should be provided';
+      if (!selectedPortfolioId) {
+        newErrors.portfolio = "Select or create a portfolio";
+        setErrors(newErrors);
+        return false;
       }
     }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+    if (step === 1) {
+      if (!companyName.trim()) {
+        newErrors.companyName = "Company name required.";
+      }
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        return false;
+      }
+    }
 
-  const handleNext = async () => {
+    if (step === 2) {
+      if (!stage) {
+        newErrors.stage = "Select a stage.";
+      }
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        return false;
+      }
+    }
+
+    if (step === 3) {
+      if (!industry.trim()) {
+        newErrors.industry = "Industry required.";
+      }
+      if (!businessModel) {
+        newErrors.businessModel = "Select a business model.";
+      }
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        return false;
+      }
+    }
+
+    setErrors({});
+    return true;
+  }, [selectedPortfolioId, companyName, stage, industry, businessModel]);
+
+  const handleContinue = useCallback(() => {
     if (!validateStep(currentStep)) return;
 
-    if (currentStep === 0 && isCreatingPortfolio) {
-      createPortfolioMutation.mutate({
-        name: newPortfolioName,
-        description: newPortfolioDescription || undefined,
+    if (typeof window !== "undefined" && (window as any).posthog) {
+      (window as any).posthog.capture("setup_step_completed", {
+        stepIndex: currentStep,
+        stepName: getStepName(currentStep)
       });
+    }
+
+    setCurrentStep((prev) => prev + 1);
+  }, [currentStep, validateStep]);
+
+  const handleCreatePortfolio = useCallback(() => {
+    const newErrors: Record<string, string> = {};
+    if (!portfolioName.trim()) {
+      newErrors.portfolioName = "Portfolio name required.";
+      setErrors(newErrors);
       return;
     }
 
-    if (currentStep < STEPS.length - 1) {
-      setCurrentStep(currentStep + 1);
-      setErrors({});
+    createPortfolioMutation.mutate({
+      name: portfolioName,
+      description: portfolioDescription || undefined
+    });
+  }, [portfolioName, portfolioDescription, createPortfolioMutation]);
+
+  const handleSubmit = useCallback(() => {
+    if (!validateStep(3)) return;
+
+    createCompanyMutation.mutate({
+      portfolioId: selectedPortfolioId,
+      name: companyName,
+      stage,
+      industry,
+      businessModel,
+      goals: goals.trim() || undefined
+    });
+  }, [selectedPortfolioId, companyName, stage, industry, businessModel, goals, createCompanyMutation, validateStep]);
+
+  const handleSelectPortfolio = useCallback((portfolioId: string) => {
+    setSelectedPortfolioId(portfolioId);
+    if (typeof window !== "undefined" && (window as any).posthog) {
+      (window as any).posthog.capture("portfolio_selected", { portfolioId });
     }
-  };
+  }, []);
 
-  const handleSubmit = () => {
-    if (!validateStep(currentStep)) return;
-    createCompanyMutation.mutate(formData);
-  };
+  const stepNames = ["Portfolio", "Company Name", "Stage", "Industry & Model", "Goals"];
+  const totalSteps = 5;
 
-  const handleBack = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-      setErrors({});
-    }
-  };
-
-  if (portfoliosLoading) {
-    return (
-      <UniversalLayout>
-        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: designTokens.colors.surface }}>
-          <div className="w-full max-w-2xl px-6 space-y-6 animate-pulse">
-            <div className="h-8 rounded" style={{ backgroundColor: designTokens.colors.surface }} />
-            <div className="h-64 rounded-xl" style={{ backgroundColor: designTokens.colors.surface }} />
-          </div>
-        </div>
-      </UniversalLayout>
-    );
-  }
-
-  if (portfoliosError) {
-    return (
-      <UniversalLayout>
-        <div className="min-h-screen flex items-center justify-center p-6" style={{ backgroundColor: designTokens.colors.surface }}>
-          <Card className="w-full max-w-md p-8 text-center space-y-4">
-            <div className="flex justify-center">
-              <div className="p-3 rounded-full" style={{ backgroundColor: `${'#dc2626'}1A` }}>
-                <AlertCircle size={32} style={{ color: '#dc2626' }} />
-              </div>
-            </div>
-            <h2 className="text-xl font-semibold" style={{ color: designTokens.colors.onSurface }}>
-              Failed to load portfolios
-            </h2>
-            <p className="text-sm" style={{ color: designTokens.colors.onSurfaceVariant }}>
-              We couldn't fetch your portfolios. Check your connection and try again.
-            </p>
-            <Button onClick={() => refetchPortfolios()} variant="outline" className="w-full">
-              Retry
-            </Button>
-          </Card>
-        </div>
-      </UniversalLayout>
-    );
-  }
-
-  const showEmptyState = !portfolios || portfolios.length === 0;
+  const getStepName = (step: number): string => stepNames[step] || "";
 
   return (
-    <UniversalLayout>
-      <div className="min-h-screen flex items-center justify-center p-4 sm:p-6" style={{ backgroundColor: designTokens.colors.surface }}>
-        <div className="w-full max-w-2xl">
-          <div className="mb-8 text-center space-y-4">
-            <h1 className="text-3xl sm:text-4xl font-semibold" style={{ color: designTokens.colors.onSurface }}>
-              {currentStep === 0 ? 'Start operating' : 'Create your company'}
-            </h1>
-            <p className="text-base sm:text-lg" style={{ color: designTokens.colors.onSurfaceVariant }}>
-              {STEPS[currentStep].description}
-            </p>
-            <StepIndicator currentStep={currentStep} totalSteps={STEPS.length} />
+    <div className="min-h-screen bg-surface flex items-center justify-center px-4 py-8">
+      <div className="w-full max-w-2xl">
+        {/* Header */}
+        <div className="mb-8 text-center">
+          <h1 className="font-mono font-bold text-4xl text-text mb-2">Build your operating system</h1>
+          <p className="font-mono text-sm text-text-secondary">Set up your portfolio and create your first company.</p>
+        </div>
+
+        {/* Step Indicator */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-2">
+            {stepNames.map((name, idx) => (
+              <div key={idx} className="flex items-center flex-1">
+                <div className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${
+                  idx < currentStep
+                    ? "bg-primary border-primary text-text-on-primary"
+                    : idx === currentStep
+                    ? "border-primary text-primary bg-surface"
+                    : "border-border text-text-tertiary bg-surface"
+                } font-mono text-xs font-semibold transition-all duration-200`}>
+                  {idx < currentStep ? <Check className="w-4 h-4" /> : idx + 1}
+                </div>
+                {idx < totalSteps - 1 && (
+                  <div className={`flex-1 h-0.5 mx-2 ${
+                    idx < currentStep ? "bg-primary" : "bg-border"
+                  } transition-all duration-200`} />
+                )}
+              </div>
+            ))}
           </div>
-
-          <div
-            className="rounded-2xl p-6 sm:p-8 space-y-6"
-            style={{
-              background: 'rgba(255, 255, 255, 0.7)',
-              backdropFilter: 'blur(16px)',
-              boxShadow: designTokens.shadows.ambient,
-            }}
-          >
-            {currentStep === 0 && (
-              <div className="space-y-6">
-                {showEmptyState ? (
-                  <div className="text-center space-y-4 py-8">
-                    <div className="flex justify-center">
-                      <div className="p-4 rounded-full" style={{ backgroundColor: designTokens.colors.surfaceContainerLow }}>
-                        <Building2 size={32} style={{ color: designTokens.colors.primary }} />
-                      </div>
-                    </div>
-                    <h3 className="text-lg font-semibold" style={{ color: designTokens.colors.onSurface }}>
-                      Create your first portfolio
-                    </h3>
-                    <p className="text-sm" style={{ color: designTokens.colors.onSurfaceVariant }}>
-                      Portfolios organize your companies. Start by creating one.
-                    </p>
-                  </div>
-                ) : (
-                  !isCreatingPortfolio && (
-                    <>
-                      <PortfolioSelector
-                        portfolios={portfolios}
-                        selectedId={formData.portfolioId}
-                        onSelect={(id) => setFormData({ ...formData, portfolioId: id })}
-                      />
-                      <div className="relative">
-                        <div className="absolute inset-0 flex items-center">
-                          <div className="w-full border-t" style={{ borderColor: designTokens.colors.outlineVariant }} />
-                        </div>
-                        <div className="relative flex justify-center">
-                          <span className="px-4 text-sm" style={{ backgroundColor: 'rgba(255, 255, 255, 0.7)', color: designTokens.colors.onSurfaceVariant }}>
-                            or
-                          </span>
-                        </div>
-                      </div>
-                    </>
-                  )
-                )}
-
-                {(isCreatingPortfolio || showEmptyState) ? (
-                  <CreatePortfolioInline
-                    name={newPortfolioName}
-                    description={newPortfolioDescription}
-                    onNameChange={setNewPortfolioName}
-                    onDescriptionChange={setNewPortfolioDescription}
-                    error={errors.portfolio}
-                  />
-                ) : (
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsCreatingPortfolio(true)}
-                    className="w-full"
-                  >
-                    <Plus size={18} className="mr-2" />
-                    Create new portfolio
-                  </Button>
-                )}
+          <div className="flex justify-between">
+            {stepNames.map((name, idx) => (
+              <div key={idx} className="flex-1 text-center">
+                <p className={`font-mono text-xs uppercase tracking-wide ${
+                  idx === currentStep ? "text-text" : "text-text-tertiary"
+                }`}>
+                  {name}
+                </p>
               </div>
-            )}
-
-            {currentStep === 1 && (
-              <CompanyNameInput
-                value={formData.name}
-                onChange={(value) => setFormData({ ...formData, name: value })}
-                error={errors.name}
-              />
-            )}
-
-            {currentStep === 2 && (
-              <StageSelector
-                value={formData.stage}
-                onChange={(value) => setFormData({ ...formData, stage: value })}
-                error={errors.stage}
-              />
-            )}
-
-            {currentStep === 3 && (
-              <div className="space-y-6">
-                <IndustryInput
-                  value={formData.industry}
-                  onChange={(value) => setFormData({ ...formData, industry: value })}
-                  error={errors.industry}
-                />
-                <BusinessModelInput
-                  value={formData.businessModel}
-                  onChange={(value) => setFormData({ ...formData, businessModel: value })}
-                  error={errors.businessModel}
-                />
-              </div>
-            )}
-
-            {currentStep === 4 && (
-              <GoalsTextarea
-                value={formData.goals}
-                onChange={(value) => setFormData({ ...formData, goals: value })}
-                error={errors.goals}
-              />
-            )}
-
-            <div className="flex flex-col-reverse sm:flex-row gap-3 pt-4">
-              {currentStep > 0 && (
-                <Button variant="outline" onClick={handleBack} className="w-full sm:w-auto">
-                  Back
-                </Button>
-              )}
-              <div className="flex-1" />
-              {currentStep < STEPS.length - 1 ? (
-                <Button
-                  onClick={handleNext}
-                  disabled={createPortfolioMutation.isPending}
-                  className="w-full sm:w-auto sm:min-w-[200px]"
-                  style={{
-                    backgroundColor: designTokens.colors.primary,
-                    color: '#ffffff',
-                  }}
-                >
-                  {createPortfolioMutation.isPending ? 'Creating portfolio...' : 'Continue'}
-                  <ChevronRight size={18} className="ml-2" />
-                </Button>
-              ) : (
-                <SubmitButton
-                  onClick={handleSubmit}
-                  isLoading={createCompanyMutation.isPending}
-                />
-              )}
-            </div>
+            ))}
           </div>
         </div>
+
+        {/* Wizard Content */}
+        <div className="bg-surface-elevated rounded-lg border border-border shadow-lg p-8 min-h-[400px]">
+          {currentStep === 0 && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="font-mono font-semibold text-2xl text-text mb-4">Select or create a portfolio</h2>
+                {portfoliosLoading && (
+                  <div className="space-y-3">
+                    <div className="bg-surface-subtle rounded-md h-16 animate-pulse" />
+                    <div className="bg-surface-subtle rounded-md h-16 animate-pulse" />
+                  </div>
+                )}
+                {portfoliosError && (
+                  <div className="bg-destructive-muted border border-destructive rounded-md p-4">
+                    <p className="font-mono text-sm text-destructive mb-3">Connection failed. Try again.</p>
+                    <Button
+                      onClick={() => queryClient.invalidateQueries({ queryKey: ["portfolios"] })}
+                      className="bg-destructive hover:bg-destructive-hover text-text-on-primary font-mono font-semibold text-sm uppercase tracking-wide px-4 py-2 rounded-md"
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                )}
+                {!portfoliosLoading && !portfoliosError && (
+                  <>
+                    {portfolios.length > 0 ? (
+                      <div className="space-y-3 mb-4">
+                        {portfolios.map((portfolio: Portfolio) => (
+                          <button
+                            key={portfolio.id}
+                            onClick={() => handleSelectPortfolio(portfolio.id)}
+                            className={`w-full text-left bg-surface border rounded-md p-4 transition-all duration-150 ${
+                              selectedPortfolioId === portfolio.id
+                                ? "border-primary ring-2 ring-primary"
+                                : "border-border hover:border-border-hover hover:bg-surface-subtle"
+                            }`}
+                          >
+                            <p className="font-mono font-semibold text-base text-text">{portfolio.name}</p>
+                            {portfolio.description && (
+                              <p className="font-mono text-sm text-text-secondary mt-1">{portfolio.description}</p>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-surface border border-border-subtle rounded-md p-8 text-center mb-4">
+                        <p className="font-mono text-sm text-text-secondary mb-4">No portfolios yet. Create your first one.</p>
+                      </div>
+                    )}
+                    {!showCreatePortfolio && (
+                      <Button
+                        onClick={() => setShowCreatePortfolio(true)}
+                        className="w-full bg-surface-subtle hover:bg-border text-text font-mono font-medium text-sm uppercase tracking-wide px-6 py-3 rounded-md border border-border transition-all duration-150"
+                      >
+                        Create portfolio
+                      </Button>
+                    )}
+                    {showCreatePortfolio && (
+                      <div className="bg-surface border border-border rounded-md p-6 space-y-4">
+                        <div>
+                          <Label htmlFor="portfolioName" className="font-mono text-xs uppercase tracking-wide text-text-secondary">
+                            Portfolio Name
+                          </Label>
+                          <Input
+                            id="portfolioName"
+                            value={portfolioName}
+                            onChange={(e) => setPortfolioName(e.target.value)}
+                            placeholder="e.g., My Ventures"
+                            className={`mt-2 bg-surface-subtle border rounded-md px-4 py-3 font-mono text-base text-text placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-150 ${
+                              errors.portfolioName ? "border-destructive" : "border-border"
+                            }`}
+                          />
+                          {errors.portfolioName && (
+                            <p className="mt-1 font-mono text-xs text-destructive">{errors.portfolioName}</p>
+                          )}
+                        </div>
+                        <div>
+                          <Label htmlFor="portfolioDescription" className="font-mono text-xs uppercase tracking-wide text-text-secondary">
+                            Description
+                          </Label>
+                          <p className="font-mono text-xs text-text-tertiary mt-1 mb-2">Optional. Describe what this portfolio contains.</p>
+                          <Textarea
+                            id="portfolioDescription"
+                            value={portfolioDescription}
+                            onChange={(e) => setPortfolioDescription(e.target.value)}
+                            placeholder="e.g., Holding company for all my projects"
+                            className="mt-2 bg-surface-subtle border border-border rounded-md px-4 py-3 font-mono text-base text-text placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-150 min-h-[80px]"
+                          />
+                        </div>
+                        <div className="flex space-x-3">
+                          <Button
+                            onClick={handleCreatePortfolio}
+                            disabled={createPortfolioMutation.isPending}
+                            className="flex-1 bg-primary hover:bg-primary-hover text-text-on-primary font-mono font-semibold text-sm uppercase tracking-wide px-6 py-3 rounded-md transition-colors duration-150"
+                          >
+                            {createPortfolioMutation.isPending ? "Saving..." : "Save portfolio"}
+                          </Button>
+                          <Button
+                            onClick={() => setShowCreatePortfolio(false)}
+                            className="bg-surface-subtle hover:bg-border text-text font-mono font-medium text-sm uppercase tracking-wide px-6 py-3 rounded-md border border-border transition-all duration-150"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                        {createPortfolioMutation.isError && (
+                          <p className="font-mono text-xs text-destructive">Connection failed. Try again.</p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              {errors.portfolio && (
+                <p className="font-mono text-sm text-destructive">{errors.portfolio}</p>
+              )}
+            </div>
+          )}
+
+          {currentStep === 1 && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="font-mono font-semibold text-2xl text-text mb-4">What's your company called?</h2>
+                <div>
+                  <Label htmlFor="companyName" className="font-mono text-xs uppercase tracking-wide text-text-secondary">
+                    Company Name
+                  </Label>
+                  <Input
+                    id="companyName"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="e.g., Acme Labs"
+                    className={`mt-2 bg-surface-subtle border rounded-md px-4 py-3 font-mono text-base text-text placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-150 ${
+                      errors.companyName ? "border-destructive" : "border-border"
+                    }`}
+                  />
+                  {errors.companyName && (
+                    <p className="mt-1 font-mono text-xs text-destructive">{errors.companyName}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {currentStep === 2 && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="font-mono font-semibold text-2xl text-text mb-2">What stage?</h2>
+                <p className="font-mono text-sm text-text-secondary mb-4">We'll adapt your operating system to your scale.</p>
+                <RadioGroup value={stage} onValueChange={setStage}>
+                  <div className="space-y-3">
+                    {STAGES.map((s) => (
+                      <label
+                        key={s.value}
+                        className={`flex items-center space-x-3 bg-surface border rounded-md p-4 cursor-pointer transition-all duration-150 ${
+                          stage === s.value
+                            ? "border-primary ring-2 ring-primary"
+                            : "border-border hover:border-border-hover hover:bg-surface-subtle"
+                        }`}
+                      >
+                        <RadioGroupItem value={s.value} id={s.value} className="border-border" />
+                        <span className="font-mono text-base text-text">{s.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </RadioGroup>
+                {errors.stage && (
+                  <p className="mt-2 font-mono text-xs text-destructive">{errors.stage}</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {currentStep === 3 && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="font-mono font-semibold text-2xl text-text mb-4">Industry and business model</h2>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="industry" className="font-mono text-xs uppercase tracking-wide text-text-secondary">
+                      Industry
+                    </Label>
+                    <Input
+                      id="industry"
+                      value={industry}
+                      onChange={(e) => setIndustry(e.target.value)}
+                      placeholder="e.g., SaaS, E-commerce, Consulting"
+                      className={`mt-2 bg-surface-subtle border rounded-md px-4 py-3 font-mono text-base text-text placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-150 ${
+                        errors.industry ? "border-destructive" : "border-border"
+                      }`}
+                    />
+                    {errors.industry && (
+                      <p className="mt-1 font-mono text-xs text-destructive">{errors.industry}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="font-mono text-xs uppercase tracking-wide text-text-secondary mb-3 block">
+                      Business Model
+                    </Label>
+                    <RadioGroup value={businessModel} onValueChange={setBusinessModel}>
+                      <div className="space-y-3">
+                        {BUSINESS_MODELS.map((model) => (
+                          <label
+                            key={model.value}
+                            className={`flex items-center space-x-3 bg-surface border rounded-md p-4 cursor-pointer transition-all duration-150 ${
+                              businessModel === model.value
+                                ? "border-primary ring-2 ring-primary"
+                                : "border-border hover:border-border-hover hover:bg-surface-subtle"
+                            }`}
+                          >
+                            <RadioGroupItem value={model.value} id={model.value} className="border-border" />
+                            <span className="font-mono text-base text-text">{model.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </RadioGroup>
+                    {errors.businessModel && (
+                      <p className="mt-2 font-mono text-xs text-destructive">{errors.businessModel}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {currentStep === 4 && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="font-mono font-semibold text-2xl text-text mb-2">What are your top 3 goals for the next quarter?</h2>
+                <p className="font-mono text-xs text-text-tertiary mb-4">Optional but recommended. Be specific.</p>
+                <Textarea
+                  value={goals}
+                  onChange={(e) => setGoals(e.target.value)}
+                  placeholder="e.g., 10x revenue, hire 5 engineers, launch product line"
+                  className="bg-surface-subtle border border-border rounded-md px-4 py-3 font-mono text-base text-text placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-150 min-h-[120px]"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Navigation Buttons */}
+        <div className="mt-6 flex justify-between">
+          {currentStep > 0 && (
+            <Button
+              onClick={() => setCurrentStep((prev) => prev - 1)}
+              className="bg-surface-subtle hover:bg-border text-text font-mono font-medium text-sm uppercase tracking-wide px-6 py-3 rounded-md border border-border transition-all duration-150"
+            >
+              Back
+            </Button>
+          )}
+          {currentStep < 4 && (
+            <Button
+              onClick={handleContinue}
+              disabled={currentStep === 0 && !selectedPortfolioId}
+              className="ml-auto bg-primary hover:bg-primary-hover text-text-on-primary font-mono font-semibold text-sm uppercase tracking-wide px-6 py-3 rounded-md transition-colors duration-150 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span>Continue</span>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          )}
+          {currentStep === 4 && (
+            <div className="ml-auto flex space-x-3">
+              <Button
+                onClick={() => {
+                  setGoals("");
+                  handleSubmit();
+                }}
+                className="bg-surface-subtle hover:bg-border text-text font-mono font-medium text-sm uppercase tracking-wide px-6 py-3 rounded-md border border-border transition-all duration-150"
+              >
+                Skip for now
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={createCompanyMutation.isPending}
+                className="bg-primary hover:bg-primary-hover text-text-on-primary font-mono font-semibold text-sm uppercase tracking-wide px-6 py-3 rounded-md transition-colors duration-150"
+              >
+                {createCompanyMutation.isPending ? "Creating..." : "Open command center"}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {createCompanyMutation.isError && (
+          <div className="mt-4 bg-destructive-muted border border-destructive rounded-md p-4">
+            <p className="font-mono text-sm text-destructive">Connection failed. Try again.</p>
+          </div>
+        )}
       </div>
-    </UniversalLayout>
+    </div>
   );
 }
