@@ -3,11 +3,13 @@
 // and ProductInsights. Outputs a SystemArchitecture artifact consumed by
 // downstream agents (design-system, backend, page-builder, etc.).
 
+import fs from "node:fs";
+import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 import { extractJsonFromResponse } from "../spec-parser/restructure-spec.js";
 import { ArtifactStore } from "./artifact-store.js";
-import type { SystemArchitecture, ProductInsights, PageStructure, ApiContract } from "./types.js";
+import type { SystemArchitecture, ProductInsights, PageStructure, ApiContract, ExistingCodebaseAudit } from "./types.js";
 import type { ProjectBrief } from "../intake/types.js";
 
 // ─── Product Domain Knowledge ──────────────────────────────────────────────
@@ -259,7 +261,7 @@ DESIGN RULES:
 
 Return ONLY the JSON object.`;
 
-function buildUserPrompt(brief: ProjectBrief, insights: ProductInsights): string {
+function buildUserPrompt(brief: ProjectBrief, insights: ProductInsights, audit?: ExistingCodebaseAudit): string {
   const specPages = brief.spec.pages
     .map(
       (p) =>
@@ -319,7 +321,104 @@ ${insights.designRecommendations.map((r) => `  - ${r}`).join("\n")}
 
 IMPORTANT: The spec pages above are what the user explicitly requested. You MUST also add implied, inferred, and standard pages using the Product Domain Knowledge and Feature Inference Process. Tag every page and endpoint with its source classification.
 
+${audit && (audit.existingRoutes.length > 0 || audit.existingTables.length > 0 || audit.existingPages.length > 0 || audit.existingStorageMethods.length > 0) ? `
+EXISTING CODEBASE AUDIT — you MUST extend what exists, not replace it:
+- Existing routes: ${audit.existingRoutes.length > 0 ? audit.existingRoutes.join(", ") : "none"}
+- Existing DB tables: ${audit.existingTables.length > 0 ? audit.existingTables.join(", ") : "none"}
+- Existing pages: ${audit.existingPages.length > 0 ? audit.existingPages.join(", ") : "none"}
+- Existing storage methods: ${audit.existingStorageMethods.length > 0 ? audit.existingStorageMethods.join(", ") : "none"}
+
+RULES:
+1. Use existing table names exactly as they are — do NOT rename or recreate them.
+2. API contracts that need storage methods must reference ONLY methods that exist above, or explicitly note "NEEDS_CREATION" in the description.
+3. Do NOT generate pages that already exist — reference them by name instead.
+4. Extend the existing schema, do not replace it.
+` : ""}
 Return the SystemArchitecture JSON object now.`;
+}
+
+// ─── Pre-Audit: Scan Existing Codebase ────────────────────────────────────
+
+function listFilesInDir(dirPath: string, ext?: string): string[] {
+  if (!fs.existsSync(dirPath)) return [];
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    return entries
+      .filter((e) => e.isFile() && (!ext || e.name.endsWith(ext)))
+      .map((e) => e.name);
+  } catch {
+    return [];
+  }
+}
+
+function extractRoutePatterns(routesDir: string): string[] {
+  const routes: string[] = [];
+  const files = listFilesInDir(routesDir, ".ts");
+  for (const file of files) {
+    const content = fs.readFileSync(path.join(routesDir, file), "utf-8");
+    const routePattern = /app\.(get|post|put|patch|delete)\s*\(\s*["'`]([^"'`]+)["'`]/gi;
+    let match: RegExpExecArray | null;
+    while ((match = routePattern.exec(content)) !== null) {
+      routes.push(`${match[1].toUpperCase()} ${match[2]}`);
+    }
+  }
+  return routes;
+}
+
+function extractTableNames(schemaPath: string): string[] {
+  if (!fs.existsSync(schemaPath)) return [];
+  const content = fs.readFileSync(schemaPath, "utf-8");
+  const tablePattern = /pgTable\s*\(\s*["'`]([^"'`]+)["'`]/g;
+  const tables: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = tablePattern.exec(content)) !== null) {
+    tables.push(match[1]);
+  }
+  return tables;
+}
+
+function extractStorageMethods(storagePath: string): string[] {
+  if (!fs.existsSync(storagePath)) return [];
+  const content = fs.readFileSync(storagePath, "utf-8");
+  const methodPattern = /(?:async\s+)?(\w+)\s*\([^)]*\)\s*(?::\s*[^{]+)?\s*\{/g;
+  const methods: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = methodPattern.exec(content)) !== null) {
+    if (match[1] !== "constructor" && match[1] !== "if" && match[1] !== "for") {
+      methods.push(match[1]);
+    }
+  }
+  return methods;
+}
+
+export function preAudit(projectRoot: string, store: ArtifactStore): ExistingCodebaseAudit {
+  const routesDir = path.join(projectRoot, "server", "routes");
+  const schemaPath = path.join(projectRoot, "shared", "schema.ts");
+  const storagePath = path.join(projectRoot, "server", "storage.ts");
+  const pagesDir = path.join(projectRoot, "client", "src", "pages");
+
+  // Also scan the main routes file if routes/ directory doesn't exist
+  const mainRoutesPath = path.join(projectRoot, "server", "routes.ts");
+  let existingRoutes = extractRoutePatterns(routesDir);
+  if (fs.existsSync(mainRoutesPath)) {
+    const mainContent = fs.readFileSync(mainRoutesPath, "utf-8");
+    const routePattern = /app\.(get|post|put|patch|delete)\s*\(\s*["'`]([^"'`]+)["'`]/gi;
+    let match: RegExpExecArray | null;
+    while ((match = routePattern.exec(mainContent)) !== null) {
+      existingRoutes.push(`${match[1].toUpperCase()} ${match[2]}`);
+    }
+  }
+
+  const audit: ExistingCodebaseAudit = {
+    existingRoutes,
+    existingTables: extractTableNames(schemaPath),
+    existingPages: listFilesInDir(pagesDir, ".tsx"),
+    existingStorageMethods: extractStorageMethods(storagePath),
+    scannedAt: new Date().toISOString(),
+  };
+
+  store.setExistingCodebaseAudit(audit);
+  return audit;
 }
 
 export async function runArchitectureAgent(
@@ -327,12 +426,15 @@ export async function runArchitectureAgent(
   insights: ProductInsights,
   store: ArtifactStore,
 ): Promise<SystemArchitecture> {
+  // Pre-audit: scan existing codebase before designing anything
+  const audit = preAudit(store.getProjectRoot(), store);
+
   const client = new Anthropic({
     apiKey: getAnthropicApiKey(),
     baseURL: getAnthropicBaseUrl(),
   });
 
-  const userPrompt = buildUserPrompt(brief, insights);
+  const userPrompt = buildUserPrompt(brief, insights, audit);
 
   const messages: Anthropic.MessageParam[] = [
     { role: "user", content: userPrompt },

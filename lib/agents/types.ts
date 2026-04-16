@@ -277,6 +277,23 @@ export interface EditResult {
   errors: string[];
 }
 
+// ─── Existing Codebase Audit ────────────────────────────────────────────────
+
+export interface ExistingCodebaseAudit {
+  existingRoutes: string[];
+  existingTables: string[];
+  existingPages: string[];
+  existingStorageMethods: string[];
+  scannedAt: string;
+}
+
+// ─── Pre-flight Check ──────────────────────────────────────────────────────
+
+export interface PreFlightResult {
+  passed: boolean;
+  checks: Array<{ name: string; passed: boolean; message: string }>;
+}
+
 // ─── Build Plan (approval gate) ─────────────────────────────────────────────
 
 export interface BuildPlan {

@@ -389,9 +389,38 @@ export async function runBackendAgent(
   }
 
   // ── 5. Generate route + storage for each endpoint ────────────────────────
+  //    Skip endpoints that already exist in the codebase. For new endpoints,
+  //    verify referenced storage methods exist or mark them as generated.
   const backendRoutes: BackendRoute[] = [];
 
+  // Load codebase audit from artifact store (written by architecture agent)
+  const audit = store.getExistingCodebaseAudit();
+  const existingRoutesSet = new Set(
+    (audit?.existingRoutes ?? []).map((r) => r.toLowerCase()),
+  );
+  const existingStorageSet = new Set(audit?.existingStorageMethods ?? []);
+
   for (const endpoint of endpoints) {
+    // Check if this route already exists in the codebase
+    const routeKey = `${endpoint.method.toLowerCase()} ${endpoint.path}`;
+    if (existingRoutesSet.has(routeKey)) {
+      store.appendBuildLog({
+        agent: "backend-agent",
+        event: "skip",
+        timestamp: Date.now(),
+        detail: `Skipping existing route: ${endpoint.method} ${endpoint.path}`,
+      });
+      backendRoutes.push({
+        method: endpoint.method,
+        path: endpoint.path,
+        filePath: "existing",
+        entity: deriveEntityName(endpoint.path),
+        schemaGenerated: false,
+        storageGenerated: false,
+      });
+      continue;
+    }
+
     const result = generateEndpointCode(
       endpoint,
       projectRoot,

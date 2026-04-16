@@ -449,10 +449,30 @@ describe("ArtifactStore", () => {
     });
   });
 
+  describe("existing-codebase-audit: set, get, exists", () => {
+    it("stores and retrieves codebase audit", () => {
+      expect(store.getExistingCodebaseAudit()).toBeNull();
+
+      const audit = {
+        existingRoutes: ["GET /api/users", "POST /api/auth/login"],
+        existingTables: ["users", "sessions"],
+        existingPages: ["dashboard-page.tsx", "settings-page.tsx"],
+        existingStorageMethods: ["getUser", "createUser"],
+        scannedAt: new Date().toISOString(),
+      };
+      store.setExistingCodebaseAudit(audit);
+
+      expect(store.getExistingCodebaseAudit()).not.toBeNull();
+      expect(store.getExistingCodebaseAudit()!.existingRoutes).toHaveLength(2);
+      expect(store.getExistingCodebaseAudit()!.existingTables).toContain("users");
+    });
+  });
+
   describe("returns null for non-existent artifacts", () => {
     it("returns null for every getter when no artifacts exist", () => {
       expect(store.getBrief()).toBeNull();
       expect(store.getProductInsights()).toBeNull();
+      expect(store.getExistingCodebaseAudit()).toBeNull();
       expect(store.getArchitecture()).toBeNull();
       expect(store.getDesignSystem()).toBeNull();
       expect(store.getProjectCopy()).toBeNull();

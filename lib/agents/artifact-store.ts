@@ -17,6 +17,7 @@ import type {
   BuildState,
   BuildStatus,
   AgentResult,
+  ExistingCodebaseAudit,
 } from "./types.js";
 import type { ProjectBrief } from "../intake/types.js";
 import type { ProjectCopy } from "../copy-planner/types.js";
@@ -26,6 +27,7 @@ type ArtifactKey =
   | "brief"
   | "product-insights"
   | "competitive-intel"
+  | "existing-codebase-audit"
   | "architecture"
   | "design-system"
   | "project-copy"
@@ -107,6 +109,16 @@ export class ArtifactStore {
 
   getCompetitiveIntel(): CompetitiveIntel | null {
     return this.readJson<CompetitiveIntel>(this.artifactPath("competitive-intel"));
+  }
+
+  // ─── Existing Codebase Audit ─────────────────────────────────────────────
+
+  setExistingCodebaseAudit(audit: ExistingCodebaseAudit): void {
+    this.writeAtomic(this.artifactPath("existing-codebase-audit"), audit);
+  }
+
+  getExistingCodebaseAudit(): ExistingCodebaseAudit | null {
+    return this.readJson<ExistingCodebaseAudit>(this.artifactPath("existing-codebase-audit"));
   }
 
   // ─── Architecture ───────────────────────────────────────────────────────

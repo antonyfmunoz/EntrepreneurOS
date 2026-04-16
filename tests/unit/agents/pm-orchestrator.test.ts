@@ -64,6 +64,11 @@ vi.mock("../../../lib/react-gen/edit-mode.js", () => ({
   }),
 }));
 
+const mockExecSync = vi.fn();
+vi.mock("node:child_process", () => ({
+  execSync: (...args: unknown[]) => mockExecSync(...args),
+}));
+
 // ─── Import under test ──────────────────────────────────────────────────────
 
 import { PMOrchestrator } from "../../../lib/agents/pm-orchestrator.js";
@@ -210,9 +215,19 @@ function setupDefaultMocks(): void {
   mockRunPageAgent.mockImplementation(async (pageSpec: { name: string }) => makePageOutput(pageSpec.name));
   mockRunBackendAgent.mockResolvedValue([]);
   mockRunQAAgent.mockResolvedValue(makeQAReport());
+
+  // Pre-flight: tsc passes by default
+  mockExecSync.mockReturnValue(Buffer.from(""));
+}
+
+function setupEnvForPreflight(): void {
+  process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/test";
+  process.env.ANTHROPIC_API_KEY = "sk-test-key";
 }
 
 // ─── Setup / Teardown ───────────────────────────────────────────────────────
+
+let savedEnv: Record<string, string | undefined>;
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pm-orchestrator-test-"));
@@ -221,11 +236,19 @@ beforeEach(() => {
   vi.spyOn(console, "log").mockImplementation(() => {});
   // Prevent Windows EINVAL from colons in filenames (agent names like "page:Page0")
   vi.spyOn(ArtifactStore.prototype, "setAgentResult").mockImplementation(() => {});
+  // Save env state
+  savedEnv = { DATABASE_URL: process.env.DATABASE_URL, ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY, AI_INTEGRATIONS_ANTHROPIC_API_KEY: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY };
   setupDefaultMocks();
+  setupEnvForPreflight();
 });
 
 afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
+  // Restore env state
+  for (const [key, val] of Object.entries(savedEnv)) {
+    if (val === undefined) delete process.env[key];
+    else process.env[key] = val;
+  }
   vi.restoreAllMocks();
 });
 
@@ -434,7 +457,7 @@ describe("PMOrchestrator", () => {
       expect(mockRunQAAgent).toHaveBeenCalled();
     });
 
-    it("reports QA failures in result", async () => {
+    it("reports QA failures as BUILD FAILED with specific issues", async () => {
       mockRunQAAgent.mockResolvedValue(makeQAReport(false));
 
       const orchestrator = new PMOrchestrator(tmpDir);
@@ -443,7 +466,8 @@ describe("PMOrchestrator", () => {
       expect(result.success).toBe(false);
       expect(result.qaReport).not.toBeNull();
       expect(result.qaReport!.allPassed).toBe(false);
-      expect(result.errors.some((e) => e.includes("QA"))).toBe(true);
+      expect(result.errors.some((e) => e.includes("BUILD FAILED"))).toBe(true);
+      expect(result.errors.some((e) => e.includes("QA did not pass"))).toBe(true);
     });
 
     it("persists build state to artifact store", async () => {
@@ -499,6 +523,66 @@ describe("PMOrchestrator", () => {
       const status = orchestrator.getStatus();
       expect(status).not.toBeNull();
       expect(status!.status.phase).toBe("failed");
+    });
+  });
+
+  describe("preFlightCheck", () => {
+    it("passes when all env vars and tsc are clean", () => {
+      const orchestrator = new PMOrchestrator(tmpDir);
+      const result = orchestrator.preFlightCheck();
+
+      expect(result.passed).toBe(true);
+      expect(result.checks.every((c) => c.passed)).toBe(true);
+    });
+
+    it("fails when DATABASE_URL is missing", () => {
+      delete process.env.DATABASE_URL;
+
+      const orchestrator = new PMOrchestrator(tmpDir);
+      const result = orchestrator.preFlightCheck();
+
+      expect(result.passed).toBe(false);
+      const dbCheck = result.checks.find((c) => c.name === "env:DATABASE_URL");
+      expect(dbCheck?.passed).toBe(false);
+    });
+
+    it("fails when no Anthropic API key is set", () => {
+      delete process.env.ANTHROPIC_API_KEY;
+      delete process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY;
+
+      const orchestrator = new PMOrchestrator(tmpDir);
+      const result = orchestrator.preFlightCheck();
+
+      expect(result.passed).toBe(false);
+      const apiCheck = result.checks.find((c) => c.name === "env:ANTHROPIC_API_KEY");
+      expect(apiCheck?.passed).toBe(false);
+    });
+
+    it("fails when tsc has errors", () => {
+      const err = new Error("tsc failed") as Error & { stderr: string };
+      err.stderr = "error TS2304: Cannot find name\nerror TS2345: Type mismatch";
+      mockExecSync.mockImplementation(() => { throw err; });
+
+      const orchestrator = new PMOrchestrator(tmpDir);
+      const result = orchestrator.preFlightCheck();
+
+      expect(result.passed).toBe(false);
+      const tscCheck = result.checks.find((c) => c.name === "tsc:noEmit");
+      expect(tscCheck?.passed).toBe(false);
+      expect(tscCheck?.message).toContain("error");
+    });
+
+    it("stops build immediately when preflight fails", async () => {
+      delete process.env.DATABASE_URL;
+
+      const orchestrator = new PMOrchestrator(tmpDir);
+      const result = await orchestrator.runBuild(makeBrief());
+
+      expect(result.success).toBe(false);
+      expect(result.errors.some((e) => e.includes("Pre-flight check failed"))).toBe(true);
+      // No agents should have been called
+      expect(mockRunProductIntelAgent).not.toHaveBeenCalled();
+      expect(mockRunArchitectureAgent).not.toHaveBeenCalled();
     });
   });
 });

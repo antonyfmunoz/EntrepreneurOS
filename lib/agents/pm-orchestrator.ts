@@ -17,7 +17,11 @@ import type {
   QAReport,
   PageOutput,
   BackendRoute,
+  PreFlightResult,
 } from "./types.js";
+import { execSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import type { ProjectCopy } from "../copy-planner/types.js";
 import type { PageSpecFull } from "@shared/spec-schema.js";
 import { ArtifactStore } from "./artifact-store.js";
@@ -67,10 +71,74 @@ export class PMOrchestrator {
     return result.brief;
   }
 
+  // ─── Pre-flight Check ───────────────────────────────────────────────────
+
+  preFlightCheck(): PreFlightResult {
+    const checks: PreFlightResult["checks"] = [];
+
+    // 1. Check required env vars
+    const requiredEnvVars = ["DATABASE_URL"];
+    const optionalEnvVars = ["ANTHROPIC_API_KEY", "AI_INTEGRATIONS_ANTHROPIC_API_KEY"];
+    for (const key of requiredEnvVars) {
+      const present = !!process.env[key];
+      checks.push({ name: `env:${key}`, passed: present, message: present ? "present" : `Missing ${key} in environment` });
+    }
+    // At least one Anthropic key must exist
+    const hasAnthropicKey = optionalEnvVars.some((k) => !!process.env[k]);
+    checks.push({
+      name: "env:ANTHROPIC_API_KEY",
+      passed: hasAnthropicKey,
+      message: hasAnthropicKey ? "present" : "Missing ANTHROPIC_API_KEY or AI_INTEGRATIONS_ANTHROPIC_API_KEY",
+    });
+
+    // 2. Verify database is reachable (check DATABASE_URL is parseable)
+    const dbUrl = process.env.DATABASE_URL;
+    const dbReachable = !!dbUrl && (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://"));
+    checks.push({
+      name: "database:url-valid",
+      passed: dbReachable,
+      message: dbReachable ? "DATABASE_URL is a valid PostgreSQL URL" : "DATABASE_URL is missing or not a PostgreSQL URL",
+    });
+
+    // 3. Verify TypeScript compiles
+    let tscPassed = false;
+    let tscMessage = "";
+    try {
+      execSync("npx tsc --noEmit", { cwd: this.projectRoot, stdio: "pipe", timeout: 120_000 });
+      tscPassed = true;
+      tscMessage = "TypeScript compilation clean";
+    } catch (err) {
+      const stderr = err instanceof Error && "stderr" in err ? String((err as { stderr: unknown }).stderr) : "";
+      const errorCount = (stderr.match(/error TS/g) ?? []).length;
+      tscMessage = `TypeScript has ${errorCount || "unknown number of"} error(s). Fix before building.`;
+    }
+    checks.push({ name: "tsc:noEmit", passed: tscPassed, message: tscMessage });
+
+    const passed = checks.every((c) => c.passed);
+    return { passed, checks };
+  }
+
   // ─── Build ──────────────────────────────────────────────────────────────
 
   async runBuild(brief: ProjectBrief): Promise<BuildResult> {
     const errors: string[] = [];
+
+    // 0. Pre-flight check — stop immediately if environment is broken
+    this.log("preflight", "start", "Running pre-flight checks...");
+    const preflight = this.preFlightCheck();
+    for (const check of preflight.checks) {
+      const icon = check.passed ? "✓" : "✗";
+      this.log("preflight", check.passed ? "pass" : "fail", `${icon} ${check.name}: ${check.message}`);
+    }
+    if (!preflight.passed) {
+      const failedChecks = preflight.checks
+        .filter((c) => !c.passed)
+        .map((c) => `  - ${c.name}: ${c.message}`)
+        .join("\n");
+      errors.push(`Pre-flight check failed. Fix these before building:\n${failedChecks}`);
+      return this.buildFailedResult(errors);
+    }
+    this.log("preflight", "complete", "All pre-flight checks passed");
 
     // 1. Persist brief and initialize build state
     this.store.setBrief(brief);
@@ -124,6 +192,12 @@ export class PMOrchestrator {
       if (dsResult.status === "failed") {
         errors.push(`Design system agent failed: ${dsResult.error}`);
         return this.buildFailedResult(errors);
+      }
+
+      // FIX 5: Verify design system used the correct tokens
+      const dsVerification = this.verifyDesignSystem();
+      if (!dsVerification.passed) {
+        this.log("design-system", "warning", `Design system verification issues: ${dsVerification.issues.join("; ")}`);
       }
 
       // ── Wave 3: Copy + Component Library (parallel) ─────────────────────
@@ -225,15 +299,22 @@ export class PMOrchestrator {
         // Non-critical
       }
 
-      // Determine success
-      const qaPasssed = qaReport?.allPassed ?? false;
-      const success = qaPasssed && errors.length === 0;
-      this.updatePhase(success ? "complete" : "failed");
-
-      if (!success && qaReport && !qaReport.allPassed) {
-        const remaining = qaReport.remainingIssues.length;
-        errors.push(`QA found ${remaining} remaining issue${remaining === 1 ? "" : "s"}`);
+      // QA is a hard gate — if QA did not pass, the build failed
+      const qaPassed = qaReport?.allPassed ?? false;
+      if (!qaPassed) {
+        const remaining = qaReport?.remainingIssues ?? [];
+        const issuesSummary = remaining
+          .slice(0, 5)
+          .map((i) => `  - [${i.severity}] ${i.category}: ${i.message}`)
+          .join("\n");
+        const truncated = remaining.length > 5 ? `\n  ... and ${remaining.length - 5} more` : "";
+        errors.push(
+          `BUILD FAILED — QA did not pass (${remaining.length} issue${remaining.length === 1 ? "" : "s"}):\n${issuesSummary}${truncated}`,
+        );
       }
+
+      const success = qaPassed && errors.length === 0;
+      this.updatePhase(success ? "complete" : "failed");
 
       return {
         success,
@@ -424,6 +505,33 @@ export class PMOrchestrator {
   }
 
   // ─── Private: Helpers ───────────────────────────────────────────────────
+
+  private verifyDesignSystem(): { passed: boolean; issues: string[] } {
+    const issues: string[] = [];
+    const designSystem = this.store.getDesignSystem();
+    if (!designSystem) return { passed: true, issues: [] };
+
+    // Check tailwind.config.ts for correct primary color
+    const tailwindPath = path.join(this.projectRoot, designSystem.tailwindConfigPath);
+    if (fs.existsSync(tailwindPath)) {
+      const tailwindContent = fs.readFileSync(tailwindPath, "utf-8");
+      const expectedPrimary = designSystem.tokens.colors.primary;
+      if (expectedPrimary && !tailwindContent.includes(expectedPrimary)) {
+        issues.push(`tailwind.config.ts missing expected primary color ${expectedPrimary}`);
+      }
+    }
+
+    // Check CSS custom properties file for correct variables
+    const cssPath = path.join(this.projectRoot, designSystem.cssCustomPropertiesPath);
+    if (fs.existsSync(cssPath)) {
+      const cssContent = fs.readFileSync(cssPath, "utf-8");
+      if (!cssContent.includes("--primary") && !cssContent.includes("--color-primary")) {
+        issues.push("Design system CSS missing --primary or --color-primary variable");
+      }
+    }
+
+    return { passed: issues.length === 0, issues };
+  }
 
   private buildDefaultInsights(brief: ProjectBrief): ProductInsights {
     return {

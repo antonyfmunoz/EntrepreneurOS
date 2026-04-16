@@ -74,7 +74,7 @@ vi.mock("../../../lib/spec-parser/restructure-spec.js", () => ({
 
 // ─── Import under test ──────────────────────────────────────────────────────
 
-import { runArchitectureAgent } from "../../../lib/agents/architecture-agent.js";
+import { runArchitectureAgent, preAudit } from "../../../lib/agents/architecture-agent.js";
 import { ArtifactStore } from "../../../lib/agents/artifact-store.js";
 import type { ProductInsights } from "../../../lib/agents/types.js";
 import type { ProjectBrief } from "../../../lib/intake/types.js";
@@ -232,5 +232,67 @@ describe("runArchitectureAgent", () => {
     await expect(
       runArchitectureAgent(makeBrief(), makeInsights(), store),
     ).rejects.toThrow("unexpected response type");
+  });
+});
+
+describe("preAudit", () => {
+  it("scans existing codebase and returns audit results", () => {
+    // Create mock server/routes.ts with route patterns
+    const routesDir = path.join(tmpDir, "server");
+    fs.mkdirSync(routesDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(routesDir, "routes.ts"),
+      `app.get("/api/users", handler);\napp.post("/api/auth/login", handler);`,
+      "utf-8",
+    );
+
+    // Create mock shared/schema.ts with table definitions
+    const sharedDir = path.join(tmpDir, "shared");
+    fs.mkdirSync(sharedDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(sharedDir, "schema.ts"),
+      `export const users = pgTable("users", { id: serial() });\nexport const sessions = pgTable("sessions", { id: serial() });`,
+      "utf-8",
+    );
+
+    // Create mock pages directory
+    const pagesDir = path.join(tmpDir, "client", "src", "pages");
+    fs.mkdirSync(pagesDir, { recursive: true });
+    fs.writeFileSync(path.join(pagesDir, "dashboard-page.tsx"), "export default function Dashboard() {}", "utf-8");
+
+    // Create mock storage.ts
+    fs.writeFileSync(
+      path.join(routesDir, "storage.ts"),
+      `async getUser(id: number): Promise<User> {\n  return db.query();\n}\nasync createUser(data: InsertUser): Promise<User> {\n  return db.insert();\n}`,
+      "utf-8",
+    );
+
+    const audit = preAudit(tmpDir, store);
+
+    expect(audit.existingRoutes).toContain("GET /api/users");
+    expect(audit.existingRoutes).toContain("POST /api/auth/login");
+    expect(audit.existingTables).toContain("users");
+    expect(audit.existingTables).toContain("sessions");
+    expect(audit.existingPages).toContain("dashboard-page.tsx");
+    expect(audit.existingStorageMethods).toContain("getUser");
+    expect(audit.existingStorageMethods).toContain("createUser");
+    expect(audit.scannedAt).toBeDefined();
+  });
+
+  it("stores audit in artifact store", () => {
+    const audit = preAudit(tmpDir, store);
+
+    const stored = store.getExistingCodebaseAudit();
+    expect(stored).not.toBeNull();
+    expect(stored!.scannedAt).toBe(audit.scannedAt);
+  });
+
+  it("returns empty arrays when directories do not exist", () => {
+    const audit = preAudit(tmpDir, store);
+
+    expect(audit.existingRoutes).toEqual([]);
+    expect(audit.existingTables).toEqual([]);
+    expect(audit.existingPages).toEqual([]);
+    expect(audit.existingStorageMethods).toEqual([]);
   });
 });
