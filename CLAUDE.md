@@ -323,3 +323,9 @@ Do not make direct repo edits outside a GSD workflow unless the user explicitly 
 > Profile not yet configured. Run `/gsd:profile-user` to generate your developer profile.
 > This section is managed by `generate-claude-profile` -- do not edit manually.
 <!-- GSD:profile-end -->
+
+## Session Settings
+
+- **Thinking mode:** Always use maximum thinking/extended reasoning effort
+- **Model preference:** Use claude-opus-4-6 for all complex tasks
+- **Bash auto-approve:** Execute bash commands without asking for confirmation each time

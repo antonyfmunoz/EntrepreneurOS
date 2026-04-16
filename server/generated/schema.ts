@@ -372,3 +372,331 @@ export const insertConversationSchema = z.object({
 
 export type Conversation = typeof conversations.$inferSelect;
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
+
+export const workflow_steps = pgTable("workflow_steps", {
+  id: text("id").primaryKey(),
+  workflow_id: text("workflow_id"),
+  order_index: text("order_index"),
+  title: text("title"),
+  description: text("description"),
+  step_type: text("step_type"),
+  assignee_type: text("assignee_type"),
+  assignee_id: text("assignee_id"),
+  config: text("config"),
+  completed_at: text("completed_at"),
+  completed_by: text("completed_by"),
+  created_at: text("created_at"),
+  updated_at: text("updated_at"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertWorkflowStepSchema = z.object({
+  workflow_id: z.string(),
+  order_index: z.string(),
+  title: z.string(),
+  description: z.string(),
+  step_type: z.string(),
+  assignee_type: z.string(),
+  assignee_id: z.string(),
+  config: z.string(),
+  completed_at: z.string(),
+  completed_by: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type WorkflowStep = typeof workflow_steps.$inferSelect;
+export type InsertWorkflowStep = z.infer<typeof insertWorkflowStepSchema>;
+
+export const messages = pgTable("messages", {
+  id: text("id").primaryKey(),
+  conversation_id: text("conversation_id"),
+  role: text("role"),
+  content: text("content"),
+  metadata: text("metadata"),
+  created_at: text("created_at"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertMessageSchema = z.object({
+  conversation_id: z.string(),
+  role: z.string(),
+  content: z.string(),
+  metadata: z.string(),
+  created_at: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Message = typeof messages.$inferSelect;
+export type InsertMessage = z.infer<typeof insertMessageSchema>;
+
+export const activity_logs = pgTable("activity_logs", {
+  id: text("id").primaryKey(),
+  company_id: text("company_id"),
+  actor_type: text("actor_type"),
+  actor_id: text("actor_id"),
+  action: text("action"),
+  entity_type: text("entity_type"),
+  entity_id: text("entity_id"),
+  delta: text("delta"),
+  metadata: text("metadata"),
+  created_at: text("created_at"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertActivityLogSchema = z.object({
+  company_id: z.string(),
+  actor_type: z.string(),
+  actor_id: z.string(),
+  action: z.string(),
+  entity_type: z.string(),
+  entity_id: z.string(),
+  delta: z.string(),
+  metadata: z.string(),
+  created_at: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type ActivityLog = typeof activity_logs.$inferSelect;
+export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
+
+export const user_preferences = pgTable("user_preferences", {
+  id: text("id").primaryKey(),
+  user_id: text("user_id"),
+  email_notifications: text("email_notifications"),
+  push_notifications: text("push_notifications"),
+  task_alerts: text("task_alerts"),
+  workflow_alerts: text("workflow_alerts"),
+  autonomy_level: text("autonomy_level"),
+  theme: text("theme"),
+  created_at: text("created_at"),
+  updated_at: text("updated_at"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertUserPreferenceSchema = z.object({
+  user_id: z.string(),
+  email_notifications: z.string(),
+  push_notifications: z.string(),
+  task_alerts: z.string(),
+  workflow_alerts: z.string(),
+  autonomy_level: z.string(),
+  theme: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type UserPreference = typeof user_preferences.$inferSelect;
+export type InsertUserPreference = z.infer<typeof insertUserPreferenceSchema>;
+
+export const capability_manifests = pgTable("capability_manifests", {
+  id: text("id").primaryKey(),
+  company_id: text("company_id"),
+  action_type: text("action_type"),
+  enabled: text("enabled"),
+  ai_allowed: text("ai_allowed"),
+  config: text("config"),
+  created_at: text("created_at"),
+  updated_at: text("updated_at"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertCapabilityManifestSchema = z.object({
+  company_id: z.string(),
+  action_type: z.string(),
+  enabled: z.string(),
+  ai_allowed: z.string(),
+  config: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type CapabilityManifest = typeof capability_manifests.$inferSelect;
+export type InsertCapabilityManifest = z.infer<typeof insertCapabilityManifestSchema>;
+
+export const kpis = pgTable("kpis", {
+  id: text("id").primaryKey(),
+  company_id: text("company_id"),
+  name: text("name"),
+  description: text("description"),
+  value: text("value"),
+  unit: text("unit"),
+  target: text("target"),
+  period: text("period"),
+  created_at: text("created_at"),
+  updated_at: text("updated_at"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertKpiSchema = z.object({
+  company_id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  value: z.string(),
+  unit: z.string(),
+  target: z.string(),
+  period: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Kpi = typeof kpis.$inferSelect;
+export type InsertKpi = z.infer<typeof insertKpiSchema>;
+
+export const onboarding_progress = pgTable("onboarding_progress", {
+  id: text("id").primaryKey(),
+  user_id: text("user_id"),
+  step: text("step"),
+  completed: text("completed"),
+  skipped: text("skipped"),
+  data: text("data"),
+  completed_at: text("completed_at"),
+  created_at: text("created_at"),
+  updated_at: text("updated_at"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertOnboardingProgressSchema = z.object({
+  user_id: z.string(),
+  step: z.string(),
+  completed: z.string(),
+  skipped: z.string(),
+  data: z.string(),
+  completed_at: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type OnboardingProgress = typeof onboarding_progress.$inferSelect;
+export type InsertOnboardingProgress = z.infer<typeof insertOnboardingProgressSchema>;
+
+export const read = pgTable("read", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertReadSchema = z.object({
+  name: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Read = typeof read.$inferSelect;
+export type InsertRead = z.infer<typeof insertReadSchema>;
+
+export const readAll = pgTable("readAll", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertReadAllSchema = z.object({
+  name: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type ReadAll = typeof readAll.$inferSelect;
+export type InsertReadAll = z.infer<typeof insertReadAllSchema>;
+
+export const preferences = pgTable("preferences", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertPreferenceSchema = z.object({
+  name: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Preference = typeof preferences.$inferSelect;
+export type InsertPreference = z.infer<typeof insertPreferenceSchema>;
+
+export const activity = pgTable("activity", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertActivitySchema = z.object({
+  name: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Activity = typeof activity.$inferSelect;
+export type InsertActivity = z.infer<typeof insertActivitySchema>;
+
+export const capabilities = pgTable("capabilities", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertCapabilitySchema = z.object({
+  name: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Capability = typeof capabilities.$inferSelect;
+export type InsertCapability = z.infer<typeof insertCapabilitySchema>;
+
+export const onboarding = pgTable("onboarding", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertOnboardingSchema = z.object({
+  name: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Onboarding = typeof onboarding.$inferSelect;
+export type InsertOnboarding = z.infer<typeof insertOnboardingSchema>;
+
+export const auth = pgTable("auth", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  companyId: text("company_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertAuthSchema = z.object({
+  name: z.string(),
+  companyId: z.string().min(1),
+});
+
+export type Auth = typeof auth.$inferSelect;
+export type InsertAuth = z.infer<typeof insertAuthSchema>;

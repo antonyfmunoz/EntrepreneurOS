@@ -1,109 +1,93 @@
-import * as React from "react"
-import { Header } from "@/components/header"
-import { LeftRail } from "@/components/left-rail"
-import { RightRail } from "@/components/right-rail"
-import { Menu, X } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { ReactNode, useState } from "react";
+import { Header } from "@/components/header";
+import { LeftRail } from "@/components/left-rail";
+import { RightRail } from "@/components/right-rail";
+import { Menu, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import clsx from "clsx";
 
-interface UniversalLayoutProps {
-  children: React.ReactNode
-  rightRail?: React.ReactNode
-  showRightRail?: boolean
-  className?: string
+export interface UniversalLayoutProps {
+  children: ReactNode;
+  showRightRail?: boolean;
+  rightRailContent?: ReactNode;
+  className?: string;
 }
 
 export function UniversalLayout({
   children,
-  rightRail,
   showRightRail = false,
-  className = "",
+  rightRailContent,
+  className,
 }: UniversalLayoutProps) {
-  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
+  const [leftRailOpen, setLeftRailOpen] = useState(false);
+  const [rightRailOpen, setRightRailOpen] = useState(false);
 
-  React.useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 1024) {
-        setMobileMenuOpen(false)
-      }
-    }
+  const toggleLeftRail = () => {
+    setLeftRailOpen(!leftRailOpen);
+    if (rightRailOpen) setRightRailOpen(false);
+  };
 
-    window.addEventListener("resize", handleResize)
-    return () => window.removeEventListener("resize", handleResize)
-  }, [])
+  const toggleRightRail = () => {
+    setRightRailOpen(!rightRailOpen);
+    if (leftRailOpen) setLeftRailOpen(false);
+  };
 
-  React.useEffect(() => {
-    if (mobileMenuOpen) {
-      document.body.style.overflow = "hidden"
-    } else {
-      document.body.style.overflow = "unset"
-    }
-
-    return () => {
-      document.body.style.overflow = "unset"
-    }
-  }, [mobileMenuOpen])
+  const closeRails = () => {
+    setLeftRailOpen(false);
+    setRightRailOpen(false);
+  };
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-[#f5f6f7] flex flex-col">
-      <Header />
+    <div className="flex flex-col h-screen w-full overflow-hidden bg-[#f5f6f7]">
+      <Header
+        onLeftMenuClick={toggleLeftRail}
+        onRightMenuClick={showRightRail ? toggleRightRail : undefined}
+      />
 
-      <div className="flex-1 flex overflow-hidden relative">
-        <div className="hidden lg:block">
-          <LeftRail />
-        </div>
+      <div className="flex flex-1 overflow-hidden relative">
+        <aside
+          className={clsx(
+            "fixed lg:static top-[64px] left-0 bottom-0 w-64 bg-[#eff1f2] z-40 transition-transform duration-300",
+            leftRailOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          )}
+        >
+          <LeftRail onNavigate={closeRails} />
+        </aside>
 
-        {mobileMenuOpen && (
-          <>
-            <div
-              className="fixed inset-0 bg-black/40 z-40 lg:hidden"
-              onClick={() => setMobileMenuOpen(false)}
-            />
-            <div className="fixed inset-y-0 left-0 z-50 lg:hidden animate-in slide-in-from-left duration-300">
-              <div className="h-full bg-[#eff1f2] shadow-[0_8px_32px_rgba(106,55,212,0.08)]">
-                <div className="flex items-center justify-between px-6 h-16 border-b border-[#abadae]/20">
-                  <span className="font-semibold text-[#2c2f30] text-base">Menu</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="h-8 w-8"
-                  >
-                    <X className="h-5 w-5 text-[#595c5d]" />
-                  </Button>
-                </div>
-                <LeftRail />
-              </div>
-            </div>
-          </>
-        )}
-
-        <main className={`flex-1 overflow-y-auto ${className}`}>
-          <div className="lg:hidden fixed top-20 left-4 z-30">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setMobileMenuOpen(true)}
-              className="h-10 w-10 rounded-[12px] bg-white/70 backdrop-blur-[16px] shadow-[0_8px_32px_rgba(106,55,212,0.08)] hover:bg-white/90"
-            >
-              <Menu className="h-5 w-5 text-[#2c2f30]" />
-            </Button>
-          </div>
-
-          <div className="h-full w-full">
+        <main
+          className={clsx(
+            "flex-1 overflow-y-auto overflow-x-hidden",
+            className
+          )}
+        >
+          <div className="w-full h-full">
             {children}
           </div>
         </main>
 
-        {showRightRail && rightRail && (
-          <div className="hidden xl:block">
-            <RightRail>
-              {rightRail}
-            </RightRail>
-          </div>
+        {showRightRail && (
+          <aside
+            className={clsx(
+              "fixed lg:static top-[64px] right-0 bottom-0 w-80 bg-[#eff1f2] z-40 transition-transform duration-300",
+              rightRailOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
+            )}
+          >
+            {rightRailContent && (
+              <RightRail>{rightRailContent}</RightRail>
+            )}
+          </aside>
+        )}
+
+        {(leftRailOpen || rightRailOpen) && (
+          <div
+            className="fixed inset-0 bg-black/20 z-30 lg:hidden"
+            onClick={closeRails}
+            aria-hidden="true"
+          />
         )}
       </div>
     </div>
-  )
+  );
 }
 
-export default UniversalLayout
+export default UniversalLayout;

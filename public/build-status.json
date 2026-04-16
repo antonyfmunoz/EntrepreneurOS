@@ -1,0 +1,13 @@
+{
+  "phase": "failed",
+  "totalAgents": 21,
+  "completedAgents": [],
+  "currentAgents": [],
+  "failedAgents": [
+    "product-intel",
+    "architecture",
+    "design-system"
+  ],
+  "startedAt": "2026-04-16T00:51:09.123Z",
+  "updatedAt": "2026-04-16T00:51:17.210Z"
+}

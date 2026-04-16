@@ -1,216 +1,145 @@
-import React, { useState } from 'react';
-import { useLocation } from 'wouter';
-import { ArrowLeft, Check } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/use-auth';
+import { useState } from "react";
+import { Link } from "wouter";
+import { Mail, CheckCircle2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import posthog from "posthog-js";
 
-const BrandLogo: React.FC = () => (
-  <div className="flex items-center justify-center mb-12">
-    <div className="flex items-center gap-3">
-      <div
-        className="w-10 h-10 rounded-xl flex items-center justify-center"
-        style={{ backgroundColor: '#6a37d4' }}
-      >
-        <span className="text-white text-xl font-semibold">E</span>
-      </div>
-      <span className="text-2xl font-semibold" style={{ color: '#2c2f30' }}>
-        EntrepreneurOS
-      </span>
-    </div>
-  </div>
-);
-
-const BackToLoginLink: React.FC = () => {
-  const [, setLocation] = useLocation();
-
-  return (
-    <button
-      onClick={() => setLocation('/login')}
-      className="inline-flex items-center gap-2 text-sm transition-colors hover:opacity-70"
-      style={{ color: '#6a37d4' }}
-    >
-      <ArrowLeft className="w-4 h-4" />
-      Back to login
-    </button>
-  );
-};
-
-const SuccessMessage: React.FC<{ email: string }> = ({ email }) => (
-  <div className="flex flex-col items-center text-center">
-    <div
-      className="w-16 h-16 rounded-full flex items-center justify-center mb-6"
-      style={{ backgroundColor: 'rgba(106, 55, 212, 0.1)' }}
-    >
-      <div
-        className="w-12 h-12 rounded-full flex items-center justify-center"
-        style={{ backgroundColor: '#6a37d4' }}
-      >
-        <Check className="w-6 h-6 text-white" />
-      </div>
-    </div>
-
-    <h2 className="text-2xl font-semibold mb-3" style={{ color: '#2c2f30' }}>
-      Check your email
-    </h2>
-
-    <p className="text-base mb-6" style={{ color: '#595c5d', lineHeight: '1.6' }}>
-      We sent a password reset code to <span className="font-medium" style={{ color: '#2c2f30' }}>{email}</span>
-    </p>
-
-    <p className="text-sm mb-8" style={{ color: '#595c5d', lineHeight: '1.6' }}>
-      Check your inbox for the reset code. If you don't see it, check your spam folder.
-    </p>
-
-    <BackToLoginLink />
-  </div>
-);
-
-const ForgotPasswordForm: React.FC<{ onSuccess: (email: string) => void }> = ({ onSuccess }) => {
-  const [email, setEmail] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [emailError, setEmailError] = useState('');
-  const { toast } = useToast();
-  const { resetPassword } = useAuth();
-
-  const validateEmail = (value: string): boolean => {
-    if (!value) {
-      setEmailError('Email required');
-      return false;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(value)) {
-      setEmailError('Enter a valid email address');
-      return false;
-    }
-
-    setEmailError('');
-    return true;
-  };
+export default function ForgotPasswordPage() {
+  const [email, setEmail] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
 
-    if (!validateEmail(email)) {
+    if (!email) {
+      setError("Email required.");
       return;
     }
 
-    setIsSubmitting(true);
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError("Email required.");
+      return;
+    }
+
+    setIsLoading(true);
 
     try {
-      await resetPassword(email);
-      onSuccess(email);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to send reset email. Try again.';
-      toast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive',
+      posthog.capture("reset_email_requested");
+
+      const response = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
       });
+
+      if (!response.ok) {
+        const data = await response.json();
+        if (response.status === 404) {
+          setError("No account with this email. Check your email or create an account.");
+        } else {
+          setError(data.message || "Connection failed. Try again.");
+        }
+        return;
+      }
+
+      posthog.capture("reset_email_sent");
+      setSuccess(true);
+    } catch (err) {
+      setError("Connection failed. Try again.");
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="w-full">
-      <div className="mb-6">
-        <Label
-          htmlFor="email"
-          className="block text-sm font-medium mb-2"
-          style={{ color: '#2c2f30' }}
-        >
-          Email
-        </Label>
-        <Input
-          id="email"
-          type="email"
-          value={email}
-          onChange={(e) => {
-            setEmail(e.target.value);
-            if (emailError) setEmailError('');
-          }}
-          onBlur={() => email && validateEmail(email)}
-          disabled={isSubmitting}
-          className="w-full transition-colors"
-          style={{
-            backgroundColor: emailError ? 'rgba(220, 38, 38, 0.05)' : '#f5f6f7',
-            color: '#2c2f30',
-          }}
-          aria-label="Email address"
-          aria-invalid={!!emailError}
-          aria-describedby={emailError ? 'email-error' : undefined}
-        />
-        {emailError && (
-          <p
-            id="email-error"
-            className="text-sm mt-2"
-            style={{ color: '#dc2626' }}
-            role="alert"
-          >
-            {emailError}
-          </p>
-        )}
-      </div>
-
-      <Button
-        type="submit"
-        disabled={isSubmitting}
-        className="w-full text-base font-medium transition-colors"
-        style={{
-          backgroundColor: '#6a37d4',
-          color: '#ffffff',
-          opacity: isSubmitting ? 0.7 : 1,
-        }}
-      >
-        {isSubmitting ? 'Sending...' : 'Send reset code'}
-      </Button>
-
-      <div className="mt-6 text-center">
-        <BackToLoginLink />
-      </div>
-    </form>
-  );
-};
-
-export default function ForgotPasswordPage() {
-  const [resetEmail, setResetEmail] = useState<string | null>(null);
-
-  return (
-    <div
-      className="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8"
-      style={{ backgroundColor: '#ffffff' }}
-    >
-      <div
-        className="w-full max-w-md rounded-xl p-8 sm:p-12"
-        style={{
-          backgroundColor: 'rgba(255, 255, 255, 0.7)',
-          backdropFilter: 'blur(16px)',
-          boxShadow: '0 8px 32px rgba(106, 55, 212, 0.08)',
-        }}
-      >
-        <BrandLogo />
-
-        {resetEmail ? (
-          <SuccessMessage email={resetEmail} />
-        ) : (
-          <>
-            <div className="text-center mb-8">
-              <h1 className="text-2xl font-semibold mb-3" style={{ color: '#2c2f30' }}>
-                Reset your password
-              </h1>
-              <p className="text-base" style={{ color: '#595c5d', lineHeight: '1.6' }}>
-                Enter your email and we'll send you a code to reset your password.
-              </p>
+    <div className="min-h-screen bg-background flex items-center justify-center p-6">
+      <Card className="w-full max-w-md bg-surface border-border-subtle shadow-sm">
+        <CardHeader className="space-y-2 text-center">
+          <div className="flex justify-center mb-4">
+            <div className="font-mono font-bold text-2xl text-primary">EntrepreneurOS</div>
+          </div>
+          <CardTitle className="font-mono font-bold text-2xl text-text">
+            Reset your password
+          </CardTitle>
+          <CardDescription className="font-mono text-sm text-text-secondary">
+            Enter your email. We'll send you a reset link.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {success ? (
+            <div className="space-y-6">
+              <Alert className="bg-success-muted border-success">
+                <CheckCircle2 className="h-4 w-4 text-success" />
+                <AlertDescription className="font-mono text-sm text-text ml-2">
+                  Check your email for a reset link.
+                </AlertDescription>
+              </Alert>
+              <Link href="/login">
+                <Button
+                  variant="outline"
+                  className="w-full font-mono font-medium text-sm uppercase tracking-wide"
+                >
+                  Back to sign in
+                </Button>
+              </Link>
             </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="font-mono text-xs uppercase tracking-wide text-text-secondary">
+                  Email
+                </Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="you@company.com"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setError(null);
+                    }}
+                    className="pl-10 bg-surface-subtle border-border font-mono text-base text-text placeholder:text-text-tertiary focus:ring-2 focus:ring-primary focus:border-primary"
+                    disabled={isLoading}
+                  />
+                </div>
+                {error && (
+                  <p className="font-mono text-xs text-destructive mt-1">
+                    {error}
+                  </p>
+                )}
+              </div>
 
-            <ForgotPasswordForm onSuccess={setResetEmail} />
-          </>
-        )}
-      </div>
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full bg-primary hover:bg-primary-hover text-text-on-primary font-mono font-semibold text-sm uppercase tracking-wide transition-colors duration-150"
+              >
+                {isLoading ? "Sending..." : "Send reset link"}
+              </Button>
+
+              <div className="text-center">
+                <Link href="/login">
+                  <a className="font-mono text-sm text-text-secondary hover:text-text transition-colors">
+                    Back to sign in
+                  </a>
+                </Link>
+              </div>
+            </form>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

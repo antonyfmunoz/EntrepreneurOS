@@ -1,0 +1,106 @@
+:root {
+  --color-primary: #0047FF;
+  --color-primary-hover: #0038CC;
+  --color-primary-muted: #E6EEFF;
+  --color-secondary: #FF3D00;
+  --color-secondary-hover: #CC3100;
+  --color-success: #00C853;
+  --color-success-muted: #E8F5E9;
+  --color-warning: #FFB300;
+  --color-warning-muted: #FFF8E1;
+  --color-destructive: #D32F2F;
+  --color-destructive-muted: #FFEBEE;
+  --color-background: #FAFAFA;
+  --color-surface: #FFFFFF;
+  --color-surface-elevated: #FFFFFF;
+  --color-surface-subtle: #F5F5F5;
+  --color-border: #E0E0E0;
+  --color-border-subtle: #F0F0F0;
+  --color-text: #0A0A0A;
+  --color-text-secondary: #616161;
+  --color-text-tertiary: #9E9E9E;
+  --color-text-on-primary: #FFFFFF;
+  --color-ring: #0047FF;
+
+  --font-mono: 'IBM Plex Mono', 'Geist Mono', monospace;
+  
+  --font-size-xs: 0.6875rem;
+  --font-size-sm: 0.8125rem;
+  --font-size-base: 0.9375rem;
+  --font-size-lg: 1.0625rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.625rem;
+  --font-size-3xl: 2.25rem;
+  --font-size-4xl: 3.5rem;
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  --spacing-0-5: 0.125rem;
+  --spacing-1: 0.25rem;
+  --spacing-1-5: 0.375rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-5: 1.25rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-10: 2.5rem;
+  --spacing-12: 3rem;
+  --spacing-16: 4rem;
+  --spacing-20: 5rem;
+  --spacing-24: 6rem;
+
+  --radius-none: 0;
+  --radius-sm: 0.125rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-full: 9999px;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 71, 255, 0.04);
+  --shadow-md: 0 4px 8px -2px rgba(0, 71, 255, 0.08), 0 2px 4px -2px rgba(0, 71, 255, 0.04);
+  --shadow-lg: 0 12px 24px -4px rgba(0, 71, 255, 0.12), 0 4px 8px -4px rgba(0, 71, 255, 0.06);
+  --shadow-xl: 0 24px 48px -8px rgba(0, 71, 255, 0.16), 0 8px 16px -8px rgba(0, 71, 255, 0.08);
+  --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+  --shadow-focus: 0 0 0 3px rgba(0, 71, 255, 0.12);
+}
+
+.dark {
+  --color-primary: #4D8AFF;
+  --color-primary-hover: #6DA3FF;
+  --color-primary-muted: #0A1A33;
+  --color-secondary: #FF5722;
+  --color-secondary-hover: #FF7043;
+  --color-success: #69F0AE;
+  --color-success-muted: #0D2818;
+  --color-warning: #FFD54F;
+  --color-warning-muted: #2E2410;
+  --color-destructive: #EF5350;
+  --color-destructive-muted: #2E0F0F;
+  --color-background: #0A0A0A;
+  --color-surface: #141414;
+  --color-surface-elevated: #1A1A1A;
+  --color-surface-subtle: #0F0F0F;
+  --color-border: #2A2A2A;
+  --color-border-subtle: #1F1F1F;
+  --color-text: #F5F5F5;
+  --color-text-secondary: #9E9E9E;
+  --color-text-tertiary: #616161;
+  --color-text-on-primary: #0A0A0A;
+  --color-ring: #4D8AFF;
+
+  --shadow-sm: 0 1px 2px 0 rgba(77, 138, 255, 0.08);
+  --shadow-md: 0 4px 8px -2px rgba(77, 138, 255, 0.12), 0 2px 4px -2px rgba(77, 138, 255, 0.08);
+  --shadow-lg: 0 12px 24px -4px rgba(77, 138, 255, 0.16), 0 4px 8px -4px rgba(77, 138, 255, 0.12);
+  --shadow-xl: 0 24px 48px -8px rgba(77, 138, 255, 0.20), 0 8px 16px -8px rgba(77, 138, 255, 0.16);
+  --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.3);
+  --shadow-focus: 0 0 0 3px rgba(77, 138, 255, 0.20);
+}

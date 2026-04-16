@@ -1,734 +1,652 @@
-import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  Mail,
-  Shield,
-  User,
-  Building2,
-  Bell,
-  Sparkles,
-} from "lucide-react";
-
-import { UniversalLayout } from "@/components/layout/universal-layout";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useUser } from "@clerk/clerk-react";
+import { Camera, Check, Loader2, Upload, X } from "lucide-react";
+import { UniversalLayout } from "@/components/universal-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { useAuth } from "@/hooks/use-auth";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import {
-  colors,
-  glassmorphism,
-  borderRadius,
-  applyGlassmorphism,
-} from "@/lib/design-tokens";
-import type { Company } from "@shared/schema";
-import { usePostHog } from "posthog-js/react";
 
-interface CompanyUpdateInput {
-  name?: string;
-  type?: string | null;
-  stage?: string | null;
-  offer?: string | null;
-  targetCustomer?: string | null;
-  goals?: string | null;
-  assistantName?: string | null;
-}
+type UserProfile = {
+  id: string;
+  email: string;
+  username?: string;
+  fullName?: string;
+  avatarUrl?: string;
+};
 
-interface NotificationSettings {
+type CompanySettings = {
+  id: string;
+  name: string;
+  stage?: string;
+  industry?: string;
+  businessModel?: string;
+  goals?: string;
+};
+
+type NotificationPreferences = {
   emailNotifications: boolean;
   pushNotifications: boolean;
   taskAlerts: boolean;
   workflowAlerts: boolean;
-}
-
-interface AutonomySettings {
-  autonomyLevel: "observe" | "recommend" | "assist" | "execute";
-}
-
-const surfaceContainerHigh = "#e2e4e5";
-const surfaceContainerHighest = "#dcdee0";
-
-const Skeleton = ({ className = "" }: { className?: string }) => (
-  <div
-    className={`animate-pulse ${className}`}
-    style={{
-      backgroundColor: surfaceContainerHigh,
-      borderRadius: borderRadius.default,
-    }}
-  />
-);
-
-const GlassCard = ({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) => (
-  <div
-    className={`p-8 ${className}`}
-    style={{
-      ...applyGlassmorphism(),
-      borderRadius: borderRadius.lg,
-    }}
-  >
-    {children}
-  </div>
-);
-
-const ErrorState = ({
-  message,
-  onRetry,
-}: {
-  message: string;
-  onRetry: () => void;
-}) => (
-  <div className="flex flex-col items-center justify-center py-16 px-4">
-    <div
-      className="rounded-full p-4 mb-4"
-      style={{ backgroundColor: surfaceContainerHigh }}
-    >
-      <AlertCircle size={32} style={{ color: colors.primary }} />
-    </div>
-    <p
-      className="text-center mb-4"
-      style={{ color: colors.onSurfaceVariant }}
-    >
-      {message}
-    </p>
-    <Button
-      onClick={onRetry}
-      style={{
-        borderRadius: borderRadius.default,
-        backgroundColor: colors.primary,
-        color: "#ffffff",
-      }}
-    >
-      Retry
-    </Button>
-  </div>
-);
-
-const inputStyle: React.CSSProperties = {
-  borderRadius: borderRadius.default,
-  backgroundColor: surfaceContainerHighest,
-  border: "none",
 };
 
-function CompanyTab({
-  company,
-  companyLoading,
-  companyError,
-  companyRefetch,
-  companyName,
-  setCompanyName,
-  companyType,
-  setCompanyType,
-  companyStage,
-  setCompanyStage,
-  assistantName,
-  setAssistantName,
-  offer,
-  setOffer,
-  targetCustomer,
-  setTargetCustomer,
-  goals,
-  setGoals,
-  handleCompanySubmit,
-  updateCompanyMutation,
-}: {
-  company: Company | undefined;
-  companyLoading: boolean;
-  companyError: Error | null;
-  companyRefetch: () => void;
-  companyName: string;
-  setCompanyName: (v: string) => void;
-  companyType: string;
-  setCompanyType: (v: string) => void;
-  companyStage: string;
-  setCompanyStage: (v: string) => void;
-  assistantName: string;
-  setAssistantName: (v: string) => void;
-  offer: string;
-  setOffer: (v: string) => void;
-  targetCustomer: string;
-  setTargetCustomer: (v: string) => void;
-  goals: string;
-  setGoals: (v: string) => void;
-  handleCompanySubmit: (e: React.FormEvent) => void;
-  updateCompanyMutation: ReturnType<
-    typeof useMutation<Company, Error, CompanyUpdateInput>
-  >;
-}) {
-  if (companyLoading) {
-    return (
-      <GlassCard>
-        <div className="space-y-6">
-          <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-10 w-32" />
-        </div>
-      </GlassCard>
-    );
-  }
+type AutonomySettings = {
+  autonomyLevel: "observe" | "recommend" | "assist" | "execute";
+};
 
-  if (companyError && !companyLoading) {
-    return (
-      <GlassCard>
-        <ErrorState
-          message={companyError.message || "Failed to load company settings"}
-          onRetry={companyRefetch}
-        />
-      </GlassCard>
-    );
-  }
-
-  if (!company) {
-    return null;
-  }
-
-  return (
-    <GlassCard>
-      <form onSubmit={handleCompanySubmit} className="space-y-6">
-        <div className="space-y-2">
-          <Label
-            htmlFor="company-name"
-            style={{ color: colors.onSurface }}
-          >
-            Company name
-          </Label>
-          <Input
-            id="company-name"
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
-            disabled={updateCompanyMutation.isPending}
-            required
-            style={inputStyle}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <Label
-              htmlFor="company-stage"
-              style={{ color: colors.onSurface }}
-            >
-              Stage
-            </Label>
-            <Input
-              id="company-stage"
-              value={companyStage}
-              onChange={(e) => setCompanyStage(e.target.value)}
-              placeholder="Pre-seed, Seed, Series A..."
-              disabled={updateCompanyMutation.isPending}
-              style={inputStyle}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label
-              htmlFor="company-type"
-              style={{ color: colors.onSurface }}
-            >
-              Type
-            </Label>
-            <Input
-              id="company-type"
-              value={companyType}
-              onChange={(e) => setCompanyType(e.target.value)}
-              placeholder="SaaS, Agency, D2C..."
-              disabled={updateCompanyMutation.isPending}
-              style={inputStyle}
-            />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label
-            htmlFor="assistant-name"
-            style={{ color: colors.onSurface }}
-          >
-            Assistant name
-          </Label>
-          <Input
-            id="assistant-name"
-            value={assistantName}
-            onChange={(e) => setAssistantName(e.target.value)}
-            placeholder="OS-1"
-            disabled={updateCompanyMutation.isPending}
-            style={inputStyle}
-          />
-          <p
-            className="text-xs"
-            style={{ color: colors.onSurfaceVariant }}
-          >
-            What you want to call your AI assistant throughout the app.
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <Label
-            htmlFor="company-offer"
-            style={{ color: colors.onSurface }}
-          >
-            Offer
-          </Label>
-          <Textarea
-            id="company-offer"
-            value={offer}
-            onChange={(e) => setOffer(e.target.value)}
-            placeholder="What you sell and to whom."
-            rows={3}
-            disabled={updateCompanyMutation.isPending}
-            style={inputStyle}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label
-            htmlFor="company-customer"
-            style={{ color: colors.onSurface }}
-          >
-            Target customer
-          </Label>
-          <Textarea
-            id="company-customer"
-            value={targetCustomer}
-            onChange={(e) => setTargetCustomer(e.target.value)}
-            placeholder="Who buys from you and why."
-            rows={3}
-            disabled={updateCompanyMutation.isPending}
-            style={inputStyle}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label
-            htmlFor="company-goals"
-            style={{ color: colors.onSurface }}
-          >
-            Goals
-          </Label>
-          <Textarea
-            id="company-goals"
-            value={goals}
-            onChange={(e) => setGoals(e.target.value)}
-            placeholder="What you're building toward this quarter."
-            rows={3}
-            disabled={updateCompanyMutation.isPending}
-            style={inputStyle}
-          />
-        </div>
-
-        <div className="flex items-center justify-end gap-3 pt-2">
-          {updateCompanyMutation.isSuccess && (
-            <span
-              className="text-xs flex items-center gap-1"
-              style={{ color: "#16a34a" }}
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Saved
-            </span>
-          )}
-          <Button
-            type="submit"
-            disabled={
-              updateCompanyMutation.isPending || !companyName.trim()
-            }
-            style={{
-              borderRadius: borderRadius.default,
-              backgroundColor: colors.primary,
-              color: "#ffffff",
-            }}
-            className="hover:opacity-90 disabled:opacity-50"
-          >
-            {updateCompanyMutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              "Save changes"
-            )}
-          </Button>
-        </div>
-      </form>
-    </GlassCard>
-  );
-}
-
-function ProfileTab({
-  user,
-}: {
-  user: { fullName?: string | null; username?: string | null; email?: string | null } | null;
-}) {
-  return (
-    <GlassCard>
-      <div className="space-y-6">
-        <div className="flex items-center gap-6 mb-2">
-          <div
-            className="w-20 h-20 rounded-full flex items-center justify-center"
-            style={{ backgroundColor: surfaceContainerHigh }}
-          >
-            <User size={28} style={{ color: colors.onSurfaceVariant }} />
-          </div>
-          <div>
-            <div
-              className="text-lg font-semibold"
-              style={{ color: colors.onSurface }}
-            >
-              {user?.fullName ?? user?.username ?? "User"}
-            </div>
-            <div className="text-sm" style={{ color: colors.onSurfaceVariant }}>
-              {user?.email ?? ""}
-            </div>
-          </div>
-        </div>
-
-        <p className="text-sm" style={{ color: colors.onSurfaceVariant }}>
-          Profile details are managed by Clerk. Update them from Clerk's user
-          settings to change them here.
-        </p>
-
-        <div className="space-y-2">
-          <Label htmlFor="profile-name" style={{ color: colors.onSurface }}>
-            Name
-          </Label>
-          <Input
-            id="profile-name"
-            value={user?.fullName ?? user?.username ?? ""}
-            readOnly
-            style={{
-              ...inputStyle,
-              opacity: 0.7,
-              cursor: "default",
-            }}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="profile-email" style={{ color: colors.onSurface }}>
-            Email
-          </Label>
-          <Input
-            id="profile-email"
-            value={user?.email ?? ""}
-            readOnly
-            style={{
-              ...inputStyle,
-              opacity: 0.7,
-              cursor: "default",
-            }}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="profile-username" style={{ color: colors.onSurface }}>
-            Username
-          </Label>
-          <Input
-            id="profile-username"
-            value={user?.username ?? ""}
-            readOnly
-            style={{
-              ...inputStyle,
-              opacity: 0.7,
-              cursor: "default",
-            }}
-          />
-        </div>
-      </div>
-    </GlassCard>
-  );
-}
-
-function SecurityTab({
-  isClerkReady,
-  userEmail,
-  handlePasswordReset,
-}: {
-  isClerkReady: boolean;
-  userEmail: string | null | undefined;
-  handlePasswordReset: () => void;
-}) {
-  const notificationOptions = [
-    {
-      icon: <Mail size={20} style={{ color: colors.primary }} />,
-      label: "Email verification",
-      description: isClerkReady
-        ? "Your email is verified through your Clerk account."
-        : "Email verification is available when Clerk is configured.",
-    },
-    {
-      icon: <Shield size={20} style={{ color: colors.primary }} />,
-      label: "Two-factor authentication",
-      description:
-        "Clerk supports TOTP authenticator apps and SMS verification. Configure 2FA from your Clerk account settings.",
-    },
-  ];
-
-  return (
-    <GlassCard>
-      <div className="space-y-6">
-        {notificationOptions.map((option) => (
-          <div
-            key={option.label}
-            className="flex items-start gap-4 py-4"
-            style={{
-              borderBottom: `1px solid ${colors.surfaceContainerLow}`,
-            }}
-          >
-            <div
-              className="rounded-full p-2.5 flex-shrink-0"
-              style={{ backgroundColor: surfaceContainerHigh }}
-            >
-              {option.icon}
-            </div>
-            <div className="flex-1">
-              <div
-                className="font-medium mb-1"
-                style={{ color: colors.onSurface }}
-              >
-                {option.label}
-              </div>
-              <div
-                className="text-sm"
-                style={{ color: colors.onSurfaceVariant }}
-              >
-                {option.description}
-              </div>
-            </div>
-          </div>
-        ))}
-
-        <div className="pt-2">
-          <div
-            className="font-medium mb-2"
-            style={{ color: colors.onSurface }}
-          >
-            Password
-          </div>
-          <p
-            className="text-sm mb-4"
-            style={{ color: colors.onSurfaceVariant }}
-          >
-            Send yourself a password reset email.
-          </p>
-          <Button
-            variant="outline"
-            onClick={handlePasswordReset}
-            disabled={!isClerkReady || !userEmail}
-            style={{ borderRadius: borderRadius.default }}
-          >
-            Send password reset email
-          </Button>
-        </div>
-      </div>
-    </GlassCard>
-  );
-}
+type CompaniesResponse = {
+  companies: CompanySettings[];
+};
 
 export default function SettingsPage() {
-  const posthog = usePostHog();
-  const { user, isClerkReady, resetPassword } = useAuth();
-  const { toast } = useToast();
+  const { user } = useUser();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState("company");
+  const [activeTab, setActiveTab] = useState("profile");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  const {
-    data: company,
-    isLoading: companyLoading,
-    error: companyError,
-    refetch: companyRefetch,
-  } = useQuery<Company, Error>({
-    queryKey: ["/api/company"],
+  const { data: userProfile, isLoading: loadingUser, error: userError } = useQuery<UserProfile>({
+    queryKey: ["/api/users/me"],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/company");
-      return (await res.json()) as Company;
+      const response = await apiRequest("/api/users/me", "GET");
+      return response.json();
     },
   });
 
-  const [companyName, setCompanyName] = useState("");
-  const [companyType, setCompanyType] = useState("");
-  const [companyStage, setCompanyStage] = useState("");
-  const [assistantName, setAssistantName] = useState("");
-  const [offer, setOffer] = useState("");
-  const [targetCustomer, setTargetCustomer] = useState("");
-  const [goals, setGoals] = useState("");
+  const { data: companiesData, isLoading: loadingCompanies } = useQuery<CompaniesResponse>({
+    queryKey: ["/api/companies"],
+    queryFn: async () => {
+      const response = await apiRequest("/api/companies", "GET");
+      return response.json();
+    },
+  });
 
-  useEffect(() => {
-    if (company) {
-      setCompanyName(company.name ?? "");
-      setCompanyType(company.type ?? "");
-      setCompanyStage(company.stage ?? "");
-      setAssistantName(company.assistantName ?? "");
-      setOffer(company.offer ?? "");
-      setTargetCustomer(company.targetCustomer ?? "");
-      setGoals(company.goals ?? "");
-    }
-  }, [company]);
+  const { data: companySettings } = useQuery<CompanySettings>({
+    queryKey: ["/api/companies", companiesData?.companies?.[0]?.id],
+    queryFn: async () => {
+      const companyId = companiesData?.companies?.[0]?.id;
+      if (!companyId) throw new Error("No company found");
+      const response = await apiRequest(`/api/companies/${companyId}`, "GET");
+      return response.json();
+    },
+    enabled: !!companiesData?.companies?.[0]?.id,
+  });
 
-  const updateCompanyMutation = useMutation<
-    Company,
-    Error,
-    CompanyUpdateInput
-  >({
-    mutationFn: async (input) => {
-      if (!company) throw new Error("No company loaded");
-      const res = await apiRequest(
-        "PATCH",
-        `/api/company/${company.id}`,
-        input,
-      );
-      return (await res.json()) as Company;
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: Partial<UserProfile>) => {
+      const response = await apiRequest("/api/users/me", "PUT", data);
+      return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/company"] });
-      toast({
-        title: "Company settings saved",
-        description: "Your changes are live.",
-      });
-    },
-    onError: (err) => {
-      toast({
-        title: "Couldn't save company settings",
-        description: err.message,
-        variant: "destructive",
-      });
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
     },
   });
 
-  function handleCompanySubmit(e: React.FormEvent) {
-    e.preventDefault();
-    updateCompanyMutation.mutate({
-      name: companyName.trim() || undefined,
-      type: companyType.trim() || null,
-      stage: companyStage.trim() || null,
-      assistantName: assistantName.trim() || null,
-      offer: offer.trim() || null,
-      targetCustomer: targetCustomer.trim() || null,
-      goals: goals.trim() || null,
-    });
-  }
+  const updateCompanyMutation = useMutation({
+    mutationFn: async (data: Partial<CompanySettings>) => {
+      const companyId = companySettings?.id;
+      if (!companyId) throw new Error("No company found");
+      const response = await apiRequest(`/api/companies/${companyId}`, "PUT", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+    },
+  });
 
-  async function handlePasswordReset() {
-    if (!user?.email) {
-      toast({
-        title: "No email on file",
-        description: "Can't send a password reset without an email.",
-        variant: "destructive",
+  const updateNotificationsMutation = useMutation({
+    mutationFn: async (data: NotificationPreferences) => {
+      const response = await apiRequest("/api/users/me/notifications", "PUT", data);
+      return response.json();
+    },
+  });
+
+  const updateAutonomyMutation = useMutation({
+    mutationFn: async (data: AutonomySettings) => {
+      const companyId = companySettings?.id;
+      if (!companyId) throw new Error("No company found");
+      const response = await apiRequest(`/api/companies/${companyId}/autonomy`, "PUT", data);
+      return response.json();
+    },
+  });
+
+  const uploadAvatarMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("avatar", file);
+      const response = await fetch("/api/users/me/avatar", {
+        method: "POST",
+        body: formData,
       });
-      return;
-    }
-    await resetPassword(user.email);
-  }
+      if (!response.ok) throw new Error("Upload failed");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
+      setUploadingAvatar(false);
+    },
+    onError: () => {
+      setUploadingAvatar(false);
+    },
+  });
 
-  function handleTabChange(value: string) {
-    setActiveTab(value);
-    window.dispatchEvent(
-      new CustomEvent("analytics", {
-        detail: {
-          event: "settings_tab_changed",
-          properties: { tabName: value },
-        },
-      }),
+  const removeAvatarMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("/api/users/me/avatar", "DELETE");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
+    },
+  });
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploadingAvatar(true);
+      uploadAvatarMutation.mutate(file);
+    }
+  };
+
+  const [profileForm, setProfileForm] = useState<Partial<UserProfile>>({});
+  const [companyForm, setCompanyForm] = useState<Partial<CompanySettings>>({});
+  const [notificationForm, setNotificationForm] = useState<NotificationPreferences>({
+    emailNotifications: true,
+    pushNotifications: true,
+    taskAlerts: true,
+    workflowAlerts: true,
+  });
+  const [autonomyForm, setAutonomyForm] = useState<AutonomySettings>({
+    autonomyLevel: "recommend",
+  });
+
+  const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
+  const [companyErrors, setCompanyErrors] = useState<Record<string, string>>({});
+
+  const validateProfile = (): boolean => {
+    const errors: Record<string, string> = {};
+    
+    if (profileForm.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profileForm.email)) {
+      errors.email = "Invalid email format.";
+    }
+    
+    if (profileForm.username && (profileForm.username.length < 3 || !/^[a-z0-9_]+$/.test(profileForm.username))) {
+      errors.username = "Username can only contain lowercase letters, numbers, and underscores.";
+    }
+
+    setProfileErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSaveProfile = () => {
+    if (!validateProfile()) return;
+    updateProfileMutation.mutate(profileForm);
+  };
+
+  const handleSaveCompany = () => {
+    updateCompanyMutation.mutate(companyForm);
+  };
+
+  const handleSaveNotifications = () => {
+    updateNotificationsMutation.mutate(notificationForm);
+  };
+
+  const handleSaveAutonomy = () => {
+    updateAutonomyMutation.mutate(autonomyForm);
+  };
+
+  if (userError) {
+    return (
+      <UniversalLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Card className="p-8 max-w-md w-full text-center">
+            <p className="font-mono text-sm text-destructive mb-4">Failed to load settings. Refresh the page.</p>
+            <Button onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/users/me"] })}>
+              Retry
+            </Button>
+          </Card>
+        </div>
+      </UniversalLayout>
     );
   }
 
   return (
-    <UniversalLayout title="Settings">
-      <div className="p-8 max-w-4xl mx-auto">
+    <UniversalLayout>
+      <div className="max-w-4xl mx-auto px-6 py-8">
         <div className="mb-8">
-          <h1
-            className="text-3xl font-semibold mb-2"
-            style={{ color: colors.onSurface }}
-          >
-            Settings
-          </h1>
-          <p style={{ color: colors.onSurfaceVariant }}>
-            Manage your profile, company settings, and preferences.
+          <h1 className="font-mono font-bold text-4xl text-text mb-2">Settings</h1>
+          <p className="font-mono text-base text-text-secondary">
+            Manage your profile, company settings, notifications, and AI autonomy.
           </p>
         </div>
 
-        <Tabs value={activeTab} onValueChange={handleTabChange}>
-          <TabsList
-            className="w-full mb-8 overflow-x-auto flex-nowrap"
-            style={{
-              backgroundColor: colors.surfaceContainerLow,
-              borderRadius: borderRadius.default,
-              padding: "4px",
-            }}
-          >
-            <TabsTrigger
-              value="company"
-              className="flex items-center gap-2 whitespace-nowrap"
-              style={{ borderRadius: borderRadius.default }}
-            >
-              <Building2 size={16} />
-              <span className="hidden sm:inline">Company</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="profile"
-              className="flex items-center gap-2 whitespace-nowrap"
-              style={{ borderRadius: borderRadius.default }}
-            >
-              <User size={16} />
-              <span className="hidden sm:inline">Profile</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="security"
-              className="flex items-center gap-2 whitespace-nowrap"
-              style={{ borderRadius: borderRadius.default }}
-            >
-              <Shield size={16} />
-              <span className="hidden sm:inline">Security</span>
-            </TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="mb-8">
+            <TabsTrigger value="profile">Profile</TabsTrigger>
+            <TabsTrigger value="company">Company</TabsTrigger>
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
+            <TabsTrigger value="autonomy">AI Autonomy</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="company">
-            <CompanyTab
-              company={company}
-              companyLoading={companyLoading}
-              companyError={companyError}
-              companyRefetch={companyRefetch}
-              companyName={companyName}
-              setCompanyName={setCompanyName}
-              companyType={companyType}
-              setCompanyType={setCompanyType}
-              companyStage={companyStage}
-              setCompanyStage={setCompanyStage}
-              assistantName={assistantName}
-              setAssistantName={setAssistantName}
-              offer={offer}
-              setOffer={setOffer}
-              targetCustomer={targetCustomer}
-              setTargetCustomer={setTargetCustomer}
-              goals={goals}
-              setGoals={setGoals}
-              handleCompanySubmit={handleCompanySubmit}
-              updateCompanyMutation={updateCompanyMutation}
-            />
-          </TabsContent>
-
           <TabsContent value="profile">
-            <ProfileTab user={user} />
+            <Card className="p-8">
+              {loadingUser ? (
+                <div className="space-y-6">
+                  <div className="h-24 w-24 rounded-full bg-surface-subtle animate-pulse" />
+                  <div className="space-y-4">
+                    <div className="h-10 bg-surface-subtle animate-pulse rounded-md" />
+                    <div className="h-10 bg-surface-subtle animate-pulse rounded-md" />
+                    <div className="h-10 bg-surface-subtle animate-pulse rounded-md" />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="flex items-center space-x-4">
+                    <div className="relative">
+                      <div className="w-24 h-24 rounded-full bg-surface-subtle overflow-hidden">
+                        {userProfile?.avatarUrl ? (
+                          <img src={userProfile.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Camera className="w-8 h-8 text-text-tertiary" />
+                          </div>
+                        )}
+                      </div>
+                      {uploadingAvatar && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-text/50 rounded-full">
+                          <Loader2 className="w-6 h-6 animate-spin text-text-on-primary" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-x-2">
+                      <label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleAvatarUpload}
+                          className="hidden"
+                          disabled={uploadingAvatar}
+                        />
+                        <Button variant="secondary" size="sm" disabled={uploadingAvatar} asChild>
+                          <span>
+                            <Upload className="w-4 h-4 mr-2" />
+                            Upload avatar
+                          </span>
+                        </Button>
+                      </label>
+                      {userProfile?.avatarUrl && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeAvatarMutation.mutate()}
+                          disabled={removeAvatarMutation.isPending}
+                        >
+                          <X className="w-4 h-4 mr-2" />
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {uploadAvatarMutation.isError && (
+                    <p className="font-mono text-xs text-destructive">Failed to upload avatar. Try again.</p>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="you@company.com"
+                      defaultValue={userProfile?.email}
+                      onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                    />
+                    {profileErrors.email && (
+                      <p className="font-mono text-xs text-destructive">{profileErrors.email}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="username">Username</Label>
+                    <Input
+                      id="username"
+                      placeholder="jsmith"
+                      defaultValue={userProfile?.username}
+                      onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
+                    />
+                    {profileErrors.username && (
+                      <p className="font-mono text-xs text-destructive">{profileErrors.username}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="fullName">Full Name</Label>
+                    <Input
+                      id="fullName"
+                      placeholder="Jane Smith"
+                      defaultValue={userProfile?.fullName}
+                      onChange={(e) => setProfileForm({ ...profileForm, fullName: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="flex justify-end space-x-3">
+                    <Button
+                      onClick={handleSaveProfile}
+                      disabled={updateProfileMutation.isPending}
+                    >
+                      {updateProfileMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4 mr-2" />
+                          Save profile
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {updateProfileMutation.isError && (
+                    <p className="font-mono text-xs text-destructive text-right">Failed to save changes. Try again.</p>
+                  )}
+                  {updateProfileMutation.isSuccess && (
+                    <p className="font-mono text-xs text-success text-right">Profile updated.</p>
+                  )}
+                </div>
+              )}
+            </Card>
           </TabsContent>
 
-          <TabsContent value="security">
-            <SecurityTab
-              isClerkReady={isClerkReady}
-              userEmail={user?.email}
-              handlePasswordReset={handlePasswordReset}
-            />
+          <TabsContent value="company">
+            <Card className="p-8">
+              {loadingCompanies ? (
+                <div className="space-y-4">
+                  <div className="h-10 bg-surface-subtle animate-pulse rounded-md" />
+                  <div className="h-10 bg-surface-subtle animate-pulse rounded-md" />
+                  <div className="h-10 bg-surface-subtle animate-pulse rounded-md" />
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="companyName">Company Name</Label>
+                    <Input
+                      id="companyName"
+                      placeholder="Acme Labs"
+                      defaultValue={companySettings?.name}
+                      onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="stage">Stage</Label>
+                    <Select
+                      defaultValue={companySettings?.stage}
+                      onValueChange={(value) => setCompanyForm({ ...companyForm, stage: value })}
+                    >
+                      <SelectTrigger id="stage">
+                        <SelectValue placeholder="Select stage" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="idea">Idea</SelectItem>
+                        <SelectItem value="pre-revenue">Pre-revenue</SelectItem>
+                        <SelectItem value="revenue">Revenue</SelectItem>
+                        <SelectItem value="scaling">Scaling</SelectItem>
+                        <SelectItem value="mature">Mature</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="industry">Industry</Label>
+                    <Input
+                      id="industry"
+                      placeholder="SaaS, E-commerce, Consulting"
+                      defaultValue={companySettings?.industry}
+                      onChange={(e) => setCompanyForm({ ...companyForm, industry: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="businessModel">Business Model</Label>
+                    <Select
+                      defaultValue={companySettings?.businessModel}
+                      onValueChange={(value) => setCompanyForm({ ...companyForm, businessModel: value })}
+                    >
+                      <SelectTrigger id="businessModel">
+                        <SelectValue placeholder="Select model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="saas">SaaS</SelectItem>
+                        <SelectItem value="services">Services</SelectItem>
+                        <SelectItem value="product">Product</SelectItem>
+                        <SelectItem value="hybrid">Hybrid</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="goals">Goals</Label>
+                    <Textarea
+                      id="goals"
+                      placeholder="10x revenue, hire 5 engineers, launch product line"
+                      defaultValue={companySettings?.goals}
+                      onChange={(e) => setCompanyForm({ ...companyForm, goals: e.target.value })}
+                      className="min-h-[120px]"
+                    />
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={handleSaveCompany}
+                      disabled={updateCompanyMutation.isPending}
+                    >
+                      {updateCompanyMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4 mr-2" />
+                          Save company
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {updateCompanyMutation.isError && (
+                    <p className="font-mono text-xs text-destructive text-right">Failed to save changes. Try again.</p>
+                  )}
+                  {updateCompanyMutation.isSuccess && (
+                    <p className="font-mono text-xs text-success text-right">Company settings updated.</p>
+                  )}
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="notifications">
+            <Card className="p-8">
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label htmlFor="emailNotifications">Email Notifications</Label>
+                    <p className="font-mono text-xs text-text-secondary">
+                      Receive alerts and updates via email.
+                    </p>
+                  </div>
+                  <Switch
+                    id="emailNotifications"
+                    checked={notificationForm.emailNotifications}
+                    onCheckedChange={(checked) =>
+                      setNotificationForm({ ...notificationForm, emailNotifications: checked })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label htmlFor="pushNotifications">Push Notifications</Label>
+                    <p className="font-mono text-xs text-text-secondary">
+                      Receive browser notifications for tasks and workflows.
+                    </p>
+                  </div>
+                  <Switch
+                    id="pushNotifications"
+                    checked={notificationForm.pushNotifications}
+                    onCheckedChange={(checked) =>
+                      setNotificationForm({ ...notificationForm, pushNotifications: checked })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label htmlFor="taskAlerts">Task Alerts</Label>
+                    <p className="font-mono text-xs text-text-secondary">
+                      Get notified when tasks are assigned to you or approaching deadlines.
+                    </p>
+                  </div>
+                  <Switch
+                    id="taskAlerts"
+                    checked={notificationForm.taskAlerts}
+                    onCheckedChange={(checked) =>
+                      setNotificationForm({ ...notificationForm, taskAlerts: checked })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label htmlFor="workflowAlerts">Workflow Alerts</Label>
+                    <p className="font-mono text-xs text-text-secondary">
+                      Get notified when workflows require your attention.
+                    </p>
+                  </div>
+                  <Switch
+                    id="workflowAlerts"
+                    checked={notificationForm.workflowAlerts}
+                    onCheckedChange={(checked) =>
+                      setNotificationForm({ ...notificationForm, workflowAlerts: checked })
+                    }
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleSaveNotifications}
+                    disabled={updateNotificationsMutation.isPending}
+                  >
+                    {updateNotificationsMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 mr-2" />
+                        Save notifications
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {updateNotificationsMutation.isError && (
+                  <p className="font-mono text-xs text-destructive text-right">Failed to save changes. Try again.</p>
+                )}
+                {updateNotificationsMutation.isSuccess && (
+                  <p className="font-mono text-xs text-success text-right">Notification preferences updated.</p>
+                )}
+              </div>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="autonomy">
+            <Card className="p-8">
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="autonomyLevel">Autonomy Level</Label>
+                  <p className="font-mono text-xs text-text-secondary mb-4">
+                    Higher autonomy = DEX executes more steps without asking. Start low, increase as trust builds.
+                  </p>
+                  <Select
+                    defaultValue={autonomyForm.autonomyLevel}
+                    onValueChange={(value: "observe" | "recommend" | "assist" | "execute") =>
+                      setAutonomyForm({ autonomyLevel: value })
+                    }
+                  >
+                    <SelectTrigger id="autonomyLevel">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="observe">Observe (lowest autonomy)</SelectItem>
+                      <SelectItem value="recommend">Recommend</SelectItem>
+                      <SelectItem value="assist">Assist</SelectItem>
+                      <SelectItem value="execute">Execute (highest autonomy)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="bg-surface-subtle rounded-lg p-4 space-y-2">
+                  <p className="font-mono text-xs uppercase tracking-wide text-text-tertiary">Current Level Details</p>
+                  {autonomyForm.autonomyLevel === "observe" && (
+                    <p className="font-mono text-sm text-text">
+                      DEX watches but never acts. You review all recommendations manually.
+                    </p>
+                  )}
+                  {autonomyForm.autonomyLevel === "recommend" && (
+                    <p className="font-mono text-sm text-text">
+                      DEX suggests actions. You approve before execution.
+                    </p>
+                  )}
+                  {autonomyForm.autonomyLevel === "assist" && (
+                    <p className="font-mono text-sm text-text">
+                      DEX executes simple tasks automatically. You review complex decisions.
+                    </p>
+                  )}
+                  {autonomyForm.autonomyLevel === "execute" && (
+                    <p className="font-mono text-sm text-text">
+                      DEX executes most workflows independently. You're notified of outcomes.
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleSaveAutonomy}
+                    disabled={updateAutonomyMutation.isPending}
+                  >
+                    {updateAutonomyMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 mr-2" />
+                        Save autonomy
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {updateAutonomyMutation.isError && (
+                  <p className="font-mono text-xs text-destructive text-right">Failed to save changes. Try again.</p>
+                )}
+                {updateAutonomyMutation.isSuccess && (
+                  <p className="font-mono text-xs text-success text-right">Autonomy level updated.</p>
+                )}
+              </div>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

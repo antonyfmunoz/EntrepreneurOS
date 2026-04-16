@@ -1,775 +1,681 @@
-import { useState } from 'react';
-import { useParams } from 'wouter';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useParams } from "wouter";
+import { Plus, Filter, X, MoreVertical, Calendar, AlertCircle } from "lucide-react";
+import { UniversalLayout } from "@/components/universal-layout";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  Plus,
-  Filter,
-  GripVertical,
-  Calendar,
-  AlertCircle,
-  Trash2,
-  Check,
-} from 'lucide-react';
-import { UniversalLayout } from '@/components/universal-layout';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import designTokens from '@/lib/design-tokens';
-import { useToast } from '@/hooks/use-toast';
-
-type TaskStatus = 'backlog' | 'in_progress' | 'in_review' | 'done';
-type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { apiRequest } from "@/lib/queryClient";
 
 interface Task {
   id: string;
   title: string;
-  description: string;
-  status: TaskStatus;
-  priority: TaskPriority;
-  assigneeId: string | null;
-  dueDate: string | null;
+  description?: string;
+  status: "backlog" | "in_progress" | "in_review" | "done";
+  priority: "low" | "medium" | "high" | "critical";
+  assigneeId?: string;
+  dueDate?: string;
   createdBy: string;
 }
 
 interface User {
   id: string;
   name: string;
-  role: string;
+  email: string;
 }
 
 interface AgentSlot {
   id: string;
   name: string;
-  isActive: boolean;
+  type: "agent";
 }
 
-interface AssigneeSelectorProps {
-  value: string | null;
-  onChange: (value: string | null) => void;
-  users: User[];
-  agentSlots: AgentSlot[];
-}
+const STATUSES = [
+  { value: "backlog", label: "Backlog" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "in_review", label: "In Review" },
+  { value: "done", label: "Done" },
+] as const;
 
-function AssigneeSelector({ value, onChange, users, agentSlots }: AssigneeSelectorProps) {
-  return (
-    <Select value={value || 'unassigned'} onValueChange={(v) => onChange(v === 'unassigned' ? null : v)}>
-      <SelectTrigger style={{ backgroundColor: designTokens.colors.surfaceContainerLow }}>
-        <SelectValue placeholder="Unassigned" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="unassigned">Unassigned</SelectItem>
-        {agentSlots.map((agent) => (
-          <SelectItem key={agent.id} value={agent.id}>
-            {agent.name} (AI)
-          </SelectItem>
-        ))}
-        {users.map((user) => (
-          <SelectItem key={user.id} value={user.id}>
-            {user.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-interface TaskCardProps {
-  task: Task;
-  onEdit: () => void;
-  users: User[];
-  agentSlots: AgentSlot[];
-}
-
-function TaskCard({ task, onEdit, users, agentSlots }: TaskCardProps) {
-  const assignee = [...users, ...agentSlots].find((a) => a.id === task.assigneeId);
-  const priorityColors = {
-    low: designTokens.colors.surfaceContainerLow,
-    medium: designTokens.colors.surfaceContainerLow,
-    high: designTokens.colors.tertiary,
-    critical: designTokens.colors.primary,
-  };
-
-  const priorityTextColors = {
-    low: designTokens.colors.onSurface,
-    medium: designTokens.colors.secondary,
-    high: designTokens.colors.tertiary,
-    critical: '#ffffff',
-  };
-
-  return (
-    <Card
-      className="p-4 cursor-pointer transition-all mb-3"
-      onClick={onEdit}
-      style={{
-        backgroundColor: designTokens.colors.surface,
-        boxShadow: '0 8px 32px rgba(106,55,212,0.08)',
-      }}
-    >
-      <div className="flex items-start gap-2">
-        <GripVertical className="w-4 h-4 mt-1 flex-shrink-0" style={{ color: designTokens.colors.outlineVariant }} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2 mb-2">
-            <h4 className="font-semibold text-sm" style={{ color: designTokens.colors.onSurface }}>
-              {task.title}
-            </h4>
-            <div
-              className="px-2 py-0.5 text-xs font-medium uppercase tracking-wide whitespace-nowrap"
-              style={{
-                backgroundColor: priorityColors[task.priority],
-                color: priorityTextColors[task.priority],
-                borderRadius: designTokens.borderRadius.lg,
-              }}
-            >
-              {task.priority}
-            </div>
-          </div>
-          {task.description && (
-            <p className="text-sm mb-2 line-clamp-2" style={{ color: designTokens.colors.onSurfaceVariant }}>
-              {task.description}
-            </p>
-          )}
-          <div className="flex items-center justify-between gap-2 text-xs" style={{ color: designTokens.colors.onSurfaceVariant }}>
-            <span>{assignee ? assignee.name : 'Unassigned'}</span>
-            {task.dueDate && (
-              <div className="flex items-center gap-1">
-                <Calendar className="w-3 h-3" />
-                <span>{new Date(task.dueDate).toLocaleDateString()}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function TaskCardSkeleton() {
-  return (
-    <div
-      className="p-4 mb-3 animate-pulse"
-      style={{
-        backgroundColor: designTokens.colors.surface,
-        borderRadius: designTokens.borderRadius.lg,
-      }}
-    >
-      <div className="flex gap-2">
-        <div className="w-4 h-4 mt-1" style={{ backgroundColor: designTokens.colors.outlineVariant, opacity: 0.3 }} />
-        <div className="flex-1">
-          <div className="h-4 mb-2" style={{ backgroundColor: designTokens.colors.surfaceContainerLow, borderRadius: '4px' }} />
-          <div className="h-3 mb-2 w-3/4" style={{ backgroundColor: designTokens.colors.surfaceContainerLow, borderRadius: '4px' }} />
-          <div className="h-3 w-1/2" style={{ backgroundColor: designTokens.colors.surfaceContainerLow, borderRadius: '4px' }} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface KanbanColumnProps {
-  title: string;
-  status: TaskStatus;
-  tasks: Task[];
-  onEdit: (task: Task) => void;
-  users: User[];
-  agentSlots: AgentSlot[];
-  isEmpty: boolean;
-  onCreateFirst?: () => void;
-}
-
-function KanbanColumn({ title, status, tasks, onEdit, users, agentSlots, isEmpty, onCreateFirst }: KanbanColumnProps) {
-  return (
-    <div className="flex-shrink-0 w-80 lg:w-96">
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="font-semibold text-base" style={{ color: designTokens.colors.onSurface }}>
-            {title}
-          </h3>
-          <span
-            className="text-xs font-medium px-2 py-1"
-            style={{
-              backgroundColor: designTokens.colors.surfaceContainerLow,
-              color: designTokens.colors.onSurfaceVariant,
-              borderRadius: designTokens.borderRadius.lg,
-            }}
-          >
-            {tasks.length}
-          </span>
-        </div>
-      </div>
-      <div className="min-h-[400px]">
-        {isEmpty && status === 'backlog' && onCreateFirst ? (
-          <Card
-            className="p-8 text-center"
-            style={{
-              backgroundColor: designTokens.colors.surface,
-              borderRadius: designTokens.borderRadius.lg,
-            }}
-          >
-            <p className="text-sm mb-4" style={{ color: designTokens.colors.onSurfaceVariant }}>
-              No tasks in backlog. Create your first task to get started.
-            </p>
-            <Button onClick={onCreateFirst} style={{ backgroundColor: designTokens.colors.primary, color: '#ffffff' }}>
-              Create your first task
-            </Button>
-          </Card>
-        ) : (
-          tasks.map((task) => <TaskCard key={task.id} task={task} onEdit={() => onEdit(task)} users={users} agentSlots={agentSlots} />)
-        )}
-      </div>
-    </div>
-  );
-}
-
-interface TaskFiltersProps {
-  assigneeFilter: string | null;
-  priorityFilter: string | null;
-  onAssigneeChange: (value: string | null) => void;
-  onPriorityChange: (value: string | null) => void;
-  users: User[];
-  agentSlots: AgentSlot[];
-}
-
-function TaskFilters({ assigneeFilter, priorityFilter, onAssigneeChange, onPriorityChange, users, agentSlots }: TaskFiltersProps) {
-  const activeFilterCount = [assigneeFilter, priorityFilter].filter(Boolean).length;
-
-  return (
-    <div className="flex items-center gap-4 flex-wrap mb-6">
-      <div className="flex items-center gap-2">
-        <Filter className="w-4 h-4" style={{ color: designTokens.colors.onSurfaceVariant }} />
-        <span className="text-sm font-medium" style={{ color: designTokens.colors.onSurface }}>
-          Filters
-        </span>
-        {activeFilterCount > 0 && (
-          <span
-            className="text-xs font-medium px-2 py-0.5"
-            style={{
-              backgroundColor: designTokens.colors.primary,
-              color: '#ffffff',
-              borderRadius: '12px',
-            }}
-          >
-            {activeFilterCount}
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-2">
-        <Label htmlFor="assignee-filter" className="text-sm" style={{ color: designTokens.colors.onSurfaceVariant }}>
-          Assignee
-        </Label>
-        <Select value={assigneeFilter || 'all'} onValueChange={(v) => onAssigneeChange(v === 'all' ? null : v)}>
-          <SelectTrigger id="assignee-filter" className="w-48" style={{ backgroundColor: designTokens.colors.surfaceContainerLow }}>
-            <SelectValue placeholder="All" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="unassigned">Unassigned</SelectItem>
-            {agentSlots.map((agent) => (
-              <SelectItem key={agent.id} value={agent.id}>
-                {agent.name} (AI)
-              </SelectItem>
-            ))}
-            {users.map((user) => (
-              <SelectItem key={user.id} value={user.id}>
-                {user.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="flex items-center gap-2">
-        <Label htmlFor="priority-filter" className="text-sm" style={{ color: designTokens.colors.onSurfaceVariant }}>
-          Priority
-        </Label>
-        <Select value={priorityFilter || 'all'} onValueChange={(v) => onPriorityChange(v === 'all' ? null : v)}>
-          <SelectTrigger id="priority-filter" className="w-40" style={{ backgroundColor: designTokens.colors.surfaceContainerLow }}>
-            <SelectValue placeholder="All" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="high">High</SelectItem>
-            <SelectItem value="critical">Critical</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
-  );
-}
-
-interface CreateTaskDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSubmit: (data: Partial<Task>) => void;
-  users: User[];
-  agentSlots: AgentSlot[];
-}
-
-function CreateTaskDialog({ open, onOpenChange, onSubmit, users, agentSlots }: CreateTaskDialogProps) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState<TaskPriority>('medium');
-  const [assigneeId, setAssigneeId] = useState<string | null>(null);
-  const [dueDate, setDueDate] = useState('');
-
-  const handleSubmit = () => {
-    if (!title.trim()) return;
-    onSubmit({
-      title,
-      description,
-      priority,
-      assigneeId,
-      dueDate: dueDate || null,
-      status: 'backlog',
-    });
-    setTitle('');
-    setDescription('');
-    setPriority('medium');
-    setAssigneeId(null);
-    setDueDate('');
-    onOpenChange(false);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent style={{ backgroundColor: designTokens.colors.surface }}>
-        <DialogHeader>
-          <DialogTitle style={{ color: designTokens.colors.onSurface }}>Create task</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 mt-4">
-          <div>
-            <Label htmlFor="title" style={{ color: designTokens.colors.onSurface }}>
-              Task title
-            </Label>
-            <Input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Design landing page"
-              style={{ backgroundColor: designTokens.colors.surfaceContainerLow }}
-            />
-          </div>
-          <div>
-            <Label htmlFor="description" style={{ color: designTokens.colors.onSurface }}>
-              Description
-            </Label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What needs to be done?"
-              rows={3}
-              style={{ backgroundColor: designTokens.colors.surfaceContainerLow }}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="priority" style={{ color: designTokens.colors.onSurface }}>
-                Priority
-              </Label>
-              <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)}>
-                <SelectTrigger id="priority" style={{ backgroundColor: designTokens.colors.surfaceContainerLow }}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="dueDate" style={{ color: designTokens.colors.onSurface }}>
-                Due date
-              </Label>
-              <Input
-                id="dueDate"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                style={{ backgroundColor: designTokens.colors.surfaceContainerLow }}
-              />
-            </div>
-          </div>
-          <div>
-            <Label htmlFor="assignee" style={{ color: designTokens.colors.onSurface }}>
-              Assign to
-            </Label>
-            <AssigneeSelector value={assigneeId} onChange={setAssigneeId} users={users} agentSlots={agentSlots} />
-          </div>
-          <div className="flex gap-2 justify-end pt-4">
-            <Button variant="ghost" onClick={() => onOpenChange(false)} style={{ color: designTokens.colors.onSurface }}>
-              Cancel
-            </Button>
-            <Button onClick={handleSubmit} disabled={!title.trim()} style={{ backgroundColor: designTokens.colors.primary, color: '#ffffff' }}>
-              Create task
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-interface EditTaskDialogProps {
-  task: Task | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onUpdate: (id: string, data: Partial<Task>) => void;
-  onDelete: (id: string) => void;
-  users: User[];
-  agentSlots: AgentSlot[];
-}
-
-function EditTaskDialog({ task, open, onOpenChange, onUpdate, onDelete, users, agentSlots }: EditTaskDialogProps) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState<TaskPriority>('medium');
-  const [status, setStatus] = useState<TaskStatus>('backlog');
-  const [assigneeId, setAssigneeId] = useState<string | null>(null);
-  const [dueDate, setDueDate] = useState('');
-
-  useState(() => {
-    if (task) {
-      setTitle(task.title);
-      setDescription(task.description);
-      setPriority(task.priority);
-      setStatus(task.status);
-      setAssigneeId(task.assigneeId);
-      setDueDate(task.dueDate || '');
-    }
-  });
-
-  const handleUpdate = () => {
-    if (!task || !title.trim()) return;
-    onUpdate(task.id, {
-      title,
-      description,
-      priority,
-      status,
-      assigneeId,
-      dueDate: dueDate || null,
-    });
-    onOpenChange(false);
-  };
-
-  const handleDelete = () => {
-    if (!task) return;
-    onDelete(task.id);
-    onOpenChange(false);
-  };
-
-  if (!task) return null;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent style={{ backgroundColor: designTokens.colors.surface }}>
-        <DialogHeader>
-          <DialogTitle style={{ color: designTokens.colors.onSurface }}>Edit task</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 mt-4">
-          <div>
-            <Label htmlFor="edit-title" style={{ color: designTokens.colors.onSurface }}>
-              Task title
-            </Label>
-            <Input
-              id="edit-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              style={{ backgroundColor: designTokens.colors.surfaceContainerLow }}
-            />
-          </div>
-          <div>
-            <Label htmlFor="edit-description" style={{ color: designTokens.colors.onSurface }}>
-              Description
-            </Label>
-            <Textarea
-              id="edit-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              style={{ backgroundColor: designTokens.colors.surfaceContainerLow }}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="edit-priority" style={{ color: designTokens.colors.onSurface }}>
-                Priority
-              </Label>
-              <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)}>
-                <SelectTrigger id="edit-priority" style={{ backgroundColor: designTokens.colors.surfaceContainerLow }}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="edit-status" style={{ color: designTokens.colors.onSurface }}>
-                Status
-              </Label>
-              <Select value={status} onValueChange={(v) => setStatus(v as TaskStatus)}>
-                <SelectTrigger id="edit-status" style={{ backgroundColor: designTokens.colors.surfaceContainerLow }}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="backlog">Backlog</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="in_review">In Review</SelectItem>
-                  <SelectItem value="done">Done</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div>
-            <Label htmlFor="edit-dueDate" style={{ color: designTokens.colors.onSurface }}>
-              Due date
-            </Label>
-            <Input
-              id="edit-dueDate"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              style={{ backgroundColor: designTokens.colors.surfaceContainerLow }}
-            />
-          </div>
-          <div>
-            <Label htmlFor="edit-assignee" style={{ color: designTokens.colors.onSurface }}>
-              Assign to
-            </Label>
-            <AssigneeSelector value={assigneeId} onChange={setAssigneeId} users={users} agentSlots={agentSlots} />
-          </div>
-          <div className="flex gap-2 justify-between pt-4">
-            <Button variant="ghost" onClick={handleDelete} style={{ color: '#dc2626' }}>
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete
-            </Button>
-            <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => onOpenChange(false)} style={{ color: designTokens.colors.onSurface }}>
-                Cancel
-              </Button>
-              <Button onClick={handleUpdate} disabled={!title.trim()} style={{ backgroundColor: designTokens.colors.primary, color: '#ffffff' }}>
-                <Check className="w-4 h-4 mr-2" />
-                Save
-              </Button>
-            </div>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
+const PRIORITIES = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "critical", label: "Critical" },
+] as const;
 
 export default function TaskBoardPage() {
   const { companyId } = useParams<{ companyId: string }>();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
+  
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
-  const [priorityFilter, setPriorityFilter] = useState<string | null>(null);
+  const [filterAssignee, setFilterAssignee] = useState<string>("");
+  const [filterPriority, setFilterPriority] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<string>("");
+  const [draggedTask, setDraggedTask] = useState<Task | null>(null);
 
-  const { data: tasksData, isLoading: tasksLoading, error: tasksError } = useQuery({
-    queryKey: ['tasks', companyId],
-    queryFn: async () => {
-      const res = await fetch(`/api/companies/${companyId}/tasks`);
-      if (!res.ok) throw new Error('Failed to fetch tasks');
-      return res.json() as Promise<{ tasks: Task[]; users: User[]; agentSlots: AgentSlot[] }>;
-    },
+  const { data: tasks = [], isLoading, error } = useQuery<Task[]>({
+    queryKey: ["tasks", companyId],
+    queryFn: () => apiRequest(`/api/companies/${companyId}/tasks`),
   });
 
-  const createTaskMutation = useMutation({
-    mutationFn: async (data: Partial<Task>) => {
-      const res = await fetch(`/api/companies/${companyId}/tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error('Failed to create task');
-      return res.json();
-    },
+  const { data: users = [] } = useQuery<User[]>({
+    queryKey: ["users", companyId],
+    queryFn: () => apiRequest(`/api/companies/${companyId}/users`),
+  });
+
+  const { data: agentSlots = [] } = useQuery<AgentSlot[]>({
+    queryKey: ["agents", companyId],
+    queryFn: () => apiRequest(`/api/companies/${companyId}/agents`),
+  });
+
+  const createTaskMutation = useMutation<Task, Error, Partial<Task>>({
+    mutationFn: (newTaskData) =>
+      apiRequest(`/api/companies/${companyId}/tasks`, {
+        method: "POST",
+        body: JSON.stringify(newTaskData),
+        headers: { "Content-Type": "application/json" },
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', companyId] });
-      toast({ title: 'Task created.' });
-    },
-    onError: () => {
-      toast({ title: 'Failed to create task. Try again.', variant: 'destructive' });
+      queryClient.invalidateQueries({ queryKey: ["tasks", companyId] });
+      setCreateDialogOpen(false);
     },
   });
 
-  const updateTaskMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<Task> }) => {
-      const res = await fetch(`/api/companies/${companyId}/tasks/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error('Failed to update task');
-      return res.json();
-    },
+  const updateTaskMutation = useMutation<Task, Error, { taskId: string; updates: Partial<Task> }>({
+    mutationFn: ({ taskId, updates }) =>
+      apiRequest(`/api/companies/${companyId}/tasks/${taskId}`, {
+        method: "PUT",
+        body: JSON.stringify(updates),
+        headers: { "Content-Type": "application/json" },
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', companyId] });
-      toast({ title: 'Task updated.' });
-    },
-    onError: () => {
-      toast({ title: 'Failed to update task. Try again.', variant: 'destructive' });
+      queryClient.invalidateQueries({ queryKey: ["tasks", companyId] });
+      setEditDialogOpen(false);
+      setSelectedTask(null);
     },
   });
 
-  const deleteTaskMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/companies/${companyId}/tasks/${id}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) throw new Error('Failed to delete task');
-    },
+  const deleteTaskMutation = useMutation<void, Error, string>({
+    mutationFn: (taskId) =>
+      apiRequest(`/api/companies/${companyId}/tasks/${taskId}`, {
+        method: "DELETE",
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', companyId] });
-      toast({ title: 'Task deleted.' });
-    },
-    onError: () => {
-      toast({ title: 'Failed to delete task. Try again.', variant: 'destructive' });
+      queryClient.invalidateQueries({ queryKey: ["tasks", companyId] });
     },
   });
 
-  const handleEdit = (task: Task) => {
-    setSelectedTask(task);
-    setEditDialogOpen(true);
+  const handleCreateTask = (formData: FormData) => {
+    const title = formData.get("title") as string;
+    const description = formData.get("description") as string;
+    const priority = formData.get("priority") as Task["priority"];
+    const assigneeId = formData.get("assigneeId") as string;
+    const dueDate = formData.get("dueDate") as string;
+
+    if (!title) return;
+
+    createTaskMutation.mutate({
+      title,
+      description,
+      status: "backlog",
+      priority,
+      assigneeId: assigneeId || undefined,
+      dueDate: dueDate || undefined,
+    });
   };
 
-  const tasks = tasksData?.tasks || [];
-  const users = tasksData?.users || [];
-  const agentSlots = tasksData?.agentSlots || [];
+  const handleEditTask = (formData: FormData) => {
+    if (!selectedTask) return;
+
+    const title = formData.get("title") as string;
+    const description = formData.get("description") as string;
+    const priority = formData.get("priority") as Task["priority"];
+    const status = formData.get("status") as Task["status"];
+    const assigneeId = formData.get("assigneeId") as string;
+    const dueDate = formData.get("dueDate") as string;
+
+    updateTaskMutation.mutate({
+      taskId: selectedTask.id,
+      updates: {
+        title,
+        description,
+        priority,
+        status,
+        assigneeId: assigneeId || undefined,
+        dueDate: dueDate || undefined,
+      },
+    });
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    if (confirm("Delete this task? This can't be undone.")) {
+      deleteTaskMutation.mutate(taskId);
+    }
+  };
+
+  const handleDragStart = (task: Task) => {
+    setDraggedTask(task);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (status: Task["status"]) => {
+    if (!draggedTask) return;
+
+    updateTaskMutation.mutate({
+      taskId: draggedTask.id,
+      updates: { status },
+    });
+
+    setDraggedTask(null);
+  };
 
   const filteredTasks = tasks.filter((task) => {
-    if (assigneeFilter && assigneeFilter !== 'unassigned' && task.assigneeId !== assigneeFilter) return false;
-    if (assigneeFilter === 'unassigned' && task.assigneeId !== null) return false;
-    if (priorityFilter && task.priority !== priorityFilter) return false;
+    if (filterAssignee && task.assigneeId !== filterAssignee) return false;
+    if (filterPriority && task.priority !== filterPriority) return false;
+    if (filterStatus && task.status !== filterStatus) return false;
     return true;
   });
 
-  const tasksByStatus = {
-    backlog: filteredTasks.filter((t) => t.status === 'backlog'),
-    in_progress: filteredTasks.filter((t) => t.status === 'in_progress'),
-    in_review: filteredTasks.filter((t) => t.status === 'in_review'),
-    done: filteredTasks.filter((t) => t.status === 'done'),
+  const getTasksByStatus = (status: Task["status"]) => {
+    return filteredTasks.filter((t) => t.status === status);
   };
 
-  const columns = [
-    { title: 'Backlog', status: 'backlog' as TaskStatus },
-    { title: 'In Progress', status: 'in_progress' as TaskStatus },
-    { title: 'In Review', status: 'in_review' as TaskStatus },
-    { title: 'Done', status: 'done' as TaskStatus },
-  ];
+  const getAssigneeName = (assigneeId?: string) => {
+    if (!assigneeId) return "Unassigned";
+    const user = users.find((u) => u.id === assigneeId);
+    if (user) return user.name;
+    const agent = agentSlots.find((a) => a.id === assigneeId);
+    if (agent) return agent.name;
+    return "Unknown";
+  };
+
+  const hasActiveFilters = filterAssignee || filterPriority || filterStatus;
+
+  const clearFilters = () => {
+    setFilterAssignee("");
+    setFilterPriority("");
+    setFilterStatus("");
+  };
+
+  if (isLoading) {
+    return (
+      <UniversalLayout>
+        <div className="p-6">
+          <div className="mb-6">
+            <div className="h-10 w-48 bg-surface-subtle rounded animate-pulse mb-2" />
+            <div className="h-6 w-96 bg-surface-subtle rounded animate-pulse" />
+          </div>
+          <div className="flex gap-4 overflow-x-auto pb-6">
+            {STATUSES.map((status) => (
+              <div key={status.value} className="flex-shrink-0 w-80">
+                <div className="h-8 w-32 bg-surface-subtle rounded animate-pulse mb-4" />
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-32 bg-surface-subtle rounded-lg animate-pulse" />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </UniversalLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <UniversalLayout>
+        <div className="p-6">
+          <div className="bg-surface rounded-lg border border-border-subtle p-12 text-center">
+            <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+            <h3 className="font-mono font-semibold text-lg text-text mb-2">Failed to load tasks</h3>
+            <p className="font-mono text-sm text-text-secondary mb-6">
+              Connection failed. Check your network.
+            </p>
+            <Button onClick={() => queryClient.invalidateQueries({ queryKey: ["tasks", companyId] })}>
+              Retry
+            </Button>
+          </div>
+        </div>
+      </UniversalLayout>
+    );
+  }
 
   return (
     <UniversalLayout>
-      <div className="flex-1 overflow-auto" style={{ backgroundColor: designTokens.colors.background }}>
-        <div className="p-6 lg:p-8" style={{ backgroundColor: designTokens.colors.surfaceContainerLow }}>
-          <div className="max-w-7xl mx-auto">
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <h1 className="text-3xl font-semibold" style={{ color: designTokens.colors.onSurface }}>
-                  Task Board
-                </h1>
-                <p className="text-sm mt-1" style={{ color: designTokens.colors.onSurfaceVariant }}>
-                  Drag tasks between columns. Assign to your team or your assistant.
-                </p>
-              </div>
-              <Button
-                onClick={() => setCreateDialogOpen(true)}
-                style={{ backgroundColor: designTokens.colors.primary, color: '#ffffff' }}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Create task
-              </Button>
-            </div>
+      <div className="p-6">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="font-mono font-bold text-4xl text-text mb-2">Task board</h1>
+            <p className="font-mono text-base text-text-secondary">
+              Move work through stages. Assign to your team or DEX.
+            </p>
           </div>
+          <Button onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create task
+          </Button>
         </div>
 
-        <div className="p-6 lg:p-8">
-          <div className="max-w-7xl mx-auto">
-            {tasksError ? (
-              <Card className="p-8 text-center" style={{ backgroundColor: designTokens.colors.surface }}>
-                <AlertCircle className="w-12 h-12 mx-auto mb-4" style={{ color: '#dc2626' }} />
-                <p className="text-sm mb-4" style={{ color: designTokens.colors.onSurface }}>
-                  Failed to load tasks. Try again.
-                </p>
-                <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['tasks', companyId] })} style={{ backgroundColor: designTokens.colors.primary, color: '#ffffff' }}>
-                  Retry
-                </Button>
-              </Card>
-            ) : (
-              <>
-                <TaskFilters
-                  assigneeFilter={assigneeFilter}
-                  priorityFilter={priorityFilter}
-                  onAssigneeChange={setAssigneeFilter}
-                  onPriorityChange={setPriorityFilter}
-                  users={users}
-                  agentSlots={agentSlots}
-                />
-                <div className="overflow-x-auto -mx-6 lg:-mx-8 px-6 lg:px-8">
-                  <div className="flex gap-6 pb-6">
-                    {tasksLoading ? (
-                      columns.map((col) => (
-                        <div key={col.status} className="flex-shrink-0 w-80 lg:w-96">
-                          <h3 className="font-semibold text-base mb-4" style={{ color: designTokens.colors.onSurface }}>
-                            {col.title}
-                          </h3>
-                          <TaskCardSkeleton />
-                          <TaskCardSkeleton />
-                        </div>
-                      ))
-                    ) : (
-                      columns.map((col) => (
-                        <KanbanColumn
-                          key={col.status}
-                          title={col.title}
-                          status={col.status}
-                          tasks={tasksByStatus[col.status]}
-                          onEdit={handleEdit}
-                          users={users}
-                          agentSlots={agentSlots}
-                          isEmpty={tasks.length === 0 && !assigneeFilter && !priorityFilter}
-                          onCreateFirst={col.status === 'backlog' ? () => setCreateDialogOpen(true) : undefined}
-                        />
-                      ))
+        <div className="mb-6 flex items-center gap-4 flex-wrap">
+          <Select value={filterAssignee} onValueChange={setFilterAssignee}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Filter by assignee" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value=" ">All assignees</SelectItem>
+              {users.map((user) => (
+                <SelectItem key={user.id} value={user.id}>
+                  {user.name}
+                </SelectItem>
+              ))}
+              {agentSlots.map((agent) => (
+                <SelectItem key={agent.id} value={agent.id}>
+                  {agent.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filterPriority} onValueChange={setFilterPriority}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Filter by priority" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value=" ">All priorities</SelectItem>
+              {PRIORITIES.map((priority) => (
+                <SelectItem key={priority.value} value={priority.value}>
+                  {priority.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value=" ">All statuses</SelectItem>
+              {STATUSES.map((status) => (
+                <SelectItem key={status.value} value={status.value}>
+                  {status.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {hasActiveFilters && (
+            <Button variant="ghost" onClick={clearFilters}>
+              <X className="h-4 w-4 mr-2" />
+              Clear filters
+            </Button>
+          )}
+        </div>
+
+        {tasks.length === 0 && !hasActiveFilters ? (
+          <div className="bg-surface rounded-lg border border-border-subtle p-12 text-center">
+            <div className="font-mono text-4xl text-text-tertiary mb-4">—</div>
+            <h3 className="font-mono font-semibold text-lg text-text mb-2">No tasks yet</h3>
+            <p className="font-mono text-sm text-text-secondary mb-6">
+              Create your first task or ask DEX to generate tasks from your goals.
+            </p>
+            <Button onClick={() => setCreateDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create task
+            </Button>
+          </div>
+        ) : (
+          <div className="flex gap-4 overflow-x-auto pb-6">
+            {STATUSES.map((status) => {
+              const columnTasks = getTasksByStatus(status.value);
+              return (
+                <div
+                  key={status.value}
+                  className="flex-shrink-0 w-80"
+                  onDragOver={handleDragOver}
+                  onDrop={() => handleDrop(status.value)}
+                >
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="font-mono font-semibold text-base uppercase tracking-wide text-text">
+                      {status.label}
+                    </h3>
+                    <span className="font-mono text-xs text-text-tertiary">
+                      {columnTasks.length}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {columnTasks.length === 0 && (
+                      <div className="bg-surface-subtle rounded-lg border border-border-subtle p-6 text-center">
+                        <p className="font-mono text-sm text-text-tertiary">No tasks</p>
+                      </div>
                     )}
+                    {columnTasks.map((task) => (
+                      <Card
+                        key={task.id}
+                        className="p-4 cursor-move hover:shadow-md transition-shadow"
+                        draggable
+                        onDragStart={() => handleDragStart(task)}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <h4 className="font-mono font-semibold text-sm text-text flex-1">
+                            {task.title}
+                          </h4>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setSelectedTask(task);
+                                  setEditDialogOpen(true);
+                                }}
+                              >
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleDeleteTask(task.id)}
+                                className="text-destructive"
+                              >
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+
+                        {task.description && (
+                          <p className="font-mono text-xs text-text-secondary mb-3 line-clamp-2">
+                            {task.description}
+                          </p>
+                        )}
+
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`inline-flex items-center px-2 py-1 rounded-full font-mono text-xs uppercase tracking-wide ${
+                              task.priority === "critical"
+                                ? "bg-destructive-muted text-destructive"
+                                : task.priority === "high"
+                                ? "bg-warning-muted text-warning"
+                                : task.priority === "medium"
+                                ? "bg-surface-subtle text-text-secondary border border-border"
+                                : "bg-surface-subtle text-text-tertiary"
+                            }`}
+                          >
+                            {task.priority}
+                          </span>
+
+                          <span className="font-mono text-xs text-text-secondary">
+                            {getAssigneeName(task.assigneeId)}
+                          </span>
+
+                          {task.dueDate && (
+                            <span className="flex items-center gap-1 font-mono text-xs text-text-tertiary">
+                              <Calendar className="h-3 w-3" />
+                              {new Date(task.dueDate).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      </Card>
+                    ))}
                   </div>
                 </div>
-              </>
-            )}
+              );
+            })}
           </div>
-        </div>
+        )}
       </div>
 
-      <CreateTaskDialog
-        open={createDialogOpen}
-        onOpenChange={setCreateDialogOpen}
-        onSubmit={(data) => createTaskMutation.mutate(data)}
-        users={users}
-        agentSlots={agentSlots}
-      />
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-mono font-bold text-2xl text-text">
+              Create task
+            </DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCreateTask(new FormData(e.currentTarget));
+            }}
+          >
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">Title</Label>
+                <Input
+                  id="title"
+                  name="title"
+                  placeholder="e.g., Draft Q2 product roadmap"
+                  required
+                />
+              </div>
 
-      <EditTaskDialog
-        task={selectedTask}
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        onUpdate={(id, data) => updateTaskMutation.mutate({ id, data })}
-        onDelete={(id) => deleteTaskMutation.mutate(id)}
-        users={users}
-        agentSlots={agentSlots}
-      />
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  name="description"
+                  placeholder="e.g., Research competitors, outline feature priorities, share with team for review"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="priority">Priority</Label>
+                <Select name="priority" defaultValue="medium">
+                  <SelectTrigger id="priority">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRIORITIES.map((priority) => (
+                      <SelectItem key={priority.value} value={priority.value}>
+                        {priority.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="font-mono text-xs text-text-tertiary">
+                  Critical: blocks other work. High: due this week. Medium/Low: flex.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="assigneeId">Assignee</Label>
+                <Select name="assigneeId">
+                  <SelectTrigger id="assigneeId">
+                    <SelectValue placeholder="Unassigned" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Unassigned</SelectItem>
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.name}
+                      </SelectItem>
+                    ))}
+                    {agentSlots.map((agent) => (
+                      <SelectItem key={agent.id} value={agent.id}>
+                        {agent.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="font-mono text-xs text-text-tertiary">
+                  Assign to a team member or DEX (your AI assistant).
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="dueDate">Due date</Label>
+                <Input id="dueDate" name="dueDate" type="date" />
+                <p className="font-mono text-xs text-text-tertiary">
+                  Optional. Set a deadline to track urgency.
+                </p>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="secondary" onClick={() => setCreateDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createTaskMutation.isPending}>
+                {createTaskMutation.isPending ? "Saving..." : "Save task"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-mono font-bold text-2xl text-text">Edit task</DialogTitle>
+          </DialogHeader>
+          {selectedTask && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleEditTask(new FormData(e.currentTarget));
+              }}
+            >
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-title">Title</Label>
+                  <Input
+                    id="edit-title"
+                    name="title"
+                    defaultValue={selectedTask.title}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-description">Description</Label>
+                  <Textarea
+                    id="edit-description"
+                    name="description"
+                    defaultValue={selectedTask.description}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-status">Status</Label>
+                  <Select name="status" defaultValue={selectedTask.status}>
+                    <SelectTrigger id="edit-status">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUSES.map((status) => (
+                        <SelectItem key={status.value} value={status.value}>
+                          {status.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-priority">Priority</Label>
+                  <Select name="priority" defaultValue={selectedTask.priority}>
+                    <SelectTrigger id="edit-priority">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PRIORITIES.map((priority) => (
+                        <SelectItem key={priority.value} value={priority.value}>
+                          {priority.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-assigneeId">Assignee</Label>
+                  <Select name="assigneeId" defaultValue={selectedTask.assigneeId || ""}>
+                    <SelectTrigger id="edit-assigneeId">
+                      <SelectValue placeholder="Unassigned" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Unassigned</SelectItem>
+                      {users.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.name}
+                        </SelectItem>
+                      ))}
+                      {agentSlots.map((agent) => (
+                        <SelectItem key={agent.id} value={agent.id}>
+                          {agent.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-dueDate">Due date</Label>
+                  <Input
+                    id="edit-dueDate"
+                    name="dueDate"
+                    type="date"
+                    defaultValue={
+                      selectedTask.dueDate
+                        ? new Date(selectedTask.dueDate).toISOString().split("T")[0]
+                        : ""
+                    }
+                  />
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setEditDialogOpen(false);
+                    setSelectedTask(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={updateTaskMutation.isPending}>
+                  {updateTaskMutation.isPending ? "Saving..." : "Save task"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </UniversalLayout>
   );
 }

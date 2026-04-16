@@ -1,179 +1,282 @@
-import { useUser, useClerk } from "@clerk/clerk-react";
+import { useState } from "react";
 import { Link } from "wouter";
-import { Building2, LogOut, User, Briefcase } from "lucide-react";
+import { useUser } from "@clerk/clerk-react";
+import { Bell, ChevronDown, Building2, FolderKanban } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
-  colors,
-  glassmorphism,
-  borderRadius,
-} from "@/lib/design-tokens";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 
 interface HeaderProps {
-  companyName?: string;
-  companyId?: string;
-  title?: string;
-  children?: React.ReactNode;
+  currentCompany?: {
+    id: string;
+    name: string;
+  };
+  currentProject?: {
+    id: string;
+    name: string;
+  };
+  companies?: Array<{
+    id: string;
+    name: string;
+  }>;
+  projects?: Array<{
+    id: string;
+    name: string;
+  }>;
+  onCompanyChange?: (companyId: string) => void;
+  onProjectChange?: (projectId: string) => void;
+  notificationCount?: number;
 }
 
-function Skeleton({ className }: { className?: string }) {
-  return (
-    <div
-      className={`animate-pulse ${className ?? ""}`}
-      style={{ background: colors.surfaceContainerLow, borderRadius: borderRadius.sm }}
-    />
-  );
-}
+export function Header({
+  currentCompany,
+  currentProject,
+  companies = [],
+  projects = [],
+  onCompanyChange,
+  onProjectChange,
+  notificationCount = 0,
+}: HeaderProps) {
+  const { user } = useUser();
+  const [isCompanyOpen, setIsCompanyOpen] = useState(false);
+  const [isProjectOpen, setIsProjectOpen] = useState(false);
 
-function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-}
-
-export function Header({ companyName, companyId, title, children }: HeaderProps) {
-  const { user: clerkUser, isLoaded } = useUser();
-  const { signOut } = useClerk();
-
-  const displayName = title ?? companyName ?? "EntrepreneurOS";
+  const userInitials = user?.firstName && user?.lastName
+    ? `${user.firstName[0]}${user.lastName[0]}`
+    : user?.firstName?.[0] ?? user?.emailAddresses?.[0]?.emailAddress?.[0]?.toUpperCase() ?? "U";
 
   return (
     <header
       className="sticky top-0 z-50 w-full"
       style={{
-        background: glassmorphism.background,
-        backdropFilter: glassmorphism.backdropFilter,
-        WebkitBackdropFilter: glassmorphism.backdropFilter,
-        boxShadow: glassmorphism.shadow,
+        background: "rgba(255,255,255,0.7)",
+        backdropFilter: "blur(16px)",
+        boxShadow: "0 8px 32px rgba(106,55,212,0.08)",
       }}
     >
-      <div className="flex h-16 items-center justify-between px-4 md:px-6">
-        {/* Left: logo + optional children (e.g. sidebar toggle) */}
-        <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
-          {children}
+      <div className="flex h-16 items-center justify-between px-4 md:px-6 lg:px-8">
+        {/* Left: Logo/Brand */}
+        <div className="flex items-center gap-6">
           <Link href="/">
-            <div className="flex items-center gap-2 cursor-pointer">
+            <a className="flex items-center gap-2 transition-opacity hover:opacity-80">
               <div
-                className="flex h-8 w-8 items-center justify-center flex-shrink-0"
-                style={{
-                  background: colors.primary,
-                  borderRadius: borderRadius.default,
-                }}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-white font-semibold text-sm"
+                style={{ background: "#6a37d4" }}
               >
-                <span className="text-white text-sm font-semibold">E</span>
+                EO
               </div>
-              <span
-                className="hidden sm:block text-base font-semibold tracking-tight"
-                style={{ color: colors.onSurface }}
-              >
+              <span className="hidden md:block font-semibold text-base" style={{ color: "#2c2f30" }}>
                 EntrepreneurOS
               </span>
-            </div>
+            </a>
           </Link>
         </div>
 
-        {/* Center: current context */}
-        <div className="flex-1 flex justify-center px-4 min-w-0">
-          {companyId ? (
-            <Link href={`/portfolios`}>
-              <div
-                className="flex items-center gap-2 px-3 py-1.5 cursor-pointer max-w-xs"
+        {/* Center: Context Switchers */}
+        <div className="hidden lg:flex items-center gap-3">
+          {currentCompany && (
+            <DropdownMenu open={isCompanyOpen} onOpenChange={setIsCompanyOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="gap-2 px-3 h-9"
+                  style={{
+                    borderRadius: "12px",
+                    color: "#2c2f30",
+                  }}
+                >
+                  <Building2 className="h-4 w-4" style={{ color: "#6a37d4" }} />
+                  <span className="max-w-[120px] truncate text-sm font-medium">
+                    {currentCompany.name}
+                  </span>
+                  <ChevronDown className="h-4 w-4" style={{ color: "#595c5d" }} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="center"
+                className="w-56"
                 style={{
-                  background: "rgba(255, 255, 255, 0.9)",
-                  borderRadius: borderRadius.default,
+                  borderRadius: "12px",
+                  background: "rgba(255,255,255,0.95)",
+                  backdropFilter: "blur(16px)",
+                  boxShadow: "0 8px 32px rgba(106,55,212,0.08)",
+                  border: "none",
                 }}
               >
-                <Building2
-                  className="h-4 w-4 flex-shrink-0"
-                  style={{ color: colors.onSurfaceVariant }}
-                />
-                <span
-                  className="truncate text-sm font-medium"
-                  style={{ color: colors.onSurface }}
+                <DropdownMenuLabel style={{ color: "#595c5d" }}>
+                  Switch Company
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator style={{ background: "#eff1f2" }} />
+                {(companies ?? []).map((company) => (
+                  <DropdownMenuItem
+                    key={company.id}
+                    onClick={() => {
+                      onCompanyChange?.(company.id);
+                      setIsCompanyOpen(false);
+                    }}
+                    className="cursor-pointer"
+                    style={{
+                      color: company.id === currentCompany.id ? "#6a37d4" : "#2c2f30",
+                      fontWeight: company.id === currentCompany.id ? 600 : 400,
+                    }}
+                  >
+                    {company.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {currentProject && (
+            <DropdownMenu open={isProjectOpen} onOpenChange={setIsProjectOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="gap-2 px-3 h-9"
+                  style={{
+                    borderRadius: "12px",
+                    color: "#2c2f30",
+                  }}
                 >
-                  {companyName ?? "Company"}
-                </span>
-              </div>
-            </Link>
-          ) : (
-            <div className="flex items-center gap-2 px-3 py-1.5">
-              <Briefcase
-                className="h-4 w-4 flex-shrink-0"
-                style={{ color: colors.onSurfaceVariant }}
-              />
-              <span
-                className="truncate text-sm font-medium"
-                style={{ color: colors.onSurface }}
+                  <FolderKanban className="h-4 w-4" style={{ color: "#6448b2" }} />
+                  <span className="max-w-[120px] truncate text-sm font-medium">
+                    {currentProject.name}
+                  </span>
+                  <ChevronDown className="h-4 w-4" style={{ color: "#595c5d" }} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="center"
+                className="w-56"
+                style={{
+                  borderRadius: "12px",
+                  background: "rgba(255,255,255,0.95)",
+                  backdropFilter: "blur(16px)",
+                  boxShadow: "0 8px 32px rgba(106,55,212,0.08)",
+                  border: "none",
+                }}
               >
-                {displayName}
-              </span>
-            </div>
+                <DropdownMenuLabel style={{ color: "#595c5d" }}>
+                  Switch Project
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator style={{ background: "#eff1f2" }} />
+                {(projects ?? []).map((project) => (
+                  <DropdownMenuItem
+                    key={project.id}
+                    onClick={() => {
+                      onProjectChange?.(project.id);
+                      setIsProjectOpen(false);
+                    }}
+                    className="cursor-pointer"
+                    style={{
+                      color: project.id === currentProject.id ? "#6a37d4" : "#2c2f30",
+                      fontWeight: project.id === currentProject.id ? 600 : 400,
+                    }}
+                  >
+                    {project.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
 
-        {/* Right: user actions */}
-        <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-          {!isLoaded ? (
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-9 w-9 rounded-full" />
-              <Skeleton className="hidden md:block h-4 w-20 rounded" />
-            </div>
-          ) : clerkUser ? (
-            <div className="flex items-center gap-2">
-              {/* Avatar */}
-              <div className="relative h-9 w-9 rounded-full overflow-hidden flex-shrink-0">
-                {clerkUser.imageUrl ? (
-                  <img
-                    src={clerkUser.imageUrl}
-                    alt={clerkUser.fullName ?? "User"}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div
-                    className="h-full w-full flex items-center justify-center"
+        {/* Right: Notifications + User */}
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              style={{ borderRadius: "12px" }}
+            >
+              <Bell className="h-5 w-5" style={{ color: "#595c5d" }} />
+            </Button>
+            {notificationCount > 0 && (
+              <Badge
+                className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center px-1 text-xs font-semibold"
+                style={{
+                  background: "#6a37d4",
+                  color: "#ffffff",
+                  borderRadius: "12px",
+                }}
+              >
+                {notificationCount > 9 ? "9+" : notificationCount}
+              </Badge>
+            )}
+          </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="h-9 gap-2 px-2"
+                style={{ borderRadius: "12px" }}
+              >
+                <Avatar className="h-7 w-7">
+                  <AvatarImage src={user?.imageUrl} alt={user?.fullName ?? ""} />
+                  <AvatarFallback
                     style={{
-                      background: colors.primary,
+                      background: "#6a37d4",
                       color: "#ffffff",
-                      fontSize: "14px",
+                      fontSize: "12px",
                       fontWeight: 600,
                     }}
                   >
-                    {getInitials(clerkUser.fullName ?? clerkUser.primaryEmailAddress?.emailAddress ?? "U")}
-                  </div>
-                )}
-              </div>
-
-              {/* Name (hidden on mobile) */}
-              <span
-                className="hidden md:block text-sm font-medium truncate max-w-[120px]"
-                style={{ color: colors.onSurface }}
-              >
-                {clerkUser.fullName ?? clerkUser.primaryEmailAddress?.emailAddress ?? "User"}
-              </span>
-
-              {/* Profile link */}
-              <Link href="/settings">
-                <button
-                  className="h-9 w-9 flex items-center justify-center rounded-full hover:opacity-80 transition-opacity"
-                  style={{ color: colors.onSurfaceVariant }}
-                  title="Profile settings"
-                >
-                  <User className="h-4 w-4" />
-                </button>
-              </Link>
-
-              {/* Sign out */}
-              <button
-                onClick={() => signOut()}
-                className="h-9 w-9 flex items-center justify-center rounded-full hover:opacity-80 transition-opacity"
-                style={{ color: colors.onSurfaceVariant }}
-                title="Sign out"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
-            </div>
-          ) : null}
+                    {userInitials}
+                  </AvatarFallback>
+                </Avatar>
+                <ChevronDown className="hidden md:block h-4 w-4" style={{ color: "#595c5d" }} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-56"
+              style={{
+                borderRadius: "12px",
+                background: "rgba(255,255,255,0.95)",
+                backdropFilter: "blur(16px)",
+                boxShadow: "0 8px 32px rgba(106,55,212,0.08)",
+                border: "none",
+              }}
+            >
+              <DropdownMenuLabel style={{ color: "#2c2f30" }}>
+                <div className="flex flex-col gap-1">
+                  <span className="font-semibold">{user?.fullName ?? "User"}</span>
+                  <span className="text-xs font-normal" style={{ color: "#595c5d" }}>
+                    {user?.emailAddresses?.[0]?.emailAddress ?? ""}
+                  </span>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator style={{ background: "#eff1f2" }} />
+              <DropdownMenuItem asChild>
+                <Link href="/settings">
+                  <a className="cursor-pointer w-full" style={{ color: "#2c2f30" }}>
+                    Settings
+                  </a>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/sign-out">
+                  <a className="cursor-pointer w-full" style={{ color: "#2c2f30" }}>
+                    Sign Out
+                  </a>
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>

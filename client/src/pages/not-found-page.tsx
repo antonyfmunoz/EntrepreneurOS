@@ -1,94 +1,66 @@
-import { Button } from "@/components/ui/button";
-import { AlertCircle, Home } from "lucide-react";
-import { useLocation } from "wouter";
 import { useEffect } from "react";
+import { Link, useLocation } from "wouter";
+import { Home, FolderKanban } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function NotFoundPage() {
-  const [, setLocation] = useLocation();
-  const attemptedRoute = window.location.pathname;
+  const [location] = useLocation();
 
   useEffect(() => {
-    // Track page_viewed event
-    if (typeof window !== "undefined" && (window as any).analytics) {
-      (window as any).analytics.track("page_viewed", {
-        attemptedRoute,
+    if (typeof window !== "undefined" && (window as any).posthog) {
+      (window as any).posthog.capture("page_viewed", {
+        attemptedRoute: location,
       });
     }
-  }, [attemptedRoute]);
+  }, [location]);
 
   const handleBackToHome = () => {
-    // Track back_to_home_clicked event
-    if (typeof window !== "undefined" && (window as any).analytics) {
-      (window as any).analytics.track("back_to_home_clicked");
+    if (typeof window !== "undefined" && (window as any).posthog) {
+      (window as any).posthog.capture("back_to_home_clicked");
     }
-    setLocation("/");
   };
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{
-        backgroundColor: "#ffffff",
-        fontFamily: "Inter, sans-serif",
-      }}
-    >
-      <div className="w-full max-w-md flex flex-col items-center text-center space-y-8">
-        {/* Illustration */}
-        <div
-          className="w-32 h-32 flex items-center justify-center backdrop-blur-2xl"
-          style={{
-            background: "rgba(255, 255, 255, 0.7)",
-            backdropFilter: "blur(16px)",
-            WebkitBackdropFilter: "blur(16px)",
-            boxShadow: "0 8px 32px rgba(106, 55, 212, 0.08)",
-            borderRadius: "12px",
-          }}
-        >
-          <AlertCircle
-            className="w-16 h-16"
-            style={{ color: "#6a37d4" }}
-            strokeWidth={1.5}
-          />
+    <div className="min-h-screen bg-background flex items-center justify-center px-6 py-12">
+      <div className="max-w-md w-full text-center space-y-8">
+        <div className="space-y-6">
+          <div className="flex justify-center">
+            <div className="w-32 h-32 rounded-lg bg-surface-subtle border border-border-subtle flex items-center justify-center">
+              <span className="font-mono text-6xl text-text-tertiary">404</span>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <h1 className="font-mono font-bold text-4xl text-text">
+              Page not found
+            </h1>
+            <p className="font-mono text-base text-text-secondary leading-relaxed">
+              This page doesn't exist or you don't have access.
+            </p>
+          </div>
         </div>
 
-        {/* Error Message */}
-        <div className="space-y-4">
-          <h1
-            className="text-4xl font-semibold"
-            style={{
-              color: "#2c2f30",
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Page not found
-          </h1>
-          <p
-            className="text-base leading-relaxed"
-            style={{
-              color: "#595c5d",
-              lineHeight: "1.6",
-            }}
-          >
-            The page you're looking for doesn't exist. It may have been moved or
-            deleted.
-          </p>
-        </div>
+        <div className="space-y-4 pt-4">
+          <Link href="/command-center">
+            <Button
+              onClick={handleBackToHome}
+              className="w-full bg-primary hover:bg-primary-hover text-text-on-primary font-mono font-semibold text-sm uppercase tracking-wide px-6 py-3 rounded-md transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+            >
+              <Home className="w-4 h-4 mr-2" />
+              Go to command center
+            </Button>
+          </Link>
 
-        {/* Back to Home Button */}
-        <Button
-          onClick={handleBackToHome}
-          className="w-full sm:w-auto gap-2 text-base font-medium"
-          style={{
-            backgroundColor: "#6a37d4",
-            color: "#ffffff",
-            borderRadius: "12px",
-            padding: "12px 32px",
-            height: "auto",
-          }}
-        >
-          <Home className="w-5 h-5" strokeWidth={2} />
-          Back to home
-        </Button>
+          <Link href="/portfolios">
+            <Button
+              variant="secondary"
+              className="w-full bg-surface-subtle hover:bg-border text-text font-mono font-medium text-sm uppercase tracking-wide px-6 py-3 rounded-md border border-border transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+            >
+              <FolderKanban className="w-4 h-4 mr-2" />
+              View portfolios
+            </Button>
+          </Link>
+        </div>
       </div>
     </div>
   );

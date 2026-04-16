@@ -1,6 +1,6 @@
 ## Spec Gap Analysis — Login
 
-Analyzed 13 pages.
+Analyzed 14 pages.
 
 ---
 No blocking issues found. Spec is ready to lock.
