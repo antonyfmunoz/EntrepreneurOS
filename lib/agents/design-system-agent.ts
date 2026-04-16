@@ -3,6 +3,8 @@
 // and ProductInsights. Writes design tokens, CSS custom properties, a Tailwind
 // config extension, and a component design guide to disk.
 
+import fs from "node:fs";
+import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 import { extractJsonFromResponse } from "../spec-parser/restructure-spec.js";
@@ -38,6 +40,8 @@ CRITICAL RULES:
 
 NEVER produce: the same design twice, safe choices, predictable layouts, generic SaaS templates
 ALWAYS produce: something a senior designer would be proud to put in their portfolio
+
+CRITICAL: If the user message includes an EXISTING DESIGN SYSTEM section, that document is LAW. You must use exactly the colors, fonts, spacing, and rules defined there. You may add details and component patterns but you cannot change the core tokens. The design system was deliberately chosen by the product owner — do not override it. Refine and extend, never replace.
 
 OUTPUT FORMAT: Return ONLY a valid JSON object with this exact shape:
 
@@ -426,7 +430,25 @@ export async function runDesignSystemAgent(
     baseURL: getAnthropicBaseUrl(),
   });
 
-  const userPrompt = buildUserPrompt(brief, insights);
+  const projectRoot = store.getProjectRoot();
+
+  // Check for an existing design-system.md — if present, it is the primary
+  // source of truth and the agent must stay within its defined tokens.
+  const dsPath = path.join(projectRoot, ".planning", "design-system.md");
+  let existingDesignDoc: string | null = null;
+  if (fs.existsSync(dsPath)) {
+    existingDesignDoc = fs.readFileSync(dsPath, "utf-8");
+    console.log("[design-system] Found .planning/design-system.md — using as binding constraint");
+  } else {
+    console.log("[design-system] No design-system.md found — generating with full creative freedom");
+  }
+
+  let userPrompt = buildUserPrompt(brief, insights);
+
+  // If an existing design system document exists, prepend it as a binding constraint
+  if (existingDesignDoc) {
+    userPrompt = `# ⚠️ EXISTING DESIGN SYSTEM — THIS IS LAW\n\nThe following design system document was written by the product owner. You MUST use exactly these colors, fonts, spacing, glassmorphism rules, and constraints. You may refine details (add component patterns, fill in missing token slots) but you CANNOT change core tokens like primary color, font family, glassmorphism values, shadow tints, or violate any stated rules (e.g. "NO gradients").\n\n---\n\n${existingDesignDoc}\n\n---\n\n# Product Context (for extending, not overriding)\n\n${userPrompt}`;
+  }
 
   // Call Claude to generate the design system
   const stream = client.messages.stream({
