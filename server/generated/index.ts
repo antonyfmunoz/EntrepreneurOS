@@ -7,7 +7,6 @@ import { registerGetApiUsersMeRoutes } from "./routes/get_api_users_me.js";
 import { registerPutApiUsersMeRoutes } from "./routes/put_api_users_me.js";
 import { registerGetApiCompaniesRoutes } from "./routes/get_api_companies.js";
 import { registerGetApiPortfoliosRoutes } from "./routes/get_api_portfolios.js";
-import { registerPostApiPortfoliosRoutes } from "./routes/post_api_portfolios.js";
 import { registerGetApiPortfoliosIdRoutes } from "./routes/get_api_portfolios_id.js";
 import { registerPutApiPortfoliosIdRoutes } from "./routes/put_api_portfolios_id.js";
 import { registerDeleteApiPortfoliosIdRoutes } from "./routes/delete_api_portfolios_id.js";
@@ -38,6 +37,22 @@ import { registerPostApiCompaniesIdWorkflowsWidStepsRoutes } from "./routes/post
 import { registerPutApiCompaniesIdWorkflowsWidStepsSidRoutes } from "./routes/put_api_companies_id_workflows_wid_steps_sid.js";
 import { registerGetApiCompaniesIdConversationsRoutes } from "./routes/get_api_companies_id_conversations.js";
 import { registerPostApiCompaniesIdConversationsRoutes } from "./routes/post_api_companies_id_conversations.js";
+import { registerPostApiAuthRegisterRoutes } from "./routes/post_api_auth_register.js";
+import { registerPostApiAuthLoginRoutes } from "./routes/post_api_auth_login.js";
+import { registerGetApiNotificationsRoutes } from "./routes/get_api_notifications.js";
+import { registerPutApiNotificationsNidReadRoutes } from "./routes/put_api_notifications_nid_read.js";
+import { registerPutApiNotificationsReadAllRoutes } from "./routes/put_api_notifications_read-all.js";
+import { registerGetApiUsersMePreferencesRoutes } from "./routes/get_api_users_me_preferences.js";
+import { registerPutApiUsersMePreferencesRoutes } from "./routes/put_api_users_me_preferences.js";
+import { registerGetApiCompaniesIdKpisRoutes } from "./routes/get_api_companies_id_kpis.js";
+import { registerPostApiCompaniesIdKpisRoutes } from "./routes/post_api_companies_id_kpis.js";
+import { registerPutApiCompaniesIdKpisKidRoutes } from "./routes/put_api_companies_id_kpis_kid.js";
+import { registerGetApiCompaniesIdActivityRoutes } from "./routes/get_api_companies_id_activity.js";
+import { registerGetApiCompaniesIdCapabilitiesRoutes } from "./routes/get_api_companies_id_capabilities.js";
+import { registerPutApiCompaniesIdCapabilitiesCidRoutes } from "./routes/put_api_companies_id_capabilities_cid.js";
+import { registerGetApiUsersMeOnboardingRoutes } from "./routes/get_api_users_me_onboarding.js";
+import { registerPutApiUsersMeOnboardingStepRoutes } from "./routes/put_api_users_me_onboarding_step.js";
+import { registerGetApiAuthRoutes } from "./routes/get_api_auth.js";
 // __GENERATED_ROUTE_IMPORTS_END__
 
 // The route/storage files under ./routes and ./storage are stale output from
@@ -52,7 +67,6 @@ registerGetApiUsersMeRoutes(app);
 registerPutApiUsersMeRoutes(app);
 registerGetApiCompaniesRoutes(app);
 registerGetApiPortfoliosRoutes(app);
-registerPostApiPortfoliosRoutes(app);
 registerGetApiPortfoliosIdRoutes(app);
 registerPutApiPortfoliosIdRoutes(app);
 registerDeleteApiPortfoliosIdRoutes(app);
@@ -83,5 +97,21 @@ registerPostApiCompaniesIdWorkflowsWidStepsRoutes(app);
 registerPutApiCompaniesIdWorkflowsWidStepsSidRoutes(app);
 registerGetApiCompaniesIdConversationsRoutes(app);
 registerPostApiCompaniesIdConversationsRoutes(app);
+registerPostApiAuthRegisterRoutes(app);
+registerPostApiAuthLoginRoutes(app);
+registerGetApiNotificationsRoutes(app);
+registerPutApiNotificationsNidReadRoutes(app);
+registerPutApiNotificationsReadAllRoutes(app);
+registerGetApiUsersMePreferencesRoutes(app);
+registerPutApiUsersMePreferencesRoutes(app);
+registerGetApiCompaniesIdKpisRoutes(app);
+registerPostApiCompaniesIdKpisRoutes(app);
+registerPutApiCompaniesIdKpisKidRoutes(app);
+registerGetApiCompaniesIdActivityRoutes(app);
+registerGetApiCompaniesIdCapabilitiesRoutes(app);
+registerPutApiCompaniesIdCapabilitiesCidRoutes(app);
+registerGetApiUsersMeOnboardingRoutes(app);
+registerPutApiUsersMeOnboardingStepRoutes(app);
+registerGetApiAuthRoutes(app);
 // __GENERATED_ROUTE_REGISTRATIONS_END__
 }
