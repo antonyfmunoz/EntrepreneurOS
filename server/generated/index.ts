@@ -11,7 +11,6 @@ import { registerGetApiPortfoliosIdRoutes } from "./routes/get_api_portfolios_id
 import { registerPutApiPortfoliosIdRoutes } from "./routes/put_api_portfolios_id.js";
 import { registerDeleteApiPortfoliosIdRoutes } from "./routes/delete_api_portfolios_id.js";
 import { registerGetApiPortfoliosIdCompaniesRoutes } from "./routes/get_api_portfolios_id_companies.js";
-import { registerPostApiPortfoliosIdCompaniesRoutes } from "./routes/post_api_portfolios_id_companies.js";
 import { registerPostApiCompaniesRoutes } from "./routes/post_api_companies.js";
 import { registerGetApiCompaniesIdRoutes } from "./routes/get_api_companies_id.js";
 import { registerPutApiCompaniesIdRoutes } from "./routes/put_api_companies_id.js";
@@ -71,7 +70,6 @@ registerGetApiPortfoliosIdRoutes(app);
 registerPutApiPortfoliosIdRoutes(app);
 registerDeleteApiPortfoliosIdRoutes(app);
 registerGetApiPortfoliosIdCompaniesRoutes(app);
-registerPostApiPortfoliosIdCompaniesRoutes(app);
 registerPostApiCompaniesRoutes(app);
 registerGetApiCompaniesIdRoutes(app);
 registerPutApiCompaniesIdRoutes(app);

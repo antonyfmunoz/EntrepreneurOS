@@ -232,12 +232,19 @@ export function registerPortfolioRoutes(app: Express): void {
     }
   });
 
-  // POST /api/portfolios/:id/companies — attach an existing company to the portfolio
-  // Body: { companyId: number }
+  // POST /api/portfolios/:id/companies — create or attach a company
+  // Body: { companyId } to attach existing, or { name, stage, ... } to create new
   app.post("/api/portfolios/:id/companies", async (req, res) => {
-    const bodySchema = z.object({
-      companyId: z.number().int().positive(),
+    const attachSchema = z.object({ companyId: z.number().int().positive() });
+    const createSchema = z.object({
+      name: z.string().min(1),
+      stage: z.string().min(1),
+      industry: z.string().optional(),
+      businessModel: z.string().optional(),
+      goals: z.string().optional(),
+      assistantName: z.string().optional(),
     });
+    const bodySchema = z.union([attachSchema, createSchema]);
 
     try {
       if (!req.isAuthenticated()) {
@@ -249,7 +256,7 @@ export function registerPortfolioRoutes(app: Express): void {
         return res.status(400).json({ message: "Invalid portfolio id" });
       }
 
-      const { companyId } = bodySchema.parse(req.body);
+      const body = bodySchema.parse(req.body);
 
       // Verify portfolio ownership
       const portfolio = await db
@@ -264,35 +271,53 @@ export function registerPortfolioRoutes(app: Express): void {
         return res.status(404).json({ message: "Portfolio not found" });
       }
 
-      // Verify company ownership
-      const company = await db
-        .select()
-        .from(companiesTable)
-        .where(
-          and(eq(companiesTable.id, companyId), eq(companiesTable.ownerUserId, userId)),
-        )
-        .limit(1);
+      // Attach existing company
+      if ("companyId" in body) {
+        const company = await db
+          .select()
+          .from(companiesTable)
+          .where(
+            and(eq(companiesTable.id, body.companyId), eq(companiesTable.ownerUserId, userId)),
+          )
+          .limit(1);
 
-      if (company.length === 0) {
-        return res.status(404).json({ message: "Company not found" });
+        if (company.length === 0) {
+          return res.status(404).json({ message: "Company not found" });
+        }
+
+        const [updated] = await db
+          .update(companiesTable)
+          .set({ portfolioId })
+          .where(
+            and(eq(companiesTable.id, body.companyId), eq(companiesTable.ownerUserId, userId)),
+          )
+          .returning();
+
+        return res.status(200).json(updated);
       }
 
-      const [updated] = await db
-        .update(companiesTable)
-        .set({ portfolioId })
-        .where(
-          and(eq(companiesTable.id, companyId), eq(companiesTable.ownerUserId, userId)),
-        )
+      // Create new company and attach to portfolio
+      const [created] = await db
+        .insert(companiesTable)
+        .values({
+          ownerUserId: userId,
+          portfolioId,
+          name: body.name,
+          stage: body.stage,
+          type: body.businessModel ?? null,
+          goals: body.goals ?? null,
+          assistantName: body.assistantName ?? "Assistant",
+        })
         .returning();
 
-      return res.status(200).json(updated);
+      return res.status(201).json(created);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid request body", errors: error.errors });
       }
-      console.error("Error attaching company to portfolio:", error);
+      console.error("Error creating/attaching company:", error);
       return res.status(500).json({
-        message: "Failed to attach company to portfolio",
+        message: "Failed to create or attach company",
         error: error instanceof Error ? error.message : String(error),
       });
     }
