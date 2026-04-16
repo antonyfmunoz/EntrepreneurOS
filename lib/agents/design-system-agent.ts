@@ -431,7 +431,7 @@ export async function runDesignSystemAgent(
   // Call Claude to generate the design system
   const stream = client.messages.stream({
     model: "claude-sonnet-4-5",
-    max_tokens: 12000,
+    max_tokens: 24000,
     system: DESIGN_SYSTEM_PROMPT,
     messages: [{ role: "user", content: userPrompt }],
   });

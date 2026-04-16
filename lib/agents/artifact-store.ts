@@ -242,13 +242,20 @@ export class ArtifactStore {
 
   // ─── Agent Results ──────────────────────────────────────────────────────
 
+  /** Sanitize agent names for use as filenames (colons are illegal on Windows). */
+  private sanitizeFilename(name: string): string {
+    return name.replace(/:/g, "-");
+  }
+
   setAgentResult(name: string, result: AgentResult<unknown>): void {
-    const resultsPath = path.join(this.artifactsDir, "agent-results", `${name}.json`);
+    const safeName = this.sanitizeFilename(name);
+    const resultsPath = path.join(this.artifactsDir, "agent-results", `${safeName}.json`);
     this.writeAtomic(resultsPath, result);
   }
 
   getAgentResult<T>(name: string): AgentResult<T> | null {
-    const resultsPath = path.join(this.artifactsDir, "agent-results", `${name}.json`);
+    const safeName = this.sanitizeFilename(name);
+    const resultsPath = path.join(this.artifactsDir, "agent-results", `${safeName}.json`);
     return this.readJson<AgentResult<T>>(resultsPath);
   }
 

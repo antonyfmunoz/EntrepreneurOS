@@ -341,7 +341,7 @@ export async function runArchitectureAgent(
   // First attempt
   const stream = client.messages.stream({
     model: "claude-sonnet-4-5",
-    max_tokens: 16000,
+    max_tokens: 32000,
     system: SYSTEM_PROMPT,
     messages,
   });
@@ -372,7 +372,7 @@ export async function runArchitectureAgent(
 
     const retryStream = client.messages.stream({
       model: "claude-sonnet-4-5",
-      max_tokens: 16000,
+      max_tokens: 32000,
       system: SYSTEM_PROMPT,
       messages: retryMessages,
     });

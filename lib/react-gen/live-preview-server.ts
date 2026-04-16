@@ -3,7 +3,7 @@
 // Pages are written to disk and Vite hot-reloads automatically.
 
 import { spawn, type ChildProcess } from "node:child_process";
-import http from "node:http";
+import net from "node:net";
 
 export interface LivePreviewServer {
   url: string;
@@ -13,13 +13,15 @@ export interface LivePreviewServer {
 
 function checkPort(port: number): Promise<boolean> {
   return new Promise((resolve) => {
-    const req = http.get({ hostname: "localhost", port, path: "/", timeout: 1000 }, (res) => {
-      res.resume();
+    const sock = net.createConnection({ port, host: "localhost" });
+    sock.setTimeout(2000);
+    sock.on("connect", () => {
+      sock.destroy();
       resolve(true);
     });
-    req.on("error", () => resolve(false));
-    req.on("timeout", () => {
-      req.destroy();
+    sock.on("error", () => resolve(false));
+    sock.on("timeout", () => {
+      sock.destroy();
       resolve(false);
     });
   });
@@ -37,8 +39,8 @@ async function pollUntilReady(port: number, timeoutMs: number = 30000): Promise<
 export async function ensureLivePreviewServer(
   projectRoot: string,
 ): Promise<LivePreviewServer> {
-  // Check if already running on common Vite ports
-  for (const port of [5173, 5174, 5000]) {
+  // Check if already running on common ports
+  for (const port of [5000, 5173, 5174]) {
     if (await checkPort(port)) {
       const url = `http://localhost:${port}`;
       console.log(`\u{1F680} Live preview already running: ${url}`);
@@ -50,7 +52,7 @@ export async function ensureLivePreviewServer(
     }
   }
 
-  // Start Vite dev server
+  // Start dev server
   const child: ChildProcess = spawn("npm", ["run", "dev"], {
     cwd: projectRoot,
     stdio: ["ignore", "pipe", "pipe"],
@@ -61,22 +63,21 @@ export async function ensureLivePreviewServer(
   // Unref so the parent process can exit independently
   child.unref();
 
-  // Capture port from Vite stdout
-  let detectedPort = 5173;
+  // Capture port from stdout — matches "localhost:PORT" (Vite) or "port PORT" (Express)
+  let detectedPort = 5000;
+  const portPattern = /(?:localhost:|port\s+)(\d+)/i;
   child.stdout?.on("data", (data: Buffer) => {
-    const line = data.toString();
-    const portMatch = line.match(/localhost:(\d+)/);
-    if (portMatch) detectedPort = parseInt(portMatch[1], 10);
+    const match = data.toString().match(portPattern);
+    if (match) detectedPort = parseInt(match[1], 10);
   });
 
   child.stderr?.on("data", (data: Buffer) => {
-    const line = data.toString();
-    // Vite sometimes logs to stderr
-    const portMatch = line.match(/localhost:(\d+)/);
-    if (portMatch) detectedPort = parseInt(portMatch[1], 10);
+    const match = data.toString().match(portPattern);
+    if (match) detectedPort = parseInt(match[1], 10);
   });
 
-  // Wait for first successful request
+  // Give the process a moment to log its port, then poll
+  await new Promise((r) => setTimeout(r, 3000));
   await pollUntilReady(detectedPort);
   const url = `http://localhost:${detectedPort}`;
 

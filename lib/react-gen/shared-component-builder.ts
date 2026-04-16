@@ -177,6 +177,61 @@ Return ONLY the TypeScript/React code. No markdown fences.`,
 
 const MAX_FIX_ATTEMPTS = 3;
 
+async function generateMinimalFallback(
+  def: SharedComponentDef,
+  errors: string,
+  existingComponents: Record<string, string>,
+): Promise<string> {
+  const client = getClient();
+
+  const depImports = def.dependsOn
+    .filter((dep) => existingComponents[dep])
+    .map((dep) => {
+      const depDef = SHARED_COMPONENTS.find((c) => c.name === dep);
+      if (!depDef) return "";
+      return `import { ${dep} } from "@/${depDef.relativePath.replace(/\.tsx?$/, "")}";`;
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  const msg = await client.messages.create({
+    model: "claude-sonnet-4-5",
+    max_tokens: 4000,
+    messages: [
+      {
+        role: "user",
+        content: `The component "${def.name}" has persistent TypeScript errors after multiple attempts.
+
+PURPOSE: ${def.description}
+FILE PATH: client/src/${def.relativePath}
+
+ERRORS TO AVOID:
+${errors}
+
+${depImports ? `AVAILABLE IMPORTS:\n${depImports}\n` : ""}
+
+Write a SIMPLIFIED but WORKING version that compiles cleanly with zero TypeScript errors.
+Rules:
+- Named export AND default export: export function ${def.name}(...) AND export default ${def.name}
+- Full TypeScript types for all props (use an exported interface ${def.name}Props)
+- Only import from: react, lucide-react, @/components/ui/*, @/lib/*, wouter, framer-motion, clsx, tailwind-merge
+- Remove any complex features causing errors
+- The component must render something meaningful (not just an empty div)
+- Keep it simple — a clean 30-50 line component is perfect
+- No markdown fences — return ONLY the TypeScript/React code`,
+      },
+    ],
+  });
+
+  const text = msg.content[0];
+  if (text.type !== "text") throw new Error(`Non-text response for minimal ${def.name}`);
+
+  return text.text
+    .replace(/^```(?:tsx?|typescript|javascript)?\s*\n?/m, "")
+    .replace(/\n?```\s*$/m, "")
+    .trim();
+}
+
 async function validateAndFixComponent(
   code: string,
   def: SharedComponentDef,
@@ -221,7 +276,6 @@ async function validateAndFixComponent(
 
   while (!tscResult.clean && fixAttempts < MAX_FIX_ATTEMPTS) {
     fixAttempts++;
-    const errorList = tscResult.errors.slice(0, 15).map((e) => `- ${e}`).join("\n");
     console.log(`    ⚠ TSC errors in ${def.name} (attempt ${fixAttempts}/${MAX_FIX_ATTEMPTS})`);
 
     // Regenerate with error feedback
@@ -229,6 +283,25 @@ async function validateAndFixComponent(
     current = autoFixImports(current);
     fs.writeFileSync(filePath, current, "utf-8");
     tscResult = runTscCheck(projectRoot, filePath);
+  }
+
+  // Fallback: if still broken after MAX_FIX_ATTEMPTS, generate a minimal
+  // working version that compiles cleanly. A compilable stub is better than
+  // a broken full version — it unblocks all downstream page builds.
+  if (!tscResult.clean) {
+    console.log(`    ⟳ ${def.name}: generating minimal fallback...`);
+    const errorList = tscResult.errors.slice(0, 20).map((e) => `- ${e}`).join("\n");
+    current = await generateMinimalFallback(def, errorList, existingComponents);
+    current = autoFixImports(current);
+    fs.writeFileSync(filePath, current, "utf-8");
+    tscResult = runTscCheck(projectRoot, filePath);
+    fixAttempts++;
+
+    if (tscResult.clean) {
+      console.log(`    ✓ ${def.name}: minimal fallback compiles clean`);
+    } else {
+      console.warn(`    ✗ ${def.name}: minimal fallback still has errors — needs manual fix`);
+    }
   }
 
   return { code: current, fixAttempts, compiledClean: tscResult.clean };

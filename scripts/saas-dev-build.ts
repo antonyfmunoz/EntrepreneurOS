@@ -78,37 +78,40 @@ async function ask(rl: ReturnType<typeof createInterface>, prompt: string): Prom
   return answer.trim();
 }
 
-async function runNewBuild(orchestrator: PMOrchestrator): Promise<void> {
-  const rl = createInterface({ input: stdin, output: stdout });
+async function runNewBuild(orchestrator: PMOrchestrator, autoApprove = false): Promise<void> {
+  // ── Intake ────────────────────────────────────────────────────────────────
+  console.log("[intake] Running intake phase...");
+  const brief = await orchestrator.runIntake();
 
-  try {
-    // ── Intake ────────────────────────────────────────────────────────────────
-    console.log("[intake] Running intake phase...");
-    const brief = await orchestrator.runIntake();
+  console.log("");
+  console.log(`  Product:    ${brief.productName}`);
+  console.log(`  Pages:      ${brief.spec.pages.length}`);
+  console.log(`  Endpoints:  ${brief.spec.endpoints?.length ?? 0}`);
+  console.log("");
 
-    console.log("");
-    console.log(`  Product:    ${brief.productName}`);
-    console.log(`  Pages:      ${brief.spec.pages.length}`);
-    console.log(`  Endpoints:  ${brief.spec.endpoints?.length ?? 0}`);
-    console.log("");
-
-    // ── Approval gate ─────────────────────────────────────────────────────────
-    const approval = await ask(rl, "Proceed with build? [Y/n] ");
-    if (approval.toLowerCase() === "n" || approval.toLowerCase() === "no") {
-      console.log("");
-      console.log("Build cancelled. Run again when ready.");
-      console.log("");
-      return;
+  // ── Approval gate ─────────────────────────────────────────────────────────
+  if (!autoApprove) {
+    const rl = createInterface({ input: stdin, output: stdout });
+    try {
+      const approval = await ask(rl, "Proceed with build? [Y/n] ");
+      if (approval.toLowerCase() === "n" || approval.toLowerCase() === "no") {
+        console.log("");
+        console.log("Build cancelled. Run again when ready.");
+        console.log("");
+        return;
+      }
+    } finally {
+      rl.close();
     }
-
-    // ── Build ─────────────────────────────────────────────────────────────────
-    console.log("");
-    console.log("[build] Starting multi-agent build...");
-    const result: BuildResult = await orchestrator.runBuild(brief);
-    printBuildSummary(result);
-  } finally {
-    rl.close();
+  } else {
+    console.log("[auto] --yes flag set, skipping approval gate");
   }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+  console.log("");
+  console.log("[build] Starting multi-agent build...");
+  const result: BuildResult = await orchestrator.runBuild(brief);
+  printBuildSummary(result);
 }
 
 async function runResume(orchestrator: PMOrchestrator): Promise<void> {
@@ -191,6 +194,7 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const isResume = args.includes("--resume");
   const isEdit = args.includes("--edit");
+  const autoApprove = args.includes("--yes") || args.includes("-y");
 
   const projectRoot = process.cwd();
 
@@ -216,7 +220,7 @@ async function main(): Promise<void> {
   } else if (isResume) {
     await runResume(orchestrator);
   } else {
-    await runNewBuild(orchestrator);
+    await runNewBuild(orchestrator, autoApprove);
   }
 
   await shutdown();
