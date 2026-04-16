@@ -1,5 +1,5 @@
 import { Switch, Route, Redirect } from "wouter";
-import { queryClient } from "./lib/queryClient";
+import { queryClient, setTokenGetter } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { Loader2 } from "lucide-react";
@@ -9,7 +9,7 @@ import CompanySetupPage from "@/pages/company-setup-page";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { CompanyGate } from "@/lib/company-guard";
-import { useUser } from "@clerk/clerk-react";
+import { useUser, useAuth } from "@clerk/clerk-react";
 import Login from "@/pages/login-page";
 import Signup from "@/pages/signup-page";
 import ForgotPassword from "@/pages/forgot-password-page";
@@ -24,6 +24,17 @@ import Workflows from "@/pages/workflows-page";
 import NotFoundPage from "@/pages/not-found-page";
 import OrgChartPage from "@/pages/org-chart-page";
 import TaskBoard from "@/pages/task-board-page-new";
+import { BuildStatusOverlay } from "@/components/BuildStatusOverlay";
+
+import { useEffect } from "react";
+
+function ClerkTokenProvider({ children }: { children: React.ReactNode }) {
+  const { getToken } = useAuth();
+  useEffect(() => {
+    setTokenGetter(getToken);
+  }, [getToken]);
+  return <>{children}</>;
+}
 
 function RootRedirect() {
   const { isLoaded, isSignedIn } = useUser();
@@ -127,12 +138,15 @@ function ClerkProviderWrapper({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <ClerkProviderWrapper>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <Router />
-          <Toaster />
-        </AuthProvider>
-      </QueryClientProvider>
+      <ClerkTokenProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <Router />
+            <Toaster />
+          </AuthProvider>
+          <BuildStatusOverlay />
+        </QueryClientProvider>
+      </ClerkTokenProvider>
     </ClerkProviderWrapper>
   );
 }
