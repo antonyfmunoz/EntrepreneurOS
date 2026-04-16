@@ -10,7 +10,7 @@ import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 import { extractJsonFromResponse } from "../spec-parser/restructure-spec.js";
 import { generateDesignContract } from "../react-gen/design-linter.js";
 import { ArtifactStore } from "./artifact-store.js";
-import type { DesignSystem, DesignTokens, ProductInsights } from "./types.js";
+import type { DesignSystem, DesignTokens, ProductInsights, ComponentLibraryRecommendations } from "./types.js";
 import type { ProjectBrief } from "../intake/types.js";
 
 // ─── System Prompt ──────────────────────────────────────────────────────────
@@ -409,6 +409,88 @@ function buildCssCustomProperties(tokens: DesignTokens, colorMode: string): stri
   return lines.join("\n");
 }
 
+// ─── Component Library Research ─────────────────────────────────────────────
+
+const LIBRARY_RESEARCH_PROMPT = `You are a senior frontend architect choosing the best animation and component libraries for a specific product.
+
+Given the product context, recommend:
+1. Animation library (e.g. framer-motion, gsap, css-only, motion)
+2. Component library (e.g. shadcn/ui, radix, mantine)
+3. Premium component sources (e.g. magicui, 21st.dev, aceternity) — pick 0-3 that fit
+4. Why these choices fit THIS product
+5. Exact npm install commands
+
+Consider: product category, target user sophistication, desired aesthetic feel, bundle size constraints, and what creates the right emotional response for the target audience.
+
+Return ONLY a valid JSON object:
+{
+  "animationLibrary": "string — npm package name",
+  "componentLibrary": "string — npm package name or ecosystem name",
+  "premiumComponents": ["string — source names"],
+  "rationale": "string — 2-3 sentences on why these fit this product",
+  "installCommands": ["string — exact npm install commands"]
+}`;
+
+export async function researchComponentLibraries(
+  brief: ProjectBrief,
+  insights: ProductInsights,
+  store: ArtifactStore,
+): Promise<ComponentLibraryRecommendations> {
+  // Check if recommendations already exist in the store
+  const existing = store.getComponentLibraryRecommendations();
+  if (existing) return existing;
+
+  const client = new Anthropic({
+    apiKey: getAnthropicApiKey(),
+    baseURL: getAnthropicBaseUrl(),
+  });
+
+  const userPrompt = `Product: ${brief.productName}
+Description: ${brief.productDescription}
+Category: ${insights.productCategory}
+Target users: ${insights.targetUserProfile}
+Market positioning: ${insights.marketPositioning}
+Tech stack: ${brief.techStack.frontend} + ${brief.techStack.buildTool} + ${brief.techStack.styling} + ${brief.techStack.componentLib}
+Design recommendations: ${insights.designRecommendations.join("; ") || "none"}
+
+What animation library, component library, and premium component sources best fit this product?`;
+
+  const stream = client.messages.stream({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 2000,
+    system: LIBRARY_RESEARCH_PROMPT,
+    messages: [{ role: "user", content: userPrompt }],
+  });
+
+  const msg = await stream.finalMessage();
+  const text = msg.content[0];
+  if (!text || text.type !== "text") {
+    // Fall back to sensible defaults
+    return getDefaultRecommendations(brief);
+  }
+
+  try {
+    const parsed = extractJsonFromResponse(text.text) as ComponentLibraryRecommendations;
+    if (!parsed.animationLibrary || !parsed.componentLibrary) {
+      return getDefaultRecommendations(brief);
+    }
+    store.setComponentLibraryRecommendations(parsed);
+    return parsed;
+  } catch {
+    return getDefaultRecommendations(brief);
+  }
+}
+
+function getDefaultRecommendations(brief: ProjectBrief): ComponentLibraryRecommendations {
+  return {
+    animationLibrary: "framer-motion",
+    componentLibrary: brief.techStack.componentLib || "shadcn/ui",
+    premiumComponents: [],
+    rationale: "Default recommendations — component library research was not available.",
+    installCommands: ["npm install framer-motion"],
+  };
+}
+
 // ─── Agent Entry Point ──────────────────────────────────────────────────────
 
 interface DesignSystemResponse {
@@ -431,6 +513,14 @@ export async function runDesignSystemAgent(
   });
 
   const projectRoot = store.getProjectRoot();
+
+  // Research component libraries before generating the design system
+  const recommendations = await researchComponentLibraries(brief, insights, store);
+  store.setComponentLibraryRecommendations(recommendations);
+  console.log(
+    `[design-system] Library research: animation=${recommendations.animationLibrary}, ` +
+    `components=${recommendations.componentLibrary}, premium=[${recommendations.premiumComponents.join(", ")}]`,
+  );
 
   // Check for an existing design-system.md — if present, it is the primary
   // source of truth and the agent must stay within its defined tokens.
@@ -534,7 +624,7 @@ export async function runDesignSystemAgent(
   store.setDesignSystem(designSystem);
 
   // 6. Write DESIGN_COMPLIANCE_CHECKLIST.md — enforced by page agents
-  const checklist = buildDesignComplianceChecklist(parsed.tokens);
+  const checklist = buildDesignComplianceChecklist(parsed.tokens, recommendations);
   store.writeProjectFile(
     ".planning/artifacts/DESIGN_COMPLIANCE_CHECKLIST.md",
     checklist,
@@ -552,17 +642,29 @@ export async function runDesignSystemAgent(
 
 // ─── Design Compliance Checklist ────────────────────────────────────────────
 
-function buildDesignComplianceChecklist(tokens: DesignTokens): string {
+function buildDesignComplianceChecklist(
+  tokens: DesignTokens,
+  recommendations: ComponentLibraryRecommendations,
+): string {
   const primary = tokens.colors.primary ?? "not set";
   const fontFamily = tokens.typography.fontFamily ?? "not set";
+  const animLib = recommendations.animationLibrary;
+  const premiumList = recommendations.premiumComponents.length > 0
+    ? recommendations.premiumComponents.join(", ")
+    : "none selected";
 
   return `# Design Compliance Checklist
 Generated by Design System Agent. Every page agent must pass ALL checks.
 
+## Library Choices (researched for this product)
+- Animation: ${animLib}
+- Components: ${recommendations.componentLibrary}
+- Premium sources: ${premiumList}
+- Rationale: ${recommendations.rationale}
+
 ## Colors (ZERO TOLERANCE)
 - [ ] Primary: ${primary} — use as: text-primary, bg-primary, border-primary
 - [ ] No hardcoded hex colors outside CSS variable definitions
-- [ ] No gradients (gradients disabled for this project)
 
 ## Typography
 - [ ] Display font: ${fontFamily} — loaded from Google Fonts or system
@@ -570,22 +672,14 @@ Generated by Design System Agent. Every page agent must pass ALL checks.
 - [ ] No other font families
 
 ## Motion (REQUIRED)
-- [ ] framer-motion installed and imported
-- [ ] Page load animation: BlurFade or equivalent
+- [ ] ${animLib} installed and imported
+- [ ] Page load animation: fade/reveal appropriate for the product
 - [ ] Interactive elements: hover + tap states
 - [ ] No static components without at least one animation
 
 ## Components (REQUIRED)
-- [ ] Only imports from design system component list
-- [ ] MagicCard used for card components
-- [ ] NumberTicker used for numeric stats
-- [ ] BlurFade used for content reveals
-
-## Available MagicUI Components
-- \`BlurFade\` — \`@/components/ui/blur-fade\` — content reveal animations
-- \`MagicCard\` — \`@/components/ui/magic-card\` — spotlight hover cards
-- \`NumberTicker\` — \`@/components/ui/number-ticker\` — animated numbers
-- \`AnimatedGradientText\` — \`@/components/ui/animated-gradient-text\` — gradient text
-- \`BorderBeam\` — \`@/components/ui/border-beam\` — animated border light
+- [ ] Only imports from the component list built by Component Library Agent
+- [ ] Premium components installed by Component Library Agent, not hardcoded
+- [ ] Import from exact paths listed in CURRENT_BUILD_STATE.md
 `;
 }

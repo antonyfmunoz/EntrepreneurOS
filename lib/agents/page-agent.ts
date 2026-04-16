@@ -81,6 +81,21 @@ export async function runPageAgent(
     designSystemContent += `\n\nAVAILABLE SHARED COMPONENT INTERFACES:\n${interfaceSummary}`;
   }
 
+  // Component library recommendations — inject dynamic library choices
+  const libRecs = store.getComponentLibraryRecommendations();
+  if (libRecs) {
+    designSystemContent += `\n\nANIMATION AND MOTION:
+Animation library for this product: ${libRecs.animationLibrary}
+Use ONLY this library for all animations. Do not use any other animation library.
+Apply motion patterns appropriate for ${brief.productDescription}.
+
+COMPONENT IMPORTS:
+Use ONLY the components built by Component Library Agent.
+Import from the exact paths listed above.
+Do not import from libraries not in the component list.
+Premium sources available: ${libRecs.premiumComponents.join(", ") || "none"}`;
+  }
+
   // Project copy — find the PageCopy matching this page by name
   const projectCopy = store.getProjectCopy();
   let pageCopy: PageCopy | null = null;

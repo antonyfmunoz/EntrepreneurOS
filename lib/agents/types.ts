@@ -277,6 +277,16 @@ export interface EditResult {
   errors: string[];
 }
 
+// ─── Component Library Recommendations ─────────────────────────────────────
+
+export interface ComponentLibraryRecommendations {
+  animationLibrary: string;
+  componentLibrary: string;
+  premiumComponents: string[];
+  rationale: string;
+  installCommands: string[];
+}
+
 // ─── Existing Codebase Audit ────────────────────────────────────────────────
 
 export interface ExistingCodebaseAudit {

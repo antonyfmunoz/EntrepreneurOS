@@ -61,6 +61,16 @@ vi.mock("../../../lib/spec-parser/restructure-spec.js", () => ({
   extractJsonFromResponse: vi.fn().mockImplementation((text: string) => JSON.parse(text)),
 }));
 
+// Mock the library research Claude call — the second stream call in the agent
+// The first mockResolvedValue handles research, subsequent ones handle design system
+const mockLibraryResearchResponse = {
+  animationLibrary: "framer-motion",
+  componentLibrary: "shadcn/ui",
+  premiumComponents: ["magicui"],
+  rationale: "framer-motion pairs well with React for smooth animations. shadcn/ui provides accessible primitives. magicui adds premium polish.",
+  installCommands: ["npm install framer-motion"],
+};
+
 // ─── Import under test ──────────────────────────────────────────────────────
 
 import { runDesignSystemAgent } from "../../../lib/agents/design-system-agent.js";
@@ -112,9 +122,14 @@ beforeEach(() => {
   store = new ArtifactStore(tmpDir);
   vi.clearAllMocks();
 
-  mockStream.finalMessage.mockResolvedValue({
-    content: [{ type: "text", text: JSON.stringify(mockDesignSystemResponse) }],
-  });
+  // First call: library research, second call: design system generation
+  mockStream.finalMessage
+    .mockResolvedValueOnce({
+      content: [{ type: "text", text: JSON.stringify(mockLibraryResearchResponse) }],
+    })
+    .mockResolvedValue({
+      content: [{ type: "text", text: JSON.stringify(mockDesignSystemResponse) }],
+    });
 });
 
 afterEach(() => {
@@ -196,14 +211,17 @@ describe("runDesignSystemAgent", () => {
     const { extractJsonFromResponse } = await import("../../../lib/spec-parser/restructure-spec.js");
     const mockExtract = extractJsonFromResponse as ReturnType<typeof vi.fn>;
 
-    mockExtract.mockReturnValueOnce({
-      aesthetic: "test",
-      colorMode: "light",
-      tokens: {},
-      tailwindExtend: {},
-      cssCustomProperties: ":root {}",
-      componentDesignGuide: "# Guide",
-    });
+    // First call: library research (succeeds), second call: design system (bad)
+    mockExtract
+      .mockReturnValueOnce(mockLibraryResearchResponse)
+      .mockReturnValueOnce({
+        aesthetic: "test",
+        colorMode: "light",
+        tokens: {},
+        tailwindExtend: {},
+        cssCustomProperties: ":root {}",
+        componentDesignGuide: "# Guide",
+      });
 
     await expect(
       runDesignSystemAgent(makeBrief(), makeInsights(), store),
@@ -214,17 +232,20 @@ describe("runDesignSystemAgent", () => {
     const { extractJsonFromResponse } = await import("../../../lib/spec-parser/restructure-spec.js");
     const mockExtract = extractJsonFromResponse as ReturnType<typeof vi.fn>;
 
-    mockExtract.mockReturnValueOnce({
-      ...mockDesignSystemResponse,
-      tailwindExtend: null,
-    });
+    // First call: library research (succeeds), second call: design system (bad)
+    mockExtract
+      .mockReturnValueOnce(mockLibraryResearchResponse)
+      .mockReturnValueOnce({
+        ...mockDesignSystemResponse,
+        tailwindExtend: null,
+      });
 
     await expect(
       runDesignSystemAgent(makeBrief(), makeInsights(), store),
     ).rejects.toThrow("missing tailwindExtend");
   });
 
-  it("writes DESIGN_COMPLIANCE_CHECKLIST.md to disk", async () => {
+  it("writes DESIGN_COMPLIANCE_CHECKLIST.md with dynamic library choices", async () => {
     await runDesignSystemAgent(makeBrief(), makeInsights(), store);
 
     const checklistPath = path.join(tmpDir, ".planning", "artifacts", "DESIGN_COMPLIANCE_CHECKLIST.md");
@@ -234,10 +255,26 @@ describe("runDesignSystemAgent", () => {
     expect(content).toContain("Design Compliance Checklist");
     expect(content).toContain("#3b82f6");
     expect(content).toContain("Inter");
-    expect(content).toContain("BlurFade");
-    expect(content).toContain("MagicCard");
-    expect(content).toContain("NumberTicker");
+    // Dynamic library choices from research, not hardcoded
+    expect(content).toContain("framer-motion");
+    expect(content).toContain("shadcn/ui");
+    expect(content).toContain("magicui");
     expect(content).toContain("ZERO TOLERANCE");
+    // Should NOT contain hardcoded component names
+    expect(content).not.toContain("MagicCard used for card components");
+    expect(content).not.toContain("NumberTicker used for numeric stats");
+  });
+
+  it("stores component library recommendations in artifact store", async () => {
+    expect(store.getComponentLibraryRecommendations()).toBeNull();
+
+    await runDesignSystemAgent(makeBrief(), makeInsights(), store);
+
+    const recs = store.getComponentLibraryRecommendations();
+    expect(recs).not.toBeNull();
+    expect(recs!.animationLibrary).toBe("framer-motion");
+    expect(recs!.componentLibrary).toBe("shadcn/ui");
+    expect(recs!.premiumComponents).toContain("magicui");
   });
 
   it("merges into existing tailwind.config.ts when one exists", async () => {

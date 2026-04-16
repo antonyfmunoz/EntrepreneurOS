@@ -11,6 +11,7 @@ import type {
   SystemArchitecture,
   DesignSystem,
   ComponentInterface,
+  ComponentLibraryRecommendations,
   PageOutput,
   BackendRoute,
   QAReport,
@@ -28,6 +29,7 @@ type ArtifactKey =
   | "product-insights"
   | "competitive-intel"
   | "existing-codebase-audit"
+  | "component-library-recommendations"
   | "architecture"
   | "design-system"
   | "project-copy"
@@ -119,6 +121,16 @@ export class ArtifactStore {
 
   getExistingCodebaseAudit(): ExistingCodebaseAudit | null {
     return this.readJson<ExistingCodebaseAudit>(this.artifactPath("existing-codebase-audit"));
+  }
+
+  // ─── Component Library Recommendations ───────────────────────────────────
+
+  setComponentLibraryRecommendations(recs: ComponentLibraryRecommendations): void {
+    this.writeAtomic(this.artifactPath("component-library-recommendations"), recs);
+  }
+
+  getComponentLibraryRecommendations(): ComponentLibraryRecommendations | null {
+    return this.readJson<ComponentLibraryRecommendations>(this.artifactPath("component-library-recommendations"));
   }
 
   // ─── Architecture ───────────────────────────────────────────────────────

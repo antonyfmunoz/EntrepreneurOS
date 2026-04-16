@@ -29,38 +29,43 @@ Every component must be production-grade and visually distinctive:
 - Navigation: clear active states. Smooth transitions between states.
 - Loading states: skeleton screens that match the layout, not generic spinners
 - Empty states: illustrated or typographic — never just "No data found"
-- Motion: use framer-motion for meaningful transitions. Page loads should feel orchestrated.
-
-Import framer-motion for animations: npm install framer-motion
-Use it for: page transitions, list item reveals, modal animations, hover micro-interactions
+- Motion: use the animation library chosen for this product. Page loads should feel orchestrated.
 `;
 
-export const COMPONENT_LIBRARY_KNOWLEDGE = `
-COMPONENT LIBRARY KNOWLEDGE:
+/**
+ * Build dynamic component library knowledge from the recommendations
+ * stored in the ArtifactStore by the design system agent's research step.
+ */
+export function buildComponentLibraryKnowledge(store: ArtifactStore): string {
+  const recs = store.getComponentLibraryRecommendations();
+  if (!recs) {
+    return `COMPONENT LIBRARY KNOWLEDGE:
+shadcn/ui components available. No premium component recommendations available — use shadcn/ui primitives only.`;
+  }
 
-shadcn/ui components available: Button, Input, Label, Card, CardHeader, CardContent, CardFooter, Dialog, DialogContent, DialogHeader, DialogFooter, Sheet, SheetContent, Tabs, TabsList, TabsTrigger, TabsContent, Table, TableHeader, TableBody, TableRow, TableCell, Select, SelectTrigger, SelectContent, SelectItem, Checkbox, RadioGroup, RadioGroupItem, Switch, Slider, Textarea, Badge, Avatar, AvatarImage, AvatarFallback, Separator, Skeleton, Toast, Toaster, ScrollArea, DropdownMenu, DropdownMenuContent, DropdownMenuItem, Tooltip, TooltipContent, Alert, AlertTitle, AlertDescription, Progress, Calendar, Popover, PopoverContent, Command, CommandInput, CommandList, CommandItem
+  const sections: string[] = [
+    `COMPONENT LIBRARY KNOWLEDGE (researched for this product):`,
+    ``,
+    `Animation library: ${recs.animationLibrary}`,
+    `Component library: ${recs.componentLibrary}`,
+    `Premium sources: ${recs.premiumComponents.length > 0 ? recs.premiumComponents.join(", ") : "none"}`,
+    `Rationale: ${recs.rationale}`,
+    ``,
+    `Install commands:`,
+    ...recs.installCommands.map((cmd) => `  ${cmd}`),
+    ``,
+    `When building components:`,
+    `1. If a premium component is needed, check if it's available via MCP (shadcn MCP, MagicUI MCP, 21st.dev MCP)`,
+    `2. If MCP available: fetch the actual component code via MCP`,
+    `3. If no MCP: generate an equivalent from scratch based on the library's patterns`,
+    `4. Install it to client/src/components/ui/{name}.tsx`,
+    ``,
+    `Use ONLY the animation library above. Do not use any other animation library.`,
+    `Build what THIS product needs — not a generic component set.`,
+  ];
 
-MagicUI components for premium feel:
-- AnimatedGradientText: animated gradient text for hero headings
-- BorderBeam: animated border effect for cards and containers
-- MagicCard: spotlight effect card with hover glow
-- BlurFade: fade-in with blur for page load animations
-- NumberTicker: animated number counting up for stats
-- Marquee: infinite scroll for logos/testimonials
-- TypingAnimation: typewriter effect for AI responses
-- ShimmerButton: shimmer effect on CTAs
-- Particles: background particle effect for hero sections
-- Meteors: meteor shower background effect
-- GridPattern: subtle grid background texture
-
-21st.dev patterns for specific use cases:
-- Sign-in forms: email + password with Google OAuth, clean centered card
-- Dashboard headers: user avatar + notifications + breadcrumb pattern
-- Data tables: sortable columns, row actions, bulk select
-- Stat cards: icon + number + trend indicator + sparkline
-- Empty states: illustration + heading + description + CTA
-- Onboarding wizards: step indicator + progress + back/next
-`;
+  return sections.join("\n");
+}
 
 // ─── MCP Component Discovery ────────────────────────────────────────────────
 
@@ -152,35 +157,20 @@ export async function discoverComponentsFromMCP(
   return results;
 }
 
+const SHADCN_COMPONENTS = new Set([
+  "Button", "Input", "Label", "Card", "CardHeader", "CardContent", "CardFooter",
+  "Dialog", "DialogContent", "DialogHeader", "DialogFooter", "Sheet", "SheetContent",
+  "Tabs", "TabsList", "TabsTrigger", "TabsContent", "Table", "TableHeader", "TableBody",
+  "TableRow", "TableCell", "Select", "SelectTrigger", "SelectContent", "SelectItem",
+  "Checkbox", "RadioGroup", "RadioGroupItem", "Switch", "Slider", "Textarea", "Badge",
+  "Avatar", "AvatarImage", "AvatarFallback", "Separator", "Skeleton", "Toast", "Toaster",
+  "ScrollArea", "DropdownMenu", "DropdownMenuContent", "DropdownMenuItem", "Tooltip",
+  "TooltipContent", "Alert", "AlertTitle", "AlertDescription", "Progress", "Calendar",
+  "Popover", "PopoverContent", "Command", "CommandInput", "CommandList", "CommandItem",
+]);
+
 function resolveFromBuiltInKnowledge(name: string): ComponentReference {
-  // Check against known shadcn components
-  const shadcnComponents = new Set([
-    "Button", "Input", "Label", "Card", "CardHeader", "CardContent", "CardFooter",
-    "Dialog", "DialogContent", "DialogHeader", "DialogFooter", "Sheet", "SheetContent",
-    "Tabs", "TabsList", "TabsTrigger", "TabsContent", "Table", "TableHeader", "TableBody",
-    "TableRow", "TableCell", "Select", "SelectTrigger", "SelectContent", "SelectItem",
-    "Checkbox", "RadioGroup", "RadioGroupItem", "Switch", "Slider", "Textarea", "Badge",
-    "Avatar", "AvatarImage", "AvatarFallback", "Separator", "Skeleton", "Toast", "Toaster",
-    "ScrollArea", "DropdownMenu", "DropdownMenuContent", "DropdownMenuItem", "Tooltip",
-    "TooltipContent", "Alert", "AlertTitle", "AlertDescription", "Progress", "Calendar",
-    "Popover", "PopoverContent", "Command", "CommandInput", "CommandList", "CommandItem",
-  ]);
-
-  const magicUIComponents: Record<string, string> = {
-    AnimatedGradientText: "animated gradient text for hero headings",
-    BorderBeam: "animated border effect for cards and containers",
-    MagicCard: "spotlight effect card with hover glow",
-    BlurFade: "fade-in with blur for page load animations",
-    NumberTicker: "animated number counting up for stats",
-    Marquee: "infinite scroll for logos/testimonials",
-    TypingAnimation: "typewriter effect for AI responses",
-    ShimmerButton: "shimmer effect on CTAs",
-    Particles: "background particle effect for hero sections",
-    Meteors: "meteor shower background effect",
-    GridPattern: "subtle grid background texture",
-  };
-
-  if (shadcnComponents.has(name)) {
+  if (SHADCN_COMPONENTS.has(name)) {
     return {
       name,
       source: "shadcn",
@@ -189,19 +179,11 @@ function resolveFromBuiltInKnowledge(name: string): ComponentReference {
     };
   }
 
-  if (magicUIComponents[name]) {
-    return {
-      name,
-      source: "magicui",
-      description: magicUIComponents[name],
-      installCommand: `npx magicui-cli@latest add ${name.toLowerCase()}`,
-    };
-  }
-
+  // No hardcoded premium component list — discovery via MCP or generation at build time
   return {
     name,
     source: "built-in",
-    description: `Custom ${name} component — no external package`,
+    description: `Custom ${name} component — will be generated or fetched via MCP`,
   };
 }
 
