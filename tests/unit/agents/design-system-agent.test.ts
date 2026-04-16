@@ -224,6 +224,22 @@ describe("runDesignSystemAgent", () => {
     ).rejects.toThrow("missing tailwindExtend");
   });
 
+  it("writes DESIGN_COMPLIANCE_CHECKLIST.md to disk", async () => {
+    await runDesignSystemAgent(makeBrief(), makeInsights(), store);
+
+    const checklistPath = path.join(tmpDir, ".planning", "artifacts", "DESIGN_COMPLIANCE_CHECKLIST.md");
+    expect(fs.existsSync(checklistPath)).toBe(true);
+
+    const content = fs.readFileSync(checklistPath, "utf-8");
+    expect(content).toContain("Design Compliance Checklist");
+    expect(content).toContain("#3b82f6");
+    expect(content).toContain("Inter");
+    expect(content).toContain("BlurFade");
+    expect(content).toContain("MagicCard");
+    expect(content).toContain("NumberTicker");
+    expect(content).toContain("ZERO TOLERANCE");
+  });
+
   it("merges into existing tailwind.config.ts when one exists", async () => {
     const existingConfig = `import type { Config } from "tailwindcss";
 
