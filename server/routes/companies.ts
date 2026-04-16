@@ -1,10 +1,113 @@
 import { Express } from "express";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
-import { companies as companiesTable } from "@shared/schema";
+import {
+  companies as companiesTable,
+  departments as departmentsTable,
+  roles as rolesTable,
+  workflows as workflowsTable,
+} from "@shared/schema";
 import { db } from "../db";
 
 export function registerCompanyRoutes(app: Express): void {
+  // GET /api/companies/:id — single company by ID
+  app.get("/api/companies/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      const userId = req.user.id;
+      const companyId = Number(req.params.id);
+      if (!Number.isFinite(companyId)) {
+        return res.status(400).json({ message: "Invalid company id" });
+      }
+      const rows = await db
+        .select()
+        .from(companiesTable)
+        .where(and(eq(companiesTable.id, companyId), eq(companiesTable.ownerUserId, userId)))
+        .limit(1);
+      if (rows.length === 0) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      return res.json(rows[0]);
+    } catch (error) {
+      console.error("Error fetching company by id:", error);
+      return res.status(500).json({ message: "Failed to fetch company" });
+    }
+  });
+
+  // GET /api/companies/:id/tasks — tasks scoped to company (placeholder: returns [])
+  app.get("/api/companies/:id/tasks", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      // Tasks table has no companyId column — return empty until schema is extended
+      return res.json([]);
+    } catch (error) {
+      console.error("Error fetching company tasks:", error);
+      return res.status(500).json({ message: "Failed to fetch tasks" });
+    }
+  });
+
+  // GET /api/companies/:id/departments — departments for company
+  app.get("/api/companies/:id/departments", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      const companyId = req.params.id;
+      const rows = await db
+        .select()
+        .from(departmentsTable)
+        .where(eq(departmentsTable.companyId, companyId));
+      return res.json(rows);
+    } catch (error) {
+      console.error("Error fetching company departments:", error);
+      return res.status(500).json({ message: "Failed to fetch departments" });
+    }
+  });
+
+  // GET /api/companies/:id/roles — roles for company
+  app.get("/api/companies/:id/roles", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      const companyId = req.params.id;
+      const rows = await db
+        .select()
+        .from(rolesTable)
+        .where(eq(rolesTable.companyId, companyId));
+      return res.json(rows);
+    } catch (error) {
+      console.error("Error fetching company roles:", error);
+      return res.status(500).json({ message: "Failed to fetch roles" });
+    }
+  });
+
+  // GET /api/companies/:id/workflows — workflows for company
+  app.get("/api/companies/:id/workflows", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      const companyId = Number(req.params.id);
+      if (!Number.isFinite(companyId)) {
+        return res.status(400).json({ message: "Invalid company id" });
+      }
+      const rows = await db
+        .select()
+        .from(workflowsTable)
+        .where(eq(workflowsTable.companyId, companyId));
+      return res.json(rows);
+    } catch (error) {
+      console.error("Error fetching company workflows:", error);
+      return res.status(500).json({ message: "Failed to fetch workflows" });
+    }
+  });
+
+  // GET /api/company — legacy: return first company for user
   app.get("/api/company", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
