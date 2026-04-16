@@ -1,555 +1,376 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useLocation } from 'wouter';
-import { ReactFlow, type Node, type Edge, Controls, MiniMap, Background, useNodesState, useEdgesState, ConnectionLineType, useReactFlow } from '@xyflow/react';
+import { Link } from 'wouter';
+import { Plus, ZoomIn, ZoomOut, Maximize2, X } from 'lucide-react';
+import {
+  ReactFlow,
+  Node,
+  Edge,
+  Background,
+  Controls,
+  useNodesState,
+  useEdgesState,
+  ConnectionMode,
+  Panel,
+  useReactFlow,
+} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Plus, MoreVertical, ArrowRight, AlertCircle } from 'lucide-react';
-import { UniversalLayout } from '@/components/layout/universal-layout';
+import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { apiRequest } from '@/lib/queryClient';
-import { useToast } from '@/hooks/use-toast';
-import designTokens from '@/lib/design-tokens';
-import { usePostHog } from 'posthog-js/react';
-import type { Portfolio, InsertPortfolio } from '@shared/schema';
+import { Card } from '@/components/ui/card';
 
-interface PortfolioNodeData {
-  portfolio: Portfolio;
-  onOpen: (id: number) => void;
-  onDelete: (id: number) => void;
+interface Portfolio {
+  id: string;
+  name: string;
+  description?: string;
+  companyCount: number;
+  createdAt: string;
 }
 
-const PortfolioNode = ({ data }: { data: PortfolioNodeData }) => {
-  const { portfolio, onOpen, onDelete } = data;
+interface PortfolioNodeData {
+  id: string;
+  name: string;
+  description?: string;
+  companyCount: number;
+  createdAt: string;
+}
 
+type PortfolioNode = Node<PortfolioNodeData>;
+
+function PortfolioNodeComponent({ data }: { data: PortfolioNodeData }) {
   return (
-    <div
-      className="group relative"
-      style={{
-        width: '280px',
-        background: designTokens.glassmorphism.background,
-        backdropFilter: designTokens.glassmorphism.backdropFilter,
-        borderRadius: designTokens.borderRadius.default,
-        padding: '24px',
-        boxShadow: designTokens.glassmorphism.shadow,
-        border: 'none',
-      }}
-    >
-      <div className="flex items-start justify-between mb-3">
-        <h3 className="text-lg font-semibold text-[#2c2f30] leading-tight pr-6">
-          {portfolio.name}
-        </h3>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-[#eff1f2]"
-              aria-label="Portfolio actions"
-            >
-              <MoreVertical className="w-4 h-4 text-[#595c5d]" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(portfolio.id);
-              }}
-              className="text-red-600"
-            >
-              Delete portfolio
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {portfolio.description && (
-        <p className="text-sm text-[#595c5d] mb-4 line-clamp-2">
-          {portfolio.description}
-        </p>
-      )}
-
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-[#595c5d]">
-          Portfolio
-        </span>
-        <Button
-          size="sm"
-          onClick={() => onOpen(portfolio.id)}
-          className="opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{
-            background: designTokens.colors.primary,
-            color: '#ffffff',
-          }}
-        >
-          Open
-          <ArrowRight className="w-4 h-4 ml-1" />
-        </Button>
-      </div>
-    </div>
-  );
-};
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const nodeTypes: Record<string, any> = {
-  portfolio: PortfolioNode,
-};
-
-const EmptyStateNode = ({ onCreate }: { onCreate: () => void }) => {
-  return (
-    <div
-      className="flex flex-col items-center justify-center text-center"
-      style={{
-        width: '320px',
-        background: designTokens.glassmorphism.background,
-        backdropFilter: designTokens.glassmorphism.backdropFilter,
-        borderRadius: designTokens.borderRadius.default,
-        padding: '48px 32px',
-        boxShadow: designTokens.glassmorphism.shadow,
-        border: 'none',
-      }}
-    >
-      <h2 className="text-xl font-semibold text-[#2c2f30] mb-2">
-        No portfolios yet
-      </h2>
-      <p className="text-sm text-[#595c5d] mb-6">
-        Create your first portfolio to organize companies and track progress.
-      </p>
-      <Button
-        onClick={onCreate}
-        style={{
-          background: designTokens.colors.primary,
-          color: '#ffffff',
-        }}
-      >
-        <Plus className="w-4 h-4 mr-2" />
-        Create your first portfolio
-      </Button>
-    </div>
-  );
-};
-
-const LoadingNode = () => {
-  return (
-    <div
-      className="animate-pulse"
-      style={{
-        width: '280px',
-        background: designTokens.glassmorphism.background,
-        backdropFilter: designTokens.glassmorphism.backdropFilter,
-        borderRadius: designTokens.borderRadius.default,
-        padding: '24px',
-        boxShadow: designTokens.glassmorphism.shadow,
-        border: 'none',
-      }}
-    >
-      <div className="h-6 bg-[#eff1f2] rounded mb-3 w-3/4" />
-      <div className="h-4 bg-[#eff1f2] rounded mb-2 w-full" />
-      <div className="h-4 bg-[#eff1f2] rounded mb-4 w-5/6" />
-      <div className="flex items-center justify-between">
-        <div className="h-4 bg-[#eff1f2] rounded w-24" />
-        <div className="h-8 bg-[#eff1f2] rounded w-16" />
-      </div>
-    </div>
-  );
-};
-
-export default function PortfolioListPage() {
-  const posthog = usePostHog();
-  const [, navigate] = useLocation();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const reactFlowInstance = useReactFlow();
-
-  const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[]);
-  const [edges, setEdges] = useEdgesState([] as Edge[]);
-
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [newPortfolioName, setNewPortfolioName] = useState('');
-  const [newPortfolioDescription, setNewPortfolioDescription] = useState('');
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [portfolioToDelete, setPortfolioToDelete] = useState<number | null>(null);
-  const [detailSheetOpen, setDetailSheetOpen] = useState(false);
-  const [selectedPortfolioId, setSelectedPortfolioId] = useState<number | null>(null);
-
-  const {
-    data: portfolios = [],
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useQuery<Portfolio[], Error>({
-    queryKey: ['/api/portfolios'],
-    queryFn: async () => {
-      const res = await apiRequest('GET', '/api/portfolios');
-      return (await res.json()) as Portfolio[];
-    },
-  });
-
-  const createMutation = useMutation<Portfolio, Error, InsertPortfolio>({
-    mutationFn: async (input) => {
-      const res = await apiRequest('POST', '/api/portfolios', input);
-      return (await res.json()) as Portfolio;
-    },
-    onSuccess: (created) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/portfolios'] });
-      setCreateDialogOpen(false);
-      setNewPortfolioName('');
-      setNewPortfolioDescription('');
-      toast({
-        title: 'Portfolio created',
-        description: `${created.name} is ready.`,
-      });
-      posthog?.capture('portfolio_created', { portfolioId: created.id });
-      navigate(`/portfolios/${created.id}`);
-    },
-    onError: (err) => {
-      toast({
-        title: 'Couldn\'t create portfolio',
-        description: err.message,
-        variant: 'destructive',
-      });
-    },
-  });
-
-  const deleteMutation = useMutation<void, Error, number>({
-    mutationFn: async (id) => {
-      await apiRequest('DELETE', `/api/portfolios/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/portfolios'] });
-      setDeleteDialogOpen(false);
-      setPortfolioToDelete(null);
-      toast({
-        title: 'Portfolio deleted',
-      });
-    },
-    onError: (err) => {
-      toast({
-        title: 'Deletion failed',
-        description: err.message,
-        variant: 'destructive',
-      });
-    },
-  });
-
-  const handleOpenPortfolio = useCallback((id: number) => {
-    setSelectedPortfolioId(id);
-    setDetailSheetOpen(true);
-    posthog?.capture('portfolio_opened', { portfolioId: id });
-  }, [posthog]);
-
-  const handleDeletePortfolio = useCallback((id: number) => {
-    setPortfolioToDelete(id);
-    setDeleteDialogOpen(true);
-  }, []);
-
-  const handleCreatePortfolio = useCallback(() => {
-    if (!newPortfolioName.trim()) {
-      toast({
-        title: 'Portfolio name required',
-        variant: 'destructive',
-      });
-      return;
-    }
-    createMutation.mutate({
-      name: newPortfolioName.trim(),
-      description: newPortfolioDescription.trim() || undefined,
-    });
-  }, [newPortfolioName, newPortfolioDescription, createMutation, toast]);
-
-  useEffect(() => {
-    if (isLoading) {
-      const loadingNodes: Node[] = Array.from({ length: 3 }, (_, i) => ({
-        id: `loading-${i}`,
-        type: 'default',
-        position: { x: (i % 3) * 340 + 50, y: Math.floor(i / 3) * 240 + 50 },
-        data: {},
-        draggable: false,
-      }));
-      setNodes(loadingNodes);
-      setEdges([]);
-    } else if (portfolios.length === 0) {
-      setNodes([]);
-      setEdges([]);
-    } else {
-      const portfolioNodes: Node[] = portfolios.map((portfolio, index) => ({
-        id: String(portfolio.id),
-        type: 'portfolio',
-        position: { x: (index % 3) * 340 + 50, y: Math.floor(index / 3) * 240 + 50 },
-        data: {
-          portfolio,
-          onOpen: handleOpenPortfolio,
-          onDelete: handleDeletePortfolio,
-        },
-        draggable: true,
-      }));
-      setNodes(portfolioNodes);
-      setEdges([]);
-    }
-  }, [portfolios, isLoading, setNodes, setEdges, handleOpenPortfolio, handleDeletePortfolio]);
-
-  useEffect(() => {
-    posthog?.capture('portfolio_list_viewed', { portfolioCount: portfolios.length });
-  }, [portfolios.length, posthog]);
-
-  const selectedPortfolio = useMemo(() => {
-    return portfolios.find(p => p.id === selectedPortfolioId);
-  }, [portfolios, selectedPortfolioId]);
-
-  const handleFitView = useCallback(() => {
-    if (reactFlowInstance) {
-      reactFlowInstance.fitView({ padding: 0.2 });
-    }
-  }, [reactFlowInstance]);
-
-  return (
-    <UniversalLayout title="Portfolios">
-      <div className="relative w-full h-screen">
-        {isLoading ? (
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            nodeTypes={nodeTypes}
-            connectionLineType={ConnectionLineType.SmoothStep}
-            fitView
-            style={{
-              background: designTokens.colors.surface,
-            }}
-          >
-            <Background color={designTokens.colors.outlineVariant} gap={24} size={1} />
-          </ReactFlow>
-        ) : isError ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-              <h2 className="text-lg font-semibold text-[#2c2f30] mb-2">
-                Failed to load portfolios
-              </h2>
-              <p className="text-sm text-[#595c5d] mb-4">
-                {error instanceof Error ? error.message : 'Unknown error occurred'}
-              </p>
-              <Button
-                onClick={() => refetch()}
-                style={{
-                  background: designTokens.colors.primary,
-                  color: '#ffffff',
-                }}
-              >
-                Retry
-              </Button>
-            </div>
-          </div>
-        ) : portfolios.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <EmptyStateNode onCreate={() => {
-              setCreateDialogOpen(true);
-              posthog?.capture('create_portfolio_clicked');
-            }} />
-          </div>
-        ) : (
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            nodeTypes={nodeTypes}
-            connectionLineType={ConnectionLineType.SmoothStep}
-            fitView
-            style={{
-              background: designTokens.colors.surface,
-            }}
-          >
-            <Background color={designTokens.colors.outlineVariant} gap={24} size={1} />
-            <Controls
-              showInteractive={false}
-              style={{
-                background: designTokens.glassmorphism.background,
-                backdropFilter: designTokens.glassmorphism.backdropFilter,
-                boxShadow: designTokens.glassmorphism.shadow,
-                borderRadius: designTokens.borderRadius.default,
-                padding: '8px',
-              }}
-            />
-            <MiniMap
-              style={{
-                background: designTokens.glassmorphism.background,
-                backdropFilter: designTokens.glassmorphism.backdropFilter,
-                boxShadow: designTokens.glassmorphism.shadow,
-                borderRadius: designTokens.borderRadius.default,
-              }}
-              maskColor="rgba(106,55,212,0.1)"
-            />
-          </ReactFlow>
+    <Card className="w-[280px] p-6 bg-white/70 backdrop-blur-[16px] border-none shadow-[0_8px_32px_rgba(106,55,212,0.08)] hover:shadow-[0_12px_40px_rgba(106,55,212,0.12)] transition-shadow duration-200 rounded-xl">
+      <div className="space-y-3">
+        <h3 className="font-mono font-semibold text-lg text-[#2c2f30]">{data.name}</h3>
+        {data.description && (
+          <p className="font-mono text-sm text-[#65676b] line-clamp-2">{data.description}</p>
         )}
+        <div className="flex items-center justify-between pt-2 border-t border-[#e0e2e4]">
+          <span className="font-mono text-xs uppercase tracking-wide text-[#9ea1a5]">
+            {data.companyCount} {data.companyCount === 1 ? 'company' : 'companies'}
+          </span>
+          <Link href={`/portfolio/${data.id}`}>
+            <a className="font-mono text-xs uppercase tracking-wide text-[#6a37d4] hover:text-[#5a2fb4] transition-colors">
+              Open →
+            </a>
+          </Link>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
-        {!isLoading && (
-          <div className="absolute top-4 right-4 flex gap-2 z-10">
-            {portfolios.length > 0 && (
-              <Button
-                size="sm"
-                onClick={handleFitView}
-                style={{
-                  background: designTokens.glassmorphism.background,
-                  backdropFilter: designTokens.glassmorphism.backdropFilter,
-                  color: designTokens.colors.primary,
-                }}
-              >
-                Fit view
-              </Button>
-            )}
+const nodeTypes = {
+  portfolio: PortfolioNodeComponent,
+};
+
+function CreatePortfolioDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const queryClient = useQueryClient();
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { name: string; description?: string }) => {
+      const response = await fetch('/api/portfolios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to create portfolio');
+      return response.json();
+    },
+    onSuccess: (newPortfolio) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/portfolios'] });
+      if (typeof window !== 'undefined' && (window as any).posthog) {
+        (window as any).posthog.capture('portfolio_created', { portfolioId: newPortfolio.id });
+      }
+      setName('');
+      setDescription('');
+      onClose();
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    createMutation.mutate({ name: name.trim(), description: description.trim() || undefined });
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-[#2c2f30]/50 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+      <div className="bg-white rounded-xl border-none shadow-xl max-w-lg w-full p-8">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="font-mono font-bold text-2xl text-[#2c2f30]">Create portfolio</h2>
+          <button
+            onClick={onClose}
+            className="text-[#65676b] hover:text-[#2c2f30] transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <Label className="font-mono text-xs uppercase tracking-wide text-[#9ea1a5]">
+              Portfolio name
+            </Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., My Ventures"
+              className="bg-[#f5f6f7] border-[#e0e2e4] rounded-xl px-4 py-3 font-mono text-base text-[#2c2f30] placeholder:text-[#9ea1a5] focus:outline-none focus:ring-2 focus:ring-[#6a37d4] focus:border-[#6a37d4] transition-all duration-150"
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="font-mono text-xs uppercase tracking-wide text-[#9ea1a5]">
+              Description (optional)
+            </Label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g., Holding company for all my projects"
+              className="bg-[#f5f6f7] border-[#e0e2e4] rounded-xl px-4 py-3 font-mono text-base text-[#2c2f30] placeholder:text-[#9ea1a5] focus:outline-none focus:ring-2 focus:ring-[#6a37d4] focus:border-[#6a37d4] transition-all duration-150 min-h-[120px]"
+            />
+          </div>
+          {createMutation.isError && (
+            <p className="font-mono text-xs text-[#d32f2f]">
+              Failed to create portfolio. Try again.
+            </p>
+          )}
+          <div className="flex space-x-4">
             <Button
-              onClick={() => {
-                setCreateDialogOpen(true);
-                posthog?.capture('create_portfolio_clicked');
-              }}
-              style={{
-                background: designTokens.colors.primary,
-                color: '#ffffff',
-              }}
+              type="submit"
+              disabled={createMutation.isPending || !name.trim()}
+              className="bg-[#6a37d4] hover:bg-[#5a2fb4] text-white font-mono font-semibold text-sm uppercase tracking-wide px-6 py-3 rounded-xl transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-[#6a37d4] focus:ring-offset-2"
             >
-              <Plus className="w-4 h-4 mr-2" />
-              Create portfolio
+              {createMutation.isPending ? 'Creating...' : 'Create portfolio'}
+            </Button>
+            <Button
+              type="button"
+              onClick={onClose}
+              className="bg-[#f5f6f7] hover:bg-[#e0e2e4] text-[#2c2f30] font-mono font-medium text-sm uppercase tracking-wide px-6 py-3 rounded-xl border border-[#e0e2e4] transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-[#6a37d4] focus:ring-offset-2"
+            >
+              Cancel
             </Button>
           </div>
-        )}
+        </form>
+      </div>
+    </div>
+  );
+}
 
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create portfolio</DialogTitle>
-              <DialogDescription>
-                Organize companies and track progress across your portfolio.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Portfolio name</Label>
-                <Input
-                  id="name"
-                  placeholder="e.g., Q1 2024 Ventures"
-                  value={newPortfolioName}
-                  onChange={(e) => setNewPortfolioName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && newPortfolioName.trim()) {
-                      handleCreatePortfolio();
-                    }
-                  }}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description (optional)</Label>
-                <Textarea
-                  id="description"
-                  placeholder="e.g., Early-stage SaaS investments"
-                  value={newPortfolioDescription}
-                  onChange={(e) => setNewPortfolioDescription(e.target.value)}
-                  rows={3}
-                />
+export default function PortfolioListPage() {
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [nodes, setNodes, onNodesChange] = useNodesState<PortfolioNode>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const { fitView, zoomIn, zoomOut } = useReactFlow();
+
+  const { data: portfolios = [], isLoading, error, refetch } = useQuery<Portfolio[]>({
+    queryKey: ['/api/portfolios'],
+    queryFn: async () => {
+      const response = await fetch('/api/portfolios', {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to load portfolios');
+      return response.json();
+    },
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).posthog) {
+      (window as any).posthog.capture('page_viewed', { portfolioCount: portfolios.length });
+    }
+  }, [portfolios.length]);
+
+  useEffect(() => {
+    if (portfolios.length > 0) {
+      const newNodes: PortfolioNode[] = portfolios.map((portfolio, index) => {
+        const cols = Math.ceil(Math.sqrt(portfolios.length));
+        const row = Math.floor(index / cols);
+        const col = index % cols;
+        return {
+          id: portfolio.id,
+          type: 'portfolio',
+          position: { x: col * 350, y: row * 250 },
+          data: portfolio,
+        };
+      });
+      setNodes(newNodes);
+    } else {
+      setNodes([]);
+    }
+  }, [portfolios, setNodes]);
+
+  const handleNodeClick = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      if (typeof window !== 'undefined' && (window as any).posthog) {
+        (window as any).posthog.capture('portfolio_opened', { portfolioId: node.id });
+      }
+    },
+    []
+  );
+
+  const handleCreateClick = useCallback(() => {
+    if (typeof window !== 'undefined' && (window as any).posthog) {
+      (window as any).posthog.capture('create_portfolio_clicked');
+    }
+    setIsCreateOpen(true);
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="h-screen w-full bg-[#fafbfc]">
+        <ReactFlow
+          nodes={[
+            {
+              id: 'skeleton-1',
+              type: 'default',
+              position: { x: 100, y: 100 },
+              data: { label: '' },
+            },
+            {
+              id: 'skeleton-2',
+              type: 'default',
+              position: { x: 450, y: 100 },
+              data: { label: '' },
+            },
+            {
+              id: 'skeleton-3',
+              type: 'default',
+              position: { x: 100, y: 350 },
+              data: { label: '' },
+            },
+          ]}
+          edges={[]}
+          connectionMode={ConnectionMode.Loose}
+          fitView
+        >
+          <Background className="bg-[#fafbfc]" gap={24} size={1} color="#e0e2e4" />
+          <Panel position="top-right" className="flex items-center space-x-2 m-4">
+            <div className="w-24 h-10 bg-[#f5f6f7] rounded-xl animate-pulse" />
+            <div className="w-10 h-10 bg-[#f5f6f7] rounded-xl animate-pulse" />
+            <div className="w-10 h-10 bg-[#f5f6f7] rounded-xl animate-pulse" />
+            <div className="w-10 h-10 bg-[#f5f6f7] rounded-xl animate-pulse" />
+          </Panel>
+        </ReactFlow>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="h-screen w-full bg-[#fafbfc] flex items-center justify-center">
+        <div className="bg-white rounded-xl border-none shadow-sm p-12 text-center max-w-md">
+          <p className="font-mono text-sm text-[#d32f2f] mb-6">
+            Failed to load portfolios. Retry or refresh the page.
+          </p>
+          <Button
+            onClick={() => refetch()}
+            className="bg-[#6a37d4] hover:bg-[#5a2fb4] text-white font-mono font-semibold text-sm uppercase tracking-wide px-6 py-3 rounded-xl transition-colors duration-150"
+          >
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (portfolios.length === 0) {
+    return (
+      <>
+        <div className="h-screen w-full bg-[#fafbfc]">
+          <ReactFlow
+            nodes={[]}
+            edges={[]}
+            connectionMode={ConnectionMode.Loose}
+            fitView
+          >
+            <Background className="bg-[#fafbfc]" gap={24} size={1} color="#e0e2e4" />
+            <Panel position="top-right" className="flex items-center space-x-2 m-4">
+              <Button
+                onClick={handleCreateClick}
+                className="bg-[#6a37d4] hover:bg-[#5a2fb4] text-white font-mono font-semibold text-sm uppercase tracking-wide px-6 py-3 rounded-xl transition-colors duration-150 flex items-center space-x-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create portfolio</span>
+              </Button>
+            </Panel>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="bg-white rounded-xl border-none shadow-sm p-12 text-center pointer-events-auto">
+                <div className="font-mono text-4xl text-[#9ea1a5] mb-4">—</div>
+                <h3 className="font-mono font-semibold text-lg text-[#2c2f30] mb-2">
+                  No portfolios yet
+                </h3>
+                <p className="font-mono text-sm text-[#65676b] mb-6">
+                  Create your first portfolio to organize your companies.
+                </p>
+                <Button
+                  onClick={handleCreateClick}
+                  className="bg-[#6a37d4] hover:bg-[#5a2fb4] text-white font-mono font-semibold text-sm uppercase tracking-wide px-6 py-3 rounded-xl transition-colors duration-150"
+                >
+                  Create portfolio
+                </Button>
               </div>
             </div>
-            <DialogFooter>
-              <Button
-                variant="ghost"
-                onClick={() => setCreateDialogOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleCreatePortfolio}
-                disabled={!newPortfolioName.trim() || createMutation.isPending}
-                style={{
-                  background: designTokens.colors.primary,
-                  color: '#ffffff',
-                }}
-              >
-                {createMutation.isPending ? 'Creating...' : 'Create portfolio'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          </ReactFlow>
+        </div>
+        <CreatePortfolioDialog isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} />
+      </>
+    );
+  }
 
-        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Delete portfolio?</DialogTitle>
-              <DialogDescription>
-                This will remove the portfolio and all its associations. Companies will not be deleted. This cannot be undone.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="ghost"
-                onClick={() => setDeleteDialogOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  if (portfolioToDelete !== null) {
-                    deleteMutation.mutate(portfolioToDelete);
-                  }
-                }}
-                disabled={deleteMutation.isPending}
-                style={{
-                  background: '#dc2626',
-                  color: '#ffffff',
-                }}
-              >
-                {deleteMutation.isPending ? 'Deleting...' : 'Delete portfolio'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        <Sheet open={detailSheetOpen} onOpenChange={setDetailSheetOpen}>
-          <SheetContent side="right" className="w-full sm:max-w-md">
-            {selectedPortfolio && (
-              <>
-                <SheetHeader>
-                  <SheetTitle>{selectedPortfolio.name}</SheetTitle>
-                  {selectedPortfolio.description && (
-                    <SheetDescription>{selectedPortfolio.description}</SheetDescription>
-                  )}
-                </SheetHeader>
-                <div className="mt-6 space-y-4">
-                  <div>
-                    <div className="text-sm font-medium text-[#595c5d] mb-1">
-                      Created
-                    </div>
-                    <div className="text-sm text-[#2c2f30]">
-                      {selectedPortfolio.createdAt
-                        ? new Date(selectedPortfolio.createdAt).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                          })
-                        : 'Unknown'}
-                    </div>
-                  </div>
-                  <Button
-                    onClick={() => {
-                      navigate(`/portfolios/${selectedPortfolio.id}`);
-                    }}
-                    className="w-full mt-6"
-                    style={{
-                      background: designTokens.colors.primary,
-                      color: '#ffffff',
-                    }}
-                  >
-                    Open portfolio
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </div>
-              </>
-            )}
-          </SheetContent>
-        </Sheet>
+  return (
+    <>
+      <div className="h-screen w-full bg-[#fafbfc]">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeClick={handleNodeClick}
+          nodeTypes={nodeTypes}
+          connectionMode={ConnectionMode.Loose}
+          fitView
+          minZoom={0.5}
+          maxZoom={1.5}
+        >
+          <Background className="bg-[#fafbfc]" gap={24} size={1} color="#e0e2e4" />
+          <Panel position="top-right" className="flex items-center space-x-2 m-4">
+            <Button
+              onClick={handleCreateClick}
+              className="bg-[#6a37d4] hover:bg-[#5a2fb4] text-white font-mono font-semibold text-sm uppercase tracking-wide px-6 py-3 rounded-xl transition-colors duration-150 flex items-center space-x-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create portfolio</span>
+            </Button>
+            <Button
+              onClick={() => fitView({ padding: 0.2, duration: 200 })}
+              className="bg-white/70 backdrop-blur-[16px] hover:bg-white/90 text-[#2c2f30] border-none shadow-[0_8px_32px_rgba(106,55,212,0.08)] font-mono font-medium text-sm uppercase tracking-wide p-3 rounded-xl transition-all duration-150"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </Button>
+            <Button
+              onClick={() => zoomIn({ duration: 200 })}
+              className="bg-white/70 backdrop-blur-[16px] hover:bg-white/90 text-[#2c2f30] border-none shadow-[0_8px_32px_rgba(106,55,212,0.08)] font-mono font-medium text-sm uppercase tracking-wide p-3 rounded-xl transition-all duration-150"
+            >
+              <ZoomIn className="w-4 h-4" />
+            </Button>
+            <Button
+              onClick={() => zoomOut({ duration: 200 })}
+              className="bg-white/70 backdrop-blur-[16px] hover:bg-white/90 text-[#2c2f30] border-none shadow-[0_8px_32px_rgba(106,55,212,0.08)] font-mono font-medium text-sm uppercase tracking-wide p-3 rounded-xl transition-all duration-150"
+            >
+              <ZoomOut className="w-4 h-4" />
+            </Button>
+          </Panel>
+        </ReactFlow>
       </div>
-    </UniversalLayout>
+      <CreatePortfolioDialog isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} />
+    </>
   );
 }
