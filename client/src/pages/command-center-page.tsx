@@ -1,573 +1,402 @@
-import { Link, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
-import {
-  Workflow,
-  Users,
-  Building2,
-  Plus,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  ChevronRight,
-  Loader2,
-  RefreshCw,
-  ListTodo,
-  FileText,
-  Network,
-  Home,
-  CheckSquare,
-  Settings,
-  MessageSquare,
-} from "lucide-react";
-import { UniversalLayout } from "@/components/layout/universal-layout";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link, useParams } from "wouter";
+import { Plus, AlertCircle, CheckCircle2, Clock, Users, Workflow, BarChart3 } from "lucide-react";
+import { UniversalLayout } from "@/components/universal-layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/queryClient";
-import type { Company, Task } from "@shared/schema";
 
-interface WorkflowSummary {
+interface Company {
   id: string;
   name: string;
-  status?: string | null;
+  stage?: string;
+  industry?: string;
 }
 
-interface CommandCenterProps {
-  params: {
-    companyId: string;
+interface Task {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  assigneeId?: string;
+  assigneeName?: string;
+  createdAt: string;
+}
+
+interface WorkflowInstance {
+  id: string;
+  name: string;
+  status: string;
+  currentStep?: string;
+  progress?: number;
+}
+
+interface Department {
+  id: string;
+  name: string;
+}
+
+interface Role {
+  id: string;
+  name: string;
+  departmentId: string;
+}
+
+interface Alert {
+  id: string;
+  type: string;
+  message: string;
+  createdAt: string;
+}
+
+export default function CommandCenterPage() {
+  const params = useParams<{ companyId: string }>();
+  const companyId = params.companyId ?? "";
+  const queryClient = useQueryClient();
+  const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
+
+  const { data: company, isLoading: companyLoading, error: companyError } = useQuery<Company>({
+    queryKey: ["/api/companies", companyId],
+    queryFn: async () => { const r = await apiRequest("GET", `/api/companies/${companyId}`); return r.json(); },
+    enabled: !!companyId,
+  });
+
+  const { data: tasksData = [], isLoading: tasksLoading, error: tasksError } = useQuery<Task[]>({
+    queryKey: ["/api/companies", companyId, "tasks"],
+    queryFn: async () => { const r = await apiRequest("GET", `/api/companies/${companyId}/tasks`); return r.json(); },
+    enabled: !!companyId,
+  });
+
+  const { data: workflowsData = [], isLoading: workflowsLoading, error: workflowsError } = useQuery<WorkflowInstance[]>({
+    queryKey: ["/api/companies", companyId, "workflows"],
+    queryFn: async () => { const r = await apiRequest("GET", `/api/companies/${companyId}/workflows`); return r.json(); },
+    enabled: !!companyId,
+  });
+
+  const { data: departmentsData = [], isLoading: departmentsLoading, error: departmentsError } = useQuery<Department[]>({
+    queryKey: ["/api/companies", companyId, "departments"],
+    queryFn: async () => { const r = await apiRequest("GET", `/api/companies/${companyId}/departments`); return r.json(); },
+    enabled: !!companyId,
+  });
+
+  const { data: rolesData = [], isLoading: rolesLoading, error: rolesError } = useQuery<Role[]>({
+    queryKey: ["/api/companies", companyId, "roles"],
+    queryFn: async () => { const r = await apiRequest("GET", `/api/companies/${companyId}/roles`); return r.json(); },
+    enabled: !!companyId,
+  });
+
+  const tasks = Array.isArray(tasksData) ? tasksData : [];
+  const workflows = Array.isArray(workflowsData) ? workflowsData : [];
+  const departments = Array.isArray(departmentsData) ? departmentsData : [];
+  const roles = Array.isArray(rolesData) ? rolesData : [];
+
+  const taskCount = tasks.length;
+  const activeWorkflowCount = workflows.filter(w => w.status === "active" || w.status === "in_progress").length;
+  const departmentCount = departments.length;
+  const roleCount = roles.length;
+
+  const recentTasks = tasks.slice(0, 5);
+  const activeWorkflows = workflows.filter(w => w.status === "active" || w.status === "in_progress").slice(0, 5);
+
+  const alerts: Alert[] = workflows
+    .filter(w => w.status === "blocked" || w.status === "needs_review")
+    .map(w => ({
+      id: w.id,
+      type: w.status === "blocked" ? "warning" : "info",
+      message: `Workflow "${w.name}" ${w.status === "blocked" ? "is blocked" : "needs review"}`,
+      createdAt: new Date().toISOString(),
+    }))
+    .filter(a => !dismissedAlerts.includes(a.id));
+
+  const isLoading = companyLoading || tasksLoading || workflowsLoading || departmentsLoading || rolesLoading;
+  const hasError = companyError || tasksError || workflowsError || departmentsError || rolesError;
+
+  const handleDismissAlert = (alertId: string) => {
+    setDismissedAlerts(prev => [...prev, alertId]);
   };
+
+  if (hasError) {
+    return (
+      <UniversalLayout>
+        <div className="flex items-center justify-center min-h-screen">
+          <Card className="p-8 max-w-md w-full text-center">
+            <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
+            <h2 className="font-mono font-semibold text-xl text-text mb-2">Failed to load command center data</h2>
+            <p className="font-mono text-sm text-text-secondary mb-6">Retry or refresh the page.</p>
+            <Button
+              onClick={() => {
+                queryClient.invalidateQueries({ queryKey: ["/api/companies", companyId] });
+              }}
+            >
+              Retry
+            </Button>
+          </Card>
+        </div>
+      </UniversalLayout>
+    );
+  }
+
+  const isEmpty = taskCount === 0 && activeWorkflowCount === 0 && departmentCount === 0;
+
+  return (
+    <UniversalLayout showRightRail={true}>
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="font-mono font-bold text-4xl text-text mb-2">Command center</h1>
+            {company && (
+              <p className="font-mono text-sm text-text-secondary">
+                {company.name} {company.stage && `• ${company.stage}`}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center space-x-3">
+            <Link href={`/company/${companyId}/tasks/new`}>
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Create task
+              </Button>
+            </Link>
+            <Link href={`/company/${companyId}/workflows/new`}>
+              <Button variant="secondary">
+                <Plus className="w-4 h-4 mr-2" />
+                Create workflow
+              </Button>
+            </Link>
+            <Link href={`/company/${companyId}/org`}>
+              <Button variant="secondary">View org chart</Button>
+            </Link>
+          </div>
+        </div>
+
+        {isEmpty && !isLoading && (
+          <Card className="p-12 text-center">
+            <div className="font-mono text-4xl text-text-tertiary mb-4">—</div>
+            <h3 className="font-mono font-semibold text-lg text-text mb-2">New company</h3>
+            <p className="font-mono text-sm text-text-secondary mb-6">
+              Add your first task, create a workflow, or set up your org chart to get started.
+            </p>
+            <div className="flex items-center justify-center space-x-3">
+              <Link href={`/company/${companyId}/tasks/new`}>
+                <Button>Create task</Button>
+              </Link>
+              <Link href={`/company/${companyId}/workflows/new`}>
+                <Button variant="secondary">Create workflow</Button>
+              </Link>
+              <Link href={`/company/${companyId}/org`}>
+                <Button variant="secondary">Set up org chart</Button>
+              </Link>
+            </div>
+          </Card>
+        )}
+
+        {!isEmpty && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <KPICard
+                icon={<CheckCircle2 className="w-5 h-5" />}
+                label="Tasks"
+                value={taskCount}
+                isLoading={isLoading}
+                linkTo={`/company/${companyId}/tasks`}
+              />
+              <KPICard
+                icon={<Workflow className="w-5 h-5" />}
+                label="Active workflows"
+                value={activeWorkflowCount}
+                isLoading={isLoading}
+                linkTo={`/company/${companyId}/workflows`}
+              />
+              <KPICard
+                icon={<BarChart3 className="w-5 h-5" />}
+                label="Departments"
+                value={departmentCount}
+                isLoading={isLoading}
+                linkTo={`/company/${companyId}/org`}
+              />
+              <KPICard
+                icon={<Users className="w-5 h-5" />}
+                label="Roles"
+                value={roleCount}
+                isLoading={isLoading}
+                linkTo={`/company/${companyId}/org`}
+              />
+            </div>
+
+            {alerts.length > 0 && (
+              <Card className="p-6">
+                <h2 className="font-mono font-semibold text-lg text-text mb-4">Alerts</h2>
+                <div className="space-y-3">
+                  {alerts.map(alert => (
+                    <div
+                      key={alert.id}
+                      className="flex items-start justify-between p-4 bg-surface-subtle rounded-md border border-border-subtle"
+                    >
+                      <div className="flex items-start space-x-3">
+                        <AlertCircle className={`w-5 h-5 flex-shrink-0 ${alert.type === "warning" ? "text-warning" : "text-primary"}`} />
+                        <div>
+                          <p className="font-mono text-sm text-text">{alert.message}</p>
+                          <p className="font-mono text-xs text-text-tertiary mt-1">
+                            {new Date(alert.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDismissAlert(alert.id)}
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="font-mono font-semibold text-lg text-text">Active workflows</h2>
+                  <Link href={`/company/${companyId}/workflows`}>
+                    <Button variant="ghost" size="sm">View all</Button>
+                  </Link>
+                </div>
+                {isLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="bg-surface-subtle rounded-md h-20 animate-pulse" />
+                    ))}
+                  </div>
+                ) : activeWorkflows.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="font-mono text-sm text-text-secondary">No active workflows</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {activeWorkflows.map(workflow => (
+                      <Link key={workflow.id} href={`/company/${companyId}/workflows/${workflow.id}`}>
+                        <div className="p-4 bg-surface-subtle rounded-md border border-border-subtle hover:bg-surface hover:border-border transition-all cursor-pointer">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h3 className="font-mono font-medium text-sm text-text mb-1">{workflow.name}</h3>
+                              {workflow.currentStep && (
+                                <p className="font-mono text-xs text-text-secondary">Current: {workflow.currentStep}</p>
+                              )}
+                            </div>
+                            <Badge variant={workflow.status === "active" ? "default" : "secondary"}>
+                              {workflow.status}
+                            </Badge>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </Card>
+
+              <Card className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="font-mono font-semibold text-lg text-text">Recent tasks</h2>
+                  <Link href={`/company/${companyId}/tasks`}>
+                    <Button variant="ghost" size="sm">View all</Button>
+                  </Link>
+                </div>
+                {isLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="bg-surface-subtle rounded-md h-20 animate-pulse" />
+                    ))}
+                  </div>
+                ) : recentTasks.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="font-mono text-sm text-text-secondary">No tasks yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {recentTasks.map(task => (
+                      <Link key={task.id} href={`/company/${companyId}/tasks/${task.id}`}>
+                        <div className="p-4 bg-surface-subtle rounded-md border border-border-subtle hover:bg-surface hover:border-border transition-all cursor-pointer">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h3 className="font-mono font-medium text-sm text-text mb-1">{task.title}</h3>
+                              {task.assigneeName && (
+                                <p className="font-mono text-xs text-text-secondary">Assigned to: {task.assigneeName}</p>
+                              )}
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Badge variant={getPriorityVariant(task.priority)}>{task.priority}</Badge>
+                              <Badge variant={getStatusVariant(task.status)}>{task.status}</Badge>
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </div>
+          </>
+        )}
+      </div>
+    </UniversalLayout>
+  );
 }
 
 interface KPICardProps {
   icon: React.ReactNode;
   label: string;
-  value: number | string;
-  trend?: string;
-  isLoading?: boolean;
-  onClick?: () => void;
+  value: number;
+  isLoading: boolean;
+  linkTo: string;
 }
 
-function KPICardSkeleton() {
-  return (
-    <div className="bg-white p-8 rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] animate-pulse">
-      <div className="flex items-start justify-between mb-6">
-        <div className="w-12 h-12 bg-[#eff1f2] rounded-xl" />
-        <div className="w-8 h-4 bg-[#eff1f2] rounded" />
-      </div>
-      <div className="h-8 w-20 bg-[#eff1f2] rounded mb-2" />
-      <div className="h-4 w-24 bg-[#eff1f2] rounded" />
-    </div>
-  );
-}
-
-function KPICard({ icon, label, value, trend, isLoading, onClick }: KPICardProps) {
-  return (
-    <Card
-      className="bg-white p-8 rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] transition-all duration-200 hover:bg-[rgba(255,255,255,0.7)] hover:backdrop-blur-[16px] cursor-pointer border-none"
-      onClick={onClick}
-    >
-      <div className="flex items-start justify-between mb-6">
-        <div className="w-12 h-12 bg-[#f5f6f7] rounded-xl flex items-center justify-center text-[#6a37d4]">
-          {icon}
-        </div>
-        {trend && (
-          <span className="text-xs uppercase tracking-[0.05em] text-[#595c5d]">{trend}</span>
-        )}
-      </div>
-      <div className="text-4xl font-semibold text-[#2c2f30] mb-2">
-        {isLoading ? <Loader2 className="h-8 w-8 animate-spin text-slate-300" /> : value}
-      </div>
-      <div className="text-xs uppercase tracking-[0.05em] text-[#595c5d]">{label}</div>
-    </Card>
-  );
-}
-
-function WorkflowListItem({ workflow, companyId }: { workflow: WorkflowSummary; companyId: string }) {
-  const status = workflow.status ?? "active";
-  const statusConfig: Record<string, { label: string; color: string }> = {
-    active: { label: "In Progress", color: "#6a37d4" },
-    paused: { label: "Paused", color: "#595c5d" },
-    completed: { label: "Completed", color: "#6a37d4" },
-  };
-
-  const config = statusConfig[status] ?? statusConfig.active;
-
-  return (
-    <Link href={`/company/${companyId}/workflows`}>
-      <div className="p-6 bg-white hover:bg-[#f5f6f7] transition-colors duration-150 cursor-pointer first:rounded-t-xl last:rounded-b-xl">
-        <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <h4 className="font-semibold text-[#2c2f30] mb-1">{workflow.name}</h4>
-          </div>
-          <div className="flex items-center gap-4">
-            <span
-              className="text-xs uppercase tracking-[0.05em] px-3 py-1 rounded-xl"
-              style={{ color: config.color, backgroundColor: `${config.color}15` }}
-            >
-              {config.label}
-            </span>
-            <ChevronRight className="w-5 h-5 text-[#abadae]" />
-          </div>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-function TaskListItem({ task, companyId }: { task: Task; companyId: string }) {
-  const statusConfig: Record<string, { label: string; color: string }> = {
-    backlog: { label: "Backlog", color: "#595c5d" },
-    in_progress: { label: "In Progress", color: "#6a37d4" },
-    in_review: { label: "In Review", color: "#6448b2" },
-    done: { label: "Done", color: "#6a37d4" },
-  };
-
-  const priorityConfig: Record<string, { icon: typeof AlertCircle; color: string }> = {
-    critical: { icon: AlertCircle, color: "#6a37d4" },
-    high: { icon: AlertCircle, color: "#6448b2" },
-    medium: { icon: Clock, color: "#595c5d" },
-    low: { icon: Clock, color: "#abadae" },
-  };
-
-  const status = statusConfig[task.status ?? "backlog"] ?? statusConfig.backlog;
-  const priority = priorityConfig[task.priority ?? "medium"] ?? priorityConfig.medium;
-  const PriorityIcon = priority.icon;
-
-  return (
-    <Link href={`/company/${companyId}/tasks`}>
-      <div className="p-6 bg-white hover:bg-[#f5f6f7] transition-colors duration-150 cursor-pointer first:rounded-t-xl last:rounded-b-xl">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 flex-1">
-            <PriorityIcon className="w-4 h-4" style={{ color: priority.color }} />
-            <span className="font-medium text-[#2c2f30]">{task.title}</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span
-              className="text-xs uppercase tracking-[0.05em] px-3 py-1 rounded-xl"
-              style={{ color: status.color, backgroundColor: `${status.color}15` }}
-            >
-              {status.label}
-            </span>
-            <ChevronRight className="w-5 h-5 text-[#abadae]" />
-          </div>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-function EmptyStateCard({
-  icon: Icon,
-  title,
-  description,
-  actionLabel,
-  actionHref,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  description: string;
-  actionLabel: string;
-  actionHref: string;
-}) {
-  return (
-    <div className="bg-white p-8 rounded-xl text-center">
-      <div className="w-16 h-16 bg-[#f5f6f7] rounded-xl flex items-center justify-center mx-auto mb-6">
-        <Icon className="w-8 h-8 text-[#6a37d4]" />
-      </div>
-      <h3 className="font-semibold text-lg text-[#2c2f30] mb-2">{title}</h3>
-      <p className="text-sm text-[#595c5d] mb-6 leading-relaxed max-w-md mx-auto">
-        {description}
-      </p>
-      <Link href={actionHref}>
-        <Button className="bg-[#6a37d4] text-white hover:bg-[#5a2dc0] rounded-xl">
-          {actionLabel}
-        </Button>
-      </Link>
-    </div>
-  );
-}
-
-function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
-  return (
-    <div className="bg-white p-8 rounded-xl text-center">
-      <AlertCircle className="w-12 h-12 text-[#6a37d4] mx-auto mb-4" />
-      <h3 className="font-semibold text-lg text-[#2c2f30] mb-2">Failed to load data</h3>
-      <p className="text-sm text-[#595c5d] mb-6">{error.message}</p>
-      <Button
-        onClick={onRetry}
-        className="bg-[#6a37d4] text-white hover:bg-[#5a2dc0] rounded-xl"
-      >
-        <RefreshCw className="w-4 h-4 mr-2" />
-        Retry
-      </Button>
-    </div>
-  );
-}
-
-export default function CommandCenter({ params }: CommandCenterProps) {
-  const [, navigate] = useLocation();
-  const companyId = params.companyId;
-
-  const {
-    data: company,
-    isLoading: companyLoading,
-    error: companyError,
-    refetch: companyRefetch,
-  } = useQuery<Company, Error>({
-    queryKey: ["/api/company"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/company");
-      return (await res.json()) as Company;
-    },
-  });
-
-  const {
-    data: tasks,
-    isLoading: tasksLoading,
-    isError: tasksError,
-    error: tasksErrorObj,
-    refetch: tasksRefetch,
-  } = useQuery<Task[], Error>({
-    queryKey: ["/api/tasks"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/tasks");
-      return (await res.json()) as Task[];
-    },
-  });
-
-  const {
-    data: workflows,
-    isLoading: workflowsLoading,
-    isError: workflowsError,
-    error: workflowsErrorObj,
-    refetch: workflowsRefetch,
-  } = useQuery<WorkflowSummary[], Error>({
-    queryKey: ["/api/workflows"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/workflows");
-      return (await res.json()) as WorkflowSummary[];
-    },
-  });
-
-  const companyName = company?.name ?? "Company";
-
-  const leftRailItems = [
-    {
-      icon: Home,
-      label: "Home",
-      href: `/company/${companyId}`,
-      active: true,
-    },
-    {
-      icon: CheckSquare,
-      label: "Tasks",
-      href: `/company/${companyId}/tasks`,
-      active: false,
-    },
-    {
-      icon: Workflow,
-      label: "Workflows",
-      href: `/company/${companyId}/workflows`,
-      active: false,
-    },
-    {
-      icon: Building2,
-      label: "Org",
-      href: `/company/${companyId}/org`,
-      active: false,
-    },
-    {
-      icon: MessageSquare,
-      label: "Chat",
-      href: `/company/${companyId}/chat`,
-      active: false,
-    },
-    {
-      icon: Settings,
-      label: "Settings",
-      href: `/settings`,
-      active: false,
-    },
-  ];
-
-  const openTaskCount = tasks?.filter((t) => t.status !== "done").length ?? 0;
-  const activeWorkflowCount =
-    workflows?.filter((w) => w.status !== "paused").length ?? 0;
-  const recentTasks = (tasks ?? []).filter((t) => t.status !== "done").slice(0, 5);
-  const activeWorkflows = (workflows ?? []).filter((w) => w.status !== "paused");
-
-  const isNewCompany = !tasksLoading && !workflowsLoading && openTaskCount === 0 && activeWorkflowCount === 0;
-
-  if (companyLoading) {
+function KPICard({ icon, label, value, isLoading, linkTo }: KPICardProps) {
+  if (isLoading) {
     return (
-      <UniversalLayout
-        title="Command Center"
-        leftRailItems={leftRailItems}
-        companyName={companyName}
-      >
-        <div className="flex items-center justify-center min-h-screen">
-          <Loader2 className="w-8 h-8 text-[#6a37d4] animate-spin" />
-        </div>
-      </UniversalLayout>
-    );
-  }
-
-  if (companyError && !companyLoading) {
-    return (
-      <UniversalLayout
-        title="Command Center"
-        leftRailItems={leftRailItems}
-        companyName={companyName}
-      >
-        <div className="max-w-4xl mx-auto pt-24 px-6">
-          <ErrorState error={companyError} onRetry={() => companyRefetch()} />
-          <div className="text-center mt-4">
-            <Link
-              href="/portfolios"
-              className="text-sm text-[#6a37d4] underline"
-            >
-              Back to portfolios
-            </Link>
-          </div>
-        </div>
-      </UniversalLayout>
+      <Card className="p-6">
+        <div className="bg-surface-subtle rounded-md h-20 animate-pulse" />
+      </Card>
     );
   }
 
   return (
-    <UniversalLayout
-      title="Command Center"
-      leftRailItems={leftRailItems}
-      companyName={companyName}
-    >
-      <div className="min-h-screen bg-white">
-        <div className="max-w-7xl mx-auto px-6 py-12 lg:px-12">
-          <div className="mb-12">
-            <h1 className="text-4xl font-semibold text-[#2c2f30] mb-2 tracking-tight">
-              Command Center
-            </h1>
-            <p className="text-[#595c5d]">{companyName}</p>
-            {company?.stage && (
-              <p className="text-sm text-slate-400 mt-2">
-                {company.stage}
-                {company.type && ` \u2022 ${company.type}`}
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-12">
-            <section>
-              <h2 className="text-xs uppercase tracking-[0.05em] text-[#595c5d] mb-6">
-                Overview
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <KPICard
-                  icon={<ListTodo className="w-6 h-6" />}
-                  label="Open Tasks"
-                  value={openTaskCount}
-                  isLoading={tasksLoading}
-                  onClick={() => navigate(`/company/${companyId}/tasks`)}
-                />
-                <KPICard
-                  icon={<Workflow className="w-6 h-6" />}
-                  label="Active Workflows"
-                  value={activeWorkflowCount}
-                  isLoading={workflowsLoading}
-                  onClick={() => navigate(`/company/${companyId}/workflows`)}
-                />
-                <KPICard
-                  icon={<Building2 className="w-6 h-6" />}
-                  label="Stage"
-                  value={company?.stage ?? "\u2014"}
-                  onClick={() => navigate(`/company/${companyId}/org`)}
-                />
-                <KPICard
-                  icon={<MessageSquare className="w-6 h-6" />}
-                  label="Assistant"
-                  value={company?.assistantName ?? "OS-1"}
-                  onClick={() => navigate(`/company/${companyId}/chat`)}
-                />
-              </div>
-            </section>
-
-            {isNewCompany ? (
-              <section>
-                <h2 className="text-xs uppercase tracking-[0.05em] text-[#595c5d] mb-6">
-                  Get Started
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <EmptyStateCard
-                    icon={ListTodo}
-                    title="Add your first task"
-                    description="Start tracking work. Create a task and assign it to your team or your assistant."
-                    actionLabel="Create task"
-                    actionHref={`/company/${companyId}/tasks`}
-                  />
-                  <EmptyStateCard
-                    icon={FileText}
-                    title="Create a workflow"
-                    description="Codify how your company works. Write a workflow once, run it repeatedly."
-                    actionLabel="Create workflow"
-                    actionHref={`/company/${companyId}/workflows`}
-                  />
-                  <EmptyStateCard
-                    icon={Network}
-                    title="Set up your org chart"
-                    description="Define your company structure. Assign roles to humans or AI agents."
-                    actionLabel="Build org chart"
-                    actionHref={`/company/${companyId}/org`}
-                  />
-                </div>
-              </section>
-            ) : (
-              <>
-                <section>
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xs uppercase tracking-[0.05em] text-[#595c5d]">
-                      Active Workflows
-                    </h2>
-                    <Link href={`/company/${companyId}/workflows`}>
-                      <Button
-                        variant="ghost"
-                        className="text-[#6a37d4] hover:bg-[#f5f6f7] rounded-xl"
-                      >
-                        View all
-                        <ChevronRight className="w-4 h-4 ml-1" />
-                      </Button>
-                    </Link>
-                  </div>
-                  {workflowsLoading ? (
-                    <div className="bg-white rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] animate-pulse">
-                      <div className="p-6 space-y-4">
-                        <div className="h-12 bg-[#eff1f2] rounded" />
-                        <div className="h-12 bg-[#eff1f2] rounded" />
-                        <div className="h-12 bg-[#eff1f2] rounded" />
-                      </div>
-                    </div>
-                  ) : workflowsError && workflowsErrorObj ? (
-                    <ErrorState
-                      error={workflowsErrorObj}
-                      onRetry={() => workflowsRefetch()}
-                    />
-                  ) : activeWorkflows.length === 0 ? (
-                    <div className="bg-white p-8 rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] text-center">
-                      <Workflow className="w-12 h-12 text-[#abadae] mx-auto mb-4" />
-                      <p className="text-sm text-[#595c5d] mb-6">
-                        No active workflows. Create your first workflow to automate work.
-                      </p>
-                      <Link href={`/company/${companyId}/workflows`}>
-                        <Button className="bg-[#6a37d4] text-white hover:bg-[#5a2dc0] rounded-xl">
-                          <Plus className="w-4 h-4 mr-2" />
-                          Create workflow
-                        </Button>
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="bg-white rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] overflow-hidden">
-                      {activeWorkflows.slice(0, 3).map((workflow) => (
-                        <WorkflowListItem key={workflow.id} workflow={workflow} companyId={companyId} />
-                      ))}
-                    </div>
-                  )}
-                </section>
-
-                <section>
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xs uppercase tracking-[0.05em] text-[#595c5d]">
-                      Recent Tasks
-                    </h2>
-                    <Link href={`/company/${companyId}/tasks`}>
-                      <Button
-                        variant="ghost"
-                        className="text-[#6a37d4] hover:bg-[#f5f6f7] rounded-xl"
-                      >
-                        View all
-                        <ChevronRight className="w-4 h-4 ml-1" />
-                      </Button>
-                    </Link>
-                  </div>
-                  {tasksLoading ? (
-                    <div className="bg-white rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] animate-pulse">
-                      <div className="p-6 space-y-4">
-                        <div className="h-12 bg-[#eff1f2] rounded" />
-                        <div className="h-12 bg-[#eff1f2] rounded" />
-                        <div className="h-12 bg-[#eff1f2] rounded" />
-                      </div>
-                    </div>
-                  ) : tasksError && tasksErrorObj ? (
-                    <ErrorState error={tasksErrorObj} onRetry={() => tasksRefetch()} />
-                  ) : recentTasks.length === 0 ? (
-                    <div className="bg-white p-8 rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] text-center">
-                      <ListTodo className="w-12 h-12 text-[#abadae] mx-auto mb-4" />
-                      <p className="text-sm text-[#595c5d] mb-6">
-                        No tasks yet. Create your first task to start tracking work.
-                      </p>
-                      <Link href={`/company/${companyId}/tasks`}>
-                        <Button className="bg-[#6a37d4] text-white hover:bg-[#5a2dc0] rounded-xl">
-                          <Plus className="w-4 h-4 mr-2" />
-                          Create task
-                        </Button>
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="bg-white rounded-xl shadow-[0_8px_32px_rgba(106,55,212,0.08)] overflow-hidden">
-                      {recentTasks.map((task) => (
-                        <TaskListItem key={task.id} task={task} companyId={companyId} />
-                      ))}
-                    </div>
-                  )}
-                </section>
-              </>
-            )}
-
-            <section>
-              <h2 className="text-xs uppercase tracking-[0.05em] text-[#595c5d] mb-6">
-                Quick Actions
-              </h2>
-              <div className="flex flex-wrap gap-3">
-                <Button
-                  className="bg-[#6a37d4] text-white hover:bg-[#5a2dc0] rounded-xl"
-                  onClick={() => navigate(`/company/${companyId}/tasks`)}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create task
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="bg-[#f5f6f7] text-[#6a37d4] hover:bg-[#eff1f2] rounded-xl"
-                  onClick={() => navigate(`/company/${companyId}/workflows`)}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create workflow
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="bg-[#f5f6f7] text-[#6a37d4] hover:bg-[#eff1f2] rounded-xl"
-                  onClick={() => navigate(`/company/${companyId}/org`)}
-                >
-                  <Network className="w-4 h-4 mr-2" />
-                  View org chart
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="bg-[#f5f6f7] text-[#6a37d4] hover:bg-[#eff1f2] rounded-xl"
-                  onClick={() => navigate(`/company/${companyId}/chat`)}
-                >
-                  <MessageSquare className="w-4 h-4 mr-2" />
-                  Talk to {company?.assistantName ?? "OS-1"}
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="bg-[#f5f6f7] text-[#6a37d4] hover:bg-[#eff1f2] rounded-xl"
-                  onClick={() => navigate(`/settings`)}
-                >
-                  <Settings className="w-4 h-4 mr-2" />
-                  Settings
-                </Button>
-              </div>
-            </section>
-          </div>
+    <Link href={linkTo}>
+      <Card className="p-6 hover:shadow-md hover:border-border transition-all cursor-pointer">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-text-secondary">{icon}</div>
         </div>
-      </div>
-    </UniversalLayout>
+        <div className="font-mono font-bold text-3xl text-text mb-1">{value}</div>
+        <div className="font-mono text-xs uppercase tracking-wide text-text-secondary">{label}</div>
+      </Card>
+    </Link>
   );
+}
+
+function getPriorityVariant(priority: string): "default" | "secondary" | "destructive" | "outline" {
+  switch (priority.toLowerCase()) {
+    case "critical":
+      return "destructive";
+    case "high":
+      return "default";
+    default:
+      return "secondary";
+  }
+}
+
+function getStatusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
+  switch (status.toLowerCase()) {
+    case "done":
+    case "completed":
+      return "default";
+    case "in_progress":
+    case "in progress":
+      return "secondary";
+    case "blocked":
+      return "destructive";
+    default:
+      return "outline";
+  }
 }
