@@ -468,10 +468,54 @@ describe("ArtifactStore", () => {
     });
   });
 
+  describe("user-defined-constraints: set, get", () => {
+    it("stores and retrieves user constraints", () => {
+      expect(store.getUserDefinedConstraints()).toBeNull();
+
+      store.setUserDefinedConstraints({
+        explicit: { primaryColor: "#6a37d4", font: "Inter" },
+        implicit: { tone: "professional" },
+        open: ["animation style", "icon choices"],
+      });
+
+      const result = store.getUserDefinedConstraints();
+      expect(result).not.toBeNull();
+      expect(result!.explicit.primaryColor).toBe("#6a37d4");
+      expect(result!.implicit.tone).toBe("professional");
+      expect(result!.open).toHaveLength(2);
+    });
+  });
+
+  describe("creative-decisions: append, get", () => {
+    it("appends and retrieves creative decisions", () => {
+      expect(store.getCreativeDecisions()).toEqual([]);
+
+      store.appendCreativeDecision({
+        agent: "design-system",
+        decision: "Used dark mode",
+        rationale: "Product targets developers who prefer dark interfaces",
+        coherenceCheck: "Consistent with professional tone",
+      });
+
+      store.appendCreativeDecision({
+        agent: "page-agent",
+        decision: "Used card grid layout",
+        rationale: "Dashboard needs at-a-glance metrics",
+        coherenceCheck: "Fits information-dense operator product",
+      });
+
+      const decisions = store.getCreativeDecisions();
+      expect(decisions).toHaveLength(2);
+      expect(decisions[0].agent).toBe("design-system");
+      expect(decisions[1].agent).toBe("page-agent");
+    });
+  });
+
   describe("returns null for non-existent artifacts", () => {
     it("returns null for every getter when no artifacts exist", () => {
       expect(store.getBrief()).toBeNull();
       expect(store.getProductInsights()).toBeNull();
+      expect(store.getUserDefinedConstraints()).toBeNull();
       expect(store.getExistingCodebaseAudit()).toBeNull();
       expect(store.getArchitecture()).toBeNull();
       expect(store.getDesignSystem()).toBeNull();

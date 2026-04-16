@@ -3,6 +3,8 @@
 // Runs agents in waves with dependency ordering, manages build state, and reports
 // progress to both console and browser overlay.
 
+import Anthropic from "@anthropic-ai/sdk";
+import { getAnthropicApiKey, getAnthropicBaseUrl } from "../env.js";
 import type {
   ProjectBrief,
   ProductInsights,
@@ -18,6 +20,7 @@ import type {
   PageOutput,
   BackendRoute,
   PreFlightResult,
+  UserDefinedConstraints,
 } from "./types.js";
 import { execSync } from "node:child_process";
 import fs from "node:fs";
@@ -140,8 +143,14 @@ export class PMOrchestrator {
     }
     this.log("preflight", "complete", "All pre-flight checks passed");
 
-    // 1. Persist brief and initialize build state
+    // 1. Persist brief, extract user constraints, and initialize build state
     this.store.setBrief(brief);
+    const constraints = this.extractUserConstraints(brief);
+    this.store.setUserDefinedConstraints(constraints);
+    this.log("constraints", "complete",
+      `Extracted ${Object.keys(constraints.explicit).length} explicit, ` +
+      `${Object.keys(constraints.implicit).length} implicit, ` +
+      `${constraints.open.length} open areas`);
     this.initBuildState(brief);
 
     // Start live preview server
@@ -194,10 +203,18 @@ export class PMOrchestrator {
         return this.buildFailedResult(errors);
       }
 
-      // FIX 5: Verify design system used the correct tokens
+      // Verify design system used the correct tokens
       const dsVerification = this.verifyDesignSystem();
       if (!dsVerification.passed) {
         this.log("design-system", "warning", `Design system verification issues: ${dsVerification.issues.join("; ")}`);
+      }
+
+      // Coherence review after wave 2
+      const coherenceResult = await this.reviewWaveCoherence(2);
+      if (!coherenceResult.coherent) {
+        for (const issue of coherenceResult.issues) {
+          this.log("coherence", "warning", `Wave 2 coherence issue: ${issue}`);
+        }
       }
 
       // ── Wave 3: Copy + Component Library (parallel) ─────────────────────
@@ -505,6 +522,118 @@ export class PMOrchestrator {
   }
 
   // ─── Private: Helpers ───────────────────────────────────────────────────
+
+  private extractUserConstraints(brief: ProjectBrief): UserDefinedConstraints {
+    const explicit: Record<string, string> = {};
+    const implicit: Record<string, string> = {};
+    const open: string[] = [];
+
+    // Extract explicit constraints from brief fields the user set
+    if (brief.productName) explicit.productName = brief.productName;
+
+    // Check for design-system.md — anything in there is explicit
+    const dsDocPath = path.join(this.projectRoot, ".planning", "design-system.md");
+    if (fs.existsSync(dsDocPath)) {
+      const dsDoc = fs.readFileSync(dsDocPath, "utf-8");
+      // Extract color definitions
+      const colorMatch = dsDoc.match(/primary[:\s]+([#][0-9a-fA-F]{6})/i);
+      if (colorMatch) explicit.primaryColor = colorMatch[1];
+      const fontMatch = dsDoc.match(/font[:\s]+['"]?([A-Za-z\s]+)['"]?/i);
+      if (fontMatch) explicit.font = fontMatch[1].trim();
+      // Extract any "no X" / "forbidden" rules
+      const forbiddenMatches = dsDoc.match(/(?:no|forbidden|never|disabled)[:\s]+([^\n]+)/gi);
+      if (forbiddenMatches) {
+        for (const rule of forbiddenMatches) {
+          const key = rule.replace(/[:\s]+/g, "_").slice(0, 40).toLowerCase();
+          explicit[key] = rule.trim();
+        }
+      }
+    }
+
+    // Extract from design system artifact if already generated
+    const ds = this.store.getDesignSystem();
+    if (ds) {
+      if (!explicit.primaryColor && ds.tokens.colors.primary) {
+        explicit.primaryColor = ds.tokens.colors.primary;
+      }
+      if (!explicit.font && ds.tokens.typography.fontFamily) {
+        explicit.font = ds.tokens.typography.fontFamily;
+      }
+    }
+
+    // Implicit constraints from product context
+    if (brief.productDescription) {
+      implicit.productPurpose = brief.productDescription;
+    }
+    if (brief.targetUsers.length > 0) {
+      implicit.targetUsers = brief.targetUsers.join(", ");
+    }
+    if (brief.brandVoice) {
+      implicit.tone = brief.brandVoice;
+    }
+
+    // Open areas — things the user didn't specify
+    const openCandidates = [
+      "specific animation style",
+      "card layout patterns",
+      "icon choices",
+      "illustration style",
+      "loading state patterns",
+      "empty state design",
+      "micro-interaction details",
+      "page transition style",
+    ];
+    for (const candidate of openCandidates) {
+      if (!Object.values(explicit).some((v) => v.toLowerCase().includes(candidate.split(" ")[0]))) {
+        open.push(candidate);
+      }
+    }
+
+    return { explicit, implicit, open };
+  }
+
+  private async reviewWaveCoherence(
+    wave: number,
+  ): Promise<{ coherent: boolean; issues: string[] }> {
+    const decisions = this.store.getCreativeDecisions();
+    const constraints = this.store.getUserDefinedConstraints();
+    if (decisions.length === 0) return { coherent: true, issues: [] };
+
+    const brief = this.store.getBrief();
+    const prompt = `Review these creative decisions made during wave ${wave} of building "${brief?.productName ?? "unknown"}".
+
+USER CONSTRAINTS:
+Explicit (LAW): ${JSON.stringify(constraints?.explicit ?? {})}
+Implicit (strong preference): ${JSON.stringify(constraints?.implicit ?? {})}
+
+CREATIVE DECISIONS:
+${decisions.map((d, i) => `${i + 1}. [${d.agent}] ${d.decision}\n   Rationale: ${d.rationale}\n   Coherence: ${d.coherenceCheck}`).join("\n\n")}
+
+Are these decisions coherent with the product brief and user constraints? Do they serve the product's purpose and target user? Flag anything off-brand or contextually inappropriate.
+
+Return JSON: { "coherent": boolean, "issues": ["issue description"] }`;
+
+    try {
+      const client = new Anthropic({
+        apiKey: getAnthropicApiKey(),
+        baseURL: getAnthropicBaseUrl(),
+      });
+      const stream = client.messages.stream({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1000,
+        messages: [{ role: "user", content: prompt }],
+      });
+      const msg = await stream.finalMessage();
+      const text = msg.content[0];
+      if (text.type !== "text") return { coherent: true, issues: [] };
+      const cleaned = text.text.replace(/```json?\s*/g, "").replace(/```/g, "").trim();
+      const parsed = JSON.parse(cleaned) as { coherent: boolean; issues: string[] };
+      return { coherent: parsed.coherent ?? true, issues: Array.isArray(parsed.issues) ? parsed.issues : [] };
+    } catch {
+      // Non-critical — if review fails, continue the build
+      return { coherent: true, issues: [] };
+    }
+  }
 
   private verifyDesignSystem(): { passed: boolean; issues: string[] } {
     const issues: string[] = [];

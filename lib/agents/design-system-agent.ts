@@ -13,6 +13,66 @@ import { ArtifactStore } from "./artifact-store.js";
 import type { DesignSystem, DesignTokens, ProductInsights, ComponentLibraryRecommendations } from "./types.js";
 import type { ProjectBrief } from "../intake/types.js";
 
+// ─── User Supremacy Prompt (shared across all agents) ─────────────────────
+
+export const USER_SUPREMACY_PROMPT = `
+USER SUPREMACY PRINCIPLE:
+
+The user has defined certain things explicitly. These are LAW — you cannot change them.
+Read userDefinedConstraints.explicit below. Every item is non-negotiable.
+
+For implicit constraints (strong preferences from context):
+- Follow them unless you have a compelling contextual reason not to
+- If you deviate, you must explain why in your output
+
+For open areas (not specified by user):
+- You have creative freedom
+- BUT every creative decision must:
+  1. Serve the product's purpose (what does the user need to accomplish?)
+  2. Serve the target user (what makes their experience better?)
+  3. Be coherent with explicit constraints (don't clash with what was defined)
+  4. Be contextually appropriate (an interactive particle background makes sense for a creative tool, not a financial dashboard)
+  5. Be executed at world-class level (half-measures are worse than nothing)
+
+COHERENCE TEST — before adding any creative element ask:
+- Does this serve the user's goal on this page?
+- Does it feel like it belongs in THIS product, not just any product?
+- Would a senior designer approve this choice?
+- Is it consistent with every other agent's output?
+
+If any answer is no — do not add it.
+`;
+
+export function buildConstraintsBlock(store: ArtifactStore): string {
+  const constraints = store.getUserDefinedConstraints();
+  if (!constraints) return "";
+
+  const sections: string[] = [USER_SUPREMACY_PROMPT];
+
+  if (Object.keys(constraints.explicit).length > 0) {
+    sections.push("EXPLICIT CONSTRAINTS (LAW — non-negotiable):");
+    for (const [key, val] of Object.entries(constraints.explicit)) {
+      sections.push(`  ${key}: ${val}`);
+    }
+  }
+
+  if (Object.keys(constraints.implicit).length > 0) {
+    sections.push("\nIMPLICIT CONSTRAINTS (strong preferences):");
+    for (const [key, val] of Object.entries(constraints.implicit)) {
+      sections.push(`  ${key}: ${val}`);
+    }
+  }
+
+  if (constraints.open.length > 0) {
+    sections.push("\nOPEN AREAS (creative freedom):");
+    for (const area of constraints.open) {
+      sections.push(`  - ${area}`);
+    }
+  }
+
+  return sections.join("\n");
+}
+
 // ─── System Prompt ──────────────────────────────────────────────────────────
 
 const DESIGN_SYSTEM_PROMPT = `You are a senior product designer with an award-winning SaaS design background. You create distinctive, non-generic design systems that avoid the generic AI aesthetic. You commit to bold aesthetic directions. You believe every SaaS product deserves its own visual identity.
@@ -534,6 +594,12 @@ export async function runDesignSystemAgent(
   }
 
   let userPrompt = buildUserPrompt(brief, insights);
+
+  // Inject User Supremacy constraints
+  const constraintsBlock = buildConstraintsBlock(store);
+  if (constraintsBlock) {
+    userPrompt = constraintsBlock + "\n\n" + userPrompt;
+  }
 
   // If an existing design system document exists, prepend it as a binding constraint
   if (existingDesignDoc) {

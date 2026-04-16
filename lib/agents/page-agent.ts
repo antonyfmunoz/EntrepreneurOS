@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { writeReactComponent, type ComponentWriterInput } from "../react-gen/component-writer.js";
 import { ArtifactStore } from "./artifact-store.js";
+import { buildConstraintsBlock } from "./design-system-agent.js";
 import type { PageOutput } from "./types.js";
 import type { ProjectBrief } from "../intake/types.js";
 import type { PageSpecFull } from "@shared/spec-schema.js";
@@ -79,6 +80,12 @@ export async function runPageAgent(
       })
       .join("\n");
     designSystemContent += `\n\nAVAILABLE SHARED COMPONENT INTERFACES:\n${interfaceSummary}`;
+  }
+
+  // User Supremacy constraints — inject into every page generation
+  const constraintsBlock = buildConstraintsBlock(store);
+  if (constraintsBlock) {
+    designSystemContent += `\n\n${constraintsBlock}`;
   }
 
   // Component library recommendations — inject dynamic library choices

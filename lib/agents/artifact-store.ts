@@ -12,6 +12,8 @@ import type {
   DesignSystem,
   ComponentInterface,
   ComponentLibraryRecommendations,
+  UserDefinedConstraints,
+  CreativeDecision,
   PageOutput,
   BackendRoute,
   QAReport,
@@ -29,6 +31,8 @@ type ArtifactKey =
   | "product-insights"
   | "competitive-intel"
   | "existing-codebase-audit"
+  | "user-defined-constraints"
+  | "creative-decisions"
   | "component-library-recommendations"
   | "architecture"
   | "design-system"
@@ -121,6 +125,28 @@ export class ArtifactStore {
 
   getExistingCodebaseAudit(): ExistingCodebaseAudit | null {
     return this.readJson<ExistingCodebaseAudit>(this.artifactPath("existing-codebase-audit"));
+  }
+
+  // ─── User Defined Constraints ────────────────────────────────────────────
+
+  setUserDefinedConstraints(constraints: UserDefinedConstraints): void {
+    this.writeAtomic(this.artifactPath("user-defined-constraints"), constraints);
+  }
+
+  getUserDefinedConstraints(): UserDefinedConstraints | null {
+    return this.readJson<UserDefinedConstraints>(this.artifactPath("user-defined-constraints"));
+  }
+
+  // ─── Creative Decisions ─────────────────────────────────────────────────
+
+  appendCreativeDecision(decision: CreativeDecision): void {
+    const existing = this.getCreativeDecisions();
+    existing.push(decision);
+    this.writeAtomic(this.artifactPath("creative-decisions"), existing);
+  }
+
+  getCreativeDecisions(): CreativeDecision[] {
+    return this.readJson<CreativeDecision[]>(this.artifactPath("creative-decisions")) ?? [];
   }
 
   // ─── Component Library Recommendations ───────────────────────────────────

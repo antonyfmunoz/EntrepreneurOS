@@ -277,6 +277,21 @@ export interface EditResult {
   errors: string[];
 }
 
+// ─── User Defined Constraints ──────────────────────────────────────────────
+
+export interface UserDefinedConstraints {
+  explicit: Record<string, string>;
+  implicit: Record<string, string>;
+  open: string[];
+}
+
+export interface CreativeDecision {
+  agent: string;
+  decision: string;
+  rationale: string;
+  coherenceCheck: string;
+}
+
 // ─── Component Library Recommendations ─────────────────────────────────────
 
 export interface ComponentLibraryRecommendations {
