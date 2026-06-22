@@ -1,5 +1,5 @@
-export const posthog = {
-  capture(event: string, properties?: Record<string, unknown>) {
-    console.log("[PostHog stub]", event, properties);
-  },
+export const posthogClient = { 
+  capture(opts: { distinctId: string; event: string; properties?: Record<string, unknown> }) { 
+    console.log("[PostHog server stub]", opts.event, opts.properties); 
+  }, 
 };
