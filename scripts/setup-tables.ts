@@ -16,7 +16,7 @@ async function setupTables() {
         "avatar" text,
         "company" text,
         "role" text,
-        "firebase_uid" text UNIQUE,
+        "clerk_user_id" text UNIQUE,
         "preferences" text,
         "metadata" jsonb,
         "created_at" timestamp DEFAULT now(),
