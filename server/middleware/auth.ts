@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { randomBytes } from "crypto";
 import { appendFileSync } from "fs";
-import { createClerkClient, getAuth } from "@clerk/express";
+import { getAuth } from "@clerk/express";
 import { storage } from "../storage";
+import { clerkClient } from "../clerkAdmin";
 import type { User as SelectUser } from "@shared/schema";
 
 declare global {
@@ -22,12 +23,6 @@ declare global {
       isAuthenticated: () => boolean;
     }
   }
-}
-
-function getClerkClient() {
-  const secretKey = process.env.CLERK_SECRET_KEY;
-  if (!secretKey) return null;
-  return createClerkClient({ secretKey });
 }
 
 /**
@@ -77,8 +72,7 @@ export async function attachClerkUser(req: Request, res: Response, next: NextFun
     let user = await storage.getUserByClerkId(clerkUserId);
 
     if (!user) {
-      const clerk = getClerkClient();
-      if (!clerk) {
+      if (!clerkClient) {
         // Clerk secret missing — treat as unauthenticated rather than hard-failing
         // the request. Routes that require auth will return 401 via their inline
         // req.isAuthenticated() checks.
@@ -87,7 +81,7 @@ export async function attachClerkUser(req: Request, res: Response, next: NextFun
         return next();
       }
 
-      const clerkUser = await clerk.users.getUser(clerkUserId);
+      const clerkUser = await clerkClient.users.getUser(clerkUserId);
       const email = clerkUser.emailAddresses[0]?.emailAddress;
       if (!email) {
         console.warn(`attachClerkUser: Clerk user ${clerkUserId} has no email`);

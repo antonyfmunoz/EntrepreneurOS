@@ -15,7 +15,7 @@ import Signup from "@/pages/signup-page";
 import ForgotPassword from "@/pages/forgot-password-page";
 import ResetPassword from "@/pages/reset-password-page";
 
-import { ClerkProvider } from "@clerk/clerk-react";
+import { ClerkProviderWrapper } from "@/lib/clerk";
 import PortfolioList from "@/pages/portfolio-list-page";
 import PortfolioDetail from "@/pages/portfolio-detail-page";
 import CommandCenter from "@/pages/command-center-page";
@@ -125,14 +125,6 @@ function Router() {
       <ProtectedRoute path="/*" component={NotFoundPage} />
     </Switch>
   );
-}
-
-function ClerkProviderWrapper({ children }: { children: React.ReactNode }) {
-  const key = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-  if (!key) {
-    return <>{children}</>;
-  }
-  return <ClerkProvider publishableKey={key}>{children}</ClerkProvider>;
 }
 
 function App() {
