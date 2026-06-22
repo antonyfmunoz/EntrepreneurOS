@@ -57,6 +57,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByClerkId(clerkUserId: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  createOrUpdateUser(clerkUserId: string, data: Omit<InsertUser, 'clerkUserId'>): Promise<User>;
   updateUser(id: string, updates: Partial<InsertUser>): Promise<User>;
   
   // Agent operations
@@ -219,6 +220,14 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return newUser;
+  }
+
+  async createOrUpdateUser(clerkUserId: string, data: Omit<InsertUser, 'clerkUserId'>): Promise<User> {
+    const existing = await this.getUserByClerkId(clerkUserId);
+    if (existing) {
+      return this.updateUser(existing.id, { ...data, clerkUserId });
+    }
+    return this.createUser({ ...data, clerkUserId });
   }
 
   async updateUser(id: string, updates: Partial<InsertUser>): Promise<User> {
