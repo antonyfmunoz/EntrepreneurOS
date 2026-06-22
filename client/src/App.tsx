@@ -27,6 +27,8 @@ import TaskBoard from "@/pages/task-board-page-new";
 import { BuildStatusOverlay } from "@/components/BuildStatusOverlay";
 
 import { useEffect } from "react";
+import { useLocation } from "wouter";
+import posthog from "@/lib/posthog";
 
 function ClerkTokenProvider({ children }: { children: React.ReactNode }) {
   const { getToken } = useAuth();
@@ -51,7 +53,15 @@ function RootRedirect() {
   return <Redirect to="/portfolios" />;
 }
 
+function usePageView() {
+  const [location] = useLocation();
+  useEffect(() => {
+    posthog.capture("$pageview", { $current_url: window.location.href });
+  }, [location]);
+}
+
 function Router() {
+  usePageView();
   return (
     <Switch>
       <Route path="/" component={RootRedirect} />

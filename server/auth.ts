@@ -3,6 +3,7 @@ import { clerkMiddleware, getAuth } from "@clerk/express";
 import { randomBytes } from "crypto";
 import { storage } from "./storage";
 import { clerkClient } from "./clerkAdmin";
+import { posthogClient } from "./posthog";
 import type { User as SelectUser } from "@shared/schema";
 
 declare global {
@@ -125,6 +126,13 @@ export function setupAuth(app: Express) {
 
   app.get("/api/user", requireAuth, (req, res) => {
     const user = (req as any).user;
+
+    posthogClient?.capture({
+      distinctId: String(user.id),
+      event: "user_logged_in",
+      properties: { email: user.email, username: user.username },
+    });
+
     const { password, ...userWithoutPassword } = user;
     res.json(userWithoutPassword);
   });
