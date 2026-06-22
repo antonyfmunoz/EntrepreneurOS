@@ -1,51 +1,122 @@
-import { Express } from "express";
-import { clerkMiddleware } from "@clerk/express";
-import { extractClerkOrg } from "./middleware/clerk-org";
-import { attachClerkUser, requireAuth } from "./middleware/auth";
+import { Express, Request, Response, NextFunction } from "express";
+import { clerkMiddleware, getAuth } from "@clerk/express";
+import { randomBytes } from "crypto";
+import { storage } from "./storage";
+import { clerkClient } from "./clerkAdmin";
+import type { User as SelectUser } from "@shared/schema";
+
+declare global {
+  namespace Express {
+    interface User extends SelectUser {}
+    interface Request {
+      user: User;
+      isAuthenticated: () => boolean;
+      clerkOrg?: string | null;
+    }
+  }
+}
+
+/**
+ * requireAuth — middleware guard that rejects unauthenticated requests.
+ *
+ * Checks getAuth(req).userId directly. Routes using this middleware
+ * will return 401 if no valid Clerk session is present.
+ */
+export function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const { userId } = getAuth(req);
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  return next();
+}
+
+/**
+ * attachClerkUser — global, non-rejecting middleware.
+ *
+ * Runs on every request AFTER clerkMiddleware() has populated req.auth.
+ * Looks up (or lazy-creates) the local user row keyed by Clerk user id,
+ * attaches to req.user, and installs req.isAuthenticated() polyfill.
+ */
+async function attachClerkUser(req: Request, res: Response, next: NextFunction) {
+  // Pre-populated user (test harness / upstream mock): install polyfill and pass.
+  if ((req as any).user) {
+    req.isAuthenticated = () => true;
+    return next();
+  }
+
+  const auth = getAuth(req);
+  const clerkUserId = auth?.userId as string | undefined;
+
+  if (!clerkUserId) {
+    req.isAuthenticated = () => false;
+    return next();
+  }
+
+  try {
+    let user = await storage.getUserByClerkId(clerkUserId);
+
+    if (!user) {
+      if (!clerkClient) {
+        console.warn("attachClerkUser: CLERK_SECRET_KEY not set, cannot sync user");
+        req.isAuthenticated = () => false;
+        return next();
+      }
+
+      const clerkUser = await clerkClient.users.getUser(clerkUserId);
+      const email = clerkUser.emailAddresses[0]?.emailAddress;
+      if (!email) {
+        console.warn(`attachClerkUser: Clerk user ${clerkUserId} has no email`);
+        req.isAuthenticated = () => false;
+        return next();
+      }
+
+      const fullName = [clerkUser.firstName, clerkUser.lastName]
+        .filter(Boolean)
+        .join(" ");
+      const username =
+        clerkUser.username ||
+        `${email.split("@")[0]}_${Math.floor(Math.random() * 10000)}`;
+
+      user = await storage.createUser({
+        username,
+        email,
+        password: randomBytes(32).toString("hex"),
+        fullName: fullName || undefined,
+        avatar: clerkUser.imageUrl || undefined,
+        clerkUserId,
+      });
+    }
+
+    (req as any).user = user;
+    req.isAuthenticated = () => true;
+    return next();
+  } catch (error) {
+    console.error("attachClerkUser: sync failed", error);
+    req.isAuthenticated = () => false;
+    return next();
+  }
+}
+
+/**
+ * extractClerkOrg — extracts Clerk organization ID from JWT claims.
+ */
+function extractClerkOrg(req: Request, _res: Response, next: NextFunction): void {
+  const orgId = (req as any).auth?.orgId ?? null;
+  (req as any).clerkOrg = orgId;
+  next();
+}
 
 /**
  * setupAuth — Clerk-only authentication wiring.
  *
- * The previous Passport local + scrypt + express-session stack has been
- * removed entirely. Clerk is now the sole authentication provider.
- *
  * Middleware chain (global, runs on every request):
- *   1. clerkMiddleware()    — parses the Clerk session token from cookies /
- *                             Authorization headers, populates req.auth.
- *                             Non-blocking: unauthenticated requests still
- *                             pass through, they just have no req.auth.userId.
- *   2. extractClerkOrg      — annotates req.clerkOrg from the Clerk JWT.
- *   3. attachClerkUser      — non-rejecting sync: if req.auth.userId exists,
- *                             looks up (or lazy-creates) the local users row
- *                             keyed by Clerk user id, attaches to req.user,
- *                             and installs req.isAuthenticated() polyfill.
- *                             This preserves the 56 existing
- *                             `req.isAuthenticated()` / `req.user.id` call
- *                             sites across server/routes/*.ts unchanged.
- *
- * Endpoints exposed:
- *   - GET  /api/user    — returns the authenticated local user row (sans password).
- *   - POST /api/logout  — server-side no-op. Clerk manages session teardown
- *                          via its SDK (clerkSignOut() in the frontend clears
- *                          the Clerk session cookie). The endpoint remains so
- *                          the frontend logout mutation has a canonical hook
- *                          and we can extend it later (audit log, cleanup).
- *
- * Removed:
- *   - POST /api/register — Clerk's signUp handles account creation.
- *   - POST /api/login    — Clerk's signIn handles credential verification.
- *   - POST /api/auth/clerk — replaced by lazy sync in attachClerkUser.
+ *   1. clerkMiddleware()  — parses Clerk session token, populates req.auth.
+ *   2. extractClerkOrg    — annotates req.clerkOrg from the Clerk JWT.
+ *   3. attachClerkUser    — looks up/lazy-creates local user row from Clerk id.
  */
 export function setupAuth(app: Express) {
   app.set("trust proxy", 1);
 
-  // Conditional mount: clerkMiddleware() from @clerk/express requires
-  // CLERK_SECRET_KEY at request time and throws without it. In the vitest
-  // test environment the secret is intentionally absent so we skip it; the
-  // downstream attachClerkUser middleware already handles the "no req.auth"
-  // case gracefully by installing isAuthenticated = () => false. In real
-  // deployments (dev + prod) CLERK_SECRET_KEY is always set so Clerk runs
-  // normally.
   if (process.env.CLERK_SECRET_KEY) {
     app.use(clerkMiddleware());
   }
