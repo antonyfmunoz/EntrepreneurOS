@@ -257,32 +257,89 @@ export class DatabaseStorage implements IStorage {
     // Real users are lazy-created by attachClerkUser on first authenticated
     // request.
 
-    // Check if there are any agents first
+    // BOOT GUARD (WP-P4-EOS-DESTRUCTIVE-BOOT-GUARD-001):
+    // This method runs on every process start, before any HTTP request and
+    // with no auth. It must NEVER delete production data. Seeding only ever
+    // INSERTs, and only when the database is genuinely empty (zero agents,
+    // zero tasks, zero messages). The legacy behavior — wipe all agents +
+    // their tasks/messages whenever no 'executive'-role agent existed, then
+    // re-seed — silently destroyed production data on boot. That path is
+    // now opt-in only via ALLOW_DESTRUCTIVE_RESEED=true and logs loudly.
+
     const existingAgents = await this.getAgents();
-    
-    // If we already have agents, only continue if there's no executive agent
+    const existingTasks = await db.select().from(tasksTable);
+    const existingMessages = await db.select().from(messagesTable);
+
+    const databaseIsEmpty =
+      existingAgents.length === 0 &&
+      existingTasks.length === 0 &&
+      existingMessages.length === 0;
+
     const hasExecutiveAgent = existingAgents.some(agent => agent.role === 'executive');
-    
-    if (existingAgents.length > 0 && hasExecutiveAgent) {
-      // Executive agent exists, no need to initialize
-      return;
-    }
-    
-    // Remove any existing agents if we're reinitializing
-    if (existingAgents.length > 0) {
-      // Delete all existing agents and their associated data
-      for (const agent of existingAgents) {
-        // Delete tasks associated with this agent
-        await db.delete(tasksTable)
-          .where(eq(tasksTable.agentId, agent.id));
-          
-        // Delete messages associated with this agent  
-        await db.delete(messagesTable)
-          .where(eq(messagesTable.agentId, agent.id));
+
+    if (!databaseIsEmpty) {
+      if (hasExecutiveAgent) {
+        // Normal steady state: data present, executive agent present.
+        return;
       }
-      
-      // Now delete all the agents
-      await db.delete(agentsTable);
+
+      if (process.env.ALLOW_DESTRUCTIVE_RESEED === 'true') {
+        // Explicitly requested legacy destructive re-seed. Loud by design.
+        console.error(
+          "!!! ALLOW_DESTRUCTIVE_RESEED=true — DESTRUCTIVE RE-SEED ENGAGED !!!\n" +
+          `!!! Deleting ${existingAgents.length} agent(s), ${existingTasks.length} task(s), ` +
+          `${existingMessages.length} message(s) from the connected database, then re-seeding sample data. !!!\n` +
+          "!!! Unset ALLOW_DESTRUCTIVE_RESEED immediately after this boot. !!!"
+        );
+        for (const agent of existingAgents) {
+          await db.delete(tasksTable)
+            .where(eq(tasksTable.agentId, agent.id));
+          await db.delete(messagesTable)
+            .where(eq(messagesTable.agentId, agent.id));
+        }
+        await db.delete(agentsTable);
+        // Fall through to the insert-only seed below.
+      } else {
+        // Default safe path: data exists but the executive agent is missing.
+        // Never delete anything. Insert ONLY the missing executive agent
+        // (pure INSERT into agents — FK-safe, touches no existing rows).
+        console.warn(
+          "[boot-guard] Database has existing data but no 'executive'-role agent. " +
+          "Skipping destructive re-seed (set ALLOW_DESTRUCTIVE_RESEED=true to force legacy behavior). " +
+          "Inserting only the missing executive agent."
+        );
+
+        const executiveIdTaken = existingAgents.some(agent => agent.id === "agent_executive");
+        if (executiveIdTaken) {
+          console.warn(
+            "[boot-guard] Agent id 'agent_executive' already exists with a non-executive role. " +
+            "Refusing to insert a duplicate; no changes made."
+          );
+          return;
+        }
+
+        try {
+          const timestamp = new Date();
+          await db.insert(agentsTable)
+            .values({
+              id: "agent_executive",
+              name: "Executive Agent",
+              role: "executive",
+              roleLevel: "chief",
+              department: "Management",
+              icon: "ri-user-star-line",
+              instructions: "Lead and manage the team of AI agents, create and assign specialized agents for different business functions, coordinate agent collaboration, and ensure alignment with business goals and strategy.",
+              latestActivity: "Created agent",
+              brainContent: "",
+              createdAt: timestamp,
+              updatedAt: timestamp
+            });
+          console.warn("[boot-guard] Inserted missing executive agent 'agent_executive'. No other data touched.");
+        } catch (error) {
+          console.error("[boot-guard] Failed to insert missing executive agent:", error);
+        }
+        return;
+      }
     }
 
     try {
