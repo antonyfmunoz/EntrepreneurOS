@@ -48,13 +48,23 @@ export function registerActionRoutes(app: Express): void {
       if (!action) return res.status(404).json({ message: "Action not found" });
       if (action.userId !== userId) return res.status(403).json({ message: "Not authorized" });
 
-      await storage.updateAction(action.id, {
+      // Atomic claim: pending → approved. Returns undefined when the action
+      // was already approved/rejected/executing/completed — prevents a
+      // double-approve from re-firing effects (e.g. sending a second email).
+      const claimed = await storage.claimPendingAction(action.id, {
         status: "approved",
         approvedBy: userId,
         approvedAt: new Date(),
       });
+      if (!claimed) {
+        const current = await storage.getAction(action.id);
+        return res.status(409).json({
+          message: `Action is not pending (current status: ${current?.status ?? "unknown"}) — approve not applied`,
+          status: current?.status ?? action.status,
+        });
+      }
 
-      const result = await executeAction({ ...action, status: "approved" });
+      const result = await executeAction(claimed);
       res.json(result);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -69,10 +79,18 @@ export function registerActionRoutes(app: Express): void {
       if (!action) return res.status(404).json({ message: "Action not found" });
       if (action.userId !== userId) return res.status(403).json({ message: "Not authorized" });
 
-      const updated = await storage.updateAction(action.id, {
+      // Atomic claim: pending → rejected. Same status-claim doctrine as approve.
+      const claimed = await storage.claimPendingAction(action.id, {
         status: "rejected",
       });
-      res.json(updated);
+      if (!claimed) {
+        const current = await storage.getAction(action.id);
+        return res.status(409).json({
+          message: `Action is not pending (current status: ${current?.status ?? "unknown"}) — reject not applied`,
+          status: current?.status ?? action.status,
+        });
+      }
+      res.json(claimed);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

@@ -145,6 +145,7 @@ export interface IStorage {
   getPendingActions(userId: string): Promise<AgentAction[]>;
   createAction(action: InsertAgentAction): Promise<AgentAction>;
   updateAction(id: string, updates: Partial<AgentAction>): Promise<AgentAction | undefined>;
+  claimPendingAction(id: string, updates: Partial<AgentAction>): Promise<AgentAction | undefined>;
 
   // OAuth Token operations
   getOauthToken(userId: string, provider: string): Promise<OauthToken | undefined>;
@@ -1425,6 +1426,23 @@ export class DatabaseStorage implements IStorage {
       .where(eq(agentActionsTable.id, id))
       .returning();
     return updated;
+  }
+
+  // Atomic status claim: only transitions a row that is still 'pending'.
+  // Returns undefined when the row was already decided (approved/rejected/
+  // executing/completed/failed) — the caller must NOT fire effects in that case.
+  // Mirrors UMH's update_action_decision (WHERE id = %s AND status = 'pending').
+  async claimPendingAction(id: string, updates: Partial<AgentAction>): Promise<AgentAction | undefined> {
+    const updateData: Record<string, any> = { ...updates, updatedAt: new Date() };
+    delete updateData.id;
+    const [claimed] = await db.update(agentActionsTable)
+      .set(updateData)
+      .where(and(
+        eq(agentActionsTable.id, id),
+        eq(agentActionsTable.status, "pending")
+      ))
+      .returning();
+    return claimed;
   }
 
   async getOauthToken(userId: string, provider: string): Promise<OauthToken | undefined> {
