@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import type { Express, Request } from "express";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
 import { callAI } from "../ai/gateway";
@@ -22,6 +22,8 @@ import {
   eosWorkPackets,
   portfolios,
   users,
+  aiBudgets,
+  aiUsageLedger,
 } from "@shared/schema";
 import {
   approvalDecisionSchema,
@@ -305,7 +307,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
     const selectedAdvisors = role === "founder" ? selectAdvisorSeats(council.advisors, input.content, 3) : [];
     const advisorOutputs = role === "founder" ? await Promise.all(selectedAdvisors.map(async (advisor) => {
       try {
-        const output = await callAI({ messages: [{ role: "user", content: input.content }], system: `You are the ${advisor.name} advisor. Mandate: ${advisor.mandate}. Founder vision: ${council.personalization.founderVision || "not captured"}. Values: ${council.personalization.founderValues || "not captured"}. Company: ${company.name}. Give a concise evidence-aware advisory view, name assumptions and material disagreement, and do not approve or execute anything.`, tier: "fast", maxTokens: 600, context: `eos-advisor:${company.id}:${advisor.id}` });
+        const output = await callAI({ messages: [{ role: "user", content: input.content }], system: `You are the ${advisor.name} advisor. Mandate: ${advisor.mandate}. Founder vision: ${council.personalization.founderVision || "not captured"}. Values: ${council.personalization.founderValues || "not captured"}. Company: ${company.name}. Give a concise evidence-aware advisory view, name assumptions and material disagreement, and do not approve or execute anything.`, tier: "fast", maxTokens: 600, context: `eos-advisor:${company.id}:${advisor.id}`, companyId: company.id, userId: req.user.id });
         await db.insert(eosAdvisorConsultations).values({ id: randomUUID(), companyId: company.id, conversationId: conversation.id, advisorId: advisor.id, advisorName: advisor.name, request: input.content, response: output.content, model: output.model, status: "completed", provenance: { mandate: advisor.mandate, timeHorizon: advisor.timeHorizon, founderProfileVersion: "company.current" } });
         return { advisor, content: output.content, status: "completed" };
       } catch (error: any) {
@@ -326,7 +328,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
     const ceoOutputs = role === "founder" ? await Promise.all(companyCeoAgents.map(async ({ company: targetCompany, seat: ceoSeat }) => {
       const delegate = { id: `company-ceo:${targetCompany.id}`, name: `${ceoSeat.agentName} — ${targetCompany.name} CEO Agent` };
       try {
-        const output = await callAI({ messages: [{ role: "user", content: input.content }], system: `You are ${ceoSeat.agentName}, the Company CEO Agent for ${targetCompany.name}. Mandate: ${ceoSeat.mandate || "Own company execution and report material state upward."}. Company goals: ${targetCompany.goals || "not captured"}. Report the company-operating perspective to the founder's Executive Assistant. Identify facts, assumptions, risks, dependencies, and decisions needed. Do not address the founder directly and do not execute or approve anything.`, tier: "fast", maxTokens: 600, context: `eos-company-ceo:${targetCompany.id}:${ceoSeat.id}` });
+        const output = await callAI({ messages: [{ role: "user", content: input.content }], system: `You are ${ceoSeat.agentName}, the Company CEO Agent for ${targetCompany.name}. Mandate: ${ceoSeat.mandate || "Own company execution and report material state upward."}. Company goals: ${targetCompany.goals || "not captured"}. Report the company-operating perspective to the founder's Executive Assistant. Identify facts, assumptions, risks, dependencies, and decisions needed. Do not address the founder directly and do not execute or approve anything.`, tier: "fast", maxTokens: 600, context: `eos-company-ceo:${targetCompany.id}:${ceoSeat.id}`, companyId: targetCompany.id, userId: req.user.id });
         await db.insert(eosAdvisorConsultations).values({ id: randomUUID(), companyId: company.id, conversationId: conversation.id, advisorId: delegate.id, advisorName: delegate.name, request: input.content, response: output.content, model: output.model, status: "completed", provenance: { kind: "company_ceo_agent", targetCompanyId: targetCompany.id, targetSeatId: ceoSeat.id } });
         return { advisor: delegate, content: output.content, status: "completed" };
       } catch (error: any) {
@@ -349,6 +351,8 @@ export function registerEosRuntimeRoutes(app: Express): void {
         tier: "standard",
         maxTokens: 1400,
         context: `eos-executive-assistant:${company.id}`,
+        companyId: company.id,
+        userId: req.user.id,
       });
       const [saved] = await db.insert(eosCommunicationMessages).values({ id: randomUUID(), conversationId: conversation.id, companyId: company.id, senderType: "agent", senderSeatId: seat.id, content: response.content, provenance: { mode: "connected_reasoning", agentName, consultedAdvisors: orchestratedOutputs.map((item) => ({ id: item.advisor.id, name: item.advisor.name, status: item.status })) } }).returning();
       return { body: { response: response.content, message: saved, mode: "connected_reasoning", assistantName: agentName } };
@@ -763,5 +767,27 @@ export function registerEosRuntimeRoutes(app: Express): void {
     const access = await companyAccess(req);
     if (!["founder", "portfolio_executive", "company_ceo"].includes(access.role)) throw new EosRouteError(403, "audit_scope_denied", "The company-wide audit trail is outside this seat's visibility scope.");
     return { body: await db.select().from(eosAuditRecords).where(eq(eosAuditRecords.companyId, access.company.id)).orderBy(desc(eosAuditRecords.createdAt)).limit(200) };
+  }));
+
+  app.get("/api/eos/companies/:companyId/ai-budget", route(async (req) => {
+    const access = await companyAccess(req);
+    if (!access.isOwner) throw new EosRouteError(403, "ai_budget_scope_denied", "Only the company owner can view AI spend controls.");
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const [budget] = await db.select().from(aiBudgets).where(eq(aiBudgets.companyId, access.company.id)).limit(1);
+    const [usage] = await db.select({ spentMicros: sql<number>`coalesce(sum(case when ${aiUsageLedger.status} = 'completed' then ${aiUsageLedger.actualCostMicros} else ${aiUsageLedger.reservedCostMicros} end), 0)` }).from(aiUsageLedger).where(and(eq(aiUsageLedger.companyId, access.company.id), gte(aiUsageLedger.createdAt, monthStart)));
+    return { body: { configured: Boolean(budget), enabled: budget?.enabled || false, monthlyLimitMicros: budget?.monthlyLimitMicros || null, perRequestLimitMicros: budget?.perRequestLimitMicros || null, spentMicros: Number(usage?.spentMicros || 0), monthStart } };
+  }));
+
+  app.put("/api/eos/companies/:companyId/ai-budget", route(async (req) => {
+    const access = await companyAccess(req);
+    if (!access.isOwner) throw new EosRouteError(403, "ai_budget_scope_denied", "Only the company owner can change AI spend controls.");
+    const input = z.object({ monthlyLimitDollars: z.number().positive().max(10_000), perRequestLimitDollars: z.number().positive().max(1_000), enabled: z.boolean() }).refine((value) => value.perRequestLimitDollars <= value.monthlyLimitDollars, "Per-request limit must not exceed the monthly limit.").parse(req.body);
+    const monthlyLimitMicros = Math.round(input.monthlyLimitDollars * 1_000_000);
+    const perRequestLimitMicros = Math.round(input.perRequestLimitDollars * 1_000_000);
+    const [budget] = await db.insert(aiBudgets).values({ companyId: access.company.id, monthlyLimitMicros, perRequestLimitMicros, enabled: input.enabled, updatedByUserId: req.user.id }).onConflictDoUpdate({ target: aiBudgets.companyId, set: { monthlyLimitMicros, perRequestLimitMicros, enabled: input.enabled, updatedByUserId: req.user.id, updatedAt: new Date() } }).returning();
+    const trace = tracePair();
+    await db.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "ai_budget.updated", targetType: "ai_budget", targetId: String(access.company.id), traceId: trace.traceId, correlationId: trace.correlationId, result: "configured", details: { monthlyLimitMicros, perRequestLimitMicros, enabled: input.enabled } });
+    return { body: budget };
   }));
 }

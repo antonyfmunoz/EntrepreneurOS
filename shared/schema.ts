@@ -253,6 +253,30 @@ export const accountDeletionRequests = pgTable("account_deletion_requests", {
   lastError: text("last_error"),
 });
 
+export const aiBudgets = pgTable("ai_budgets", {
+  companyId: integer("company_id").primaryKey().references(() => companies.id, { onDelete: "cascade" }),
+  monthlyLimitMicros: integer("monthly_limit_micros").notNull(),
+  perRequestLimitMicros: integer("per_request_limit_micros").notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  updatedByUserId: text("updated_by_user_id").notNull().references(() => users.id),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const aiUsageLedger = pgTable("ai_usage_ledger", {
+  id: text("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id),
+  context: text("context").notNull(),
+  model: text("model").notNull(),
+  status: text("status").notNull().default("reserved"),
+  reservedCostMicros: integer("reserved_cost_micros").notNull(),
+  actualCostMicros: integer("actual_cost_micros"),
+  inputTokens: integer("input_tokens"),
+  outputTokens: integer("output_tokens"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+});
+
 export type InsertAgent = z.infer<typeof insertAgentSchema>;
 export type Agent = typeof agents.$inferSelect;
 

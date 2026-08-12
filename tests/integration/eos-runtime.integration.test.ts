@@ -113,6 +113,11 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(profile.body.password).toBeUndefined();
     await api.put("/api/users/me").send({ fullName: "EOS Qualified Owner" }).expect(200);
     await api.put("/api/users/me/notifications").send({ emailNotifications: true, pushNotifications: false, taskAlerts: true, workflowAlerts: true }).expect(200);
+    const initialConsent = await api.get("/api/users/me/analytics-consent").expect(200);
+    expect(initialConsent.body.consent).toBe(null);
+    await api.put("/api/users/me/analytics-consent").send({ consent: false }).expect(200);
+    const declinedConsent = await api.get("/api/users/me/analytics-consent").expect(200);
+    expect(declinedConsent.body.consent).toBe(false);
     const exported = await api.get("/api/users/me/export").expect(200);
     expect(exported.headers["content-disposition"]).toContain("entrepreneuros-account-export");
     expect(exported.body.format).toBe("entrepreneuros.account-export.v1");
@@ -138,6 +143,20 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     await api.delete("/api/users/me/deletion").expect(200);
     const status = await api.get("/api/users/me/deletion").expect(200);
     expect(status.body.status).toBe("cancelled");
+  });
+
+  it("enforces owner-scoped AI budget configuration", async () => {
+    const configured = await api.put(`/api/eos/companies/${companyId}/ai-budget`).send({ monthlyLimitDollars: 25, perRequestLimitDollars: 1, enabled: true }).expect(200);
+    expect(configured.body.monthlyLimitMicros).toBe(25_000_000);
+    const status = await api.get(`/api/eos/companies/${companyId}/ai-budget`).expect(200);
+    expect(status.body.configured).toBe(true);
+    expect(status.body.spentMicros).toBe(0);
+    const { reserveAiSpend, completeAiSpend } = await import("../../server/ai/cost-control");
+    const reservation = await reserveAiSpend({ companyId, userId: ownerId, context: "integration-cost-control", model: "test-model", estimatedCostMicros: 500_000 });
+    await completeAiSpend(reservation.id, { actualCostMicros: 100_000, inputTokens: 100, outputTokens: 50 });
+    const afterUsage = await api.get(`/api/eos/companies/${companyId}/ai-budget`).expect(200);
+    expect(afterUsage.body.spentMicros).toBe(100_000);
+    await expect(reserveAiSpend({ companyId, userId: ownerId, context: "over-request-limit", model: "test-model", estimatedCostMicros: 2_000_000 })).rejects.toMatchObject({ code: "ai_request_limit_exceeded" });
   });
 
   it("compiles and activates an organization, then completes an evidence-bearing approved mission", async () => {

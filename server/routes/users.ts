@@ -15,6 +15,7 @@ import {
 import { db } from "../db";
 import { storage } from "../storage";
 import { cancelAccountDeletion, deletionRequestForUser, scheduleAccountDeletion } from "../lifecycle/account-deletion";
+import { PRODUCT_ANALYTICS_POLICY_VERSION } from "@shared/product-analytics";
 
 const profileUpdateSchema = z.object({
   username: z.string().trim().min(3).max(64).regex(/^[a-z0-9_]+$/).optional(),
@@ -57,6 +58,27 @@ export function registerUserRoutes(app: Express): void {
       return res.json({ notifications: (publicUser(user).preferences as Record<string, unknown>).notifications });
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ code: "invalid_notifications", message: "Check notification preferences." });
+      return next(error);
+    }
+  });
+
+  app.get("/api/users/me/analytics-consent", (req, res) => {
+    let preferences: Record<string, any> = {};
+    try { preferences = req.user.preferences ? JSON.parse(req.user.preferences) : {}; } catch {}
+    const analytics = preferences.analytics || {};
+    return res.json({ consent: analytics.policyVersion === PRODUCT_ANALYTICS_POLICY_VERSION ? analytics.consent ?? null : null, decidedAt: analytics.decidedAt || null, policyVersion: PRODUCT_ANALYTICS_POLICY_VERSION });
+  });
+
+  app.put("/api/users/me/analytics-consent", async (req, res, next) => {
+    try {
+      const { consent } = z.object({ consent: z.boolean() }).parse(req.body);
+      let existing: Record<string, unknown> = {};
+      try { existing = req.user.preferences ? JSON.parse(req.user.preferences) : {}; } catch {}
+      const analytics = { consent, decidedAt: new Date().toISOString(), policyVersion: PRODUCT_ANALYTICS_POLICY_VERSION };
+      await storage.updateUser(req.user.id, { preferences: { ...existing, analytics } });
+      return res.json(analytics);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ code: "invalid_analytics_consent", message: "Choose whether optional product analytics are allowed." });
       return next(error);
     }
   });

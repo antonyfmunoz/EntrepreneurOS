@@ -68,6 +68,10 @@ describe("EOS API security boundary", () => {
     expect(next).not.toHaveBeenCalled();
     blockLegacyUnscopedApis({ path: "/conversations/foreign" } as any, res, next);
     expect(res.status).toHaveBeenCalledWith(410);
+    blockLegacyUnscopedApis({ path: "/keys/save" } as any, res, next);
+    expect(res.status).toHaveBeenCalledWith(410);
+    blockLegacyUnscopedApis({ path: "/llm/chat" } as any, res, next);
+    expect(res.status).toHaveBeenCalledWith(410);
   });
 
   it("does not block company-scoped EOS runtime routes", () => {

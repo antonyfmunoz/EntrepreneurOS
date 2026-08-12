@@ -6,6 +6,14 @@ import { clerkClient } from "./clerkAdmin";
 import { posthogClient } from "./posthog";
 import { verifiedEmailForLegacyClaim } from "./security/legacy-principal-reconciliation";
 import type { User as SelectUser } from "@shared/schema";
+import { PRODUCT_ANALYTICS_POLICY_VERSION, productEvents } from "@shared/product-analytics";
+
+function hasProductAnalyticsConsent(user: SelectUser): boolean {
+  try {
+    const preferences = user.preferences ? JSON.parse(user.preferences) : {};
+    return preferences.analytics?.policyVersion === PRODUCT_ANALYTICS_POLICY_VERSION && preferences.analytics?.consent === true;
+  } catch { return false; }
+}
 
 declare global {
   namespace Express {
@@ -155,10 +163,7 @@ export function setupAuth(app: Express) {
   app.get("/api/user", requireAuth, (req, res) => {
     const user = (req as any).user;
 
-    posthogClient?.capture({
-      distinctId: String(user.id),
-      event: "user_logged_in",
-    });
+    if (hasProductAnalyticsConsent(user)) posthogClient?.capture({ distinctId: String(user.id), event: productEvents.userSignedIn });
 
     const { password, ...userWithoutPassword } = user;
     res.json(userWithoutPassword);

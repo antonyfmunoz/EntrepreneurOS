@@ -1,6 +1,6 @@
 import { Switch, Route, Redirect } from "wouter";
 import { queryClient, setTokenGetter } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { KeyRound } from "lucide-react";
 import { FullPageStatus } from "@/components/full-page-status";
@@ -31,7 +31,8 @@ import { BuildStatusOverlay } from "@/components/BuildStatusOverlay";
 
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import posthog from "@/lib/posthog";
+import { captureProductEvent, configureProductAnalytics } from "@/lib/posthog";
+import { productEvents } from "@shared/product-analytics";
 
 function ClerkTokenProvider({ children }: { children: React.ReactNode }) {
   const { getToken } = useAuth();
@@ -68,7 +69,7 @@ function RootRedirect() {
 function usePageView() {
   const [location] = useLocation();
   useEffect(() => {
-    posthog.capture("$pageview", { $current_url: window.location.href });
+    captureProductEvent(productEvents.pageViewed, { path: location });
   }, [location]);
 }
 
@@ -157,6 +158,7 @@ function App() {
         <ClerkTokenProvider>
           <QueryClientProvider client={queryClient}>
             <AuthProvider>
+              <AnalyticsConsentBridge />
               <Router />
               <Toaster />
             </AuthProvider>
@@ -166,6 +168,13 @@ function App() {
       </ClerkLoaded>
     </ClerkProviderWrapper>
   );
+}
+
+function AnalyticsConsentBridge() {
+  const { isSignedIn } = useUser();
+  const consent = useQuery<{ consent: boolean | null }>({ queryKey: ["/api/users/me/analytics-consent"], enabled: Boolean(isSignedIn) });
+  useEffect(() => { configureProductAnalytics(consent.data?.consent === true); }, [consent.data?.consent]);
+  return null;
 }
 
 function AuthenticationConfigurationRequired() {

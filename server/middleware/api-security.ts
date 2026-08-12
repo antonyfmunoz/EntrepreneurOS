@@ -70,7 +70,8 @@ export function requireLocalApiAuth(req: Request, res: Response, next: NextFunct
 export function blockLegacyUnscopedApis(req: Request, res: Response, next: NextFunction) {
   const legacyUnscoped = /^\/(tasks|agents|workflows|conversations)(\/|$)/.test(req.path)
     || req.path === "/integrations"
-    || req.path === "/integrations/connect";
+    || req.path === "/integrations/connect"
+    || ["/keys/save", "/ai/generate", "/ai/multi-agent", "/llm/chat"].includes(req.path);
   if (legacyUnscoped && process.env.EOS_ENABLE_LEGACY_UNSCOPED_ROUTES !== "true") {
     return res.status(410).json({
       code: "legacy_unscoped_route_disabled",
