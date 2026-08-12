@@ -2,9 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $required = @(
   "ANTHROPIC_API_KEY",
-  "POSTHOG_API_KEY",
-  "VITE_CLERK_PUBLISHABLE_KEY",
-  "VITE_POSTHOG_API_KEY"
+  "VITE_CLERK_PUBLISHABLE_KEY"
 )
 
 foreach ($name in $required) {
@@ -13,10 +11,16 @@ foreach ($name in $required) {
   }
 }
 
-@(
-  "ANTHROPIC_API_KEY=$env:ANTHROPIC_API_KEY"
-  "POSTHOG_API_KEY=$env:POSTHOG_API_KEY"
-) | flyctl secrets import --app eos-app --stage
+$posthogKey = [string]$env:POSTHOG_API_KEY
+$validPosthogKey = $posthogKey.StartsWith("phc_") -and -not $posthogKey.ToLowerInvariant().Contains("placeholder")
+if ($validPosthogKey) {
+  flyctl secrets set --app eos-app --stage `
+    "ANTHROPIC_API_KEY=$env:ANTHROPIC_API_KEY" `
+    "POSTHOG_API_KEY=$posthogKey"
+} else {
+  flyctl secrets set --app eos-app --stage "ANTHROPIC_API_KEY=$env:ANTHROPIC_API_KEY"
+  if ($LASTEXITCODE -eq 0) { flyctl secrets unset --app eos-app --stage POSTHOG_API_KEY }
+}
 
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

@@ -15,6 +15,7 @@
     "test:e2e:fixture": "tsx scripts/e2e-fixture-server.ts",
     "test:e2e:client": "vite --config vite.e2e.config.ts",
     "test:e2e:acceptance": "tsx tests/e2e/mvp-browser-acceptance.ts",
+    "test:e2e:production": "tsx tests/e2e/production-public-smoke.ts",
     "check:stitch-tools": "tsx scripts/check-stitch-tools.ts",
     "test:stitch-workflow": "tsx scripts/test-stitch-workflow.ts"
   },
