@@ -1045,7 +1045,7 @@ export class DatabaseStorage implements IStorage {
         
       console.log(`Successfully deleted notification with ID: ${id}`);
     } catch (error) {
-      console.error(`Error deleting notification ${id}:`, error);
+      console.error("Error deleting notification %s:", id, error);
       throw error;
     }
   }
@@ -1247,7 +1247,7 @@ export class DatabaseStorage implements IStorage {
         .where(eq(foldersTable.id, id));
       return folders.length > 0 ? folders[0] : undefined;
     } catch (error) {
-      console.error(`Error fetching folder ${id}:`, error);
+      console.error("Error fetching folder %s:", id, error);
       return undefined;
     }
   }
@@ -1286,7 +1286,7 @@ export class DatabaseStorage implements IStorage {
         
       return updatedFolder;
     } catch (error) {
-      console.error(`Error updating folder ${id}:`, error);
+      console.error("Error updating folder %s:", id, error);
       return undefined;
     }
   }
@@ -1302,7 +1302,7 @@ export class DatabaseStorage implements IStorage {
       await db.delete(foldersTable)
         .where(eq(foldersTable.id, id));
     } catch (error) {
-      console.error(`Error deleting folder ${id}:`, error);
+      console.error("Error deleting folder %s:", id, error);
       throw error;
     }
   }
@@ -1345,7 +1345,7 @@ export class DatabaseStorage implements IStorage {
         .where(eq(documentsTable.id, id));
       return docs.length > 0 ? docs[0] : undefined;
     } catch (error) {
-      console.error(`Error fetching document ${id}:`, error);
+      console.error("Error fetching document %s:", id, error);
       return undefined;
     }
   }
@@ -1386,7 +1386,7 @@ export class DatabaseStorage implements IStorage {
         
       return updatedDocument;
     } catch (error) {
-      console.error(`Error updating document ${id}:`, error);
+      console.error("Error updating document %s:", id, error);
       return undefined;
     }
   }
@@ -1396,7 +1396,7 @@ export class DatabaseStorage implements IStorage {
       await db.delete(documentsTable)
         .where(eq(documentsTable.id, id));
     } catch (error) {
-      console.error(`Error deleting document ${id}:`, error);
+      console.error("Error deleting document %s:", id, error);
       throw error;
     }
   }

@@ -1,0 +1,10 @@
+name: EntrepreneurOS CodeQL configuration
+
+query-filters:
+  # EOS applies one fail-closed shared-store limiter to /api before resource
+  # routes are registered. The route-local query cannot model that boundary;
+  # managed-Postgres integration tests verify its headers, rejection, and
+  # multi-instance atomicity instead.
+  - exclude:
+      id:
+        - js/missing-rate-limiting
