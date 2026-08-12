@@ -1,6 +1,7 @@
 import { Express } from "express";
 import { storage } from "../storage";
 import { executeAction } from "../services/action-executor";
+import { recordFederatedActionEvent } from "../umh/service";
 
 export function registerActionRoutes(app: Express): void {
   app.get("/api/actions", async (req, res) => {
@@ -34,6 +35,7 @@ export function registerActionRoutes(app: Express): void {
     try {
       const action = await storage.getAction(req.params.id);
       if (!action) return res.status(404).json({ message: "Action not found" });
+      if (action.userId !== req.user.id) return res.status(404).json({ message: "Action not found" });
       res.json(action);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -65,6 +67,12 @@ export function registerActionRoutes(app: Express): void {
       }
 
       const result = await executeAction(claimed);
+      await recordFederatedActionEvent(claimed, "eos.approval.decided.v1", { decision: "approved", approvedBy: userId });
+      await recordFederatedActionEvent(
+        { ...claimed, status: result.success ? "completed" : "failed" },
+        result.success ? "eos.action.completed.v1" : "eos.action.failed.v1",
+        result.success ? { result: result.result ?? {} } : { errorCode: "action_execution_failed" },
+      );
       res.json(result);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -90,6 +98,7 @@ export function registerActionRoutes(app: Express): void {
           status: current?.status ?? action.status,
         });
       }
+      await recordFederatedActionEvent(claimed, "eos.approval.decided.v1", { decision: "rejected", rejectedBy: userId });
       res.json(claimed);
     } catch (error: any) {
       res.status(500).json({ message: error.message });

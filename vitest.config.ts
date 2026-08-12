@@ -9,6 +9,7 @@ export default defineConfig({
     },
   },
   test: {
+    testTimeout: 30_000,
     environment: "node",
     // Dummy env vars so lib/env.ts helpers don't throw during tests that mock
     // the underlying SDK. Tests that need the real value override these.

@@ -1,0 +1,87 @@
+name: Production qualification
+
+on:
+  pull_request:
+  push:
+    branches: [feature/company-system, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eos-qualification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: eos_test
+          POSTGRES_PASSWORD: eos_test
+          POSTGRES_DB: eos_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eos_test -d eos_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://eos_test:eos_test@127.0.0.1:5432/eos_test
+      EOS_TEST_DATABASE_URL: postgresql://eos_test:eos_test@127.0.0.1:5432/eos_test
+      NODE_ENV: test
+      VITE_CLERK_PUBLISHABLE_KEY: pk_test_ZW9zLWZpeHR1cmUuY2xlcmsuYWNjb3VudHMuZGV2JA
+      EOS_CREDENTIAL_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      SESSION_SECRET: ci-only-session-secret-not-for-production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install pinned browser runtime
+        run: npx playwright install --with-deps chromium
+      - name: Dependency vulnerability gate
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm audit --audit-level=high
+      - name: Establish disposable database baseline
+        run: npx drizzle-kit push --force
+      - name: Apply checksum migrations
+        run: npm run db:migrate
+      - name: Type safety
+        run: npm run check
+      - name: Unit and integration qualification
+        run: npm test
+      - name: Browser, mobile, accessibility, and local performance acceptance
+        run: npm run test:e2e
+      - name: Logical backup and restore rehearsal
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+          pg_dump "$DATABASE_URL" --format=custom --file=eos-ci-backup.dump
+          PGPASSWORD=eos_test createdb --host=127.0.0.1 --username=eos_test eos_restore_test
+          PGPASSWORD=eos_test pg_restore --host=127.0.0.1 --username=eos_test --dbname=eos_restore_test --exit-on-error eos-ci-backup.dump
+          PGPASSWORD=eos_test psql --host=127.0.0.1 --username=eos_test --dbname=eos_restore_test --set=ON_ERROR_STOP=1 --command="SELECT count(*) AS restored_migrations FROM eos_schema_migrations;"
+      - name: Production build
+        run: npm run build
+      - name: Container build
+        run: docker build --build-arg VITE_CLERK_PUBLISHABLE_KEY="$VITE_CLERK_PUBLISHABLE_KEY" -t eos:${{ github.sha }} .
+      - name: Create qualification evidence pack
+        run: npm run evidence:create
+      - name: Upload qualification evidence pack
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: eos-qualification-${{ github.sha }}
+          path: |
+            .tmp/eos-qualification-evidence.json
+            .tmp/eos-qualification-evidence.json.sha256
+            .tmp/eos-local-load-result.json
+          if-no-files-found: error
+          retention-days: 90

@@ -14,6 +14,8 @@ import {
   agentActions as agentActionsTable,
   oauthTokens as oauthTokensTable,
   agentMetrics as agentMetricsTable,
+  companies as companiesTable,
+  portfolios as portfoliosTable,
   type Agent, 
   type Task, 
   type InsertAgent, 
@@ -47,7 +49,7 @@ import {
   type InsertAgentMetric,
 } from "@shared/schema";
 import { db, client } from './db';
-import { eq, and, desc, asc, sql } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, inArray, isNull, ne } from 'drizzle-orm';
 
 export interface IStorage {
   // User operations
@@ -56,6 +58,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByClerkId(clerkUserId: string): Promise<User | undefined>;
+  claimLegacyBusinessOwnership(currentUserId: string, verifiedEmail: string): Promise<{ companies: number; portfolios: number }>;
   createUser(user: InsertUser): Promise<User>;
   createOrUpdateUser(clerkUserId: string, data: Omit<InsertUser, 'clerkUserId'>): Promise<User>;
   updateUser(id: string, updates: Partial<InsertUser>): Promise<User>;
@@ -161,10 +164,12 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   constructor() {
     // Clerk owns session management — no local session store is created here.
-    // Initialize with sample data if needed.
-    this.initSampleData().catch(err => {
-      console.error("Error initializing sample data:", err);
-    });
+    // Demo data is an explicit development-only opt-in; boot is read-only by default.
+    if (process.env.NODE_ENV === "development" && process.env.EOS_SEED_SAMPLE_DATA === "true") {
+      this.initSampleData().catch(err => {
+        console.error("Error initializing sample data:", err);
+      });
+    }
   }
   
   // User operations
@@ -192,6 +197,38 @@ export class DatabaseStorage implements IStorage {
 
     const users = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, clerkUserId));
     return users.length > 0 ? users[0] : undefined;
+  }
+
+  async claimLegacyBusinessOwnership(currentUserId: string, verifiedEmail: string): Promise<{ companies: number; portfolios: number }> {
+    const normalizedEmail = verifiedEmail.trim().toLowerCase();
+    if (!normalizedEmail) return { companies: 0, portfolios: 0 };
+
+    const legacyPrincipals = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(and(
+        sql`lower(${usersTable.email}) = ${normalizedEmail}`,
+        isNull(usersTable.clerkUserId),
+        ne(usersTable.id, currentUserId),
+      ));
+
+    const legacyIds = legacyPrincipals.map((principal) => principal.id);
+    if (!legacyIds.length) return { companies: 0, portfolios: 0 };
+
+    return db.transaction(async (tx) => {
+      const claimedCompanies = await tx
+        .update(companiesTable)
+        .set({ ownerUserId: currentUserId })
+        .where(inArray(companiesTable.ownerUserId, legacyIds))
+        .returning({ id: companiesTable.id });
+      const claimedPortfolios = await tx
+        .update(portfoliosTable)
+        .set({ ownerId: currentUserId, updatedAt: new Date() })
+        .where(inArray(portfoliosTable.ownerId, legacyIds))
+        .returning({ id: portfoliosTable.id });
+
+      return { companies: claimedCompanies.length, portfolios: claimedPortfolios.length };
+    });
   }
 
   async createUser(user: InsertUser): Promise<User> {

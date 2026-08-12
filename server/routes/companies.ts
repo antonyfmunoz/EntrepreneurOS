@@ -8,8 +8,21 @@ import {
   workflows as workflowsTable,
 } from "@shared/schema";
 import { db } from "../db";
+import { hasEntitlement } from "../billing/stripe";
+
+async function ownsCompany(companyId: number, userId: string): Promise<boolean> {
+  const rows = await db.select({ id: companiesTable.id }).from(companiesTable)
+    .where(and(eq(companiesTable.id, companyId), eq(companiesTable.ownerUserId, userId))).limit(1);
+  return rows.length === 1;
+}
 
 export function registerCompanyRoutes(app: Express): void {
+  app.get("/api/companies", async (req, res, next) => {
+    try {
+      const rows = await db.select().from(companiesTable).where(eq(companiesTable.ownerUserId, req.user.id));
+      return res.json({ companies: rows });
+    } catch (error) { return next(error); }
+  });
   // GET /api/companies/:id — single company by ID
   app.get("/api/companies/:id", async (req, res) => {
     try {
@@ -42,6 +55,10 @@ export function registerCompanyRoutes(app: Express): void {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Not authenticated" });
       }
+      const companyId = Number(req.params.id);
+      if (!Number.isInteger(companyId) || !(await ownsCompany(companyId, req.user.id))) {
+        return res.status(404).json({ message: "Company not found" });
+      }
       // Tasks table has no companyId column — return empty until schema is extended
       return res.json([]);
     } catch (error) {
@@ -55,6 +72,10 @@ export function registerCompanyRoutes(app: Express): void {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Not authenticated" });
+      }
+      const numericCompanyId = Number(req.params.id);
+      if (!Number.isInteger(numericCompanyId) || !(await ownsCompany(numericCompanyId, req.user.id))) {
+        return res.status(404).json({ message: "Company not found" });
       }
       const companyId = req.params.id;
       const rows = await db
@@ -73,6 +94,10 @@ export function registerCompanyRoutes(app: Express): void {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Not authenticated" });
+      }
+      const numericCompanyId = Number(req.params.id);
+      if (!Number.isInteger(numericCompanyId) || !(await ownsCompany(numericCompanyId, req.user.id))) {
+        return res.status(404).json({ message: "Company not found" });
       }
       const companyId = req.params.id;
       const rows = await db
@@ -95,6 +120,9 @@ export function registerCompanyRoutes(app: Express): void {
       const companyId = Number(req.params.id);
       if (!Number.isFinite(companyId)) {
         return res.status(400).json({ message: "Invalid company id" });
+      }
+      if (!(await ownsCompany(companyId, req.user.id))) {
+        return res.status(404).json({ message: "Company not found" });
       }
       const rows = await db
         .select()
@@ -143,7 +171,8 @@ export function registerCompanyRoutes(app: Express): void {
       offer: z.string().optional(),
       targetCustomer: z.string().optional(),
       goals: z.string().optional(),
-      assistantName: z.string().optional(),
+      assistantName: z.string().trim().min(1).max(40).optional(),
+      founderProfile: z.record(z.unknown()).optional(),
     });
 
     try {
@@ -152,6 +181,9 @@ export function registerCompanyRoutes(app: Express): void {
       }
 
       const userId = req.user.id;
+      if (!(await hasEntitlement(userId, "company:create"))) {
+        return res.status(402).json({ code: "entitlement_required", message: "Your current plan does not permit another company." });
+      }
       const data = createCompanySchema.parse(req.body);
 
       const [created] = await db
@@ -165,6 +197,7 @@ export function registerCompanyRoutes(app: Express): void {
           targetCustomer: data.targetCustomer ?? null,
           goals: data.goals ?? null,
           assistantName: data.assistantName || "Assistant",
+          founderProfile: data.founderProfile || {},
         })
         .returning();
 
@@ -189,7 +222,8 @@ export function registerCompanyRoutes(app: Express): void {
       offer: z.string().optional().nullable(),
       targetCustomer: z.string().optional().nullable(),
       goals: z.string().optional().nullable(),
-      assistantName: z.string().optional().nullable(),
+      assistantName: z.string().trim().min(1).max(40).optional().nullable(),
+      founderProfile: z.record(z.unknown()).optional(),
     });
 
     try {
@@ -236,6 +270,40 @@ export function registerCompanyRoutes(app: Express): void {
         message: "Failed to update company",
         error: error instanceof Error ? error.message : String(error),
       });
+    }
+  });
+
+  app.put("/api/companies/:id", async (req, res, next) => {
+    const updateSchema = z.object({
+      name: z.string().trim().min(1).max(160).optional(),
+      stage: z.string().trim().max(80).optional(),
+      goals: z.string().trim().max(10_000).optional(),
+    }).strict();
+    try {
+      const companyId = Number(req.params.id);
+      if (!Number.isInteger(companyId)) return res.status(400).json({ code: "invalid_company", message: "Invalid company id." });
+      const update = updateSchema.parse(req.body);
+      const [company] = await db.update(companiesTable).set(update).where(and(eq(companiesTable.id, companyId), eq(companiesTable.ownerUserId, req.user.id))).returning();
+      if (!company) return res.status(404).json({ code: "company_not_found", message: "Company not found." });
+      return res.json(company);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ code: "invalid_company_update", message: "Check the company fields.", issues: error.issues });
+      return next(error);
+    }
+  });
+
+  app.put("/api/companies/:id/autonomy", async (req, res, next) => {
+    try {
+      const companyId = Number(req.params.id);
+      const { autonomyLevel } = z.object({ autonomyLevel: z.enum(["observe", "recommend", "assist", "execute"]) }).parse(req.body);
+      const [existing] = await db.select().from(companiesTable).where(and(eq(companiesTable.id, companyId), eq(companiesTable.ownerUserId, req.user.id))).limit(1);
+      if (!existing) return res.status(404).json({ code: "company_not_found", message: "Company not found." });
+      const founderProfile = { ...(existing.founderProfile as Record<string, unknown> || {}), autonomyLevel };
+      const [updated] = await db.update(companiesTable).set({ founderProfile }).where(eq(companiesTable.id, companyId)).returning();
+      return res.json({ autonomyLevel, companyId: updated.id });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ code: "invalid_autonomy", message: "Unknown autonomy level." });
+      return next(error);
     }
   });
 }

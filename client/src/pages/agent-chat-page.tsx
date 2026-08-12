@@ -20,6 +20,12 @@ interface Conversation {
   updatedAt: string;
 }
 
+interface CompanyContext {
+  id: number | string;
+  name: string;
+  assistantName?: string | null;
+}
+
 const SUGGESTED_ACTIONS = [
   "What are my top priorities this week?",
   "Show me workflow bottlenecks",
@@ -33,6 +39,13 @@ export default function AgentChatPage() {
   const [message, setMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+
+  const { data: company } = useQuery<CompanyContext>({
+    queryKey: ["company", companyId],
+    queryFn: () => apiRequest<CompanyContext>(`/api/companies/${companyId}`, "GET"),
+    enabled: !!companyId,
+  });
+  const assistantName = company?.assistantName || "Executive Assistant";
 
   const { data: conversation, isLoading, error } = useQuery<Conversation>({
     queryKey: ["conversation", companyId],
@@ -71,7 +84,7 @@ export default function AgentChatPage() {
       <div className="flex flex-col h-[calc(100vh-4rem)]">
         {/* Header */}
         <div className="border-b border-border-subtle px-6 py-4">
-          <h1 className="font-mono font-bold text-2xl text-text">DEX</h1>
+          <h1 className="font-mono font-bold text-2xl text-text">{assistantName}</h1>
           <p className="font-mono text-sm text-text-secondary mt-1">
             Your AI executive assistant. Ask anything about your company.
           </p>
@@ -110,7 +123,7 @@ export default function AgentChatPage() {
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
               <div className="font-mono text-4xl text-text-tertiary mb-4">—</div>
               <h3 className="font-mono font-semibold text-lg text-text mb-2">
-                I'm DEX, your AI executive assistant. Ask me anything about your company.
+                I'm {assistantName}, your Executive Assistant. I coordinate the right organizational channel for your company.
               </h3>
               <div className="mt-8 flex flex-wrap gap-3 justify-center max-w-2xl">
                 {SUGGESTED_ACTIONS.map((action) => (
@@ -210,7 +223,7 @@ export default function AgentChatPage() {
                     handleSend();
                   }
                 }}
-                placeholder="Ask DEX anything—workflows, tasks, strategy, org structure..."
+                placeholder={`Ask ${assistantName} about workflows, tasks, strategy, or organization…`}
                 className="w-full bg-surface-subtle border border-border rounded-md px-4 py-3 font-mono text-base text-text placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-150 resize-none min-h-[48px] max-h-[200px]"
                 rows={1}
                 disabled={sendMessageMutation.isPending}

@@ -4,7 +4,7 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 // Allows non-component code to attach Authorization headers to every request.
 let getTokenFn: (() => Promise<string | null>) | null = null;
 
-export function setTokenGetter(fn: () => Promise<string | null>) {
+export function setTokenGetter(fn: (() => Promise<string | null>) | null) {
   getTokenFn = fn;
 }
 
@@ -22,21 +22,42 @@ async function authHeaders(extra?: Record<string, string>): Promise<Record<strin
   return headers;
 }
 
-export async function apiRequest(
-  method: string,
-  url: string,
-  data?: unknown | undefined,
-): Promise<Response> {
-  const headers = await authHeaders(data ? { "Content-Type": "application/json" } : undefined);
+// New code uses apiRequest(method, url, data) and consumes the Response. A
+// handful of generated screens use the older apiRequest(url, options) or
+// apiRequest<T>(url, method, data) convention. Keeping the compatibility
+// overload here gives the application one authenticated transport instead of
+// letting those screens fall back to unauthenticated fetch calls.
+export async function apiRequest<T = any>(
+  first: string,
+  second?: string | RequestInit,
+  third?: unknown,
+): Promise<T> {
+  const methodFirst = /^(GET|POST|PUT|PATCH|DELETE)$/.test(first) && typeof second === "string";
+  const url = methodFirst ? second as string : first;
+  const options = !methodFirst && second && typeof second === "object" ? second : undefined;
+  const method = methodFirst ? first : typeof second === "string" ? second : options?.method || "GET";
+  const data = methodFirst ? third : typeof second === "string" ? third : options?.body;
+  const serializedBody = data == null
+    ? undefined
+    : typeof data === "string"
+      ? data
+      : JSON.stringify(data);
+  const headers = await authHeaders({
+    ...(serializedBody ? { "Content-Type": "application/json" } : {}),
+    ...(options?.headers ? Object.fromEntries(new Headers(options.headers).entries()) : {}),
+  });
   const res = await fetch(url, {
+    ...options,
     method,
     headers,
-    body: data ? JSON.stringify(data) : undefined,
+    body: serializedBody,
     credentials: "include",
   });
 
   await throwIfResNotOk(res);
-  return res;
+  if (methodFirst) return res as T;
+  if (res.status === 204) return undefined as T;
+  return await res.json() as T;
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";

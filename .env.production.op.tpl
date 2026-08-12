@@ -1,0 +1,31 @@
+# Secret references only. Create the EntrepreneurOS/Production item in 1Password
+# before public promotion; never replace these references with plaintext values.
+DATABASE_URL=op://EntrepreneurOS/Production/DATABASE_URL
+SESSION_SECRET=op://EntrepreneurOS/Production/SESSION_SECRET
+ANTHROPIC_API_KEY=op://EntrepreneurOS/Production/ANTHROPIC_API_KEY
+VITE_CLERK_PUBLISHABLE_KEY=op://EntrepreneurOS/Production/VITE_CLERK_PUBLISHABLE_KEY
+CLERK_PUBLISHABLE_KEY=op://EntrepreneurOS/Production/CLERK_PUBLISHABLE_KEY
+CLERK_SECRET_KEY=op://EntrepreneurOS/Production/CLERK_SECRET_KEY
+EOS_CREDENTIAL_ENCRYPTION_KEY=op://EntrepreneurOS/Production/EOS_CREDENTIAL_ENCRYPTION_KEY
+VITE_POSTHOG_API_KEY=op://EntrepreneurOS/Production/VITE_POSTHOG_API_KEY
+POSTHOG_API_KEY=op://EntrepreneurOS/Production/VITE_POSTHOG_API_KEY
+GOOGLE_CLIENT_ID=op://UMH-Production/Google-Workspace-OAuth/client_id
+GOOGLE_CLIENT_SECRET=op://UMH-Production/Google-Workspace-OAuth/client_secret
+GOOGLE_REDIRECT_URI=https://entrepreneuros.net/api/auth/google/callback
+NOTION_API_KEY=op://UMH-Production/Notion-Integration/api_key
+EOS_PUBLIC_ORIGIN=https://entrepreneuros.net
+EOS_PRODUCTION_ENVIRONMENT_SUBJECT=environment:entrepreneuros-production
+EOS_PRODUCTION_RELEASE_BRANCH=feature/company-system
+EOS_GITHUB_REPOSITORY=antonyfmunoz/EntrepreneurOS
+EOS_PRODUCTION_BEARER_TOKEN=op://EntrepreneurOS/Production/EOS_PRODUCTION_BEARER_TOKEN
+EOS_PRODUCTION_COMPANY_ID=op://EntrepreneurOS/Production/EOS_PRODUCTION_COMPANY_ID
+EOS_PRODUCTION_FORBIDDEN_COMPANY_ID=op://EntrepreneurOS/Production/EOS_PRODUCTION_FORBIDDEN_COMPANY_ID
+EOS_ALERT_WEBHOOK_URL=op://EntrepreneurOS/Production/EOS_ALERT_WEBHOOK_URL
+EOS_ALERT_WEBHOOK_SECRET=op://EntrepreneurOS/Production/EOS_ALERT_WEBHOOK_SECRET
+STRIPE_RESTRICTED_KEY=op://EntrepreneurOS/Production/STRIPE_RESTRICTED_KEY
+STRIPE_WEBHOOK_SECRET=op://EntrepreneurOS/Production/STRIPE_WEBHOOK_SECRET
+EOS_STRIPE_PLANS=op://EntrepreneurOS/Production/EOS_STRIPE_PLANS
+EOS_PLATFORM_ADMIN_USER_IDS=op://EntrepreneurOS/Production/EOS_PLATFORM_ADMIN_USER_IDS
+EOS_ACCOUNT_DELETION_ENABLED=true
+EOS_LEGAL_ENFORCEMENT=true
+EOS_PUBLIC_PAID_SAAS=true

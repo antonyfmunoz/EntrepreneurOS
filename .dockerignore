@@ -3,3 +3,9 @@ dist
 .git
 .env
 .planning
+.claude
+.codex
+.tmp
+coverage
+playwright-report
+test-results

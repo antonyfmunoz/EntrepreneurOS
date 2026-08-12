@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/clerk-react";
-import { Camera, Check, Loader2, Upload, X } from "lucide-react";
+import { Camera, Check, DollarSign, Download, Loader2 } from "lucide-react";
 import { UniversalLayout } from "@/components/universal-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,12 +49,14 @@ export default function SettingsPage() {
   const { user } = useUser();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("profile");
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [deletionConfirmation, setDeletionConfirmation] = useState("");
+  const [monthlyAiBudget, setMonthlyAiBudget] = useState("25");
+  const [perRequestAiBudget, setPerRequestAiBudget] = useState("1");
 
   const { data: userProfile, isLoading: loadingUser, error: userError } = useQuery<UserProfile>({
     queryKey: ["/api/users/me"],
     queryFn: async () => {
-      const response = await apiRequest("/api/users/me", "GET");
+      const response = await apiRequest<Response>("GET", "/api/users/me");
       return response.json();
     },
   });
@@ -62,7 +64,7 @@ export default function SettingsPage() {
   const { data: companiesData, isLoading: loadingCompanies } = useQuery<CompaniesResponse>({
     queryKey: ["/api/companies"],
     queryFn: async () => {
-      const response = await apiRequest("/api/companies", "GET");
+      const response = await apiRequest<Response>("GET", "/api/companies");
       return response.json();
     },
   });
@@ -72,7 +74,7 @@ export default function SettingsPage() {
     queryFn: async () => {
       const companyId = companiesData?.companies?.[0]?.id;
       if (!companyId) throw new Error("No company found");
-      const response = await apiRequest(`/api/companies/${companyId}`, "GET");
+      const response = await apiRequest<Response>("GET", `/api/companies/${companyId}`);
       return response.json();
     },
     enabled: !!companiesData?.companies?.[0]?.id,
@@ -80,7 +82,7 @@ export default function SettingsPage() {
 
   const updateProfileMutation = useMutation({
     mutationFn: async (data: Partial<UserProfile>) => {
-      const response = await apiRequest("/api/users/me", "PUT", data);
+      const response = await apiRequest<Response>("PUT", "/api/users/me", data);
       return response.json();
     },
     onSuccess: () => {
@@ -92,7 +94,7 @@ export default function SettingsPage() {
     mutationFn: async (data: Partial<CompanySettings>) => {
       const companyId = companySettings?.id;
       if (!companyId) throw new Error("No company found");
-      const response = await apiRequest(`/api/companies/${companyId}`, "PUT", data);
+      const response = await apiRequest<Response>("PUT", `/api/companies/${companyId}`, data);
       return response.json();
     },
     onSuccess: () => {
@@ -102,7 +104,7 @@ export default function SettingsPage() {
 
   const updateNotificationsMutation = useMutation({
     mutationFn: async (data: NotificationPreferences) => {
-      const response = await apiRequest("/api/users/me/notifications", "PUT", data);
+      const response = await apiRequest<Response>("PUT", "/api/users/me/notifications", data);
       return response.json();
     },
   });
@@ -111,48 +113,67 @@ export default function SettingsPage() {
     mutationFn: async (data: AutonomySettings) => {
       const companyId = companySettings?.id;
       if (!companyId) throw new Error("No company found");
-      const response = await apiRequest(`/api/companies/${companyId}/autonomy`, "PUT", data);
+      const response = await apiRequest<Response>("PUT", `/api/companies/${companyId}/autonomy`, data);
       return response.json();
     },
   });
 
-  const uploadAvatarMutation = useMutation({
-    mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append("avatar", file);
-      const response = await fetch("/api/users/me/avatar", {
-        method: "POST",
-        body: formData,
-      });
-      if (!response.ok) throw new Error("Upload failed");
+  const aiBudget = useQuery<{ configured: boolean; enabled: boolean; monthlyLimitMicros: number | null; perRequestLimitMicros: number | null; spentMicros: number }>({
+    queryKey: ["/api/eos/companies", companiesData?.companies?.[0]?.id, "ai-budget"],
+    queryFn: async () => {
+      const response = await apiRequest<Response>("GET", `/api/eos/companies/${companiesData!.companies[0].id}/ai-budget`);
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
-      setUploadingAvatar(false);
-    },
-    onError: () => {
-      setUploadingAvatar(false);
-    },
+    enabled: Boolean(companiesData?.companies?.[0]?.id),
   });
 
-  const removeAvatarMutation = useMutation({
+  const exportAccountMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("/api/users/me/avatar", "DELETE");
-      return response.json();
+      const response = await apiRequest<Response>("GET", "/api/users/me/export");
+      return await response.blob();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `entrepreneuros-account-export-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
     },
   });
+  const updateAiBudgetMutation = useMutation({
+    mutationFn: async () => {
+      const companyId = companiesData?.companies?.[0]?.id;
+      if (!companyId) throw new Error("No company selected.");
+      const response = await apiRequest<Response>("PUT", `/api/eos/companies/${companyId}/ai-budget`, { monthlyLimitDollars: Number(monthlyAiBudget), perRequestLimitDollars: Number(perRequestAiBudget), enabled: true });
+      return response.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/eos/companies", companiesData?.companies?.[0]?.id, "ai-budget"] }),
+  });
 
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setUploadingAvatar(true);
-      uploadAvatarMutation.mutate(file);
-    }
-  };
+  const deletionRequest = useQuery<{ status: string; scheduledFor: string; deleteOwnedOrganizations: boolean; lastError?: string } | null>({ queryKey: ["/api/users/me/deletion"] });
+  const analyticsConsent = useQuery<{ consent: boolean | null; decidedAt: string | null }>({ queryKey: ["/api/users/me/analytics-consent"] });
+  const updateAnalyticsConsent = useMutation({
+    mutationFn: async (consent: boolean) => {
+      const response = await apiRequest<Response>("PUT", "/api/users/me/analytics-consent", { consent });
+      return response.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/users/me/analytics-consent"] }),
+  });
+  const scheduleDeletionMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest<Response>("POST", "/api/users/me/deletion", { confirmation: deletionConfirmation, deleteOwnedOrganizations: false });
+      return response.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/users/me/deletion"] }),
+  });
+  const cancelDeletionMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest<Response>("DELETE", "/api/users/me/deletion");
+      return response.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/users/me/deletion"] }),
+  });
 
   const [profileForm, setProfileForm] = useState<Partial<UserProfile>>({});
   const [companyForm, setCompanyForm] = useState<Partial<CompanySettings>>({});
@@ -227,11 +248,13 @@ export default function SettingsPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-8">
+          <TabsList className="mb-8 h-auto flex-wrap justify-start">
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="company">Company</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="autonomy">AI Autonomy</TabsTrigger>
+            <TabsTrigger value="privacy">Data & Privacy</TabsTrigger>
+            <TabsTrigger value="cost">AI Cost</TabsTrigger>
           </TabsList>
 
           <TabsContent value="profile">
@@ -258,45 +281,9 @@ export default function SettingsPage() {
                           </div>
                         )}
                       </div>
-                      {uploadingAvatar && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-text/50 rounded-full">
-                          <Loader2 className="w-6 h-6 animate-spin text-text-on-primary" />
-                        </div>
-                      )}
                     </div>
-                    <div className="space-x-2">
-                      <label>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleAvatarUpload}
-                          className="hidden"
-                          disabled={uploadingAvatar}
-                        />
-                        <Button variant="secondary" size="sm" disabled={uploadingAvatar} asChild>
-                          <span>
-                            <Upload className="w-4 h-4 mr-2" />
-                            Upload avatar
-                          </span>
-                        </Button>
-                      </label>
-                      {userProfile?.avatarUrl && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeAvatarMutation.mutate()}
-                          disabled={removeAvatarMutation.isPending}
-                        >
-                          <X className="w-4 h-4 mr-2" />
-                          Remove
-                        </Button>
-                      )}
-                    </div>
+                    <p className="text-sm text-text-secondary">Your identity photo is managed from the account menu in the top-right corner.</p>
                   </div>
-
-                  {uploadAvatarMutation.isError && (
-                    <p className="font-mono text-xs text-destructive">Failed to upload avatar. Try again.</p>
-                  )}
 
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
@@ -305,8 +292,9 @@ export default function SettingsPage() {
                       type="email"
                       placeholder="you@company.com"
                       defaultValue={userProfile?.email}
-                      onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                      disabled
                     />
+                    <p className="font-mono text-xs text-text-secondary">Email changes are managed by the identity provider.</p>
                     {profileErrors.email && (
                       <p className="font-mono text-xs text-destructive">{profileErrors.email}</p>
                     )}
@@ -404,34 +392,6 @@ export default function SettingsPage() {
                     </Select>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="industry">Industry</Label>
-                    <Input
-                      id="industry"
-                      placeholder="SaaS, E-commerce, Consulting"
-                      defaultValue={companySettings?.industry}
-                      onChange={(e) => setCompanyForm({ ...companyForm, industry: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="businessModel">Business Model</Label>
-                    <Select
-                      defaultValue={companySettings?.businessModel}
-                      onValueChange={(value) => setCompanyForm({ ...companyForm, businessModel: value })}
-                    >
-                      <SelectTrigger id="businessModel">
-                        <SelectValue placeholder="Select model" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="saas">SaaS</SelectItem>
-                        <SelectItem value="services">Services</SelectItem>
-                        <SelectItem value="product">Product</SelectItem>
-                        <SelectItem value="hybrid">Hybrid</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="goals">Goals</Label>
@@ -576,7 +536,7 @@ export default function SettingsPage() {
                 <div className="space-y-2">
                   <Label htmlFor="autonomyLevel">Autonomy Level</Label>
                   <p className="font-mono text-xs text-text-secondary mb-4">
-                    Higher autonomy = DEX executes more steps without asking. Start low, increase as trust builds.
+                    Higher autonomy lets the scoped Role Agent execute more steps without asking. Start low and increase only with evidence.
                   </p>
                   <Select
                     defaultValue={autonomyForm.autonomyLevel}
@@ -600,22 +560,22 @@ export default function SettingsPage() {
                   <p className="font-mono text-xs uppercase tracking-wide text-text-tertiary">Current Level Details</p>
                   {autonomyForm.autonomyLevel === "observe" && (
                     <p className="font-mono text-sm text-text">
-                      DEX watches but never acts. You review all recommendations manually.
+                      The Role Agent watches but never acts. You review all recommendations manually.
                     </p>
                   )}
                   {autonomyForm.autonomyLevel === "recommend" && (
                     <p className="font-mono text-sm text-text">
-                      DEX suggests actions. You approve before execution.
+                      The Role Agent suggests actions. You approve before execution.
                     </p>
                   )}
                   {autonomyForm.autonomyLevel === "assist" && (
                     <p className="font-mono text-sm text-text">
-                      DEX executes simple tasks automatically. You review complex decisions.
+                      The Role Agent executes bounded simple tasks. You review complex decisions.
                     </p>
                   )}
                   {autonomyForm.autonomyLevel === "execute" && (
                     <p className="font-mono text-sm text-text">
-                      DEX executes most workflows independently. You're notified of outcomes.
+                      The Role Agent executes authorized workflows independently. You receive outcomes and evidence.
                     </p>
                   )}
                 </div>
@@ -645,6 +605,60 @@ export default function SettingsPage() {
                 {updateAutonomyMutation.isSuccess && (
                   <p className="font-mono text-xs text-success text-right">Autonomy level updated.</p>
                 )}
+              </div>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="privacy">
+            <Card className="p-8">
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-lg font-semibold">Export your account data</h2>
+                  <p className="mt-2 text-sm text-text-secondary">Download the personal profile, owned portfolio and company records, memberships, messages you sent, audit activity, support requests, billing state, and provider metadata associated with your account. Provider secrets are never included.</p>
+                </div>
+                <Button onClick={() => exportAccountMutation.mutate()} disabled={exportAccountMutation.isPending}>
+                  {exportAccountMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                  Download account export
+                </Button>
+                {exportAccountMutation.isError && <p className="text-sm text-destructive">The export could not be prepared. Try again.</p>}
+                <div className="border-t pt-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div><h2 className="text-lg font-semibold">Optional product analytics</h2><p className="mt-2 text-sm text-text-secondary">Allow privacy-scoped usage events that help improve EOS. Content, prompts, provider secrets, and company records are not analytics properties. Choosing no does not reduce product functionality.</p></div>
+                    <Switch aria-label="Allow optional product analytics" checked={analyticsConsent.data?.consent === true} onCheckedChange={(consent) => updateAnalyticsConsent.mutate(consent)} disabled={updateAnalyticsConsent.isPending} />
+                  </div>
+                  <p className="mt-2 text-xs text-text-secondary">Current choice: {analyticsConsent.data?.consent === true ? "Allowed" : analyticsConsent.data?.consent === false ? "Declined" : "Not chosen"}</p>
+                </div>
+                <div className="border-t pt-6">
+                  <h2 className="text-lg font-semibold text-destructive">Delete your account</h2>
+                  {deletionRequest.data?.status === "scheduled" ? (
+                    <div className="mt-3 space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                      <p>Deletion is scheduled for {new Date(deletionRequest.data.scheduledFor).toLocaleString()}. You can cancel until processing begins.</p>
+                      <Button variant="outline" onClick={() => cancelDeletionMutation.mutate()} disabled={cancelDeletionMutation.isPending}>Cancel deletion</Button>
+                    </div>
+                  ) : (
+                    <div className="mt-3 space-y-4">
+                      <p className="text-sm text-text-secondary">A cooling-off period applies. Identity access and personal working data are removed after the scheduled date. Download an export first. If you own a portfolio or company, transfer ownership before the deletion date; EOS will block execution until that is complete.</p>
+                      <div className="space-y-2"><Label htmlFor="delete-confirmation">Type DELETE MY ENTREPRENEUROS ACCOUNT</Label><Input id="delete-confirmation" value={deletionConfirmation} onChange={(event) => setDeletionConfirmation(event.target.value)} /></div>
+                      <Button variant="destructive" onClick={() => scheduleDeletionMutation.mutate()} disabled={scheduleDeletionMutation.isPending || deletionConfirmation !== "DELETE MY ENTREPRENEUROS ACCOUNT"}>Schedule account deletion</Button>
+                      {scheduleDeletionMutation.isError && <p className="text-sm text-destructive">Deletion could not be scheduled.</p>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="cost">
+            <Card className="p-8">
+              <div className="space-y-6">
+                <div><h2 className="flex items-center gap-2 text-lg font-semibold"><DollarSign className="h-5 w-5" />AI spend control</h2><p className="mt-2 text-sm text-text-secondary">EOS reserves the worst-case request cost atomically before calling a model. Concurrent agents cannot exceed this company budget.</p></div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2"><Label htmlFor="monthly-ai-budget">Monthly limit (USD)</Label><Input id="monthly-ai-budget" type="number" min="0.01" max="10000" step="0.01" value={monthlyAiBudget} onChange={(event) => setMonthlyAiBudget(event.target.value)} /></div>
+                  <div className="space-y-2"><Label htmlFor="request-ai-budget">Per-request limit (USD)</Label><Input id="request-ai-budget" type="number" min="0.01" max="1000" step="0.01" value={perRequestAiBudget} onChange={(event) => setPerRequestAiBudget(event.target.value)} /></div>
+                </div>
+                {aiBudget.data?.configured && <div className="rounded-lg bg-surface-subtle p-4 text-sm"><p>Current monthly limit: ${(Number(aiBudget.data.monthlyLimitMicros) / 1_000_000).toFixed(2)}</p><p>Current usage and reservations: ${(aiBudget.data.spentMicros / 1_000_000).toFixed(4)}</p></div>}
+                <Button onClick={() => updateAiBudgetMutation.mutate()} disabled={updateAiBudgetMutation.isPending || Number(perRequestAiBudget) > Number(monthlyAiBudget)}>{updateAiBudgetMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save AI budget</Button>
+                {updateAiBudgetMutation.isError && <p className="text-sm text-destructive">The budget could not be saved. Confirm both limits are positive and the per-request limit is no greater than the monthly limit.</p>}
               </div>
             </Card>
           </TabsContent>

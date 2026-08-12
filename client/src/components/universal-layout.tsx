@@ -1,10 +1,7 @@
-import { ReactNode, useState } from "react";
-import { Header } from "@/components/header";
-import { LeftRail } from "@/components/left-rail";
-import { RightRail } from "@/components/right-rail";
-import { Menu, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import clsx from "clsx";
+import { ReactNode } from "react";
+import { Bot, FileCheck2, ShieldCheck } from "lucide-react";
+import CanonicalUniversalLayout from "@/components/layout/universal-layout";
+import { cn } from "@/lib/utils";
 
 export interface UniversalLayoutProps {
   children: ReactNode;
@@ -19,74 +16,21 @@ export function UniversalLayout({
   rightRailContent,
   className,
 }: UniversalLayoutProps) {
-  const [leftRailOpen, setLeftRailOpen] = useState(false);
-  const [rightRailOpen, setRightRailOpen] = useState(false);
-
-  const toggleLeftRail = () => {
-    setLeftRailOpen(!leftRailOpen);
-    if (rightRailOpen) setRightRailOpen(false);
-  };
-
-  const toggleRightRail = () => {
-    setRightRailOpen(!rightRailOpen);
-    if (leftRailOpen) setLeftRailOpen(false);
-  };
-
-  const closeRails = () => {
-    setLeftRailOpen(false);
-    setRightRailOpen(false);
-  };
-
-  return (
-    <div className="flex flex-col h-screen w-full overflow-hidden bg-[#f5f6f7]">
-      <Header
-        onLeftMenuClick={toggleLeftRail}
-        onRightMenuClick={showRightRail ? toggleRightRail : undefined}
-      />
-
-      <div className="flex flex-1 overflow-hidden relative">
-        <aside
-          className={clsx(
-            "fixed lg:static top-[64px] left-0 bottom-0 w-64 bg-[#eff1f2] z-40 transition-transform duration-300",
-            leftRailOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-          )}
-        >
-          <LeftRail onNavigate={closeRails} />
-        </aside>
-
-        <main
-          className={clsx(
-            "flex-1 overflow-y-auto overflow-x-hidden",
-            className
-          )}
-        >
-          <div className="w-full h-full">
-            {children}
-          </div>
-        </main>
-
-        {showRightRail && (
-          <aside
-            className={clsx(
-              "fixed lg:static top-[64px] right-0 bottom-0 w-80 bg-[#eff1f2] z-40 transition-transform duration-300",
-              rightRailOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
-            )}
-          >
-            {rightRailContent && (
-              <RightRail>{rightRailContent}</RightRail>
-            )}
-          </aside>
-        )}
-
-        {(leftRailOpen || rightRailOpen) && (
-          <div
-            className="fixed inset-0 bg-black/20 z-30 lg:hidden"
-            onClick={closeRails}
-            aria-hidden="true"
-          />
-        )}
+  const intelligence = rightRailContent ?? (
+    <div className="space-y-5 p-6">
+      <div className="flex items-center gap-2"><Bot className="h-5 w-5 text-primary" /><h2 className="font-semibold">Role Assistant</h2></div>
+      <p className="text-sm text-muted-foreground">Contextual communication and advisory mode. The active agent name and scope are resolved from the current company and seat; proposed actions remain subject to local authority and evidence requirements.</p>
+      <div className="space-y-3 rounded-xl bg-white p-4 text-xs text-muted-foreground shadow-sm">
+        <div className="flex gap-2"><ShieldCheck className="h-4 w-4 text-primary" /> Context before consequence</div>
+        <div className="flex gap-2"><FileCheck2 className="h-4 w-4 text-primary" /> Evidence before completion</div>
       </div>
     </div>
+  );
+
+  return (
+    <CanonicalUniversalLayout rightRailContent={showRightRail ? intelligence : undefined}>
+      <div className={cn("min-h-full", className)}>{children}</div>
+    </CanonicalUniversalLayout>
   );
 }
 

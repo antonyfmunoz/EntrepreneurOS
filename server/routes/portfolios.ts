@@ -8,6 +8,7 @@ import {
   updatePortfolioSchema,
 } from "@shared/schema";
 import { db } from "../db";
+import { hasEntitlement } from "../billing/stripe";
 
 export function registerPortfolioRoutes(app: Express): void {
   // GET /api/portfolios — list all portfolios for authenticated user
@@ -38,6 +39,9 @@ export function registerPortfolioRoutes(app: Express): void {
         return res.status(401).json({ message: "Not authenticated" });
       }
       const userId = req.user.id;
+      if (!(await hasEntitlement(userId, "portfolio:create"))) {
+        return res.status(402).json({ code: "entitlement_required", message: "Your current plan does not permit another portfolio." });
+      }
       const data = insertPortfolioSchema.parse(req.body);
 
       const [created] = await db
@@ -243,6 +247,12 @@ export function registerPortfolioRoutes(app: Express): void {
       businessModel: z.string().optional(),
       goals: z.string().optional(),
       assistantName: z.string().optional(),
+      founderProfile: z.object({
+        vision: z.string().max(2000).default(""),
+        values: z.string().max(1200).default(""),
+        decisionStyle: z.string().max(1200).default(""),
+        workingStyle: z.string().max(1200).default(""),
+      }).optional(),
     });
     const bodySchema = z.union([attachSchema, createSchema]);
 
@@ -307,6 +317,7 @@ export function registerPortfolioRoutes(app: Express): void {
           type: body.businessModel ?? null,
           goals: body.goals ?? null,
           assistantName: body.assistantName ?? "Assistant",
+          founderProfile: body.founderProfile ?? {},
         })
         .returning();
 

@@ -4,6 +4,8 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+auth-debug.log
+.tmp/
 # Secrets — never commit
 .env
 .env.*
@@ -13,5 +15,6 @@ vite.config.ts.*
 .env
 .env.*
 !.env.op.tpl
+!.env.production.op.tpl
 !.env.tpl
 !.env.example

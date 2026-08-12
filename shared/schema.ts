@@ -35,6 +35,8 @@ export const insertUserSchema = z.object({
 // Agents
 export const agents = pgTable("agents", {
   id: text("id").primaryKey(),
+  // Nullable for legacy records; federation rejects unscoped agents.
+  companyId: integer("company_id"),
   name: text("name").notNull(),
   role: text("role").notNull(),                      // Job title (e.g., "Marketing Specialist")
   roleLevel: text("role_level").default("laborer"),  // Chief, Manager, Laborer
@@ -171,6 +173,153 @@ export const insertIntegrationSchema = z.object({
 // Export types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+export const supportTickets = pgTable("support_tickets", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  category: text("category").notNull(),
+  subject: text("subject").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("open"),
+  requestId: text("request_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const createSupportTicketSchema = z.object({
+  category: z.enum(["account", "technical", "integration", "feedback", "security", "other"]),
+  subject: z.string().trim().min(3).max(160),
+  message: z.string().trim().min(10).max(10_000),
+});
+
+export type SupportTicket = typeof supportTickets.$inferSelect;
+export type CreateSupportTicket = z.infer<typeof createSupportTicketSchema>;
+
+export const billingSubscriptions = pgTable("billing_subscriptions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  providerCustomerId: text("provider_customer_id").notNull(),
+  providerSubscriptionId: text("provider_subscription_id").notNull().unique(),
+  planKey: text("plan_key").notNull(),
+  status: text("status").notNull(),
+  entitlements: jsonb("entitlements").notNull().default([]),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const billingWebhookEvents = pgTable("billing_webhook_events", {
+  id: text("id").primaryKey(),
+  eventType: text("event_type").notNull(),
+  payloadHash: text("payload_hash").notNull(),
+  processedAt: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const legalDocuments = pgTable("legal_documents", {
+  id: text("id").primaryKey(),
+  documentType: text("document_type").notNull(),
+  title: text("title").notNull(),
+  version: text("version").notNull(),
+  url: text("url").notNull(),
+  checksum: text("checksum").notNull(),
+  required: boolean("required").notNull().default(true),
+  status: text("status").notNull().default("published"),
+  effectiveAt: timestamp("effective_at", { withTimezone: true }).notNull(),
+  publishedAt: timestamp("published_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const legalAcceptances = pgTable("legal_acceptances", {
+  id: text("id").primaryKey(),
+  documentId: text("document_id").notNull().references(() => legalDocuments.id),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  documentChecksum: text("document_checksum").notNull(),
+  ipHash: text("ip_hash").notNull(),
+  userAgentHash: text("user_agent_hash").notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const accountDeletionRequests = pgTable("account_deletion_requests", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().unique(),
+  clerkUserId: text("clerk_user_id"),
+  status: text("status").notNull().default("scheduled"),
+  deleteOwnedOrganizations: boolean("delete_owned_organizations").notNull().default(false),
+  scheduledFor: timestamp("scheduled_for", { withTimezone: true }).notNull(),
+  requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  executedAt: timestamp("executed_at", { withTimezone: true }),
+  attempts: integer("attempts").notNull().default(0),
+  lastError: text("last_error"),
+});
+
+export const aiBudgets = pgTable("ai_budgets", {
+  companyId: integer("company_id").primaryKey().references(() => companies.id, { onDelete: "cascade" }),
+  monthlyLimitMicros: integer("monthly_limit_micros").notNull(),
+  perRequestLimitMicros: integer("per_request_limit_micros").notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  updatedByUserId: text("updated_by_user_id").notNull().references(() => users.id),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const aiUsageLedger = pgTable("ai_usage_ledger", {
+  id: text("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id),
+  context: text("context").notNull(),
+  model: text("model").notNull(),
+  status: text("status").notNull().default("reserved"),
+  reservedCostMicros: integer("reserved_cost_micros").notNull(),
+  actualCostMicros: integer("actual_cost_micros"),
+  inputTokens: integer("input_tokens"),
+  outputTokens: integer("output_tokens"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+});
+
+export const operationalControls = pgTable("operational_controls", {
+  controlKey: text("control_key").primaryKey(),
+  status: text("status").notNull(),
+  evidenceUri: text("evidence_uri").notNull(),
+  evidenceHash: text("evidence_hash").notNull(),
+  evidenceScope: text("evidence_scope").notNull().default("production"),
+  subject: text("subject").notNull().default("legacy-unspecified"),
+  notes: text("notes"),
+  ownerUserId: text("owner_user_id").notNull().references(() => users.id),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const vendorRegistry = pgTable("vendor_registry", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  serviceCategory: text("service_category").notNull(),
+  riskTier: text("risk_tier").notNull(),
+  status: text("status").notNull(),
+  dataClasses: jsonb("data_classes").notNull().default([]),
+  dpaStatus: text("dpa_status").notNull(),
+  subprocessorStatus: text("subprocessor_status").notNull(),
+  ownerUserId: text("owner_user_id").notNull().references(() => users.id),
+  reviewEvidenceUri: text("review_evidence_uri"),
+  exitPlan: text("exit_plan").notNull(),
+  lastReviewedAt: timestamp("last_reviewed_at", { withTimezone: true }),
+  nextReviewAt: timestamp("next_review_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const serviceOwnership = pgTable("service_ownership", {
+  serviceKey: text("service_key").primaryKey(),
+  displayName: text("display_name").notNull(),
+  ownerUserId: text("owner_user_id").notNull().references(() => users.id),
+  onCallReference: text("on_call_reference").notNull(),
+  availabilityTarget: text("availability_target").notNull(),
+  latencyTarget: text("latency_target").notNull(),
+  errorBudgetPolicy: text("error_budget_policy").notNull(),
+  incidentRunbookUri: text("incident_runbook_uri").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export type InsertAgent = z.infer<typeof insertAgentSchema>;
 export type Agent = typeof agents.$inferSelect;
@@ -377,6 +526,9 @@ export const agentActions = pgTable("agent_actions", {
   id: text("id").primaryKey(),
   agentId: text("agent_id").notNull().references(() => agents.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // Federation commands are always bound to a company. Legacy actions may be null
+  // until they are backfilled, but they are never eligible for UMH execution.
+  companyId: integer("company_id"),
   actionType: text("action_type").notNull(),
   actionName: text("action_name").notNull(),
   description: text("description"),
@@ -516,6 +668,7 @@ export const companies = pgTable("companies", {
   targetCustomer: text("target_customer"),
   goals: text("goals"),
   assistantName: text("assistant_name").default("Assistant"),
+  founderProfile: jsonb("founder_profile").notNull().default({}),
   orgId: text("org_id"),  // Clerk organization ID — nullable for single-user companies
   createdAt: timestamp("created_at").defaultNow()
 });
@@ -548,6 +701,253 @@ export const insertWorkflowSchema = z.object({
 
 export type InsertWorkflow = z.infer<typeof insertWorkflowSchema>;
 export type Workflow = typeof workflows.$inferSelect;
+
+// UMH federation is projection-owned: UMH never reads or writes these records
+// directly. They provide the local installation binding, idempotency ledger,
+// transactional outbox, immutable outcomes, and audit trail for HTTPS commands.
+export const umhInstallations = pgTable("umh_installations", {
+  id: text("id").primaryKey(),
+  umhInstallationId: text("umh_installation_id").notNull().unique(),
+  issuer: text("issuer").notNull(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(false),
+  capabilities: jsonb("capabilities").notNull().default([]),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Canonical migration ledger. The runner creates this defensively for legacy
+// databases, but it must also live in the Drizzle schema so a later `db:push`
+// cannot treat it as an unknown table and erase checksum history.
+export const eosSchemaMigrations = pgTable("eos_schema_migrations", {
+  id: text("id").primaryKey(),
+  checksum: text("checksum").notNull(),
+  appliedAt: timestamp("applied_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const umhIdentityBindings = pgTable("umh_identity_bindings", {
+  id: text("id").primaryKey(),
+  installationId: text("installation_id").notNull().references(() => umhInstallations.id, { onDelete: "cascade" }),
+  externalActorId: text("external_actor_id").notNull(),
+  localUserId: text("local_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  delegationId: text("delegation_id").notNull(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const umhCommands = pgTable("umh_commands", {
+  id: text("id").primaryKey(),
+  installationId: text("installation_id").notNull().references(() => umhInstallations.id, { onDelete: "cascade" }),
+  commandType: text("command_type").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  nonce: text("nonce").notNull(),
+  requestHash: text("request_hash").notNull(),
+  traceId: text("trace_id").notNull(),
+  correlationId: text("correlation_id").notNull(),
+  actorUserId: text("actor_user_id").notNull().references(() => users.id),
+  companyId: integer("company_id").notNull().references(() => companies.id),
+  status: text("status").notNull(),
+  outcome: jsonb("outcome").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const umhEventOutbox = pgTable("umh_event_outbox", {
+  id: text("id").primaryKey(),
+  installationId: text("installation_id").notNull().references(() => umhInstallations.id, { onDelete: "cascade" }),
+  eventType: text("event_type").notNull(),
+  payload: jsonb("payload").notNull(),
+  status: text("status").notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at").defaultNow(),
+  leasedAt: timestamp("leased_at"),
+  deliveredAt: timestamp("delivered_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const umhAuditRecords = pgTable("umh_audit_records", {
+  id: text("id").primaryKey(),
+  installationId: text("installation_id").notNull().references(() => umhInstallations.id, { onDelete: "cascade" }),
+  commandId: text("command_id").references(() => umhCommands.id, { onDelete: "set null" }),
+  eventType: text("event_type").notNull(),
+  traceId: text("trace_id").notNull(),
+  correlationId: text("correlation_id").notNull(),
+  actorUserId: text("actor_user_id").references(() => users.id),
+  details: jsonb("details").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// EOS overlay MVP runtime. These records are authoritative local state even
+// when every provider integration and UMH are offline.
+export const eosManifestVersions = pgTable("eos_manifest_versions", {
+  id: text("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  status: text("status").notNull().default("draft"),
+  manifest: jsonb("manifest").notNull(),
+  createdByUserId: text("created_by_user_id").notNull().references(() => users.id),
+  approvedByUserId: text("approved_by_user_id").references(() => users.id),
+  activatedAt: timestamp("activated_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const eosWorkPackets = pgTable("eos_work_packets", {
+  id: text("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  createdByUserId: text("created_by_user_id").notNull().references(() => users.id),
+  accountableUserId: text("accountable_user_id").notNull().references(() => users.id),
+  accountableSeatId: text("accountable_seat_id"),
+  title: text("title").notNull(),
+  objective: text("objective").notNull(),
+  status: text("status").notNull().default("draft"),
+  priority: text("priority").notNull().default("medium"),
+  source: text("source").notNull().default("manual"),
+  visibility: text("visibility").notNull().default("company"),
+  classification: text("classification").notNull().default("internal"),
+  requiresApproval: boolean("requires_approval").notNull().default(false),
+  toolPack: jsonb("tool_pack").notNull().default([]),
+  evidenceRequirements: jsonb("evidence_requirements").notNull().default([]),
+  traceId: text("trace_id").notNull(),
+  correlationId: text("correlation_id").notNull(),
+  dueAt: timestamp("due_at"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const eosApprovalRequests = pgTable("eos_approval_requests", {
+  id: text("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  workPacketId: text("work_packet_id").notNull().references(() => eosWorkPackets.id, { onDelete: "cascade" }),
+  requestedByUserId: text("requested_by_user_id").notNull().references(() => users.id),
+  assignedToUserId: text("assigned_to_user_id").notNull().references(() => users.id),
+  assignedToSeatId: text("assigned_to_seat_id"),
+  summary: text("summary").notNull(),
+  status: text("status").notNull().default("pending"),
+  decisionReason: text("decision_reason"),
+  decidedByUserId: text("decided_by_user_id").references(() => users.id),
+  decidedAt: timestamp("decided_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const eosEvidence = pgTable("eos_evidence", {
+  id: text("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  workPacketId: text("work_packet_id").notNull().references(() => eosWorkPackets.id, { onDelete: "cascade" }),
+  recordedByUserId: text("recorded_by_user_id").notNull().references(() => users.id),
+  evidenceType: text("evidence_type").notNull(),
+  title: text("title").notNull(),
+  uri: text("uri"),
+  details: jsonb("details").notNull().default({}),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const eosAuditRecords = pgTable("eos_audit_records", {
+  id: text("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  actorUserId: text("actor_user_id").notNull().references(() => users.id),
+  action: text("action").notNull(),
+  targetType: text("target_type").notNull(),
+  targetId: text("target_id").notNull(),
+  traceId: text("trace_id").notNull(),
+  correlationId: text("correlation_id").notNull(),
+  result: text("result").notNull(),
+  details: jsonb("details").notNull().default({}),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Role-aware organizational runtime. Membership answers whether a principal may
+// enter an organization; seats and their reporting edges determine what that
+// principal may see and where communication is allowed to travel.
+export const eosMemberships = pgTable("eos_memberships", {
+  id: text("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  seatId: text("seat_id"),
+  role: text("role").notNull(),
+  status: text("status").notNull().default("active"),
+  purpose: text("purpose").notNull().default("operate"),
+  classificationCeiling: text("classification_ceiling").notNull().default("internal"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const eosSeats = pgTable("eos_seats", {
+  id: text("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  kind: text("kind").notNull(),
+  supervisorSeatId: text("supervisor_seat_id"),
+  occupantUserId: text("occupant_user_id").references(() => users.id, { onDelete: "set null" }),
+  agentName: text("agent_name").notNull(),
+  agentMode: text("agent_mode").notNull().default("autonomous"),
+  mandate: text("mandate").notNull().default(""),
+  authority: jsonb("authority").notNull().default({}),
+  toolEntitlements: jsonb("tool_entitlements").notNull().default([]),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const eosConversations = pgTable("eos_conversations", {
+  id: text("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  seatId: text("seat_id").references(() => eosSeats.id, { onDelete: "set null" }),
+  channelType: text("channel_type").notNull(),
+  title: text("title").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const eosCommunicationMessages = pgTable("eos_communication_messages", {
+  id: text("id").primaryKey(),
+  conversationId: text("conversation_id").notNull().references(() => eosConversations.id, { onDelete: "cascade" }),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  senderType: text("sender_type").notNull(),
+  senderUserId: text("sender_user_id").references(() => users.id, { onDelete: "set null" }),
+  senderSeatId: text("sender_seat_id").references(() => eosSeats.id, { onDelete: "set null" }),
+  content: text("content").notNull(),
+  provenance: jsonb("provenance").notNull().default({}),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const eosAdvisorConsultations = pgTable("eos_advisor_consultations", {
+  id: text("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  conversationId: text("conversation_id").notNull().references(() => eosConversations.id, { onDelete: "cascade" }),
+  advisorId: text("advisor_id").notNull(),
+  advisorName: text("advisor_name").notNull(),
+  request: text("request").notNull(),
+  response: text("response").notNull(),
+  model: text("model"),
+  status: text("status").notNull(),
+  provenance: jsonb("provenance").notNull().default({}),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const eosProviderExecutions = pgTable("eos_provider_executions", {
+  id: text("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  workPacketId: text("work_packet_id").notNull().references(() => eosWorkPackets.id, { onDelete: "cascade" }),
+  approvalId: text("approval_id").references(() => eosApprovalRequests.id, { onDelete: "set null" }),
+  requestedByUserId: text("requested_by_user_id").notNull().references(() => users.id),
+  provider: text("provider").notNull(),
+  operation: text("operation").notNull(),
+  status: text("status").notNull().default("awaiting_approval"),
+  request: jsonb("request").notNull(),
+  receipt: jsonb("receipt").notNull().default({}),
+  reconciliationStatus: text("reconciliation_status").notNull().default("pending"),
+  failureCode: text("failure_code"),
+  traceId: text("trace_id").notNull(),
+  correlationId: text("correlation_id").notNull(),
+  executedAt: timestamp("executed_at"),
+  reconciledAt: timestamp("reconciled_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 // __ORCHESTRATOR_GENERATED_SCHEMAS__
 

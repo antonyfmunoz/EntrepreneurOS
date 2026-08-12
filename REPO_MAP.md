@@ -483,7 +483,7 @@ All routes defined in `server/routes.ts` and `server/auth.ts`. Server runs on po
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/integrations` | List integrations |
-| POST | `/api/integrations/connect` | Connect integration |
+| POST | `/api/integrations/connect` | Retired unscoped catalog mutation (returns 410) |
 | GET | `/api/integrations/gmail/auth` | Gmail OAuth start URL |
 | GET | `/api/auth/google/callback` | OAuth callback handler |
 | GET | `/api/integrations/gmail/status` | Gmail connection status |
