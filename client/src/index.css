@@ -1,5 +1,5 @@
-/* Import RemixIcon for Document Vault */
-@import url("https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap");
+@import "./styles/design-system.css";
 
 @tailwind base;
 @tailwind components;
@@ -10,25 +10,54 @@
     @apply border-border;
   }
 
-  body {
-    @apply font-sans antialiased bg-white text-foreground;
+  html {
+    background: var(--color-background);
   }
 
-  :root {
-    --primary: 221.2 83.2% 53.3%;
-    --secondary: 239.6 83.9% 66.3%;
-    --accent: 328.6 85.5% 70.2%;
-    --success: 158.4 64.4% 51.6%;
-    --warning: 37.7 92.1% 50.2%;
-    --error: 0 84.2% 60.2%;
+  body {
+    @apply min-h-screen bg-background font-sans text-foreground antialiased;
+    margin: 0;
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.6;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    color: var(--color-on-surface);
+    letter-spacing: -0.02em;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgba(106, 55, 212, 0.35);
+    outline-offset: 2px;
   }
 
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
-  
+
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+}
+
+@layer components {
+  .eos-glass {
+    background: var(--glass-background);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    box-shadow: var(--shadow-ambient);
+  }
+
+  .eos-surface {
+    @apply rounded-xl bg-white;
+    box-shadow: var(--shadow-ambient);
+  }
+
+  .eos-label {
+    @apply text-xs font-medium uppercase tracking-[0.05em] text-muted-foreground;
   }
 }

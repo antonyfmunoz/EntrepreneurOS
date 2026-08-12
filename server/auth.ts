@@ -4,6 +4,7 @@ import { randomBytes } from "crypto";
 import { storage } from "./storage";
 import { clerkClient } from "./clerkAdmin";
 import { posthogClient } from "./posthog";
+import { verifiedEmailForLegacyClaim } from "./security/legacy-principal-reconciliation";
 import type { User as SelectUser } from "@shared/schema";
 
 declare global {
@@ -24,6 +25,13 @@ declare global {
  * will return 401 if no valid Clerk session is present.
  */
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
+  // A pre-resolved local principal is used by isolated acceptance harnesses.
+  // Hosted requests can only reach this state through attachClerkUser after a
+  // valid Clerk identity has been resolved.
+  if (req.isAuthenticated?.()) return next();
+  if (!process.env.CLERK_SECRET_KEY) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
   const { userId } = getAuth(req);
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -42,6 +50,11 @@ async function attachClerkUser(req: Request, res: Response, next: NextFunction) 
   // Pre-populated user (test harness / upstream mock): install polyfill and pass.
   if ((req as any).user) {
     req.isAuthenticated = () => true;
+    return next();
+  }
+
+  if (!process.env.CLERK_SECRET_KEY) {
+    req.isAuthenticated = () => false;
     return next();
   }
 
@@ -88,6 +101,21 @@ async function attachClerkUser(req: Request, res: Response, next: NextFunction) 
       });
     }
 
+    // Older EOS builds created local password principals before Clerk became
+    // authoritative. Claim only business records whose unbound legacy
+    // principal has the same *verified* Clerk email. This is an idempotent
+    // ownership migration; it never broadens access by company id alone.
+    const clerkIdentity = await clerkClient?.users.getUser(clerkUserId);
+    const verifiedEmail = clerkIdentity
+      ? verifiedEmailForLegacyClaim(user.email, clerkIdentity.emailAddresses)
+      : undefined;
+    if (verifiedEmail) {
+      const claimed = await storage.claimLegacyBusinessOwnership(user.id, verifiedEmail);
+      if (claimed.companies || claimed.portfolios) {
+        console.info("attachClerkUser: reconciled verified legacy business ownership", claimed);
+      }
+    }
+
     (req as any).user = user;
     req.isAuthenticated = () => true;
     return next();
@@ -130,7 +158,6 @@ export function setupAuth(app: Express) {
     posthogClient?.capture({
       distinctId: String(user.id),
       event: "user_logged_in",
-      properties: { email: user.email, username: user.username },
     });
 
     const { password, ...userWithoutPassword } = user;

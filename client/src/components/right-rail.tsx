@@ -6,12 +6,14 @@ import { AgentChatStub } from "@/components/agent-chat-stub";
 import { cn } from "@/lib/utils";
 
 export interface RightRailProps {
+  children?: React.ReactNode;
   className?: string;
   isOpen?: boolean;
   onToggle?: () => void;
 }
 
 export function RightRail({
+  children,
   className,
   isOpen = true,
   onToggle,
@@ -89,7 +91,7 @@ export function RightRail({
 
           {/* Chat content */}
           <div className="flex-1 overflow-hidden">
-            <AgentChatStub />
+            {children ?? <AgentChatStub />}
           </div>
         </div>
       </aside>

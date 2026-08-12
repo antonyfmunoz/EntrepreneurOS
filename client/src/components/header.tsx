@@ -19,6 +19,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 interface HeaderProps {
+  title?: string;
+  children?: React.ReactNode;
+  onLeftMenuClick?: () => void;
+  onRightMenuClick?: () => void;
   currentCompany?: {
     id: string;
     name: string;
@@ -41,6 +45,8 @@ interface HeaderProps {
 }
 
 export function Header({
+  title,
+  children,
   currentCompany,
   currentProject,
   companies = [],
@@ -69,8 +75,8 @@ export function Header({
       <div className="flex h-16 items-center justify-between px-4 md:px-6 lg:px-8">
         {/* Left: Logo/Brand */}
         <div className="flex items-center gap-6">
-          <Link href="/">
-            <a className="flex items-center gap-2 transition-opacity hover:opacity-80">
+          {children}
+          <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
               <div
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-white font-semibold text-sm"
                 style={{ background: "#6a37d4" }}
@@ -80,8 +86,8 @@ export function Header({
               <span className="hidden md:block font-semibold text-base" style={{ color: "#2c2f30" }}>
                 EntrepreneurOS
               </span>
-            </a>
           </Link>
+          {title && <span className="hidden md:block text-sm font-medium text-[#595c5d]">{title}</span>}
         </div>
 
         {/* Center: Context Switchers */}
@@ -262,18 +268,10 @@ export function Header({
               </DropdownMenuLabel>
               <DropdownMenuSeparator style={{ background: "#eff1f2" }} />
               <DropdownMenuItem asChild>
-                <Link href="/settings">
-                  <a className="cursor-pointer w-full" style={{ color: "#2c2f30" }}>
-                    Settings
-                  </a>
-                </Link>
+                <Link href="/settings" className="cursor-pointer w-full" style={{ color: "#2c2f30" }}>Settings</Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/sign-out">
-                  <a className="cursor-pointer w-full" style={{ color: "#2c2f30" }}>
-                    Sign Out
-                  </a>
-                </Link>
+                <Link href="/sign-out" className="cursor-pointer w-full" style={{ color: "#2c2f30" }}>Sign Out</Link>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

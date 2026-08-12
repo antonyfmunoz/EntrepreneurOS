@@ -48,10 +48,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryKey: ["/api/user", clerkUser?.id ?? null],
     enabled: clerkReady && Boolean(clerkUser),
     queryFn: async () => {
-      const res = await fetch("/api/user", { credentials: "include" });
-      if (res.status === 401) return null;
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      return await res.json();
+      try {
+        return await apiRequest<UserWithoutPassword>("/api/user");
+      } catch (requestError) {
+        if (requestError instanceof Error && requestError.message.startsWith("401:")) return null;
+        throw requestError;
+      }
     },
   });
 

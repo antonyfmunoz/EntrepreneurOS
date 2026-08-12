@@ -63,7 +63,7 @@ let client: Anthropic | null = null;
 function getClient(): Anthropic {
   if (!client) {
     client = new Anthropic({
-      apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
+      apiKey: process.env.ANTHROPIC_API_KEY || process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
       baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
     });
   }

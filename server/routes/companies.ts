@@ -9,6 +9,12 @@ import {
 } from "@shared/schema";
 import { db } from "../db";
 
+async function ownsCompany(companyId: number, userId: string): Promise<boolean> {
+  const rows = await db.select({ id: companiesTable.id }).from(companiesTable)
+    .where(and(eq(companiesTable.id, companyId), eq(companiesTable.ownerUserId, userId))).limit(1);
+  return rows.length === 1;
+}
+
 export function registerCompanyRoutes(app: Express): void {
   // GET /api/companies/:id — single company by ID
   app.get("/api/companies/:id", async (req, res) => {
@@ -42,6 +48,10 @@ export function registerCompanyRoutes(app: Express): void {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Not authenticated" });
       }
+      const companyId = Number(req.params.id);
+      if (!Number.isInteger(companyId) || !(await ownsCompany(companyId, req.user.id))) {
+        return res.status(404).json({ message: "Company not found" });
+      }
       // Tasks table has no companyId column — return empty until schema is extended
       return res.json([]);
     } catch (error) {
@@ -55,6 +65,10 @@ export function registerCompanyRoutes(app: Express): void {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Not authenticated" });
+      }
+      const numericCompanyId = Number(req.params.id);
+      if (!Number.isInteger(numericCompanyId) || !(await ownsCompany(numericCompanyId, req.user.id))) {
+        return res.status(404).json({ message: "Company not found" });
       }
       const companyId = req.params.id;
       const rows = await db
@@ -73,6 +87,10 @@ export function registerCompanyRoutes(app: Express): void {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Not authenticated" });
+      }
+      const numericCompanyId = Number(req.params.id);
+      if (!Number.isInteger(numericCompanyId) || !(await ownsCompany(numericCompanyId, req.user.id))) {
+        return res.status(404).json({ message: "Company not found" });
       }
       const companyId = req.params.id;
       const rows = await db
@@ -95,6 +113,9 @@ export function registerCompanyRoutes(app: Express): void {
       const companyId = Number(req.params.id);
       if (!Number.isFinite(companyId)) {
         return res.status(400).json({ message: "Invalid company id" });
+      }
+      if (!(await ownsCompany(companyId, req.user.id))) {
+        return res.status(404).json({ message: "Company not found" });
       }
       const rows = await db
         .select()
@@ -143,7 +164,8 @@ export function registerCompanyRoutes(app: Express): void {
       offer: z.string().optional(),
       targetCustomer: z.string().optional(),
       goals: z.string().optional(),
-      assistantName: z.string().optional(),
+      assistantName: z.string().trim().min(1).max(40).optional(),
+      founderProfile: z.record(z.unknown()).optional(),
     });
 
     try {
@@ -165,6 +187,7 @@ export function registerCompanyRoutes(app: Express): void {
           targetCustomer: data.targetCustomer ?? null,
           goals: data.goals ?? null,
           assistantName: data.assistantName || "Assistant",
+          founderProfile: data.founderProfile || {},
         })
         .returning();
 
@@ -189,7 +212,8 @@ export function registerCompanyRoutes(app: Express): void {
       offer: z.string().optional().nullable(),
       targetCustomer: z.string().optional().nullable(),
       goals: z.string().optional().nullable(),
-      assistantName: z.string().optional().nullable(),
+      assistantName: z.string().trim().min(1).max(40).optional().nullable(),
+      founderProfile: z.record(z.unknown()).optional(),
     });
 
     try {

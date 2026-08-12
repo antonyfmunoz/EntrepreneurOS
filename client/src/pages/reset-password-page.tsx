@@ -271,11 +271,7 @@ export default function ResetPasswordPage() {
             </Button>
 
             <div className="text-center pt-2">
-              <Link href="/sign-in">
-                <a className="font-mono text-sm text-text-secondary hover:text-text transition-colors">
-                  Back to sign in
-                </a>
-              </Link>
+              <Link href="/sign-in" className="font-mono text-sm text-text-secondary hover:text-text transition-colors">Back to sign in</Link>
             </div>
           </form>
         </CardContent>

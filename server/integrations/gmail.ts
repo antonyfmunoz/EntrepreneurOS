@@ -1,11 +1,36 @@
 import { google } from "googleapis";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { storage } from "../storage";
+import { credentialEncryptionConfigured, decryptCredential, encryptCredential } from "../security/credential-encryption";
 
 const SCOPES = [
   "https://www.googleapis.com/auth/gmail.send",
-  "https://www.googleapis.com/auth/gmail.readonly",
-  "https://www.googleapis.com/auth/gmail.compose",
+  "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/drive.metadata.readonly",
 ];
+
+export const GOOGLE_WORKSPACE_SERVICES = ["Gmail", "Calendar", "Drive"] as const;
+
+export const GOOGLE_WORKSPACE_TOOLS = [
+  "google.workspace.health.verify",
+  "google.calendar.upcoming.read",
+  "google.drive.recent_metadata.read",
+  "gmail.send_with_local_approval",
+] as const;
+
+interface OAuthStatePayload {
+  userId: string;
+  expiresAt: number;
+  nonce: string;
+  returnTo: string;
+}
+
+function safeReturnTo(value?: string): string {
+  if (!value) return "/portfolios";
+  if (/^\/company\/[1-9]\d*(?:#systems)?$/.test(value)) return value;
+  if (/^\/portfolios(?:\/[1-9]\d*)?$/.test(value)) return value;
+  return "/portfolios";
+}
 
 function getOAuth2Client() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -19,12 +44,55 @@ function getOAuth2Client() {
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
 
-export function getAuthUrl(): string {
+function oauthStateSecret(): string {
+  const secret = process.env.SESSION_SECRET?.trim();
+  if (!secret || secret.length < 32) throw new Error("SESSION_SECRET must be at least 32 characters for OAuth state signing.");
+  return secret;
+}
+
+export function createOAuthState(userId: string, now = Date.now(), returnTo = "/portfolios"): string {
+  const payload = Buffer.from(JSON.stringify({
+    userId,
+    expiresAt: now + 10 * 60_000,
+    nonce: randomBytes(16).toString("base64url"),
+    returnTo: safeReturnTo(returnTo),
+  })).toString("base64url");
+  const signature = createHmac("sha256", oauthStateSecret()).update(payload).digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+export function readOAuthState(state: string, userId: string, now = Date.now()): OAuthStatePayload | null {
+  try {
+    const [payload, receivedSignature] = state.split(".");
+    if (!payload || !receivedSignature) return null;
+    const expectedSignature = createHmac("sha256", oauthStateSecret()).update(payload).digest();
+    const received = Buffer.from(receivedSignature, "base64url");
+    if (received.length !== expectedSignature.length || !timingSafeEqual(received, expectedSignature)) return null;
+    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Partial<OAuthStatePayload>;
+    if (decoded.userId !== userId || typeof decoded.expiresAt !== "number" || decoded.expiresAt < now) return null;
+    return {
+      userId,
+      expiresAt: decoded.expiresAt,
+      nonce: typeof decoded.nonce === "string" ? decoded.nonce : "",
+      returnTo: safeReturnTo(decoded.returnTo),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function verifyOAuthState(state: string, userId: string, now = Date.now()): boolean {
+  return readOAuthState(state, userId, now) !== null;
+}
+
+export function getAuthUrl(userId: string, returnTo?: string): string {
   const oauth2Client = getOAuth2Client();
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
     scope: SCOPES,
     prompt: "consent",
+    include_granted_scopes: true,
+    state: createOAuthState(userId, Date.now(), returnTo),
   });
 }
 
@@ -56,22 +124,23 @@ export async function getAccessToken(userId: string): Promise<string> {
       throw new Error("Gmail token expired and no refresh token available. Please reconnect Gmail.");
     }
     const oauth2Client = getOAuth2Client();
-    oauth2Client.setCredentials({ refresh_token: token.refreshToken });
+    const refreshToken = decryptCredential(token.refreshToken);
+    oauth2Client.setCredentials({ refresh_token: refreshToken });
     const { credentials } = await oauth2Client.refreshAccessToken();
 
     await storage.upsertOauthToken({
       userId,
       provider: "gmail",
-      accessToken: credentials.access_token || token.accessToken,
-      refreshToken: credentials.refresh_token || token.refreshToken,
+      accessToken: credentials.access_token ? encryptCredential(credentials.access_token) : token.accessToken,
+      refreshToken: credentials.refresh_token ? encryptCredential(credentials.refresh_token) : token.refreshToken,
       expiresAt: credentials.expiry_date ? new Date(credentials.expiry_date) : undefined,
       scope: token.scope || undefined,
     });
 
-    return credentials.access_token || token.accessToken;
+    return credentials.access_token || decryptCredential(token.accessToken);
   }
 
-  return token.accessToken;
+  return decryptCredential(token.accessToken);
 }
 
 export async function sendEmail(
@@ -109,13 +178,90 @@ export async function sendEmail(
 
 export async function isConnected(userId: string): Promise<boolean> {
   try {
+    if (!credentialEncryptionConfigured()) return false;
     const token = await storage.getOauthToken(userId, "gmail");
-    return !!token;
+    if (!token) return false;
+    decryptCredential(token.accessToken);
+    return true;
   } catch {
     return false;
   }
 }
 
 export function isConfigured(): boolean {
-  return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  try {
+    oauthStateSecret();
+    return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && credentialEncryptionConfigured());
+  } catch {
+    return false;
+  }
+}
+
+export async function connectionSummary(userId: string): Promise<{
+  configured: boolean;
+  connected: boolean;
+  grantedScopes: string[];
+}> {
+  const configured = isConfigured();
+  if (!configured) return { configured: false, connected: false, grantedScopes: [] };
+  const connected = await isConnected(userId);
+  if (!connected) return { configured: true, connected: false, grantedScopes: [] };
+  const token = await storage.getOauthToken(userId, "gmail");
+  return {
+    configured: true,
+    connected: true,
+    grantedScopes: (token?.scope || "").split(/\s+/).filter(Boolean),
+  };
+}
+
+export async function verifyConnection(userId: string): Promise<{
+  configured: boolean;
+  connected: boolean;
+  healthy: boolean;
+  services: Record<(typeof GOOGLE_WORKSPACE_SERVICES)[number], boolean>;
+  grantedScopes: string[];
+}> {
+  const summary = await connectionSummary(userId);
+  const services = { Gmail: false, Calendar: false, Drive: false };
+  if (!summary.connected) return { ...summary, healthy: false, services };
+
+  try {
+    const accessToken = await getAccessToken(userId);
+    const oauth2Client = getOAuth2Client();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const checks = await Promise.allSettled([
+      google.gmail({ version: "v1", auth: oauth2Client }).users.getProfile({ userId: "me" }),
+      google.calendar({ version: "v3", auth: oauth2Client }).calendarList.list({ maxResults: 1 }),
+      google.drive({ version: "v3", auth: oauth2Client }).about.get({ fields: "user" }),
+    ]);
+    services.Gmail = checks[0].status === "fulfilled";
+    services.Calendar = checks[1].status === "fulfilled";
+    services.Drive = checks[2].status === "fulfilled";
+    return { ...summary, healthy: Object.values(services).every(Boolean), services };
+  } catch {
+    return { ...summary, healthy: false, services };
+  }
+}
+
+export function requestedScopes(): string[] {
+  return [...SCOPES];
+}
+
+export async function operatingContext(userId: string): Promise<{
+  generatedAt: string;
+  calendar: Array<{ id: string; summary: string; start: string | null; end: string | null; htmlLink: string | null }>;
+  drive: Array<{ id: string; name: string; mimeType: string | null; modifiedTime: string | null; webViewLink: string | null }>;
+}> {
+  const accessToken = await getAccessToken(userId);
+  const oauth2Client = getOAuth2Client();
+  oauth2Client.setCredentials({ access_token: accessToken });
+  const [calendarResult, driveResult] = await Promise.all([
+    google.calendar({ version: "v3", auth: oauth2Client }).events.list({ calendarId: "primary", timeMin: new Date().toISOString(), maxResults: 10, singleEvents: true, orderBy: "startTime" }),
+    google.drive({ version: "v3", auth: oauth2Client }).files.list({ pageSize: 10, orderBy: "modifiedTime desc", fields: "files(id,name,mimeType,modifiedTime,webViewLink)", q: "trashed = false" }),
+  ]);
+  return {
+    generatedAt: new Date().toISOString(),
+    calendar: (calendarResult.data.items || []).map((event) => ({ id: event.id || "", summary: event.summary || "Untitled event", start: event.start?.dateTime || event.start?.date || null, end: event.end?.dateTime || event.end?.date || null, htmlLink: event.htmlLink || null })),
+    drive: (driveResult.data.files || []).map((file) => ({ id: file.id || "", name: file.name || "Untitled file", mimeType: file.mimeType || null, modifiedTime: file.modifiedTime || null, webViewLink: file.webViewLink || null })),
+  };
 }

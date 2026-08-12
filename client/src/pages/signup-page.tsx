@@ -1,12 +1,19 @@
 import { SignUp } from '@clerk/clerk-react'
+import { eosClerkAppearance } from '@/lib/clerk-appearance'
 
 export default function SignupPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f5f6f7]">
+    <div className="min-h-screen flex flex-col items-center justify-center gap-5 bg-[#f5f6f7] px-4">
+      <div className="text-center">
+        <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-[#6a37d4] font-semibold text-white">EO</div>
+        <h1 className="text-2xl font-semibold text-[#2c2f30]">Create your EntrepreneurOS account</h1>
+        <p className="mt-1 text-sm text-[#595c5d]">Start with one company and one governed operating loop.</p>
+      </div>
       <SignUp
         routing="hash"
-        afterSignUpUrl="/company-setup"
+        fallbackRedirectUrl="/company-setup"
         signInUrl="/login"
+        appearance={eosClerkAppearance}
       />
     </div>
   )

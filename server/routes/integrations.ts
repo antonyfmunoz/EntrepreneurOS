@@ -1,6 +1,8 @@
 import { Express } from "express";
 import { storage } from "../storage";
 import * as gmail from "../integrations/gmail";
+import * as notion from "../integrations/notion";
+import { credentialEncryptionConfigured, encryptCredential } from "../security/credential-encryption";
 
 export function registerIntegrationRoutes(app: Express): void {
   app.get("/api/integrations", async (_req, res) => {
@@ -8,41 +10,16 @@ export function registerIntegrationRoutes(app: Express): void {
     res.json(integrations);
   });
 
-  app.post("/api/integrations/connect", async (req, res) => {
-    try {
-      const { type } = req.body;
-      if (!type) {
-        return res.status(400).json({ message: "Integration type is required" });
-      }
-
-      const integration = await storage.connectIntegration(type);
-
-      // Create a notification for the user when integration is connected
-      if (req.user && integration) {
-        await storage.createNotification({
-          userId: req.user.id,
-          title: "Integration Connected",
-          content: `${integration.name} integration has been successfully connected`,
-          type: "integration-connected",
-          href: "/integrations",
-          relatedId: integration.id
-        });
-      }
-
-      res.status(201).json(integration);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to connect integration" });
-    }
-  });
-
-  // Gmail Routes
+  // Google Workspace OAuth routes. Provider connection state is derived from
+  // encrypted OAuth credentials, never from the legacy integration catalog.
   app.get("/api/integrations/gmail/auth", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
     try {
       if (!gmail.isConfigured()) {
-        return res.status(400).json({ message: "Gmail OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET." });
+        return res.status(400).json({ message: "Gmail OAuth or EOS credential encryption is not configured." });
       }
-      const authUrl = gmail.getAuthUrl();
+      const returnTo = typeof req.query.returnTo === "string" ? req.query.returnTo : undefined;
+      const authUrl = gmail.getAuthUrl(req.user.id, returnTo);
       res.json({ authUrl });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -50,10 +27,18 @@ export function registerIntegrationRoutes(app: Express): void {
   });
 
   app.get("/api/auth/google/callback", async (req, res) => {
-    if (!req.isAuthenticated()) return res.redirect("/integrations?error=not_authenticated");
+    if (!req.isAuthenticated()) return res.redirect("/portfolios?integration_error=not_authenticated");
     try {
       const code = req.query.code as string;
-      if (!code) return res.redirect("/integrations?error=no_code");
+      const state = req.query.state as string;
+      if (!code) return res.redirect("/portfolios?integration_error=no_code");
+      const oauthState = state ? gmail.readOAuthState(state, req.user.id) : null;
+      if (!oauthState) return res.redirect("/portfolios?integration_error=invalid_oauth_state");
+      const redirectWith = (key: string, value: string) => {
+        const [path, hash] = oauthState.returnTo.split("#");
+        return `${path}?${key}=${encodeURIComponent(value)}${hash ? `#${hash}` : ""}`;
+      };
+      if (!credentialEncryptionConfigured()) return res.redirect(redirectWith("integration_error", "credential_encryption_not_configured"));
 
       const userId = (req.user as any).id;
       const tokens = await gmail.exchangeCode(code);
@@ -61,16 +46,16 @@ export function registerIntegrationRoutes(app: Express): void {
       await storage.upsertOauthToken({
         userId,
         provider: "gmail",
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
+        accessToken: encryptCredential(tokens.accessToken),
+        refreshToken: tokens.refreshToken ? encryptCredential(tokens.refreshToken) : undefined,
         expiresAt: tokens.expiresAt,
         scope: tokens.scope,
       });
 
-      res.redirect("/integrations?gmail=connected");
+      res.redirect(redirectWith("google_workspace", "connected"));
     } catch (error: any) {
       console.error("Gmail OAuth callback error:", error);
-      res.redirect(`/integrations?error=${encodeURIComponent(error.message)}`);
+      res.redirect("/portfolios?integration_error=oauth_callback_failed");
     }
   });
 
@@ -78,9 +63,8 @@ export function registerIntegrationRoutes(app: Express): void {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
     try {
       const userId = (req.user as any).id;
-      const connected = await gmail.isConnected(userId);
-      const configured = gmail.isConfigured();
-      res.json({ connected, configured });
+      const verify = req.query.verify === "true";
+      res.json(verify ? await gmail.verifyConnection(userId) : await gmail.connectionSummary(userId));
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -95,5 +79,10 @@ export function registerIntegrationRoutes(app: Express): void {
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
+  });
+
+  app.get("/api/integrations/notion/status", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    res.json(await notion.verifyConnection());
   });
 }

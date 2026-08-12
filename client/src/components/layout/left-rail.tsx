@@ -1,92 +1,45 @@
-import React from 'react';
-import { Link, useLocation } from 'wouter';
-import {
-  LayoutGrid,
-  Command,
-  Network,
-  MessageSquare,
-  ListTodo,
-  Workflow,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react';
-
-interface NavItem {
-  label: string;
-  href: string;
-  icon: React.ReactNode;
-}
-
-const navItems: NavItem[] = [
-  { label: 'Portfolio', href: '/portfolio', icon: <LayoutGrid className="h-5 w-5" /> },
-  { label: 'Command Center', href: '/command-center', icon: <Command className="h-5 w-5" /> },
-  { label: 'Org Chart', href: '/org-chart', icon: <Network className="h-5 w-5" /> },
-  { label: 'Agent Chat', href: '/agent-chat', icon: <MessageSquare className="h-5 w-5" /> },
-  { label: 'Task Board', href: '/task-board', icon: <ListTodo className="h-5 w-5" /> },
-  { label: 'Workflows', href: '/workflows', icon: <Workflow className="h-5 w-5" /> },
-  { label: 'Settings', href: '/settings', icon: <Settings className="h-5 w-5" /> },
-];
+import { useLocation } from "wouter";
+import { Blocks, Bot, BriefcaseBusiness, Building2, Command, Home, Landmark, LayoutGrid, Network, Workflow } from "lucide-react";
 
 interface LeftRailProps {
   collapsed?: boolean;
-  onToggle?: () => void;
 }
 
-export default function LeftRail({ collapsed = false, onToggle }: LeftRailProps) {
+export default function LeftRail({ collapsed = false }: LeftRailProps) {
   const [location] = useLocation();
+  const companyId = location.match(/^\/company\/([^/]+)/)?.[1];
+  const companyRoot = companyId ? `/company/${companyId}` : "/portfolios";
+  const items = [
+    { label: "Home", href: `${companyRoot}#home`, icon: Home },
+    { label: "Portfolio", href: "/portfolios", icon: LayoutGrid },
+    { label: "Organizations", href: "/portfolios", icon: Building2 },
+    { label: "Command", href: `${companyRoot}#command`, icon: Command },
+    { label: "Organization", href: companyId ? `${companyRoot}/org` : "/portfolios", icon: Network },
+    { label: "Stakeholder / Commercial", href: `${companyRoot}#commercial`, icon: BriefcaseBusiness },
+    { label: "Operations", href: `${companyRoot}#operations`, icon: Workflow },
+    { label: "Capital & Finance", href: `${companyRoot}#capital`, icon: Landmark, status: "dormant" },
+    { label: "Intelligence", href: companyId ? `${companyRoot}/chat` : "/portfolios", icon: Bot },
+    { label: "Systems", href: "/settings", icon: Blocks },
+  ];
 
   return (
-    <aside
-      className={
-        (collapsed ? 'w-16 ' : 'w-64 ') +
-        'relative bg-[#eff1f2] border-r border-[#abadae]/10 flex-shrink-0 ' +
-        'transition-[width] duration-200 ease-out'
-      }
-    >
-      {onToggle && (
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
-          className="absolute top-5 -right-3 z-20 w-6 h-6 rounded-full bg-white border border-[#abadae]/20 shadow-[0_4px_12px_rgba(0,0,0,0.08)] flex items-center justify-center text-[#595c5d] hover:text-[#6a37d4] transition-colors"
-        >
-          {collapsed ? (
-            <ChevronRight className="w-3.5 h-3.5" />
-          ) : (
-            <ChevronLeft className="w-3.5 h-3.5" />
-          )}
-        </button>
-      )}
-      <nav className={'py-8 ' + (collapsed ? 'px-2' : 'px-4')}>
-        <ul className="space-y-1">
-          {navItems.map((item) => {
-            const isActive = location === item.href;
-
-            return (
-              <li key={item.href}>
-                <Link href={item.href}>
-                  <a
-                    title={collapsed ? item.label : undefined}
-                    className={
-                      'flex items-center gap-3 rounded-xl transition-colors ' +
-                      (collapsed ? 'justify-center px-0 py-3 ' : 'px-4 py-3 ') +
-                      (isActive
-                        ? 'bg-white text-[#6a37d4] shadow-[0_8px_32px_rgba(106,55,212,0.08)]'
-                        : 'text-[#595c5d] hover:bg-white/50 hover:text-[#2c2f30]')
-                    }
-                  >
-                    {item.icon}
-                    {!collapsed && (
-                      <span className="text-sm font-medium">{item.label}</span>
-                    )}
-                  </a>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-    </aside>
+    <nav className={collapsed ? "px-1.5" : "px-2"} aria-label="EOS primary navigation">
+      <ul className="space-y-0.5">
+        {items.map((item) => {
+          const path = item.href.split("#")[0];
+          const active = location === path || (path !== "/portfolios" && location.startsWith(`${path}/`));
+          const Icon = item.icon;
+          return (
+            <li key={`${item.label}-${item.href}`}>
+              <a href={item.href} title={collapsed ? item.label : undefined} className={(collapsed ? "justify-center px-0 " : "px-2.5 ") + (active ? "bg-white text-primary shadow-sm " : "text-muted-foreground hover:bg-white/70 hover:text-foreground ") + "flex min-h-10 items-center gap-2 rounded-lg text-xs font-medium transition-colors"}>
+                <Icon className="h-4 w-4 flex-shrink-0" />
+                {!collapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+                {!collapsed && item.status && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary/45" title={item.status} aria-label={item.status} />}
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }

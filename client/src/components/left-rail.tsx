@@ -15,12 +15,13 @@ export interface NavItem {
 }
 
 export interface LeftRailProps {
-  items: NavItem[];
+  items?: NavItem[];
   className?: string;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
   footer?: React.ReactNode;
   header?: React.ReactNode;
+  onNavigate?: () => void;
 }
 
 export const LeftRail: React.FC<LeftRailProps> = ({
@@ -30,6 +31,7 @@ export const LeftRail: React.FC<LeftRailProps> = ({
   onCollapsedChange,
   footer,
   header,
+  onNavigate,
 }) => {
   const [location] = useLocation();
   const [internalCollapsed, setInternalCollapsed] = useState(false);
@@ -152,7 +154,7 @@ export const LeftRail: React.FC<LeftRailProps> = ({
             {itemContent}
           </button>
         ) : (
-          <Link href={item.href} onClick={() => setMobileOpen(false)}>
+          <Link href={item.href} onClick={() => { setMobileOpen(false); onNavigate?.(); }}>
             {itemContent}
           </Link>
         )}

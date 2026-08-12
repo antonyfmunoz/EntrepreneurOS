@@ -1,330 +1,109 @@
-import { useState, useCallback, useMemo } from "react";
-import { useParams, Link, useLocation } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  ReactFlow,
-  Node,
-  Edge,
-  Controls,
-  Background,
-  useNodesState,
-  useEdgesState,
-  Panel,
-  NodeProps,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
-import { Plus, Building2, MoreVertical, ExternalLink, Unlink } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Link, useParams } from "wouter";
+import { ArrowLeft, ArrowRight, Building2, LayoutGrid, Plus, RefreshCw } from "lucide-react";
+import UniversalLayout from "@/components/layout/universal-layout";
+import { FullPageStatus } from "@/components/full-page-status";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Card, CardContent } from "@/components/ui/card";
 import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 
 interface Portfolio {
-  id: string;
+  id: number | string;
   name: string;
-  description?: string;
-  totalCompanies: number;
-  activeCompanies: number;
+  description?: string | null;
 }
 
 interface Company {
-  id: string;
+  id: number | string;
   name: string;
-  stage: string;
-  industry: string;
-  createdAt: string;
+  stage?: string | null;
+  industry?: string | null;
+  offer?: string | null;
 }
-
-interface CompanyNodeData {
-  id: string;
-  name: string;
-  stage: string;
-  industry: string;
-  onOpen: (id: string) => void;
-  onDetach: (id: string) => void;
-}
-
-const CompanyNode = ({ data }: NodeProps<CompanyNodeData>) => {
-  return (
-    <Card className="w-[280px] bg-white/70 backdrop-blur-md border border-gray-200 shadow-[0_8px_32px_rgba(106,55,212,0.08)] hover:shadow-[0_12px_48px_rgba(106,55,212,0.12)] transition-all duration-200 cursor-pointer group">
-      <div className="p-6">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center space-x-2">
-            <Building2 className="h-5 w-5 text-[#6a37d4]" />
-            <h3 className="font-semibold text-base text-[#2c2f30]">{data.name}</h3>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => data.onOpen(data.id)}>
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Open
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => data.onDetach(data.id)}>
-                <Unlink className="h-4 w-4 mr-2" />
-                Detach from portfolio
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-        <div className="space-y-1">
-          <p className="text-sm text-gray-600">
-            <span className="font-medium">Stage:</span> {data.stage}
-          </p>
-          <p className="text-sm text-gray-600">
-            <span className="font-medium">Industry:</span> {data.industry}
-          </p>
-        </div>
-      </div>
-    </Card>
-  );
-};
-
-const nodeTypes = {
-  company: CompanyNode,
-};
 
 export default function PortfolioDetailPage() {
-  const { portfolioId } = useParams<{ portfolioId: string }>();
-  const [, navigate] = useLocation();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
-
-  const {
-    data: portfolio,
-    isLoading: portfolioLoading,
-    error: portfolioError,
-  } = useQuery<Portfolio>({
+  const { portfolioId = "" } = useParams<{ portfolioId: string }>();
+  const portfolioQuery = useQuery<Portfolio>({
     queryKey: ["/api/portfolios", portfolioId],
-    queryFn: () => apiRequest(`/api/portfolios/${portfolioId}`),
-    enabled: !!portfolioId,
+    queryFn: () => apiRequest<Portfolio>(`/api/portfolios/${portfolioId}`),
+    enabled: Boolean(portfolioId),
   });
-
-  const {
-    data: companies = [],
-    isLoading: companiesLoading,
-    error: companiesError,
-  } = useQuery<Company[]>({
+  const companiesQuery = useQuery<Company[]>({
     queryKey: ["/api/portfolios", portfolioId, "companies"],
-    queryFn: () => apiRequest(`/api/portfolios/${portfolioId}/companies`),
-    enabled: !!portfolioId,
+    queryFn: () => apiRequest<Company[]>(`/api/portfolios/${portfolioId}/companies`),
+    enabled: Boolean(portfolioId),
   });
 
-  const detachMutation = useMutation({
-    mutationFn: (companyId: string) =>
-      apiRequest(`/api/companies/${companyId}`, {
-        method: "DELETE",
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["/api/portfolios", portfolioId, "companies"],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["/api/portfolios", portfolioId],
-      });
-      toast({
-        title: "Company detached",
-        description: "The company has been removed from this portfolio.",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Failed to detach company",
-        description: "Failed to detach company. Try again.",
-        variant: "destructive",
-      });
-    },
-  });
+  if (portfolioQuery.isLoading || companiesQuery.isLoading) {
+    return <FullPageStatus label="Portfolio" title="Loading organizations" description="Resolving the companies and operating contexts available in this portfolio." />;
+  }
 
-  const handleOpenCompany = useCallback((companyId: string) => {
-    navigate(`/companies/${companyId}`);
-  }, [navigate]);
-
-  const handleDetachCompany = useCallback((companyId: string) => {
-    detachMutation.mutate(companyId);
-  }, [detachMutation]);
-
-  const handleAddCompany = useCallback(() => {
-    navigate(`/companies/new?portfolioId=${portfolioId}`);
-  }, [portfolioId, navigate]);
-
-  const initialNodes = useMemo(() => {
-    if (!companies || companies.length === 0) return [];
-
-    const cols = Math.ceil(Math.sqrt(companies.length));
-    const nodeWidth = 280;
-    const nodeHeight = 140;
-    const gapX = 60;
-    const gapY = 60;
-
-    return companies.map((company: Company, index: number) => {
-      const col = index % cols;
-      const row = Math.floor(index / cols);
-
-      return {
-        id: company.id,
-        type: "company",
-        position: {
-          x: col * (nodeWidth + gapX) + 100,
-          y: row * (nodeHeight + gapY) + 100,
-        },
-        data: {
-          id: company.id,
-          name: company.name,
-          stage: company.stage,
-          industry: company.industry,
-          onOpen: handleOpenCompany,
-          onDetach: handleDetachCompany,
-        } as CompanyNodeData,
-      };
-    });
-  }, [companies, handleOpenCompany, handleDetachCompany]);
-
-  const [nodes, , onNodesChange] = useNodesState(initialNodes);
-  const [edges, , onEdgesChange] = useEdgesState<Edge>([]);
-
-  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    const data = node.data as CompanyNodeData;
-    handleOpenCompany(data.id);
-  }, [handleOpenCompany]);
-
-  if (portfolioLoading || companiesLoading) {
+  if (portfolioQuery.error || companiesQuery.error || !portfolioQuery.data) {
+    const retry = async () => Promise.all([portfolioQuery.refetch(), companiesQuery.refetch()]);
     return (
-      <div className="h-screen flex flex-col">
-        <div className="border-b border-gray-200 bg-white">
-          <div className="max-w-7xl mx-auto px-6 py-6">
-            <div className="h-8 w-48 bg-gray-200 rounded animate-pulse mb-4" />
-            <div className="h-4 w-96 bg-gray-200 rounded animate-pulse mb-6" />
-            <div className="flex items-center space-x-4">
-              <div className="h-6 w-24 bg-gray-200 rounded animate-pulse" />
-              <div className="h-6 w-24 bg-gray-200 rounded animate-pulse" />
-            </div>
-          </div>
-        </div>
-        <div className="flex-1 bg-gray-50 relative">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="w-[280px] h-[140px] bg-gray-200 rounded-lg animate-pulse"
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+      <FullPageStatus
+        label="Portfolio unavailable"
+        title="We could not load this portfolio"
+        description="The requested portfolio may be outside your authority scope, or the data service may be temporarily unavailable."
+        busy={false}
+        action={<Button onClick={retry}><RefreshCw className="mr-2 h-4 w-4" />Retry</Button>}
+      />
     );
   }
 
-  if (portfolioError || companiesError) {
-    return (
-      <div className="h-screen flex items-center justify-center">
-        <Card className="max-w-md w-full p-8 text-center">
-          <h2 className="text-xl font-semibold text-[#2c2f30] mb-2">
-            Failed to load companies
-          </h2>
-          <p className="text-sm text-gray-600 mb-6">
-            Failed to load companies. Retry or refresh the page.
-          </p>
-          <Button onClick={() => window.location.reload()}>Retry</Button>
-        </Card>
-      </div>
-    );
-  }
-
-  const showEmptyState = companies.length === 0;
+  const portfolio = portfolioQuery.data;
+  const companies = companiesQuery.data ?? [];
 
   return (
-    <div className="h-screen flex flex-col">
-      <div className="border-b border-gray-200 bg-white sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-bold text-[#2c2f30] mb-2">
-                {portfolio?.name || "Portfolio"}
-              </h1>
-              {portfolio?.description && (
-                <p className="text-base text-gray-600">{portfolio.description}</p>
-              )}
+    <UniversalLayout title="Organizations" portfolioName={portfolio.name} portfolioHref={`/portfolios/${portfolio.id}`} floatingPanel={false}>
+      <section className="space-y-8 pb-12">
+        <div>
+          <Link href="/portfolios"><a className="inline-flex items-center text-sm font-medium text-primary hover:text-[#5a2dc0]"><ArrowLeft className="mr-1.5 h-4 w-4" />All portfolios</a></Link>
+          <div className="mt-6 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+            <div className="max-w-2xl">
+              <p className="eos-label flex items-center gap-2"><LayoutGrid className="h-4 w-4 text-primary" />Portfolio context</p>
+              <h1 className="mt-3 text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">{portfolio.name}</h1>
+              <p className="mt-3 text-sm text-muted-foreground sm:text-base">{portfolio.description || "Select an organization to enter its EntrepreneurOS operating workspace."}</p>
             </div>
-            <Button onClick={handleAddCompany} className="flex items-center space-x-2">
-              <Plus className="h-4 w-4" />
-              <span>Add company</span>
-            </Button>
-          </div>
-          <div className="flex items-center space-x-6">
-            <div className="text-sm">
-              <span className="text-gray-600">Total companies:</span>{" "}
-              <span className="font-semibold text-[#2c2f30]">
-                {portfolio?.totalCompanies || 0}
-              </span>
-            </div>
-            <div className="text-sm">
-              <span className="text-gray-600">Active companies:</span>{" "}
-              <span className="font-semibold text-[#2c2f30]">
-                {portfolio?.activeCompanies || 0}
-              </span>
-            </div>
+            <Link href={`/company-setup?portfolioId=${portfolio.id}`}><a><Button className="w-full sm:w-auto"><Plus className="mr-2 h-4 w-4" />Add organization</Button></a></Link>
           </div>
         </div>
-      </div>
 
-      <div className="flex-1 bg-gray-50 relative">
-        {showEmptyState ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Card className="max-w-md w-full p-12 text-center">
-              <div className="text-4xl text-gray-300 mb-4">—</div>
-              <h3 className="text-lg font-semibold text-[#2c2f30] mb-2">
-                No companies yet
-              </h3>
-              <p className="text-sm text-gray-600 mb-6">
-                No companies yet. Add your first company to this portfolio.
-              </p>
-              <Button onClick={handleAddCompany} className="flex items-center space-x-2">
-                <Plus className="h-4 w-4" />
-                <span>Add company</span>
-              </Button>
-            </Card>
-          </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Metric label="Organizations" value={companies.length} />
+          <Metric label="Operating contexts" value={companies.length} />
+        </div>
+
+        {companies.length === 0 ? (
+          <Card className="border-0 bg-[#eff1f2] shadow-none">
+            <CardContent className="px-6 py-14 text-center sm:px-12 sm:py-20">
+              <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-white text-primary shadow-[0_8px_32px_rgba(106,55,212,0.08)]"><Building2 className="h-7 w-7" /></span>
+              <h2 className="mt-6 text-xl font-semibold">Add the first organization</h2>
+              <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">Create a company inside this portfolio, then compile its operating context in EntrepreneurOS.</p>
+              <Button asChild className="mt-7"><Link href={`/company-setup?portfolioId=${portfolio.id}`}><Plus className="mr-2 h-4 w-4" />Add organization</Link></Button>
+            </CardContent>
+          </Card>
         ) : (
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onNodeClick={onNodeClick}
-            nodeTypes={nodeTypes}
-            fitView
-            className="bg-gray-50"
-            minZoom={0.2}
-            maxZoom={2}
-          >
-            <Background />
-            <Controls />
-            <Panel position="top-left" className="bg-white/70 backdrop-blur-md rounded-lg border border-gray-200 p-4 shadow-[0_8px_32px_rgba(106,55,212,0.08)]">
-              <p className="text-sm text-gray-600">
-                Companies in this portfolio. Click a company to open its command center.
-              </p>
-            </Panel>
-          </ReactFlow>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {companies.map((company) => (
+              <Link key={company.id} href={`/company/${company.id}`} className="group block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+                  <Card className="h-full border-0 bg-white shadow-[0_8px_32px_rgba(106,55,212,0.08)] transition-[transform,box-shadow] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_12px_40px_rgba(106,55,212,0.12)]">
+                    <CardContent className="flex min-h-56 flex-col p-6 sm:p-8">
+                      <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#eff1f2] text-primary"><Building2 className="h-5 w-5" /></span>
+                      <h2 className="mt-6 text-xl font-semibold">{company.name}</h2>
+                      <p className="mt-2 flex-1 text-sm text-muted-foreground">{company.offer || "Open the organization workspace to define its operating brief, missions, approvals, and evidence."}</p>
+                      <div className="mt-6 flex items-center justify-between gap-4"><span className="eos-label">{company.stage || "MVP"}</span><span className="flex items-center text-sm font-medium text-primary">Open workspace <ArrowRight className="ml-1.5 h-4 w-4 transition-transform group-hover:translate-x-0.5" /></span></div>
+                    </CardContent>
+                  </Card>
+              </Link>
+            ))}
+          </div>
         )}
-      </div>
-    </div>
+      </section>
+    </UniversalLayout>
   );
+}
+
+function Metric({ label, value }: { label: string; value: number }) {
+  return <div className="rounded-xl bg-[#eff1f2] p-5"><div className="text-2xl font-semibold text-foreground">{value}</div><div className="eos-label mt-1">{label}</div></div>;
 }

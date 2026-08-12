@@ -1,53 +1,46 @@
-import React, { useState } from 'react';
-import { MessageSquare, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import AgentChatStub from './agent-chat-stub';
+import { useState } from "react";
+import { AlertTriangle, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 
-export default function FloatingAIPanel() {
-  const [isOpen, setIsOpen] = useState(false);
+interface FloatingAiPanelProps {
+  assistantName?: string;
+  seatName?: string;
+  openWork?: number;
+  approvals?: number;
+  nextAction?: string;
+  children?: React.ReactNode;
+}
+
+export default function FloatingAIPanel({
+  assistantName = "Executive Assistant",
+  seatName = "Founder / Portfolio Principal",
+  openWork = 0,
+  approvals = 0,
+  nextAction = "Review the current operating context",
+  children,
+}: FloatingAiPanelProps) {
+  const [expanded, setExpanded] = useState(false);
 
   return (
-    <>
-      {isOpen && (
-        <div
-          className="fixed bottom-24 right-8 w-[420px] h-[600px] rounded-xl border border-[#6a37d4] shadow-[0_8px_32px_rgba(106,55,212,0.08)] overflow-hidden z-50"
-          style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.7)',
-            backdropFilter: 'blur(16px)',
-          }}
+    <div className="pointer-events-none sticky top-3 z-40 h-0 px-3 sm:px-6 lg:px-10" aria-label="Executive decision control HUD">
+      <div className="eos-glass pointer-events-auto mx-auto w-full max-w-4xl overflow-hidden rounded-2xl border border-primary/20 shadow-[0_12px_34px_rgba(106,55,212,0.16)]">
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="flex min-h-14 w-full flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 text-left sm:px-6"
+          aria-expanded={expanded}
         >
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[#abadae]/10">
-            <div className="flex items-center gap-3">
-              <MessageSquare className="h-5 w-5 text-[#6a37d4]" />
-              <span className="text-sm font-semibold text-[#2c2f30]">
-                Your assistant
-              </span>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsOpen(false)}
-              className="h-8 w-8 text-[#595c5d] hover:text-[#2c2f30]"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+          <span className="flex items-center gap-2 font-medium text-foreground"><Sparkles className="h-4 w-4 text-primary" />{assistantName}</span>
+          <span className="rounded-full bg-primary-muted px-3 py-1 text-xs font-medium text-primary">{openWork} open</span>
+          <span className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground"><AlertTriangle className="h-3.5 w-3.5" />{approvals} approvals</span>
+          <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground"><strong className="font-medium text-foreground">Next:</strong> {nextAction}</span>
+          {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </button>
+        {expanded && (
+          <div className="border-t border-border/60 bg-white px-4 pb-5 pt-4 sm:px-6">
+            {children ?? <div className="space-y-2 text-sm text-muted-foreground"><p><strong className="font-medium text-foreground">Active seat:</strong> {seatName}</p><p>{assistantName} is your Executive Assistant and sole founder-facing communication channel. It coordinates advisors and company CEO agents, but cannot authorize consequential effects.</p></div>}
           </div>
-          <div className="h-[calc(100%-64px)]">
-            <AgentChatStub />
-          </div>
-        </div>
-      )}
-
-      <Button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-8 right-8 h-14 w-14 rounded-full bg-[#6a37d4] text-white shadow-[0_8px_32px_rgba(106,55,212,0.08)] hover:bg-[#5a2dc0] z-40"
-      >
-        {isOpen ? (
-          <X className="h-6 w-6" />
-        ) : (
-          <MessageSquare className="h-6 w-6" />
         )}
-      </Button>
-    </>
+      </div>
+    </div>
   );
 }

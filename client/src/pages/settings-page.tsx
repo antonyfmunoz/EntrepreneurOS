@@ -576,7 +576,7 @@ export default function SettingsPage() {
                 <div className="space-y-2">
                   <Label htmlFor="autonomyLevel">Autonomy Level</Label>
                   <p className="font-mono text-xs text-text-secondary mb-4">
-                    Higher autonomy = DEX executes more steps without asking. Start low, increase as trust builds.
+                    Higher autonomy lets the scoped Role Agent execute more steps without asking. Start low and increase only with evidence.
                   </p>
                   <Select
                     defaultValue={autonomyForm.autonomyLevel}
@@ -600,22 +600,22 @@ export default function SettingsPage() {
                   <p className="font-mono text-xs uppercase tracking-wide text-text-tertiary">Current Level Details</p>
                   {autonomyForm.autonomyLevel === "observe" && (
                     <p className="font-mono text-sm text-text">
-                      DEX watches but never acts. You review all recommendations manually.
+                      The Role Agent watches but never acts. You review all recommendations manually.
                     </p>
                   )}
                   {autonomyForm.autonomyLevel === "recommend" && (
                     <p className="font-mono text-sm text-text">
-                      DEX suggests actions. You approve before execution.
+                      The Role Agent suggests actions. You approve before execution.
                     </p>
                   )}
                   {autonomyForm.autonomyLevel === "assist" && (
                     <p className="font-mono text-sm text-text">
-                      DEX executes simple tasks automatically. You review complex decisions.
+                      The Role Agent executes bounded simple tasks. You review complex decisions.
                     </p>
                   )}
                   {autonomyForm.autonomyLevel === "execute" && (
                     <p className="font-mono text-sm text-text">
-                      DEX executes most workflows independently. You're notified of outcomes.
+                      The Role Agent executes authorized workflows independently. You receive outcomes and evidence.
                     </p>
                   )}
                 </div>

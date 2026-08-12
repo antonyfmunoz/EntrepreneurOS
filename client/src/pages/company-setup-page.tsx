@@ -11,13 +11,9 @@ import { ChevronRight, Check } from "lucide-react";
 
 // Types
 interface Portfolio {
-  id: string;
+  id: string | number;
   name: string;
   description?: string;
-}
-
-interface PortfoliosResponse {
-  portfolios: Portfolio[];
 }
 
 interface PortfolioCreatePayload {
@@ -26,7 +22,7 @@ interface PortfolioCreatePayload {
 }
 
 interface PortfolioCreateResponse {
-  id: string;
+  id: string | number;
   name: string;
   description?: string;
 }
@@ -37,6 +33,13 @@ interface CompanyCreatePayload {
   industry: string;
   businessModel: string;
   goals?: string;
+  assistantName: string;
+  founderProfile: {
+    vision: string;
+    values: string;
+    decisionStyle: string;
+    workingStyle: string;
+  };
 }
 
 interface CompanyResponse {
@@ -74,7 +77,9 @@ export default function CompanySetupPage() {
   const [showCreatePortfolio, setShowCreatePortfolio] = useState(false);
 
   // Form state
-  const [selectedPortfolioId, setSelectedPortfolioId] = useState<string>("");
+  const [selectedPortfolioId, setSelectedPortfolioId] = useState<string>(() =>
+    typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("portfolioId") || "",
+  );
   const [portfolioName, setPortfolioName] = useState("");
   const [portfolioDescription, setPortfolioDescription] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -82,12 +87,17 @@ export default function CompanySetupPage() {
   const [industry, setIndustry] = useState("");
   const [businessModel, setBusinessModel] = useState("");
   const [goals, setGoals] = useState("");
+  const [assistantName, setAssistantName] = useState("");
+  const [founderVision, setFounderVision] = useState("");
+  const [founderValues, setFounderValues] = useState("");
+  const [decisionStyle, setDecisionStyle] = useState("");
+  const [workingStyle, setWorkingStyle] = useState("");
 
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Data fetching
-  const { data: portfoliosData, isLoading: portfoliosLoading, error: portfoliosError } = useQuery<PortfoliosResponse>({
+  const { data: portfoliosData, isLoading: portfoliosLoading, error: portfoliosError } = useQuery<Portfolio[]>({
     queryKey: ["portfolios"],
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/portfolios");
@@ -95,7 +105,7 @@ export default function CompanySetupPage() {
     }
   });
 
-  const portfolios = portfoliosData?.portfolios ?? [];
+  const portfolios = portfoliosData ?? [];
 
   const createPortfolioMutation = useMutation<PortfolioCreateResponse, Error, PortfolioCreatePayload>({
     mutationFn: async (data: PortfolioCreatePayload) => {
@@ -104,7 +114,7 @@ export default function CompanySetupPage() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["portfolios"] });
-      setSelectedPortfolioId(data.id);
+      setSelectedPortfolioId(String(data.id));
       setShowCreatePortfolio(false);
       if (typeof window !== "undefined" && (window as any).posthog) {
         (window as any).posthog.capture("portfolio_created_inline", { portfolioId: data.id });
@@ -181,9 +191,18 @@ export default function CompanySetupPage() {
       }
     }
 
+    if (step === 4) {
+      if (!assistantName.trim()) newErrors.assistantName = "Choose a name for your Executive Assistant.";
+      if (!founderVision.trim()) newErrors.founderVision = "Describe the vision your Executive Office should protect.";
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        return false;
+      }
+    }
+
     setErrors({});
     return true;
-  }, [selectedPortfolioId, companyName, stage, industry, businessModel]);
+  }, [selectedPortfolioId, companyName, stage, industry, businessModel, assistantName, founderVision]);
 
   const handleContinue = useCallback(() => {
     if (!validateStep(currentStep)) return;
@@ -213,7 +232,7 @@ export default function CompanySetupPage() {
   }, [portfolioName, portfolioDescription, createPortfolioMutation]);
 
   const handleSubmit = useCallback(() => {
-    if (!validateStep(3)) return;
+    if (!validateStep(4)) return;
 
     createCompanyMutation.mutate({
       portfolioId: selectedPortfolioId,
@@ -221,9 +240,16 @@ export default function CompanySetupPage() {
       stage,
       industry,
       businessModel,
-      goals: goals.trim() || undefined
+      goals: goals.trim() || undefined,
+      assistantName: assistantName.trim(),
+      founderProfile: {
+        vision: founderVision.trim(),
+        values: founderValues.trim(),
+        decisionStyle: decisionStyle.trim(),
+        workingStyle: workingStyle.trim(),
+      },
     });
-  }, [selectedPortfolioId, companyName, stage, industry, businessModel, goals, createCompanyMutation, validateStep]);
+  }, [selectedPortfolioId, companyName, stage, industry, businessModel, goals, assistantName, founderVision, founderValues, decisionStyle, workingStyle, createCompanyMutation, validateStep]);
 
   const handleSelectPortfolio = useCallback((portfolioId: string) => {
     setSelectedPortfolioId(portfolioId);
@@ -232,8 +258,8 @@ export default function CompanySetupPage() {
     }
   }, []);
 
-  const stepNames = ["Portfolio", "Company Name", "Stage", "Industry & Model", "Goals"];
-  const totalSteps = 5;
+  const stepNames = ["Portfolio", "Company", "Stage", "Model", "Executive Office", "Goals"];
+  const totalSteps = 6;
 
   const getStepName = (step: number): string => stepNames[step] || "";
 
@@ -311,9 +337,9 @@ export default function CompanySetupPage() {
                         {portfolios.map((portfolio: Portfolio) => (
                           <button
                             key={portfolio.id}
-                            onClick={() => handleSelectPortfolio(portfolio.id)}
+                            onClick={() => handleSelectPortfolio(String(portfolio.id))}
                             className={`w-full text-left bg-surface border rounded-md p-4 transition-all duration-150 ${
-                              selectedPortfolioId === portfolio.id
+                              selectedPortfolioId === String(portfolio.id)
                                 ? "border-primary ring-2 ring-primary"
                                 : "border-border hover:border-border-hover hover:bg-surface-subtle"
                             }`}
@@ -508,6 +534,32 @@ export default function CompanySetupPage() {
           {currentStep === 4 && (
             <div className="space-y-6">
               <div>
+                <h2 className="font-mono font-semibold text-2xl text-text mb-2">Name your Executive Assistant</h2>
+                <p className="font-mono text-sm text-text-secondary mb-5">This is the founder-facing agent. It will coordinate the portfolio advisor council and company CEO agents on your behalf.</p>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="assistantName" className="font-mono text-xs uppercase tracking-wide text-text-secondary">Executive Assistant name</Label>
+                    <Input id="assistantName" value={assistantName} onChange={(event) => setAssistantName(event.target.value)} placeholder="Choose any name" className={`mt-2 ${errors.assistantName ? "border-destructive" : ""}`} />
+                    {errors.assistantName && <p className="mt-1 font-mono text-xs text-destructive">{errors.assistantName}</p>}
+                  </div>
+                  <div>
+                    <Label htmlFor="founderVision" className="font-mono text-xs uppercase tracking-wide text-text-secondary">Founder vision</Label>
+                    <Textarea id="founderVision" value={founderVision} onChange={(event) => setFounderVision(event.target.value)} placeholder="What are you ultimately building, and what must remain true as it grows?" className={`mt-2 min-h-[96px] ${errors.founderVision ? "border-destructive" : ""}`} />
+                    {errors.founderVision && <p className="mt-1 font-mono text-xs text-destructive">{errors.founderVision}</p>}
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div><Label htmlFor="founderValues" className="font-mono text-xs uppercase tracking-wide text-text-secondary">Values and standards</Label><Textarea id="founderValues" value={founderValues} onChange={(event) => setFounderValues(event.target.value)} placeholder="The principles the council must protect" className="mt-2 min-h-[90px]" /></div>
+                    <div><Label htmlFor="decisionStyle" className="font-mono text-xs uppercase tracking-wide text-text-secondary">Decision style</Label><Textarea id="decisionStyle" value={decisionStyle} onChange={(event) => setDecisionStyle(event.target.value)} placeholder="How you want facts, options, risks, and recommendations presented" className="mt-2 min-h-[90px]" /></div>
+                  </div>
+                  <div><Label htmlFor="workingStyle" className="font-mono text-xs uppercase tracking-wide text-text-secondary">Working style</Label><Textarea id="workingStyle" value={workingStyle} onChange={(event) => setWorkingStyle(event.target.value)} placeholder="Cadence, communication preferences, watchouts, and how the system should support you" className="mt-2 min-h-[90px]" /></div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {currentStep === 5 && (
+            <div className="space-y-6">
+              <div>
                 <h2 className="font-mono font-semibold text-2xl text-text mb-2">What are your top 3 goals for the next quarter?</h2>
                 <p className="font-mono text-xs text-text-tertiary mb-4">Optional but recommended. Be specific.</p>
                 <Textarea
@@ -531,7 +583,7 @@ export default function CompanySetupPage() {
               Back
             </Button>
           )}
-          {currentStep < 4 && (
+          {currentStep < 5 && (
             <Button
               onClick={handleContinue}
               disabled={currentStep === 0 && !selectedPortfolioId}
@@ -541,7 +593,7 @@ export default function CompanySetupPage() {
               <ChevronRight className="w-4 h-4" />
             </Button>
           )}
-          {currentStep === 4 && (
+          {currentStep === 5 && (
             <div className="ml-auto flex space-x-3">
               <Button
                 onClick={() => {

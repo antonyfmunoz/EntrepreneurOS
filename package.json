@@ -5,13 +5,16 @@
   "license": "MIT",
   "scripts": {
     "dev": "tsx server/index.ts",
-    "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "build": "vite build && esbuild server/index.ts --platform=node --packages=external --external:./vite --bundle --format=esm --outfile=dist/index.js && esbuild scripts/run-migration.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/run-migration.js && esbuild scripts/import-google-workspace-token.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/import-google-workspace-token.js",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "db:migrate": "tsx scripts/run-migration.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e:fixture": "tsx scripts/e2e-fixture-server.ts",
+    "test:e2e:client": "vite --config vite.e2e.config.ts",
+    "test:e2e:acceptance": "tsx tests/e2e/mvp-browser-acceptance.ts",
     "check:stitch-tools": "tsx scripts/check-stitch-tools.ts",
     "test:stitch-workflow": "tsx scripts/test-stitch-workflow.ts"
   },
@@ -60,8 +63,8 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
     "date-fns": "^3.6.0",
-    "drizzle-orm": "^0.39.1",
-    "drizzle-zod": "^0.7.1",
+    "drizzle-orm": "0.45.2",
+    "drizzle-zod": "0.7.1",
     "embla-carousel-react": "^8.3.0",
     "express": "^4.21.2",
     "fast-xml-parser": "^5.3.6",
@@ -109,10 +112,10 @@
     "@types/react-dom": "^18.3.1",
     "@types/supertest": "^7.2.0",
     "@types/ws": "^8.5.13",
-    "@vitejs/plugin-react": "^4.3.2",
-    "@vitest/ui": "^2.1.9",
+    "@vitejs/plugin-react": "4.7.0",
+    "@vitest/ui": "3.2.7",
     "autoprefixer": "^10.4.20",
-    "drizzle-kit": "^0.30.4",
+    "drizzle-kit": "0.31.10",
     "esbuild": "^0.25.0",
     "jsdom": "^29.0.1",
     "playwright": "^1.59.1",
@@ -121,8 +124,8 @@
     "tailwindcss": "^3.4.14",
     "tsx": "^4.19.1",
     "typescript": "5.6.3",
-    "vite": "^5.4.15",
-    "vitest": "^2.1.9"
+    "vite": "6.4.3",
+    "vitest": "3.2.7"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"

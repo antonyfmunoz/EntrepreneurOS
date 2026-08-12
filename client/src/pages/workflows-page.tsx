@@ -509,7 +509,7 @@ export default function WorkflowsPage() {
             </h1>
             <p className="font-mono text-sm text-text-secondary">
               Codify how your company works. Run step by step. Hand steps to
-              humans or DEX.
+              humans or the Role Agent attached to the accountable seat.
             </p>
           </div>
           <Button onClick={openCreateDialog}>
@@ -717,7 +717,7 @@ export default function WorkflowsPage() {
                     Steps
                   </h3>
                   <p className="font-mono text-xs text-text-secondary">
-                    Human: manual task. AI: DEX handles. Tool: automated action.
+                    Human: manual task. AI: the scoped Role Agent handles it. Tool: automated action.
                   </p>
                 </div>
                 <Button onClick={addStep} variant="outline" size="sm">
@@ -787,7 +787,7 @@ export default function WorkflowsPage() {
                             <SelectItem value="ai">
                               <div className="flex items-center space-x-2">
                                 <Bot className="w-4 h-4" />
-                                <span>AI (DEX)</span>
+                                <span>AI (Role Agent)</span>
                               </div>
                             </SelectItem>
                             <SelectItem value="tool">

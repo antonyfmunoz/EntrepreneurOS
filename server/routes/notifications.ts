@@ -15,7 +15,7 @@ export function registerNotificationRoutes(app: Express): void {
       // the user is visiting the site and has no notifications.
       // We'll add a special filter to avoid adding welcome notifications repeatedly
       const hasWelcomeNotification = existingNotifications.some(n =>
-        n.type === "system" && n.title === "Welcome to AgentOS"
+        n.type === "system" && n.title === "Welcome to EntrepreneurOS"
       );
 
       const user = await storage.getUser(req.user.id);
@@ -29,7 +29,7 @@ export function registerNotificationRoutes(app: Express): void {
       if (existingNotifications.length === 0 && !hasWelcomeNotification && !hasSeenWelcome) {
         await storage.createNotification({
           userId: req.user.id,
-          title: "Welcome to AgentOS",
+          title: "Welcome to EntrepreneurOS",
           content: "Your notification system is now active. You'll receive updates here as agents complete tasks and integrations are connected.",
           type: "system",
           read: false

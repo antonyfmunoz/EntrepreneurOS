@@ -277,7 +277,7 @@ export default function TaskBoardPage() {
           <div>
             <h1 className="font-mono font-bold text-4xl text-text mb-2">Task board</h1>
             <p className="font-mono text-base text-text-secondary">
-              Move work through stages. Assign to your team or DEX.
+              Move work through stages. Assign it to your team or the Role Agent attached to the accountable seat.
             </p>
           </div>
           <Button onClick={() => setCreateDialogOpen(true)}>
@@ -347,7 +347,7 @@ export default function TaskBoardPage() {
             <div className="font-mono text-4xl text-text-tertiary mb-4">—</div>
             <h3 className="font-mono font-semibold text-lg text-text mb-2">No tasks yet</h3>
             <p className="font-mono text-sm text-text-secondary mb-6">
-              Create your first task or ask DEX to generate tasks from your goals.
+              Create your first task or ask your Role Agent to draft work from the active goals.
             </p>
             <Button onClick={() => setCreateDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
@@ -531,7 +531,7 @@ export default function TaskBoardPage() {
                   </SelectContent>
                 </Select>
                 <p className="font-mono text-xs text-text-tertiary">
-                  Assign to a team member or DEX (your AI assistant).
+                  Assign to a team member or the Role Agent attached to the selected seat.
                 </p>
               </div>
 
