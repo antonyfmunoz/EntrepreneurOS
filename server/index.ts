@@ -12,6 +12,7 @@ import { applySecurityHeaders, sanitizeServerErrors } from "./middleware/api-sec
 import { shutdownPosthog } from "./posthog";
 import { requestTelemetry, writeLog } from "./observability/logger";
 import { startAccountDeletionWorker } from "./lifecycle/account-deletion";
+import { productionRuntimeConfigurationIssues } from "./security/release-configuration";
 
 const app = express();
 app.use(applySecurityHeaders);
@@ -38,13 +39,12 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.get("/api/ready", async (_req, res) => {
-  const required = ["DATABASE_URL", "CLERK_SECRET_KEY", "EOS_CREDENTIAL_ENCRYPTION_KEY"];
-  const missing = process.env.NODE_ENV === "production"
-    ? required.filter((name) => !process.env[name]?.trim())
+  const configurationIssues = process.env.NODE_ENV === "production"
+    ? productionRuntimeConfigurationIssues()
     : [];
   try {
     await db.execute(sql`select 1`);
-    if (missing.length) return res.status(503).json({ status: "not_ready", reason: "configuration" });
+    if (configurationIssues.length) return res.status(503).json({ status: "not_ready", reason: "configuration" });
     return res.status(200).json({ status: "ready", app: "eos" });
   } catch {
     return res.status(503).json({ status: "not_ready", reason: "database" });

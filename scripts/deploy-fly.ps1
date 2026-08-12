@@ -2,7 +2,19 @@ $ErrorActionPreference = "Stop"
 
 $required = @(
   "ANTHROPIC_API_KEY",
-  "VITE_CLERK_PUBLISHABLE_KEY"
+  "VITE_CLERK_PUBLISHABLE_KEY",
+  "CLERK_PUBLISHABLE_KEY",
+  "CLERK_SECRET_KEY",
+  "DATABASE_URL",
+  "SESSION_SECRET",
+  "EOS_CREDENTIAL_ENCRYPTION_KEY",
+  "EOS_PUBLIC_ORIGIN",
+  "VITE_POSTHOG_API_KEY",
+  "POSTHOG_API_KEY",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "GOOGLE_REDIRECT_URI",
+  "NOTION_API_KEY"
 )
 
 foreach ($name in $required) {
@@ -11,16 +23,22 @@ foreach ($name in $required) {
   }
 }
 
-$posthogKey = [string]$env:POSTHOG_API_KEY
-$validPosthogKey = $posthogKey.StartsWith("phc_") -and -not $posthogKey.ToLowerInvariant().Contains("placeholder")
-if ($validPosthogKey) {
-  flyctl secrets set --app eos-app --stage `
-    "ANTHROPIC_API_KEY=$env:ANTHROPIC_API_KEY" `
-    "POSTHOG_API_KEY=$posthogKey"
-} else {
-  flyctl secrets set --app eos-app --stage "ANTHROPIC_API_KEY=$env:ANTHROPIC_API_KEY"
-  if ($LASTEXITCODE -eq 0) { flyctl secrets unset --app eos-app --stage POSTHOG_API_KEY }
-}
+npm run release:verify
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+flyctl secrets set --app eos-app --stage `
+  "ANTHROPIC_API_KEY=$env:ANTHROPIC_API_KEY" `
+  "CLERK_PUBLISHABLE_KEY=$env:CLERK_PUBLISHABLE_KEY" `
+  "CLERK_SECRET_KEY=$env:CLERK_SECRET_KEY" `
+  "DATABASE_URL=$env:DATABASE_URL" `
+  "SESSION_SECRET=$env:SESSION_SECRET" `
+  "EOS_CREDENTIAL_ENCRYPTION_KEY=$env:EOS_CREDENTIAL_ENCRYPTION_KEY" `
+  "EOS_PUBLIC_ORIGIN=$env:EOS_PUBLIC_ORIGIN" `
+  "POSTHOG_API_KEY=$env:POSTHOG_API_KEY" `
+  "GOOGLE_CLIENT_ID=$env:GOOGLE_CLIENT_ID" `
+  "GOOGLE_CLIENT_SECRET=$env:GOOGLE_CLIENT_SECRET" `
+  "GOOGLE_REDIRECT_URI=$env:GOOGLE_REDIRECT_URI" `
+  "NOTION_API_KEY=$env:NOTION_API_KEY"
 
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

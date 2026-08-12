@@ -4,35 +4,36 @@ import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { KeyRound } from "lucide-react";
 import { FullPageStatus } from "@/components/full-page-status";
-import SettingsPage from "@/pages/settings-page";
-import CompanySetupPage from "@/pages/company-setup-page";
 
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { CompanyGate } from "@/lib/company-guard";
 import { ClerkLoaded, ClerkLoading, useUser, useAuth } from "@clerk/clerk-react";
-import Login from "@/pages/login-page";
-import Signup from "@/pages/signup-page";
-import ForgotPassword from "@/pages/forgot-password-page";
-import ResetPassword from "@/pages/reset-password-page";
-import SupportPage from "@/pages/support-page";
-import LegalAcceptancePage from "@/pages/legal-acceptance-page";
 
 import { ClerkProviderWrapper, isClerkConfigured } from "@/lib/clerk";
-import PortfolioList from "@/pages/portfolio-list-page";
-import PortfolioDetail from "@/pages/portfolio-detail-page";
-import EosOverlayPage from "@/pages/eos-overlay-page";
-import AgentChatPage from "@/pages/agent-chat-page";
-import Workflows from "@/pages/workflows-page";
-import NotFoundPage from "@/pages/not-found-page";
-import OrgChartPage from "@/pages/org-chart-page";
-import TaskBoard from "@/pages/task-board-page-new";
 import { BuildStatusOverlay } from "@/components/BuildStatusOverlay";
 
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { captureProductEvent, configureProductAnalytics } from "@/lib/posthog";
 import { productEvents } from "@shared/product-analytics";
+
+const Login = lazy(() => import("@/pages/login-page"));
+const Signup = lazy(() => import("@/pages/signup-page"));
+const ForgotPassword = lazy(() => import("@/pages/forgot-password-page"));
+const ResetPassword = lazy(() => import("@/pages/reset-password-page"));
+const SettingsPage = lazy(() => import("@/pages/settings-page"));
+const CompanySetupPage = lazy(() => import("@/pages/company-setup-page"));
+const SupportPage = lazy(() => import("@/pages/support-page"));
+const LegalAcceptancePage = lazy(() => import("@/pages/legal-acceptance-page"));
+const PortfolioList = lazy(() => import("@/pages/portfolio-list-page"));
+const PortfolioDetail = lazy(() => import("@/pages/portfolio-detail-page"));
+const EosOverlayPage = lazy(() => import("@/pages/eos-overlay-page"));
+const AgentChatPage = lazy(() => import("@/pages/agent-chat-page"));
+const Workflows = lazy(() => import("@/pages/workflows-page"));
+const NotFoundPage = lazy(() => import("@/pages/not-found-page"));
+const OrgChartPage = lazy(() => import("@/pages/org-chart-page"));
+const TaskBoard = lazy(() => import("@/pages/task-board-page-new"));
 
 function ClerkTokenProvider({ children }: { children: React.ReactNode }) {
   const { getToken } = useAuth();
@@ -153,7 +154,9 @@ function App() {
           <QueryClientProvider client={queryClient}>
             <AuthProvider>
               <AnalyticsConsentBridge />
-              <Router />
+              <Suspense fallback={<FullPageStatus title="Loading your workspace" description="Preparing the selected EntrepreneurOS surface." />}>
+                <Router />
+              </Suspense>
               <Toaster />
             </AuthProvider>
             <BuildStatusOverlay />

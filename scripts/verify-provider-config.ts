@@ -1,3 +1,5 @@
+import { scopeCoverage } from "../server/integrations/gmail";
+
 async function main() {
   const notion = await fetch("https://api.notion.com/v1/users/me", {
     headers: {
@@ -31,19 +33,19 @@ async function main() {
       fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1&singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(new Date().toISOString())}`, { headers }),
       fetch("https://www.googleapis.com/drive/v3/files?pageSize=1&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime,webViewLink)&q=trashed%20%3D%20false", { headers }),
     ]);
-    google.gmail = checks[0].ok;
-    google.gmailStatus = checks[0].status;
-    google.calendar = checks[1].ok;
-    google.calendarStatus = checks[1].status;
+    google.gmailApi = checks[0].ok;
+    google.gmailApiStatus = checks[0].status;
+    google.calendarApi = checks[1].ok;
+    google.calendarApiStatus = checks[1].status;
     if (!checks[1].ok) {
       const error = await checks[1].json().catch(() => ({})) as { error?: { message?: string; errors?: Array<{ reason?: string }> } };
       google.calendarError = String(error.error?.errors?.[0]?.reason || error.error?.message || "unknown");
     }
-    google.drive = checks[2].ok;
-    google.driveStatus = checks[2].status;
+    google.driveApi = checks[2].ok;
+    google.driveApiStatus = checks[2].status;
     const grantedScopes = String(token.scope || "").split(/\s+/).filter(Boolean);
     google.scopeCount = grantedScopes.length;
-    google.grantedScopes = grantedScopes;
+    google.services = scopeCoverage(grantedScopes);
   } else {
     google.status = tokenResponse.status;
   }
@@ -52,7 +54,8 @@ async function main() {
     notion: { healthy: notion.ok, status: notion.status, search: notionSearch.ok, searchStatus: notionSearch.status },
     google,
   }));
-  if (!notion.ok || !notionSearch.ok || !tokenResponse.ok || google.gmail !== true || google.calendar !== true || google.drive !== true) process.exitCode = 1;
+  const services = google.services as ReturnType<typeof scopeCoverage> | undefined;
+  if (!notion.ok || !notionSearch.ok || !tokenResponse.ok || !services || !Object.values(services).every(Boolean)) process.exitCode = 1;
 }
 
 main().catch(() => {

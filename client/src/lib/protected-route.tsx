@@ -1,6 +1,6 @@
 import { useUser } from "@clerk/clerk-react";
 import { Route, Redirect } from "wouter";
-import { ReactNode } from "react";
+import { ComponentType, ReactNode } from "react";
 import { FullPageStatus } from "@/components/full-page-status";
 import { useQuery } from "@tanstack/react-query";
 
@@ -17,7 +17,7 @@ function LegalGate({ path, children }: { path: string; children: ReactNode }) {
 type ProtectedRouteProps = {
   path: string;
 } & (
-  | { component: () => React.JSX.Element; children?: never }
+  | { component: ComponentType; children?: never }
   | { component?: never; children: (params: any) => ReactNode }
 );
 

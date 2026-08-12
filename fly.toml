@@ -3,8 +3,6 @@ primary_region = "iad"
 
 [build]
   dockerfile = "Dockerfile"
-  [build.args]
-    VITE_CLERK_PUBLISHABLE_KEY = "pk_test_aGlwLXNuaXBlLTMzLmNsZXJrLmFjY291bnRzLmRldiQ"
 
 [env]
   NODE_ENV = "production"
@@ -18,7 +16,12 @@ primary_region = "iad"
   force_https = true
   auto_stop_machines = "suspend"
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 40
+    hard_limit = 50
 
 [[http_service.checks]]
   grace_period = "10s"

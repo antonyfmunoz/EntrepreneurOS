@@ -15,5 +15,6 @@ auth-debug.log
 .env
 .env.*
 !.env.op.tpl
+!.env.production.op.tpl
 !.env.tpl
 !.env.example

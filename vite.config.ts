@@ -29,5 +29,14 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("posthog")) return "analytics";
+          return "vendor-runtime";
+        },
+      },
+    },
   },
 });
