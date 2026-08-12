@@ -45,6 +45,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Install pinned browser runtime
+        run: npx playwright install --with-deps chromium
       - name: Dependency vulnerability gate
         run: npm audit --omit=dev --audit-level=high
       - name: Establish disposable database baseline

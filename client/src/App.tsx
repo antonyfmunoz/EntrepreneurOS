@@ -88,13 +88,7 @@ function Router() {
       <ProtectedRoute path="/support" component={SupportPage} />
       <ProtectedRoute path="/legal/accept" component={LegalAcceptancePage} />
 
-      <ProtectedRoute path="/settings">
-        {() => (
-          <CompanyGate>
-            <SettingsPage />
-          </CompanyGate>
-        )}
-      </ProtectedRoute>
+      <ProtectedRoute path="/settings" component={SettingsPage} />
 
       <ProtectedRoute path="/portfolios">
         {() => <PortfolioList />}
