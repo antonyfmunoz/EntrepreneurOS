@@ -24,6 +24,24 @@ function isHttpsOrigin(value?: string): boolean {
   }
 }
 
+function isHttpsWebhook(value?: string): boolean {
+  try {
+    const url = new URL(value || "");
+    return url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash;
+  } catch {
+    return false;
+  }
+}
+
+function hasStripePlans(value?: string): boolean {
+  try {
+    const plans = JSON.parse(value || "{}") as Record<string, { priceId?: string }>;
+    return Object.values(plans).some((plan) => plan?.priceId?.startsWith("price_"));
+  } catch {
+    return false;
+  }
+}
+
 export function productionRuntimeConfiguration(env: ReleaseEnvironment = process.env) {
   return {
     managedDatabase: isManagedPostgres(env.DATABASE_URL),
@@ -32,6 +50,12 @@ export function productionRuntimeConfiguration(env: ReleaseEnvironment = process
     sessionSecretStrong: Boolean(env.SESSION_SECRET && env.SESSION_SECRET.length >= 32),
     credentialEncryptionConfigured: isEncryptionKey(env.EOS_CREDENTIAL_ENCRYPTION_KEY),
     publicOriginHttps: isHttpsOrigin(env.EOS_PUBLIC_ORIGIN),
+    operationalAlertsConfigured: isHttpsWebhook(env.EOS_ALERT_WEBHOOK_URL) && Boolean(env.EOS_ALERT_WEBHOOK_SECRET && env.EOS_ALERT_WEBHOOK_SECRET.length >= 32),
+    accountDeletionEnabled: env.EOS_ACCOUNT_DELETION_ENABLED === "true",
+    legalEnforcementEnabled: env.EOS_LEGAL_ENFORCEMENT === "true",
+    paidSaasEnabled: env.EOS_PUBLIC_PAID_SAAS === "true",
+    billingConfigured: Boolean(env.STRIPE_RESTRICTED_KEY?.startsWith("rk_live_") && env.STRIPE_WEBHOOK_SECRET?.startsWith("whsec_") && hasStripePlans(env.EOS_STRIPE_PLANS)),
+    platformAdministratorsConfigured: Boolean(env.EOS_PLATFORM_ADMIN_USER_IDS?.split(",").some((id) => id.trim().length > 0)),
   };
 }
 

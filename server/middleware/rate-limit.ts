@@ -35,12 +35,12 @@ class MemoryRateLimitStore implements RateLimitStore {
 class PostgresRateLimitStore implements RateLimitStore {
   async increment(input: { namespace: string; identity: string; windowMs: number; now: number }): Promise<Bucket> {
     const windowStartMs = Math.floor(input.now / input.windowMs) * input.windowMs;
-    const windowStart = new Date(windowStartMs);
+    const windowStart = new Date(windowStartMs).toISOString();
     const resetAt = windowStartMs + input.windowMs;
     const identityHash = createHash("sha256").update(input.identity).digest("hex");
     const result = await db.execute(sql`
       INSERT INTO eos_rate_limit_windows (namespace, identity_hash, window_start, count, expires_at)
-      VALUES (${input.namespace}, ${identityHash}, ${windowStart}, 1, ${new Date(resetAt + input.windowMs)})
+      VALUES (${input.namespace}, ${identityHash}, ${windowStart}::timestamptz, 1, ${new Date(resetAt + input.windowMs).toISOString()}::timestamptz)
       ON CONFLICT (namespace, identity_hash, window_start)
       DO UPDATE SET count = eos_rate_limit_windows.count + 1
       RETURNING count

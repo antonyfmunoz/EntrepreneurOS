@@ -282,10 +282,12 @@ export const operationalControls = pgTable("operational_controls", {
   status: text("status").notNull(),
   evidenceUri: text("evidence_uri").notNull(),
   evidenceHash: text("evidence_hash").notNull(),
+  evidenceScope: text("evidence_scope").notNull().default("production"),
+  subject: text("subject").notNull().default("legacy-unspecified"),
   notes: text("notes"),
   ownerUserId: text("owner_user_id").notNull().references(() => users.id),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }).notNull(),
-  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

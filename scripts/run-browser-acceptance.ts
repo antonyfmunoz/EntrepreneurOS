@@ -39,9 +39,28 @@ function runAcceptance(): Promise<void> {
   });
 }
 
+function runLoadAcceptance(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(node, [tsxCli, "scripts/http-load-test.ts"], {
+      env: {
+        ...environment,
+        EOS_LOAD_TEST_TARGET: "http://127.0.0.1:5111/api/portfolios",
+        EOS_LOAD_TEST_REQUESTS: "300",
+        EOS_LOAD_TEST_CONCURRENCY: "20",
+        EOS_LOAD_TEST_MAXIMUM_P95_MS: "2000",
+        EOS_LOAD_TEST_RESULT_PATH: ".tmp/eos-local-load-result.json",
+      },
+      stdio: "inherit",
+    });
+    child.on("exit", (code) => code === 0 ? resolve() : reject(new Error(`Load acceptance exited with ${code}.`)));
+    child.on("error", reject);
+  });
+}
+
 try {
   await Promise.all([waitFor("http://127.0.0.1:5111/.well-known/umh/capability-manifest"), waitFor("http://127.0.0.1:5110")]);
   await runAcceptance();
+  await runLoadAcceptance();
 } finally {
   for (const child of processes) {
     if (!child.pid) continue;

@@ -1,11 +1,68 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
-import { accountDeletionRequests, companies, portfolios, users, workflows } from "@shared/schema";
+import {
+  accountDeletionRequests,
+  agentActions,
+  aiMessages,
+  companies,
+  crmActivities,
+  crmContacts,
+  crmDeals,
+  documents,
+  eosCommunicationMessages,
+  eosMemberships,
+  eosSeats,
+  folders,
+  notifications,
+  oauthTokens,
+  portfolios,
+  supportTickets,
+  umhIdentityBindings,
+  users,
+  workflows,
+} from "@shared/schema";
 import { clerkClient } from "../clerkAdmin";
 import { db } from "../db";
 import { writeLog } from "../observability/logger";
 
 const graceDays = Math.max(1, Math.min(30, Number(process.env.EOS_ACCOUNT_DELETION_GRACE_DAYS || 7)));
+
+async function erasePersonalData(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], request: typeof accountDeletionRequests.$inferSelect): Promise<void> {
+  const userId = request.userId;
+  await tx.delete(crmActivities).where(eq(crmActivities.userId, userId));
+  await tx.delete(crmDeals).where(eq(crmDeals.userId, userId));
+  await tx.delete(crmContacts).where(eq(crmContacts.userId, userId));
+  await tx.delete(documents).where(eq(documents.userId, userId));
+  await tx.delete(folders).where(eq(folders.userId, userId));
+  await tx.delete(notifications).where(eq(notifications.userId, userId));
+  await tx.delete(aiMessages).where(eq(aiMessages.userId, userId));
+  await tx.delete(oauthTokens).where(eq(oauthTokens.userId, userId));
+  await tx.delete(supportTickets).where(eq(supportTickets.userId, userId));
+  await tx.delete(agentActions).where(eq(agentActions.userId, userId));
+  await tx.delete(eosMemberships).where(eq(eosMemberships.userId, userId));
+  await tx.delete(umhIdentityBindings).where(eq(umhIdentityBindings.localUserId, userId));
+  await tx.update(eosSeats).set({ occupantUserId: null, agentMode: "autonomous", updatedAt: new Date() }).where(eq(eosSeats.occupantUserId, userId));
+  await tx.update(eosCommunicationMessages).set({ senderUserId: null }).where(eq(eosCommunicationMessages.senderUserId, userId));
+
+  // Audit, legal-acceptance, approval, provider, and cost records retain their foreign-key link to
+  // this non-identifying tombstone. This preserves legally required evidence
+  // without retaining the person's name, email, identity-provider binding,
+  // profile, preferences, or provider credentials.
+  const tombstone = request.id.replace(/[^a-zA-Z0-9]/g, "").slice(-20).toLowerCase();
+  await tx.update(users).set({
+    username: `deleted_${tombstone}`,
+    password: `deleted:${randomUUID()}`,
+    email: `deleted+${tombstone}@users.invalid`,
+    fullName: null,
+    avatar: null,
+    company: null,
+    role: null,
+    clerkUserId: null,
+    preferences: null,
+    metadata: { accountDeleted: true },
+    updatedAt: new Date(),
+  }).where(eq(users.id, userId));
+}
 
 export async function scheduleAccountDeletion(input: { userId: string; clerkUserId: string | null; deleteOwnedOrganizations: boolean }) {
   const scheduledFor = new Date(Date.now() + graceDays * 86_400_000);
@@ -46,14 +103,25 @@ async function executeOne(request: typeof accountDeletionRequests.$inferSelect):
         await tx.delete(companies).where(eq(companies.ownerUserId, request.userId));
         await tx.delete(portfolios).where(eq(portfolios.ownerId, request.userId));
       }
-      await tx.delete(users).where(eq(users.id, request.userId));
-      await tx.update(accountDeletionRequests).set({ status: "executed", executedAt: new Date(), lastError: null }).where(eq(accountDeletionRequests.id, request.id));
+      await erasePersonalData(tx, request);
+      await tx.update(accountDeletionRequests).set({ status: "executed", clerkUserId: null, executedAt: new Date(), lastError: null }).where(eq(accountDeletionRequests.id, request.id));
     });
     writeLog("info", "account_deletion_executed", { deletionRequestId: request.id });
   } catch (error) {
     await db.update(accountDeletionRequests).set({ status: "failed", lastError: "Deletion could not complete; operations review required." }).where(eq(accountDeletionRequests.id, request.id));
     writeLog("error", "account_deletion_failed", { deletionRequestId: request.id, error });
   }
+}
+
+export async function processDueAccountDeletion(requestId: string, now = new Date()): Promise<boolean> {
+  const [request] = await db.select().from(accountDeletionRequests).where(and(
+    eq(accountDeletionRequests.id, requestId),
+    inArray(accountDeletionRequests.status, ["scheduled", "failed"]),
+    lte(accountDeletionRequests.scheduledFor, now),
+  )).limit(1);
+  if (!request) return false;
+  await executeOne(request);
+  return true;
 }
 
 export async function processDueAccountDeletions(): Promise<void> {

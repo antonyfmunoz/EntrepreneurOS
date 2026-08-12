@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
+import { dispatchOperationalAlert } from "./alerts";
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 type LogFields = Record<string, unknown>;
@@ -35,6 +36,11 @@ export function writeLog(level: LogLevel, event: string, fields: LogFields = {})
   if (level === "error") console.error(line);
   else if (level === "warn") console.warn(line);
   else console.log(line);
+  if (level === "error" && event !== "http_request" && process.env.NODE_ENV === "production") {
+    void dispatchOperationalAlert(entry).catch((alertError) => {
+      console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: "error", service: "entrepreneuros", event: "operational_alert_delivery_failed", sourceEvent: event, message: alertError instanceof Error ? alertError.message : "Alert delivery failed." }));
+    });
+  }
 }
 
 declare global {

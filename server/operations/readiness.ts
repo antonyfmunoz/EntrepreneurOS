@@ -1,44 +1,21 @@
-import { and, eq, gt, inArray, or, isNull } from "drizzle-orm";
+import { and, eq, gt, inArray } from "drizzle-orm";
 import { operationalControls, serviceOwnership, vendorRegistry } from "@shared/schema";
 import { db } from "../db";
 import { billingConfigured } from "../billing/stripe";
+import { CONTROL_LAYERS, controlEvidenceIsCurrent } from "./control-definitions";
 
 export type ReadinessResult = { layer: number; name: string; status: "pass" | "fail"; evidence: string[]; missing: string[] };
 
-const controlLayers: Array<{ layer: number; name: string; controls: string[] }> = [
-  { layer: 1, name: "Front-end foundations", controls: ["frontend_acceptance"] },
-  { layer: 2, name: "APIs and back-end logic", controls: ["api_contract_qualification"] },
-  { layer: 3, name: "Database and storage", controls: ["database_migration_and_storage"] },
-  { layer: 4, name: "Authentication and permissions", controls: ["identity_acceptance"] },
-  { layer: 5, name: "Hosting and deployment", controls: ["deployment_smoke"] },
-  { layer: 6, name: "Cloud and compute", controls: ["compute_capacity"] },
-  { layer: 7, name: "CI/CD and version control", controls: ["ci_qualification"] },
-  { layer: 8, name: "Security and database isolation", controls: ["database_isolation_review", "security_review"] },
-  { layer: 9, name: "Rate limiting", controls: ["distributed_rate_limit_test"] },
-  { layer: 10, name: "Caching and CDN", controls: ["cache_cdn_review"] },
-  { layer: 11, name: "Load balancing and scaling", controls: ["load_and_scaling_test"] },
-  { layer: 12, name: "Error tracking and logs", controls: ["observability_alert_test"] },
-  { layer: 13, name: "Availability and recovery", controls: ["production_restore_drill", "incident_response_drill"] },
-  { layer: 14, name: "Payments and billing", controls: ["billing_live_mode_acceptance"] },
-  { layer: 15, name: "Legal and compliance", controls: ["legal_approval", "privacy_review", "tax_review"] },
-  { layer: 16, name: "Customer support", controls: ["support_staffing"] },
-  { layer: 17, name: "Product analytics", controls: ["analytics_dashboard_review"] },
-  { layer: 18, name: "Cost controls", controls: ["ai_cost_policy"] },
-  { layer: 19, name: "Vendor management", controls: ["vendor_review"] },
-  { layer: 20, name: "Operational ownership", controls: ["service_ownership_review"] },
-  { layer: 21, name: "Integration operations", controls: ["integration_round_trip"] },
-  { layer: 22, name: "AI governance and reliability", controls: ["ai_governance_evaluation"] },
-  { layer: 23, name: "Customer and data lifecycle", controls: ["data_lifecycle_drill"] },
-  { layer: 24, name: "Release and experience quality", controls: ["accessibility_performance_release", "release_owner_approval"] },
-];
-
 export async function productionReadiness() {
   const now = new Date();
-  const controls = await db.select().from(operationalControls).where(and(inArray(operationalControls.status, ["pass", "not_applicable"]), or(isNull(operationalControls.expiresAt), gt(operationalControls.expiresAt, now))));
+  const controls = await db.select().from(operationalControls).where(and(eq(operationalControls.status, "pass"), gt(operationalControls.expiresAt, now)));
   const controlMap = new Map(controls.map((control) => [control.controlKey, control]));
-  const layers: ReadinessResult[] = controlLayers.map((definition) => {
-    const missing = definition.controls.filter((key) => !controlMap.has(key));
-    return { layer: definition.layer, name: definition.name, status: missing.length ? "fail" : "pass", evidence: definition.controls.filter((key) => controlMap.has(key)).map((key) => `${key}:${controlMap.get(key)!.evidenceHash}`), missing };
+  const layers: ReadinessResult[] = CONTROL_LAYERS.map((definition) => {
+    const missing = definition.controls.filter((required) => {
+      const evidence = controlMap.get(required.key);
+      return !evidence || !controlEvidenceIsCurrent({ definition: required, evidenceScope: evidence.evidenceScope, reviewedAt: evidence.reviewedAt, expiresAt: evidence.expiresAt, now });
+    }).map((control) => control.key);
+    return { layer: definition.layer, name: definition.name, status: missing.length ? "fail" : "pass", evidence: definition.controls.filter((required) => !missing.includes(required.key)).map((required) => { const item = controlMap.get(required.key)!; return `${required.key}:${item.evidenceScope}:${item.subject}:${item.evidenceHash}`; }), missing };
   });
 
   const requiredVendors = [

@@ -71,3 +71,15 @@ jobs:
         run: npm run build
       - name: Container build
         run: docker build --build-arg VITE_CLERK_PUBLISHABLE_KEY="$VITE_CLERK_PUBLISHABLE_KEY" -t eos:${{ github.sha }} .
+      - name: Create qualification evidence pack
+        run: npm run evidence:create
+      - name: Upload qualification evidence pack
+        uses: actions/upload-artifact@v7
+        with:
+          name: eos-qualification-${{ github.sha }}
+          path: |
+            .tmp/eos-qualification-evidence.json
+            .tmp/eos-qualification-evidence.json.sha256
+            .tmp/eos-local-load-result.json
+          if-no-files-found: error
+          retention-days: 90

@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import pRetry from "p-retry";
 import { completeAiSpend, failAiSpend, reserveAiSpend } from "./cost-control";
 import { writeLog } from "../observability/logger";
+import { AI_GOVERNANCE_STANDARD, AI_MODEL_REGISTRY, governAiRequest, governImagePayload } from "./governance";
 
 export type ModelTier = "fast" | "standard" | "advanced";
 
@@ -15,13 +16,13 @@ export interface GatewayRequest {
   userId?: string;
 }
 
-export interface GatewayResponse { content: string; model: string; inputTokens: number; outputTokens: number; cost: number }
+export interface GatewayResponse { content: string; model: string; inputTokens: number; outputTokens: number; cost: number; governanceVersion: string }
 
 export class GatewayError extends Error {
   constructor(message: string, public readonly context: string, public readonly tier: ModelTier) { super(message); this.name = "GatewayError"; }
 }
 
-const MODEL_MAP: Record<ModelTier, string> = { fast: "claude-haiku-4-5-20251001", standard: "claude-sonnet-4-6", advanced: "claude-opus-4-6" };
+const MODEL_MAP: Record<ModelTier, string> = AI_MODEL_REGISTRY.tiers;
 const COST_PER_1K: Record<string, { input: number; output: number }> = {
   "claude-haiku-4-5-20251001": { input: 0.00025, output: 0.00125 },
   "claude-sonnet-4-6": { input: 0.003, output: 0.015 },
@@ -44,7 +45,6 @@ function calculateCost(model: string, inputTokens: number, outputTokens: number)
 
 async function runGovernedCall(input: { request: GatewayRequest; model: string; maxTokens: number; invoke: () => Promise<Anthropic.Message> }): Promise<GatewayResponse> {
   const { request, model, maxTokens } = input;
-  if (process.env.NODE_ENV === "production" && (!request.companyId || !request.userId)) throw new GatewayError("Company and user scope are required for production AI calls.", request.context, request.tier);
   const estimatedInputTokens = Math.ceil((JSON.stringify(request.messages).length + (request.system?.length || 0)) / 4);
   const estimatedCostMicros = Math.ceil(calculateCost(model, estimatedInputTokens, maxTokens) * 1_000_000);
   const reservation = request.companyId && request.userId ? await reserveAiSpend({ companyId: request.companyId, userId: request.userId, context: request.context, model, estimatedCostMicros }) : null;
@@ -56,9 +56,9 @@ async function runGovernedCall(input: { request: GatewayRequest; model: string; 
     if (reservation) await completeAiSpend(reservation.id, { actualCostMicros: Math.ceil(cost * 1_000_000), inputTokens, outputTokens });
     stats.totalCalls += 1; stats.totalCost += cost; stats.totalInputTokens += inputTokens; stats.totalOutputTokens += outputTokens;
     stats.callsByContext[request.context] = (stats.callsByContext[request.context] || 0) + 1;
-    writeLog("info", "ai_gateway_completed", { companyId: request.companyId, userId: request.userId, context: request.context, tier: request.tier, model, inputTokens, outputTokens, costMicros: Math.ceil(cost * 1_000_000) });
-    const firstBlock = response.content[0];
-    return { content: firstBlock.type === "text" ? firstBlock.text : "", model, inputTokens, outputTokens, cost };
+    writeLog("info", "ai_gateway_completed", { companyId: request.companyId, userId: request.userId, context: request.context, tier: request.tier, model, governanceVersion: AI_GOVERNANCE_STANDARD, inputTokens, outputTokens, costMicros: Math.ceil(cost * 1_000_000) });
+    const content = response.content.filter((block): block is Anthropic.TextBlock => block.type === "text").map((block) => block.text).join("\n");
+    return { content, model, inputTokens, outputTokens, cost, governanceVersion: AI_GOVERNANCE_STANDARD };
   } catch (error) {
     if (reservation) await failAiSpend(reservation.id);
     throw new GatewayError(`AI gateway call failed after retries: ${error instanceof Error ? error.message : "unknown error"}`, request.context, request.tier);
@@ -67,14 +67,17 @@ async function runGovernedCall(input: { request: GatewayRequest; model: string; 
 
 export async function callAI(request: GatewayRequest): Promise<GatewayResponse> {
   const model = MODEL_MAP[request.tier];
-  const maxTokens = request.maxTokens ?? 8192;
+  const governed = governAiRequest({ ...request, production: process.env.NODE_ENV === "production" });
+  const maxTokens = governed.maxTokens;
   return runGovernedCall({ request, model, maxTokens, invoke: () => getClient().messages.create({ model, max_tokens: maxTokens, system: request.system || undefined, messages: request.messages }) });
 }
 
 export async function callVision(base64Image: string, prompt: string, context = "vision", scope?: { companyId: number; userId: string }): Promise<GatewayResponse> {
+  governImagePayload(base64Image);
   const model = MODEL_MAP.standard;
-  const maxTokens = 8192;
+  const maxTokens = AI_MODEL_REGISTRY.maximumOutputTokens;
   const request: GatewayRequest = { messages: [{ role: "user", content: prompt }], tier: "standard", context, ...scope };
+  governAiRequest({ ...request, maxTokens, production: process.env.NODE_ENV === "production" });
   return runGovernedCall({ request, model, maxTokens, invoke: () => getClient().messages.create({ model, max_tokens: maxTokens, messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64Image } }] }] }) });
 }
 

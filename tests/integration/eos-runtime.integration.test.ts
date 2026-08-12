@@ -145,6 +145,41 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(status.body.status).toBe("cancelled");
   });
 
+  it("executes personal-data erasure while preserving an anonymized audit principal", async () => {
+    const deletionUserId = "test_eos_deletion_execution";
+    await sql`DELETE FROM account_deletion_requests WHERE user_id = ${deletionUserId}`;
+    await sql`DELETE FROM users WHERE id = ${deletionUserId}`;
+    await sql`INSERT INTO users (id, username, password, email, full_name, clerk_user_id, metadata) VALUES (${deletionUserId}, 'delete_execution', 'not-used', 'delete-me@example.test', 'Delete Me', 'clerk_delete_execution', ${sql.json({ privatePreference: true })})`;
+    await sql`INSERT INTO notifications (id, user_id, title, content, type) VALUES ('delete_notification', ${deletionUserId}, 'Private', 'Personal content', 'test')`;
+    await sql`INSERT INTO ai_messages (id, role, content, user_id) VALUES ('delete_ai_message', 'user', 'Personal conversation', ${deletionUserId})`;
+    await sql`INSERT INTO folders (id, name, user_id) VALUES ('delete_folder', 'Private folder', ${deletionUserId})`;
+    await sql`INSERT INTO documents (id, title, content, folder_id, user_id) VALUES ('delete_document', 'Private document', 'Personal document content', 'delete_folder', ${deletionUserId})`;
+
+    const { scheduleAccountDeletion, processDueAccountDeletion } = await import("../../server/lifecycle/account-deletion");
+    const request = await scheduleAccountDeletion({ userId: deletionUserId, clerkUserId: null, deleteOwnedOrganizations: false });
+    await sql`UPDATE account_deletion_requests SET scheduled_for = now() - interval '1 minute' WHERE id = ${request.id}`;
+    expect(await processDueAccountDeletion(request.id)).toBe(true);
+
+    const [principal] = await sql<Array<{ email: string; full_name: string | null; clerk_user_id: string | null; metadata: { accountDeleted?: boolean } }>>`SELECT email, full_name, clerk_user_id, metadata FROM users WHERE id = ${deletionUserId}`;
+    expect(principal.email).toMatch(/^deleted\+.+@users\.invalid$/);
+    expect(principal.full_name).toBeNull();
+    expect(principal.clerk_user_id).toBeNull();
+    expect(principal.metadata.accountDeleted).toBe(true);
+    const [personalRows] = await sql<Array<{ notifications: number; ai_messages: number; documents: number; folders: number }>>`
+      SELECT
+        (SELECT count(*)::int FROM notifications WHERE user_id = ${deletionUserId}) AS notifications,
+        (SELECT count(*)::int FROM ai_messages WHERE user_id = ${deletionUserId}) AS ai_messages,
+        (SELECT count(*)::int FROM documents WHERE user_id = ${deletionUserId}) AS documents,
+        (SELECT count(*)::int FROM folders WHERE user_id = ${deletionUserId}) AS folders
+    `;
+    expect(personalRows).toEqual({ notifications: 0, ai_messages: 0, documents: 0, folders: 0 });
+    const [deletion] = await sql<Array<{ status: string }>>`SELECT status FROM account_deletion_requests WHERE id = ${request.id}`;
+    expect(deletion.status).toBe("executed");
+
+    await sql`DELETE FROM account_deletion_requests WHERE id = ${request.id}`;
+    await sql`DELETE FROM users WHERE id = ${deletionUserId}`;
+  });
+
   it("enforces owner-scoped AI budget configuration", async () => {
     const configured = await api.put(`/api/eos/companies/${companyId}/ai-budget`).send({ monthlyLimitDollars: 25, perRequestLimitDollars: 1, enabled: true }).expect(200);
     expect(configured.body.monthlyLimitMicros).toBe(25_000_000);
@@ -157,6 +192,29 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const afterUsage = await api.get(`/api/eos/companies/${companyId}/ai-budget`).expect(200);
     expect(afterUsage.body.spentMicros).toBe(100_000);
     await expect(reserveAiSpend({ companyId, userId: ownerId, context: "over-request-limit", model: "test-model", estimatedCostMicros: 2_000_000 })).rejects.toMatchObject({ code: "ai_request_limit_exceeded" });
+  });
+
+  it("shares production rate-limit state across independent middleware instances", async () => {
+    const namespace = `integration-shared-${Date.now()}`;
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      const { fixedWindowRateLimit } = await import("../../server/middleware/rate-limit");
+      const instanceA = fixedWindowRateLimit({ limit: 2, windowMs: 60_000, namespace, key: () => "shared-principal" });
+      const instanceB = fixedWindowRateLimit({ limit: 2, windowMs: 60_000, namespace, key: () => "shared-principal" });
+      const limiterApp = express();
+      limiterApp.get("/instance-a", instanceA, (_req, res) => res.json({ instance: "a" }));
+      limiterApp.get("/instance-b", instanceB, (_req, res) => res.json({ instance: "b" }));
+      const limiterApi = supertest(limiterApp);
+      await limiterApi.get("/instance-a").expect(200);
+      await limiterApi.get("/instance-b").expect(200);
+      const rejected = await limiterApi.get("/instance-a").expect(429);
+      expect(rejected.body.code).toBe("rate_limited");
+      expect(rejected.headers["retry-after"]).toBeDefined();
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      await sql`DELETE FROM eos_rate_limit_windows WHERE namespace = ${namespace}`;
+    }
   });
 
   it("compiles and activates an organization, then completes an evidence-bearing approved mission", async () => {
