@@ -1,8 +1,8 @@
 # EOS Overlay MVP Qualification Report
 
-**Assessment date:** 2026-08-11
+**Assessment date:** 2026-08-12
 **Scope:** EntrepreneurOS repository and projection-side UMH adapter only
-**Decision:** Repository-qualified and deployed; live Calendar authorization and production Clerk cutover remain external acceptance gates
+**Decision:** Repository-qualified production foundation; the deployed Fly v27 pilot is not the qualified public SaaS release. Production identity, billing, analytics, provider authorization, staffing, approvals, and live drills remain external acceptance gates.
 
 ## Release definition
 
@@ -22,14 +22,17 @@ The required overlay MVP is the governed EntrepreneurOS runtime, not the eventua
 |---|---|---|
 | Static type safety | Pass | `npm run check` |
 | Production build | Pass | Vite client plus bundled server and migration/import runners |
-| Unit and isolated-database integration | Pass | 11 files, 52 tests, no skips against disposable PostgreSQL |
+| Unit and isolated-database integration | Pass | 16 files, 74 tests, no skips against disposable PostgreSQL in protected-branch qualification |
 | Tenant and role isolation | Pass | Cross-tenant denial; seat membership; reporting-subtree filtering; founder-profile, manifest, audit, advisor-deliberation, and Notion-search denial for a manager |
 | Compiler lifecycle | Pass | draft → diagnostic → proposed → review → approved → provisioning → verifying → active, with provisioning and verification gates |
 | Hierarchical communication | Pass | Persistent per-seat channels; Role Agent assistant mode; three selected advisor calls; current/specified Company CEO Agent calls; one persisted Executive Assistant synthesis with provenance |
 | Consequential provider loop | Pass in deterministic adapter test | Gmail request → assigned approval → provider execution → receipt evidence → audit → reconciled status; provider failure blocks the Work Packet |
 | Browser acceptance | Pass | Seven operator surfaces at 1440×1000; hierarchy-builder interaction; 390×844 no overflow; movable communication FAB; full-width mobile communication drawer; no browser errors |
-| Source control | Pass | Qualified work is committed and pushed on `agent/eos-overlay-mvp-1-7`; draft PR #5 targets `feature/company-system` |
-| Production image/runtime | Pass | Pruned non-root image passed local health/readiness, then Fly release v27 deployed image `deployment-01KZT61SSFYHTYZ362TZJDZRFP` |
+| Source control | Pass | `feature/company-system` is protected, strict/up-to-date, conversation-resolved, admin-enforced, and requires both `qualify` and fail-closed `Analyze (javascript-typescript)` checks |
+| Supply-chain evidence | Pass | Protected-branch qualification generates a production-only CycloneDX SBOM, hashes and retains it, and issues SLSA provenance on push; commit `22fadc620fcb147b54930a14dbf5bd626f8f82b5` was independently verified against the signed subject |
+| Static application security | Pass with one reviewed false positive | CodeQL reports zero open alerts on the protected product branch. The only accepted raw SARIF result is the exact Gmail OAuth-state HMAC verification rule/path, capped at one; it is message authentication with timing-safe comparison, not password storage |
+| Repository security services | Pass / account-limited | Dependabot security updates, secret scanning, and push protection are enabled. Non-provider patterns and validity checks remain unavailable for this repository/account tier |
+| Production image/runtime | **Not promoted** | Fly still runs the older v27 pilot image `deployment-01KZT61SSFYHTYZ362TZJDZRFP`; it predates the 24-layer release tooling and must not be represented as the qualified public SaaS release |
 | Production migrations | Pass | Fly release command completed; checksum runner reports migrations 0001–0007 and the enhancement migration already applied |
 | Production HTTP and browser | Pass | `https://entrepreneuros.net/api/health` and `/api/ready` returned 200; a 390×844 rendered public smoke reached the Clerk sign-in surface with no failed resources or browser errors |
 | Notion live provider | Pass | Identity and actual workspace search returned 200 |
@@ -37,7 +40,9 @@ The required overlay MVP is the governed EntrepreneurOS runtime, not the eventua
 | Drive live provider | Pass | Actual recent-file metadata query returned 200 |
 | Calendar live provider | **Blocked externally** | Existing Google grant returned `403 insufficientPermissions` and contains no Calendar scope; the current authorization request includes Calendar read-only, so the user must reconnect once |
 | Clerk production identity | **Blocked externally** | Current Fly build configuration still uses a Clerk development publishable key; a production Clerk instance/key and allowed-origin cutover are required |
-| Product analytics | Optional / disabled | The available PostHog value is a placeholder; EOS refuses to initialize either PostHog client until a real `phc_` project key is supplied |
+| Product analytics | **Blocked externally** | The connected PostHog organization has projects for other products but no EntrepreneurOS production project. EOS must receive its own project and consent/retention acceptance; another product's destination must not be reused |
+| Stripe live billing | **Blocked externally** | No Stripe secrets are deployed and the connected Stripe account requires reauthentication. Products, prices, a restricted live key, webhook signing secret, tax decision, and refund/dunning acceptance remain unverified |
+| Production credential custody | **Blocked externally** | The EntrepreneurOS vault contains only a `Development` record. Clerk values are development keys and there is no complete `Production` credential record |
 | UMH | Correctly disabled | Projection-owned signed HTTPS ingress/outbox is implemented and tested; direct-Postgres polling/writeback is not activated; live UMH is outside this EntrepreneurOS-only release scope |
 
 ## What is not being claimed
@@ -50,10 +55,15 @@ The required overlay MVP is the governed EntrepreneurOS runtime, not the eventua
 
 ## Remaining external closure gates
 
-The repository and deployment portions of the seven MVP areas are complete. The product can be called **MVP complete and live-qualified** only after the remaining account-level gates are recorded:
+The repository-controlled foundation is complete, but the product can be called **public SaaS MVP complete and live-qualified** only after every 24-layer production control has current evidence for the exact deployed image and environment. The remaining account- and operations-level gates include:
 
-1. the owner reconnects Google Workspace and the strict provider probe returns 200 for Gmail, Calendar, Drive, Notion identity, and Notion search;
-2. a production Clerk publishable/secret key pair and allowed origins are installed, the client is rebuilt, and signed-in owner/mobile flows pass;
-3. the owner explicitly authorizes a safe recipient if a real Gmail delivery receipt is required as a release gate.
+1. create a production Clerk instance, install `pk_live_` and `sk_live_` credentials, configure domains/redirects, and pass signed-in tenant/role/mobile acceptance;
+2. provision a dedicated production datastore, migrate it, and record isolation, load/scaling, backup/restore, RTO/RPO, and lifecycle evidence;
+3. reauthenticate Stripe, configure live products/prices, restricted credentials, webhook, portal, refund/dunning behavior, and an explicit tax decision;
+4. create a dedicated EntrepreneurOS PostHog project and approve consent, event, dashboard, retention, and privacy behavior;
+5. reconnect Google Workspace for Gmail send and Calendar read, rerun Notion/Drive/Gmail/Calendar probes, and record authorized safe round trips;
+6. configure signed operational alerts, dashboards, on-call routing, named primary/backup owners, support hours/SLA/escalation, and execute alert/incident/support drills;
+7. obtain approved terms, privacy, records, tax, vendor, model/tool governance, and data-lifecycle decisions and evidence;
+8. execute the immutable-image deployment, authenticated isolation smoke, production accessibility/performance acceptance, rollback rehearsal, and final 24-layer readiness probe.
 
-Until then, describe the state as **the seven-area EOS overlay is implemented, repository-qualified, and deployed, with external identity/consent gates still open**.
+Until those controls pass, describe the state as **the EOS overlay and production foundation are repository-qualified; the public pilot is not yet the production-ready SaaS MVP**.
