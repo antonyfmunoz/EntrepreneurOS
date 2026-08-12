@@ -16,7 +16,13 @@ const app = express();
 app.use(applySecurityHeaders);
 app.use(sanitizeServerErrors);
 app.use(requestTelemetry);
-app.use(express.json({ limit: process.env.EOS_JSON_BODY_LIMIT || "1mb" }));
+app.use(express.json({
+  limit: process.env.EOS_JSON_BODY_LIMIT || "1mb",
+  verify(req, _res, buffer) {
+    const request = req as express.Request;
+    if (request.originalUrl === "/api/billing/webhook") request.rawBody = Buffer.from(buffer);
+  },
+}));
 app.use(express.urlencoded({ extended: false, limit: process.env.EOS_FORM_BODY_LIMIT || "256kb" }));
 
 // Health check endpoint — required by Dockerfile HEALTHCHECK and platform health probes

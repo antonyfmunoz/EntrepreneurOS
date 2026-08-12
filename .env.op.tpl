@@ -33,3 +33,10 @@ UMH_COMMAND_PUBLIC_KEY_PEM=
 # in EntrepreneurOS secrets and is never sent to UMH.
 UMH_EVENT_ENDPOINT=
 EOS_EVENT_PRIVATE_KEY_PEM=
+
+# Paid SaaS activation. These references may remain absent until pricing,
+# customer terms, tax registrations, and the production Stripe account are approved.
+# STRIPE_RESTRICTED_KEY=op://EntrepreneurOS/Production/STRIPE_RESTRICTED_KEY
+# STRIPE_WEBHOOK_SECRET=op://EntrepreneurOS/Production/STRIPE_WEBHOOK_SECRET
+# EOS_STRIPE_PLANS=op://EntrepreneurOS/Production/EOS_STRIPE_PLANS
+EOS_PUBLIC_ORIGIN=https://entrepreneuros.net

@@ -195,6 +195,27 @@ export const createSupportTicketSchema = z.object({
 export type SupportTicket = typeof supportTickets.$inferSelect;
 export type CreateSupportTicket = z.infer<typeof createSupportTicketSchema>;
 
+export const billingSubscriptions = pgTable("billing_subscriptions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  providerCustomerId: text("provider_customer_id").notNull(),
+  providerSubscriptionId: text("provider_subscription_id").notNull().unique(),
+  planKey: text("plan_key").notNull(),
+  status: text("status").notNull(),
+  entitlements: jsonb("entitlements").notNull().default([]),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const billingWebhookEvents = pgTable("billing_webhook_events", {
+  id: text("id").primaryKey(),
+  eventType: text("event_type").notNull(),
+  payloadHash: text("payload_hash").notNull(),
+  processedAt: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type InsertAgent = z.infer<typeof insertAgentSchema>;
 export type Agent = typeof agents.$inferSelect;
 

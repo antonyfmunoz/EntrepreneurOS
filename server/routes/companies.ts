@@ -8,6 +8,7 @@ import {
   workflows as workflowsTable,
 } from "@shared/schema";
 import { db } from "../db";
+import { hasEntitlement } from "../billing/stripe";
 
 async function ownsCompany(companyId: number, userId: string): Promise<boolean> {
   const rows = await db.select({ id: companiesTable.id }).from(companiesTable)
@@ -174,6 +175,9 @@ export function registerCompanyRoutes(app: Express): void {
       }
 
       const userId = req.user.id;
+      if (!(await hasEntitlement(userId, "company:create"))) {
+        return res.status(402).json({ code: "entitlement_required", message: "Your current plan does not permit another company." });
+      }
       const data = createCompanySchema.parse(req.body);
 
       const [created] = await db

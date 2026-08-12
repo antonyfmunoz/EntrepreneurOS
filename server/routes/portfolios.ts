@@ -8,6 +8,7 @@ import {
   updatePortfolioSchema,
 } from "@shared/schema";
 import { db } from "../db";
+import { hasEntitlement } from "../billing/stripe";
 
 export function registerPortfolioRoutes(app: Express): void {
   // GET /api/portfolios — list all portfolios for authenticated user
@@ -38,6 +39,9 @@ export function registerPortfolioRoutes(app: Express): void {
         return res.status(401).json({ message: "Not authenticated" });
       }
       const userId = req.user.id;
+      if (!(await hasEntitlement(userId, "portfolio:create"))) {
+        return res.status(402).json({ code: "entitlement_required", message: "Your current plan does not permit another portfolio." });
+      }
       const data = insertPortfolioSchema.parse(req.body);
 
       const [created] = await db

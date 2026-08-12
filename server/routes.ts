@@ -17,6 +17,7 @@ import { registerAnalyticsRoutes } from "./routes/analytics";
 import { registerUmhFederationRoutes } from "./routes/umh";
 import { registerEosRuntimeRoutes } from "./routes/eos-runtime";
 import { registerSupportRoutes } from "./routes/support";
+import { registerBillingRoutes, registerBillingWebhook } from "./routes/billing";
 import { errorHandler } from "./middleware/error-handler";
 import { blockLegacyUnscopedApis, requireLocalApiAuth } from "./middleware/api-security";
 import { federationCommandRateLimit, localApiRateLimit } from "./middleware/rate-limit";
@@ -24,6 +25,7 @@ import { federationCommandRateLimit, localApiRateLimit } from "./middleware/rate
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication routes and middleware
   setupAuth(app);
+  registerBillingWebhook(app);
 
   // Signed federation ingress is authenticated by the projection-owned UMH
   // adapter. Register it before the Clerk gate; every remaining API route
@@ -50,6 +52,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerAnalyticsRoutes(app);
   registerEosRuntimeRoutes(app);
   registerSupportRoutes(app);
+  registerBillingRoutes(app);
 
   // __ORCHESTRATOR_GENERATED_ROUTES__ (do not remove this marker)
   {
