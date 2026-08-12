@@ -29,7 +29,7 @@ The required overlay MVP is the governed EntrepreneurOS runtime, not the eventua
 | Consequential provider loop | Pass in deterministic adapter test | Gmail request → assigned approval → provider execution → receipt evidence → audit → reconciled status; provider failure blocks the Work Packet |
 | Browser acceptance | Pass | Seven operator surfaces at 1440×1000; hierarchy-builder interaction; 390×844 no overflow; movable communication FAB; full-width mobile communication drawer; no browser errors |
 | Source control | Pass | Qualified work is committed and pushed on `agent/eos-overlay-mvp-1-7`; draft PR #5 targets `feature/company-system` |
-| Production image/runtime | Pass | Pruned non-root image passed local health/readiness, then Fly release v26 deployed image `deployment-01KZT5NPN5YGDA6N325FNYNRJA` |
+| Production image/runtime | Pass | Pruned non-root image passed local health/readiness, then Fly release v27 deployed image `deployment-01KZT61SSFYHTYZ362TZJDZRFP` |
 | Production migrations | Pass | Fly release command completed; checksum runner reports migrations 0001–0007 and the enhancement migration already applied |
 | Production HTTP and browser | Pass | `https://entrepreneuros.net/api/health` and `/api/ready` returned 200; a 390×844 rendered public smoke reached the Clerk sign-in surface with no failed resources or browser errors |
 | Notion live provider | Pass | Identity and actual workspace search returned 200 |
