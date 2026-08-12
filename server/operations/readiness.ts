@@ -8,12 +8,14 @@ export type ReadinessResult = { layer: number; name: string; status: "pass" | "f
 
 export async function productionReadiness() {
   const now = new Date();
+  const expectedReleaseSubject = process.env.EOS_RELEASE_SUBJECT;
+  const expectedEnvironmentSubject = process.env.EOS_PRODUCTION_ENVIRONMENT_SUBJECT;
   const controls = await db.select().from(operationalControls).where(and(eq(operationalControls.status, "pass"), gt(operationalControls.expiresAt, now)));
   const controlMap = new Map(controls.map((control) => [control.controlKey, control]));
   const layers: ReadinessResult[] = CONTROL_LAYERS.map((definition) => {
     const missing = definition.controls.filter((required) => {
       const evidence = controlMap.get(required.key);
-      return !evidence || !controlEvidenceIsCurrent({ definition: required, evidenceScope: evidence.evidenceScope, reviewedAt: evidence.reviewedAt, expiresAt: evidence.expiresAt, now });
+      return !evidence || !controlEvidenceIsCurrent({ definition: required, evidenceScope: evidence.evidenceScope, subject: evidence.subject, reviewedAt: evidence.reviewedAt, expiresAt: evidence.expiresAt, expectedReleaseSubject, expectedEnvironmentSubject, now });
     }).map((control) => control.key);
     return { layer: definition.layer, name: definition.name, status: missing.length ? "fail" : "pass", evidence: definition.controls.filter((required) => !missing.includes(required.key)).map((required) => { const item = controlMap.get(required.key)!; return `${required.key}:${item.evidenceScope}:${item.subject}:${item.evidenceHash}`; }), missing };
   });
@@ -44,6 +46,8 @@ export async function productionReadiness() {
     ...(process.env.EOS_ACCOUNT_DELETION_ENABLED !== "true" ? ["account_deletion_worker"] : []),
     ...(process.env.EOS_LEGAL_ENFORCEMENT !== "true" ? ["legal_enforcement"] : []),
     ...(process.env.EOS_PUBLIC_PAID_SAAS === "true" && !billingConfigured() ? ["billing_configuration"] : []),
+    ...(!expectedReleaseSubject ? ["release_subject"] : []),
+    ...(!expectedEnvironmentSubject ? ["production_environment_subject"] : []),
   ];
   return { standard: "eos.production-readiness.v1", generatedAt: now.toISOString(), ready: layers.every((layer) => layer.status === "pass") && !configurationMissing.length, layers, configurationMissing, requiredVendors, missingVendors };
 }

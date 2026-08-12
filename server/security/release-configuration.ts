@@ -42,6 +42,14 @@ function hasStripePlans(value?: string): boolean {
   }
 }
 
+function isReleaseSubject(value?: string): boolean {
+  return Boolean(value && (/^git:[a-f0-9]{40}$/.test(value) || /^image:sha256:[a-f0-9]{64}$/.test(value)));
+}
+
+function isEnvironmentSubject(value?: string): boolean {
+  return Boolean(value && /^environment:[a-z0-9][a-z0-9-]{2,79}$/.test(value));
+}
+
 export function productionRuntimeConfiguration(env: ReleaseEnvironment = process.env) {
   return {
     managedDatabase: isManagedPostgres(env.DATABASE_URL),
@@ -56,6 +64,8 @@ export function productionRuntimeConfiguration(env: ReleaseEnvironment = process
     paidSaasEnabled: env.EOS_PUBLIC_PAID_SAAS === "true",
     billingConfigured: Boolean(env.STRIPE_RESTRICTED_KEY?.startsWith("rk_live_") && env.STRIPE_WEBHOOK_SECRET?.startsWith("whsec_") && hasStripePlans(env.EOS_STRIPE_PLANS)),
     platformAdministratorsConfigured: Boolean(env.EOS_PLATFORM_ADMIN_USER_IDS?.split(",").some((id) => id.trim().length > 0)),
+    immutableReleaseSubject: isReleaseSubject(env.EOS_RELEASE_SUBJECT),
+    productionEnvironmentSubject: isEnvironmentSubject(env.EOS_PRODUCTION_ENVIRONMENT_SUBJECT),
   };
 }
 

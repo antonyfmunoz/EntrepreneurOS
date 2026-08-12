@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
@@ -51,7 +50,6 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("profile");
   const [deletionConfirmation, setDeletionConfirmation] = useState("");
-  const [deleteOwnedOrganizations, setDeleteOwnedOrganizations] = useState(false);
   const [monthlyAiBudget, setMonthlyAiBudget] = useState("25");
   const [perRequestAiBudget, setPerRequestAiBudget] = useState("1");
 
@@ -164,7 +162,7 @@ export default function SettingsPage() {
   });
   const scheduleDeletionMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest<Response>("POST", "/api/users/me/deletion", { confirmation: deletionConfirmation, deleteOwnedOrganizations });
+      const response = await apiRequest<Response>("POST", "/api/users/me/deletion", { confirmation: deletionConfirmation, deleteOwnedOrganizations: false });
       return response.json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/users/me/deletion"] }),
@@ -639,8 +637,7 @@ export default function SettingsPage() {
                     </div>
                   ) : (
                     <div className="mt-3 space-y-4">
-                      <p className="text-sm text-text-secondary">A cooling-off period applies. Identity access, personal data, and—only when explicitly selected—owned portfolios and companies are removed after the scheduled date. Download an export first.</p>
-                      <div className="flex items-start gap-3"><Checkbox id="delete-owned" checked={deleteOwnedOrganizations} onCheckedChange={(value) => setDeleteOwnedOrganizations(value === true)} /><Label htmlFor="delete-owned" className="leading-5">Also permanently delete every portfolio and company I own. If unchecked, deletion is blocked until ownership is transferred.</Label></div>
+                      <p className="text-sm text-text-secondary">A cooling-off period applies. Identity access and personal working data are removed after the scheduled date. Download an export first. If you own a portfolio or company, transfer ownership before the deletion date; EOS will block execution until that is complete.</p>
                       <div className="space-y-2"><Label htmlFor="delete-confirmation">Type DELETE MY ENTREPRENEUROS ACCOUNT</Label><Input id="delete-confirmation" value={deletionConfirmation} onChange={(event) => setDeletionConfirmation(event.target.value)} /></div>
                       <Button variant="destructive" onClick={() => scheduleDeletionMutation.mutate()} disabled={scheduleDeletionMutation.isPending || deletionConfirmation !== "DELETE MY ENTREPRENEUROS ACCOUNT"}>Schedule account deletion</Button>
                       {scheduleDeletionMutation.isError && <p className="text-sm text-destructive">Deletion could not be scheduled.</p>}

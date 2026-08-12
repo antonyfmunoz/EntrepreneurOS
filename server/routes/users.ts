@@ -117,11 +117,11 @@ export function registerUserRoutes(app: Express): void {
 
   app.post("/api/users/me/deletion", async (req, res, next) => {
     try {
-      const input = z.object({ confirmation: z.literal("DELETE MY ENTREPRENEUROS ACCOUNT"), deleteOwnedOrganizations: z.boolean() }).parse(req.body);
+      const input = z.object({ confirmation: z.literal("DELETE MY ENTREPRENEUROS ACCOUNT"), deleteOwnedOrganizations: z.literal(false) }).parse(req.body);
       const request = await scheduleAccountDeletion({ userId: req.user.id, clerkUserId: req.user.clerkUserId, deleteOwnedOrganizations: input.deleteOwnedOrganizations });
       return res.status(202).json({ status: request.status, scheduledFor: request.scheduledFor, deleteOwnedOrganizations: request.deleteOwnedOrganizations });
     } catch (error) {
-      if (error instanceof z.ZodError) return res.status(400).json({ code: "deletion_confirmation_required", message: "Type the exact confirmation phrase and choose how owned organizations are handled." });
+      if (error instanceof z.ZodError) return res.status(400).json({ code: "deletion_confirmation_required", message: "Type the exact confirmation phrase. Owned organizations must be transferred before deletion can execute." });
       return next(error);
     }
   });

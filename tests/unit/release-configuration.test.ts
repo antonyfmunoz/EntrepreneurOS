@@ -17,6 +17,8 @@ const valid = {
   STRIPE_WEBHOOK_SECRET: "whsec_example",
   EOS_STRIPE_PLANS: JSON.stringify({ founder: { priceId: "price_example" } }),
   EOS_PLATFORM_ADMIN_USER_IDS: "user_production_admin",
+  EOS_RELEASE_SUBJECT: `git:${"a".repeat(40)}`,
+  EOS_PRODUCTION_ENVIRONMENT_SUBJECT: "environment:entrepreneuros-production",
 };
 
 describe("production runtime configuration", () => {
@@ -42,6 +44,8 @@ describe("production runtime configuration", () => {
       STRIPE_WEBHOOK_SECRET: "bad",
       EOS_STRIPE_PLANS: "{}",
       EOS_PLATFORM_ADMIN_USER_IDS: "",
+      EOS_RELEASE_SUBJECT: "latest",
+      EOS_PRODUCTION_ENVIRONMENT_SUBJECT: "production",
     })).toEqual([
       "managedDatabase",
       "clerkPublishableProduction",
@@ -55,6 +59,8 @@ describe("production runtime configuration", () => {
       "paidSaasEnabled",
       "billingConfigured",
       "platformAdministratorsConfigured",
+      "immutableReleaseSubject",
+      "productionEnvironmentSubject",
     ]);
   });
 });

@@ -23,6 +23,7 @@
     "test:load": "tsx scripts/http-load-test.ts",
     "test:e2e:production": "tsx tests/e2e/production-public-smoke.ts",
     "test:e2e:production:authenticated": "tsx tests/e2e/production-authenticated-smoke.ts",
+    "test:e2e:production:readiness": "tsx tests/e2e/production-readiness-smoke.ts",
     "check:stitch-tools": "tsx scripts/check-stitch-tools.ts",
     "test:stitch-workflow": "tsx scripts/test-stitch-workflow.ts"
   },

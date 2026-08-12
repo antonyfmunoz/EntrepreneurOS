@@ -6,10 +6,10 @@ This document distinguishes implemented lifecycle behavior from policy decisions
 
 ## Implemented account lifecycle
 
-1. An authenticated person requests deletion using an exact confirmation phrase and chooses whether owned organizations are included.
+1. An authenticated person requests personal-account deletion using an exact confirmation phrase.
 2. EntrepreneurOS schedules the request after a configurable one-to-thirty-day cooling-off period; the current default is seven days.
 3. The person may cancel while the request is scheduled.
-4. If owned portfolios or companies remain and organization deletion was not explicitly selected, execution stops for ownership transfer.
+4. If owned portfolios or companies remain, execution stops until ownership is transferred. Personal-account deletion never silently destroys organization evidence.
 5. In production, identity-provider deletion must be available; otherwise execution fails closed for operations review.
 6. Execution removes personal working data and provider credentials, releases hybrid-role seats, detaches communication authorship, and anonymizes the remaining principal.
 7. Immutable operational evidence retains only its reference to that anonymized principal.

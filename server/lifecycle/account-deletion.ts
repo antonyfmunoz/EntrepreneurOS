@@ -19,7 +19,6 @@ import {
   supportTickets,
   umhIdentityBindings,
   users,
-  workflows,
 } from "@shared/schema";
 import { clerkClient } from "../clerkAdmin";
 import { db } from "../db";
@@ -85,8 +84,8 @@ async function executeOne(request: typeof accountDeletionRequests.$inferSelect):
   try {
     const ownedCompanies = await db.select({ id: companies.id }).from(companies).where(eq(companies.ownerUserId, request.userId));
     const ownedPortfolios = await db.select({ id: portfolios.id }).from(portfolios).where(eq(portfolios.ownerId, request.userId));
-    if (!request.deleteOwnedOrganizations && (ownedCompanies.length || ownedPortfolios.length)) {
-      await db.update(accountDeletionRequests).set({ status: "blocked", lastError: "Owned organizations must be transferred or explicitly included." }).where(eq(accountDeletionRequests.id, request.id));
+    if (ownedCompanies.length || ownedPortfolios.length) {
+      await db.update(accountDeletionRequests).set({ status: "blocked", lastError: "Owned organizations must be transferred before personal account deletion." }).where(eq(accountDeletionRequests.id, request.id));
       return;
     }
     if (request.clerkUserId && clerkClient) {
@@ -98,11 +97,6 @@ async function executeOne(request: typeof accountDeletionRequests.$inferSelect):
       throw new Error("Identity provider deletion is unavailable.");
     }
     await db.transaction(async (tx) => {
-      if (request.deleteOwnedOrganizations) {
-        for (const company of ownedCompanies) await tx.delete(workflows).where(eq(workflows.companyId, company.id));
-        await tx.delete(companies).where(eq(companies.ownerUserId, request.userId));
-        await tx.delete(portfolios).where(eq(portfolios.ownerId, request.userId));
-      }
       await erasePersonalData(tx, request);
       await tx.update(accountDeletionRequests).set({ status: "executed", clerkUserId: null, executedAt: new Date(), lastError: null }).where(eq(accountDeletionRequests.id, request.id));
     });

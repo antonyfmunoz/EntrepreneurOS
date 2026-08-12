@@ -137,6 +137,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
 
   it("requires explicit account deletion confirmation and provides a cooling-off cancellation", async () => {
     await api.post("/api/users/me/deletion").send({ confirmation: "delete me", deleteOwnedOrganizations: false }).expect(400);
+    await api.post("/api/users/me/deletion").send({ confirmation: "DELETE MY ENTREPRENEUROS ACCOUNT", deleteOwnedOrganizations: true }).expect(400);
     const scheduled = await api.post("/api/users/me/deletion").send({ confirmation: "DELETE MY ENTREPRENEUROS ACCOUNT", deleteOwnedOrganizations: false }).expect(202);
     expect(scheduled.body.status).toBe("scheduled");
     expect(new Date(scheduled.body.scheduledFor).getTime()).toBeGreaterThan(Date.now());
@@ -178,6 +179,19 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
 
     await sql`DELETE FROM account_deletion_requests WHERE id = ${request.id}`;
     await sql`DELETE FROM users WHERE id = ${deletionUserId}`;
+  });
+
+  it("blocks legacy organization-deletion requests until ownership is transferred", async () => {
+    const { scheduleAccountDeletion, processDueAccountDeletion } = await import("../../server/lifecycle/account-deletion");
+    const request = await scheduleAccountDeletion({ userId: ownerId, clerkUserId: null, deleteOwnedOrganizations: true });
+    await sql`UPDATE account_deletion_requests SET scheduled_for = now() - interval '1 minute' WHERE id = ${request.id}`;
+    expect(await processDueAccountDeletion(request.id)).toBe(true);
+    const [deletion] = await sql<Array<{ status: string; last_error: string | null }>>`SELECT status, last_error FROM account_deletion_requests WHERE id = ${request.id}`;
+    expect(deletion.status).toBe("blocked");
+    expect(deletion.last_error).toContain("transferred");
+    const [company] = await sql<Array<{ id: number }>>`SELECT id FROM companies WHERE id = ${companyId}`;
+    expect(company.id).toBe(companyId);
+    await sql`DELETE FROM account_deletion_requests WHERE id = ${request.id}`;
   });
 
   it("enforces owner-scoped AI budget configuration", async () => {
