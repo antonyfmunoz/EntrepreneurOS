@@ -17,6 +17,7 @@
     "test:e2e:fixture": "tsx scripts/e2e-fixture-server.ts",
     "test:e2e:client": "vite --config vite.e2e.config.ts",
     "test:e2e:acceptance": "tsx tests/e2e/mvp-browser-acceptance.ts",
+    "test:e2e": "tsx scripts/run-browser-acceptance.ts",
     "test:e2e:production": "tsx tests/e2e/production-public-smoke.ts",
     "check:stitch-tools": "tsx scripts/check-stitch-tools.ts",
     "test:stitch-workflow": "tsx scripts/test-stitch-workflow.ts"
@@ -105,6 +106,7 @@
     "zod-validation-error": "^3.5.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@replit/vite-plugin-cartographer": "^0.0.11",
     "@replit/vite-plugin-runtime-error-modal": "^0.0.3",
     "@tailwindcss/typography": "^0.5.15",

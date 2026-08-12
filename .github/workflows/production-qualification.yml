@@ -55,6 +55,8 @@ jobs:
         run: npm run check
       - name: Unit and integration qualification
         run: npm test
+      - name: Browser, mobile, accessibility, and local performance acceptance
+        run: npm run test:e2e
       - name: Logical backup and restore rehearsal
         run: |
           sudo apt-get update -qq
