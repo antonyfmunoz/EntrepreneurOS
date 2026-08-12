@@ -62,18 +62,23 @@ export function registerUserRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/users/me/analytics-consent", (req, res) => {
+  app.get("/api/users/me/analytics-consent", async (req, res, next) => {
+    try {
+    const persisted = await storage.getUser(req.user.id);
+    if (!persisted) return res.status(404).json({ code: "user_not_found", message: "Account not found." });
     let preferences: Record<string, any> = {};
-    try { preferences = req.user.preferences ? JSON.parse(req.user.preferences) : {}; } catch {}
+    try { preferences = persisted.preferences ? JSON.parse(persisted.preferences) : {}; } catch {}
     const analytics = preferences.analytics || {};
     return res.json({ consent: analytics.policyVersion === PRODUCT_ANALYTICS_POLICY_VERSION ? analytics.consent ?? null : null, decidedAt: analytics.decidedAt || null, policyVersion: PRODUCT_ANALYTICS_POLICY_VERSION });
+    } catch (error) { return next(error); }
   });
 
   app.put("/api/users/me/analytics-consent", async (req, res, next) => {
     try {
       const { consent } = z.object({ consent: z.boolean() }).parse(req.body);
       let existing: Record<string, unknown> = {};
-      try { existing = req.user.preferences ? JSON.parse(req.user.preferences) : {}; } catch {}
+      const persisted = await storage.getUser(req.user.id);
+      try { existing = persisted?.preferences ? JSON.parse(persisted.preferences) : {}; } catch {}
       const analytics = { consent, decidedAt: new Date().toISOString(), policyVersion: PRODUCT_ANALYTICS_POLICY_VERSION };
       await storage.updateUser(req.user.id, { preferences: { ...existing, analytics } });
       return res.json(analytics);
