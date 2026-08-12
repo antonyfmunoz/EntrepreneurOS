@@ -2,7 +2,7 @@
 
 **Assessment date:** 2026-08-11
 **Scope:** EntrepreneurOS repository and projection-side UMH adapter only
-**Decision:** Code-qualified release candidate; live Calendar authorization and production Clerk cutover remain external acceptance gates
+**Decision:** Repository-qualified and deployed; live Calendar authorization and production Clerk cutover remain external acceptance gates
 
 ## Release definition
 
@@ -28,6 +28,10 @@ The required overlay MVP is the governed EntrepreneurOS runtime, not the eventua
 | Hierarchical communication | Pass | Persistent per-seat channels; Role Agent assistant mode; three selected advisor calls; current/specified Company CEO Agent calls; one persisted Executive Assistant synthesis with provenance |
 | Consequential provider loop | Pass in deterministic adapter test | Gmail request → assigned approval → provider execution → receipt evidence → audit → reconciled status; provider failure blocks the Work Packet |
 | Browser acceptance | Pass | Seven operator surfaces at 1440×1000; hierarchy-builder interaction; 390×844 no overflow; movable communication FAB; full-width mobile communication drawer; no browser errors |
+| Source control | Pass | Qualified work is committed and pushed on `agent/eos-overlay-mvp-1-7`; draft PR #5 targets `feature/company-system` |
+| Production image/runtime | Pass | Pruned non-root image passed local health/readiness, then Fly release v26 deployed image `deployment-01KZT5NPN5YGDA6N325FNYNRJA` |
+| Production migrations | Pass | Fly release command completed; checksum runner reports migrations 0001–0007 and the enhancement migration already applied |
+| Production HTTP and browser | Pass | `https://entrepreneuros.net/api/health` and `/api/ready` returned 200; a 390×844 rendered public smoke reached the Clerk sign-in surface with no failed resources or browser errors |
 | Notion live provider | Pass | Identity and actual workspace search returned 200 |
 | Gmail live provider | Pass read/identity probe | Token refresh and Gmail profile returned 200; no real message was sent during qualification |
 | Drive live provider | Pass | Actual recent-file metadata query returned 200 |
@@ -44,13 +48,12 @@ The required overlay MVP is the governed EntrepreneurOS runtime, not the eventua
 - A development Clerk tenant is not represented as production-hardened identity.
 - UMH live round-trip delivery is not represented as complete while the deployment-managed adapter remains disabled.
 
-## Final closure gates
+## Remaining external closure gates
 
-The release can be called **MVP complete and live-qualified** only after all of the following are recorded:
+The repository and deployment portions of the seven MVP areas are complete. The product can be called **MVP complete and live-qualified** only after the remaining account-level gates are recorded:
 
 1. the owner reconnects Google Workspace and the strict provider probe returns 200 for Gmail, Calendar, Drive, Notion identity, and Notion search;
 2. a production Clerk publishable/secret key pair and allowed origins are installed, the client is rebuilt, and signed-in owner/mobile flows pass;
-3. the qualified commit is pushed, reviewed through a draft pull request, deployed with migrations, and public `/api/health` plus database-backed `/api/ready` both return 200;
-4. the owner explicitly authorizes a safe recipient if a real Gmail delivery receipt is required as a release gate.
+3. the owner explicitly authorizes a safe recipient if a real Gmail delivery receipt is required as a release gate.
 
-Until then, describe the state as **repository-qualified for the seven MVP areas, with external identity/consent gates still open**.
+Until then, describe the state as **the seven-area EOS overlay is implemented, repository-qualified, and deployed, with external identity/consent gates still open**.
