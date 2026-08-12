@@ -151,7 +151,7 @@ export function registerNotificationRoutes(app: Express): void {
         id: notificationId
       });
     } catch (error) {
-      console.error(`Error deleting notification ${notificationId}:`, error);
+      console.error("Error deleting notification %s:", notificationId, error);
       res.status(500).json({
         success: false,
         message: "Failed to delete notification",

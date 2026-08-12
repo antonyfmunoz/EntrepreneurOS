@@ -1,11 +1,10 @@
 import { apiRequest } from "./queryClient";
 
-export async function callLLM(prompt: string, model: string = "claude-haiku-4-5", systemMessage?: string): Promise<string> {
+export async function callLLM(prompt: string, model: string = "claude-haiku-4-5"): Promise<string> {
   try {
     const response = await apiRequest("POST", "/api/llm/chat", {
       prompt,
       model,
-      systemMessage
     });
     
     const data = await response.json();

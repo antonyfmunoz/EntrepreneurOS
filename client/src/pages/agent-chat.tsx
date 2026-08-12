@@ -20,7 +20,7 @@ import { ApiKeyDialog } from "@/components/api-key-dialog";
 import { CreateAgentModal } from "@/components/create-agent-modal";
 import { cn } from "@/lib/utils";
 import { Settings, Info, Clipboard, Bot, Sparkles, Trash2 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 type Agent = {
   id: string;
@@ -50,6 +50,7 @@ type AgentChatProps = {
 
 export default function AgentChat({ params }: AgentChatProps) {
   const agentId = params?.agentId || "";
+  const [, setLocation] = useLocation();
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [aiModelConfig, setAIModelConfig] = useState<AIModelConfig>({ 
@@ -695,7 +696,8 @@ export default function AgentChat({ params }: AgentChatProps) {
                   value={agentId}
                   onChange={(e) => {
                     const selectedId = e.target.value;
-                    window.location.href = `/chat/${selectedId}`;
+                    if (selectedId !== "direct-claude" && !agents.some((candidate) => candidate.id === selectedId)) return;
+                    setLocation(`/chat/${encodeURIComponent(selectedId)}`);
                   }}
                 >
                   <option value="direct-claude">Claude Direct</option>
