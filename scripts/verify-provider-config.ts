@@ -22,7 +22,7 @@ async function main() {
     }),
   });
 
-  const google: Record<string, boolean | number> = { token: tokenResponse.ok };
+  const google: Record<string, unknown> = { token: tokenResponse.ok };
   if (tokenResponse.ok) {
     const token = await tokenResponse.json() as { access_token?: string; scope?: string };
     const headers = { Authorization: `Bearer ${token.access_token || ""}` };
@@ -35,9 +35,15 @@ async function main() {
     google.gmailStatus = checks[0].status;
     google.calendar = checks[1].ok;
     google.calendarStatus = checks[1].status;
+    if (!checks[1].ok) {
+      const error = await checks[1].json().catch(() => ({})) as { error?: { message?: string; errors?: Array<{ reason?: string }> } };
+      google.calendarError = String(error.error?.errors?.[0]?.reason || error.error?.message || "unknown");
+    }
     google.drive = checks[2].ok;
     google.driveStatus = checks[2].status;
-    google.scopeCount = String(token.scope || "").split(/\s+/).filter(Boolean).length;
+    const grantedScopes = String(token.scope || "").split(/\s+/).filter(Boolean);
+    google.scopeCount = grantedScopes.length;
+    google.grantedScopes = grantedScopes;
   } else {
     google.status = tokenResponse.status;
   }

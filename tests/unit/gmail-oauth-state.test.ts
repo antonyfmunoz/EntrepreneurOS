@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createOAuthState, readOAuthState, verifyOAuthState } from "../../server/integrations/gmail";
+import { createOAuthState, readOAuthState, scopeCoverage, verifyOAuthState } from "../../server/integrations/gmail";
 
 describe("Gmail OAuth state binding", () => {
   beforeEach(() => { process.env.SESSION_SECRET = "test-session-secret-that-is-at-least-thirty-two-characters"; });
@@ -23,5 +23,17 @@ describe("Gmail OAuth state binding", () => {
 
     const external = createOAuthState("owner-1", 1_000, "https://attacker.example/collect");
     expect(readOAuthState(external, "owner-1", 2_000)?.returnTo).toBe("/portfolios");
+  });
+
+  it("does not represent read-only Gmail access as an authorized execution connection", () => {
+    expect(scopeCoverage([
+      "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/drive.readonly",
+    ])).toEqual({ Gmail: false, Calendar: false, Drive: true });
+    expect(scopeCoverage([
+      "https://www.googleapis.com/auth/gmail.send",
+      "https://www.googleapis.com/auth/calendar.readonly",
+      "https://www.googleapis.com/auth/drive.metadata.readonly",
+    ])).toEqual({ Gmail: true, Calendar: true, Drive: true });
   });
 });

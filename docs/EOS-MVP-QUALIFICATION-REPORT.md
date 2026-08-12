@@ -33,9 +33,9 @@ The required overlay MVP is the governed EntrepreneurOS runtime, not the eventua
 | Production migrations | Pass | Fly release command completed; checksum runner reports migrations 0001–0007 and the enhancement migration already applied |
 | Production HTTP and browser | Pass | `https://entrepreneuros.net/api/health` and `/api/ready` returned 200; a 390×844 rendered public smoke reached the Clerk sign-in surface with no failed resources or browser errors |
 | Notion live provider | Pass | Identity and actual workspace search returned 200 |
-| Gmail live provider | Pass read/identity probe | Token refresh and Gmail profile returned 200; no real message was sent during qualification |
+| Gmail live provider | **Blocked externally for execution** | Token refresh and Gmail profile returned 200, but the existing grant contains `gmail.readonly` rather than required `gmail.send`; EOS now reports this grant disconnected instead of implying execution authority |
 | Drive live provider | Pass | Actual recent-file metadata query returned 200 |
-| Calendar live provider | **Blocked externally** | Existing Google grant returned 403; the current authorization request includes Calendar read-only, so the user must reconnect once to grant the expanded scope |
+| Calendar live provider | **Blocked externally** | Existing Google grant returned `403 insufficientPermissions` and contains no Calendar scope; the current authorization request includes Calendar read-only, so the user must reconnect once |
 | Clerk production identity | **Blocked externally** | Current Fly build configuration still uses a Clerk development publishable key; a production Clerk instance/key and allowed-origin cutover are required |
 | Product analytics | Optional / disabled | The available PostHog value is a placeholder; EOS refuses to initialize either PostHog client until a real `phc_` project key is supplied |
 | UMH | Correctly disabled | Projection-owned signed HTTPS ingress/outbox is implemented and tested; direct-Postgres polling/writeback is not activated; live UMH is outside this EntrepreneurOS-only release scope |

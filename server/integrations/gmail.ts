@@ -18,6 +18,15 @@ export const GOOGLE_WORKSPACE_TOOLS = [
   "gmail.send_with_local_approval",
 ] as const;
 
+export function scopeCoverage(grantedScopes: string[]): Record<(typeof GOOGLE_WORKSPACE_SERVICES)[number], boolean> {
+  const granted = new Set(grantedScopes);
+  return {
+    Gmail: granted.has("https://www.googleapis.com/auth/gmail.send") || granted.has("https://mail.google.com/"),
+    Calendar: granted.has("https://www.googleapis.com/auth/calendar.readonly") || granted.has("https://www.googleapis.com/auth/calendar"),
+    Drive: granted.has("https://www.googleapis.com/auth/drive.metadata.readonly") || granted.has("https://www.googleapis.com/auth/drive.readonly") || granted.has("https://www.googleapis.com/auth/drive"),
+  };
+}
+
 interface OAuthStatePayload {
   userId: string;
   expiresAt: number;
@@ -182,7 +191,7 @@ export async function isConnected(userId: string): Promise<boolean> {
     const token = await storage.getOauthToken(userId, "gmail");
     if (!token) return false;
     decryptCredential(token.accessToken);
-    return true;
+    return Object.values(scopeCoverage((token.scope || "").split(/\s+/).filter(Boolean))).every(Boolean);
   } catch {
     return false;
   }
@@ -204,13 +213,14 @@ export async function connectionSummary(userId: string): Promise<{
 }> {
   const configured = isConfigured();
   if (!configured) return { configured: false, connected: false, grantedScopes: [] };
-  const connected = await isConnected(userId);
-  if (!connected) return { configured: true, connected: false, grantedScopes: [] };
   const token = await storage.getOauthToken(userId, "gmail");
+  if (!token) return { configured: true, connected: false, grantedScopes: [] };
+  const grantedScopes = (token.scope || "").split(/\s+/).filter(Boolean);
+  const connected = await isConnected(userId);
   return {
     configured: true,
-    connected: true,
-    grantedScopes: (token?.scope || "").split(/\s+/).filter(Boolean),
+    connected,
+    grantedScopes,
   };
 }
 
@@ -222,7 +232,7 @@ export async function verifyConnection(userId: string): Promise<{
   grantedScopes: string[];
 }> {
   const summary = await connectionSummary(userId);
-  const services = { Gmail: false, Calendar: false, Drive: false };
+  const services = scopeCoverage(summary.grantedScopes);
   if (!summary.connected) return { ...summary, healthy: false, services };
 
   try {
