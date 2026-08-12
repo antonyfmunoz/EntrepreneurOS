@@ -16,6 +16,7 @@ import { registerActionRoutes } from "./routes/actions";
 import { registerAnalyticsRoutes } from "./routes/analytics";
 import { registerUmhFederationRoutes } from "./routes/umh";
 import { registerEosRuntimeRoutes } from "./routes/eos-runtime";
+import { registerSupportRoutes } from "./routes/support";
 import { errorHandler } from "./middleware/error-handler";
 import { blockLegacyUnscopedApis, requireLocalApiAuth } from "./middleware/api-security";
 import { federationCommandRateLimit, localApiRateLimit } from "./middleware/rate-limit";
@@ -48,6 +49,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerActionRoutes(app);
   registerAnalyticsRoutes(app);
   registerEosRuntimeRoutes(app);
+  registerSupportRoutes(app);
 
   // __ORCHESTRATOR_GENERATED_ROUTES__ (do not remove this marker)
   {

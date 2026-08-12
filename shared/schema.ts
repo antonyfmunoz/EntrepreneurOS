@@ -174,6 +174,27 @@ export const insertIntegrationSchema = z.object({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
+export const supportTickets = pgTable("support_tickets", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  category: text("category").notNull(),
+  subject: text("subject").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("open"),
+  requestId: text("request_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const createSupportTicketSchema = z.object({
+  category: z.enum(["account", "technical", "integration", "feedback", "security", "other"]),
+  subject: z.string().trim().min(3).max(160),
+  message: z.string().trim().min(10).max(10_000),
+});
+
+export type SupportTicket = typeof supportTickets.$inferSelect;
+export type CreateSupportTicket = z.infer<typeof createSupportTicketSchema>;
+
 export type InsertAgent = z.infer<typeof insertAgentSchema>;
 export type Agent = typeof agents.$inferSelect;
 

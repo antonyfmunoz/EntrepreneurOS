@@ -10,12 +10,14 @@ import { serveStatic, log } from "./runtime";
 import { client, db } from "./db";
 import { applySecurityHeaders, sanitizeServerErrors } from "./middleware/api-security";
 import { shutdownPosthog } from "./posthog";
+import { requestTelemetry, writeLog } from "./observability/logger";
 
 const app = express();
 app.use(applySecurityHeaders);
 app.use(sanitizeServerErrors);
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(requestTelemetry);
+app.use(express.json({ limit: process.env.EOS_JSON_BODY_LIMIT || "1mb" }));
+app.use(express.urlencoded({ extended: false, limit: process.env.EOS_FORM_BODY_LIMIT || "256kb" }));
 
 // Health check endpoint — required by Dockerfile HEALTHCHECK and platform health probes
 // (Railway, Render, Fly.io all probe this path). Placed before route registration so it
@@ -40,19 +42,6 @@ app.get("/api/ready", async (_req, res) => {
   } catch {
     return res.status(503).json({ status: "not_ready", reason: "database" });
   }
-});
-
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      log(`${req.method} ${path} ${res.statusCode} in ${duration}ms`);
-    }
-  });
-
-  next();
 });
 
 void (async () => {
@@ -91,6 +80,6 @@ void (async () => {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 })().catch((error) => {
-  console.error("EOS failed to start", error);
+  writeLog("error", "startup_failed", { error });
   process.exitCode = 1;
 });

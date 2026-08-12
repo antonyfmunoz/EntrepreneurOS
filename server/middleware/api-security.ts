@@ -2,11 +2,31 @@ import type { NextFunction, Request, Response } from "express";
 
 const unsafeMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-export function applySecurityHeaders(_req: Request, res: Response, next: NextFunction) {
+export function applySecurityHeaders(req: Request, res: Response, next: NextFunction) {
+  const extraConnectSources = (process.env.EOS_CSP_CONNECT_SRC || "")
+    .split(/\s+/)
+    .filter((source) => /^https?:\/\/|^wss?:\/\//.test(source));
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  res.setHeader("Cross-Origin-Resource-Policy", "same-site");
+  res.setHeader("Content-Security-Policy", [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'self'",
+    "script-src 'self' https://*.clerk.accounts.dev https://*.clerk.com",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self' data:",
+    "img-src 'self' data: blob: https:",
+    `connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://*.posthog.com wss://*.clerk.accounts.dev ${extraConnectSources.join(" ")}`.trim(),
+    "frame-src https://*.clerk.accounts.dev https://*.clerk.com",
+    "worker-src 'self' blob:",
+  ].join("; "));
+  if (req.path?.startsWith("/api")) res.setHeader("Cache-Control", "no-store");
   if (process.env.NODE_ENV === "production") {
     res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   }

@@ -48,6 +48,7 @@ describe("EOS API security boundary", () => {
     applySecurityHeaders({} as any, res, next);
     expect(res.setHeader).toHaveBeenCalledWith("X-Frame-Options", "DENY");
     expect(res.setHeader).toHaveBeenCalledWith("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    expect(res.setHeader).toHaveBeenCalledWith("Content-Security-Policy", expect.stringContaining("frame-ancestors 'none'"));
     expect(next).toHaveBeenCalledOnce();
   });
 

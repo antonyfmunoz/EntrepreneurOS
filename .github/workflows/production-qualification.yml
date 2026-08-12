@@ -1,0 +1,62 @@
+name: Production qualification
+
+on:
+  pull_request:
+  push:
+    branches: [feature/company-system, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eos-qualification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: eos_test
+          POSTGRES_PASSWORD: eos_test
+          POSTGRES_DB: eos_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eos_test -d eos_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://eos_test:eos_test@127.0.0.1:5432/eos_test
+      EOS_TEST_DATABASE_URL: postgresql://eos_test:eos_test@127.0.0.1:5432/eos_test
+      NODE_ENV: test
+      VITE_CLERK_PUBLISHABLE_KEY: pk_test_ZW9zLWZpeHR1cmUuY2xlcmsuYWNjb3VudHMuZGV2JA
+      EOS_CREDENTIAL_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      SESSION_SECRET: ci-only-session-secret-not-for-production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Dependency vulnerability gate
+        run: npm audit --omit=dev --audit-level=high
+      - name: Establish disposable database baseline
+        run: npx drizzle-kit push --force
+      - name: Apply checksum migrations
+        run: npm run db:migrate
+      - name: Type safety
+        run: npm run check
+      - name: Unit and integration qualification
+        run: npm test
+      - name: Production build
+        run: npm run build
+      - name: Container build
+        run: docker build --build-arg VITE_CLERK_PUBLISHABLE_KEY="$VITE_CLERK_PUBLISHABLE_KEY" -t eos:${{ github.sha }} .
+

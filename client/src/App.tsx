@@ -15,6 +15,7 @@ import Login from "@/pages/login-page";
 import Signup from "@/pages/signup-page";
 import ForgotPassword from "@/pages/forgot-password-page";
 import ResetPassword from "@/pages/reset-password-page";
+import SupportPage from "@/pages/support-page";
 
 import { ClerkProviderWrapper, isClerkConfigured } from "@/lib/clerk";
 import PortfolioList from "@/pages/portfolio-list-page";
@@ -82,6 +83,7 @@ function Router() {
       <Route path="/reset-password" component={ResetPassword} />
 
       <ProtectedRoute path="/company-setup" component={CompanySetupPage} />
+      <ProtectedRoute path="/support" component={SupportPage} />
 
       <ProtectedRoute path="/settings">
         {() => (

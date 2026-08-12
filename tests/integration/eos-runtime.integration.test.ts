@@ -36,6 +36,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
 
   beforeAll(async () => {
     process.env.DATABASE_URL = databaseUrl;
+    await sql`DELETE FROM support_tickets WHERE user_id IN (${ownerId}, ${otherId})`;
     await sql`DELETE FROM umh_installations WHERE id = ${internalInstallationId}`;
     await sql`DELETE FROM agents WHERE id = ${agentId}`;
     await sql`DELETE FROM documents WHERE user_id IN (${ownerId}, ${otherId})`;
@@ -65,6 +66,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
   }, 90_000);
 
   afterAll(async () => {
+    await sql`DELETE FROM support_tickets WHERE user_id IN (${ownerId}, ${otherId})`;
     await sql`DELETE FROM umh_installations WHERE id = ${internalInstallationId}`;
     await sql`DELETE FROM agents WHERE id = ${agentId}`;
     await sql`DELETE FROM documents WHERE user_id IN (${ownerId}, ${otherId})`;
@@ -86,6 +88,18 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     await api.get(`/api/eos/companies/${otherCompanyId}/context`).expect(404);
     const legacy = await api.get("/api/tasks").expect(410);
     expect(legacy.body.code).toBe("legacy_unscoped_route_disabled");
+  });
+
+  it("persists authenticated support requests without exposing the platform queue", async () => {
+    const created = await api.post("/api/support/tickets").send({
+      category: "technical",
+      subject: "Acceptance support request",
+      message: "A qualified support request created by the integration harness.",
+    }).expect(201);
+    expect(created.body.id).toMatch(/^support_/);
+    const ownTickets = await api.get("/api/support/tickets").expect(200);
+    expect(ownTickets.body.some((ticket: { id: string }) => ticket.id === created.body.id)).toBe(true);
+    await api.get("/api/platform/support/tickets").expect(403);
   });
 
   it("compiles and activates an organization, then completes an evidence-bearing approved mission", async () => {
