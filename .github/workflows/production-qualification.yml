@@ -8,6 +8,8 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
 
 concurrency:
   group: eos-qualification-${{ github.ref }}
@@ -73,8 +75,18 @@ jobs:
         run: npm run build
       - name: Container build
         run: docker build --build-arg VITE_CLERK_PUBLISHABLE_KEY="$VITE_CLERK_PUBLISHABLE_KEY" -t eos:${{ github.sha }} .
+      - name: Generate production software bill of materials
+        run: |
+          mkdir -p .tmp
+          npm sbom --omit=dev --sbom-format cyclonedx --sbom-type application > .tmp/eos-sbom.cdx.json
+          sha256sum .tmp/eos-sbom.cdx.json > .tmp/eos-sbom.cdx.json.sha256
       - name: Create qualification evidence pack
         run: npm run evidence:create
+      - name: Attest production software bill of materials
+        if: github.event_name == 'push'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: .tmp/eos-sbom.cdx.json
       - name: Upload qualification evidence pack
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -83,5 +95,7 @@ jobs:
             .tmp/eos-qualification-evidence.json
             .tmp/eos-qualification-evidence.json.sha256
             .tmp/eos-local-load-result.json
+            .tmp/eos-sbom.cdx.json
+            .tmp/eos-sbom.cdx.json.sha256
           if-no-files-found: error
           retention-days: 90
