@@ -91,38 +91,6 @@ export function registerAIRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/ai/generate", async (req, res) => {
-    try {
-      const { messages, config } = req.body;
-
-      if (!messages || !Array.isArray(messages)) {
-        return res.status(400).json({ message: "Messages array is required" });
-      }
-
-      if (messages.some((message: unknown) => {
-        if (!message || typeof message !== "object") return true;
-        const candidate = message as { role?: unknown; content?: unknown };
-        return (candidate.role !== "user" && candidate.role !== "assistant") || typeof candidate.content !== "string";
-      })) {
-        return res.status(400).json({ message: "Messages must contain only user or assistant text" });
-      }
-
-      const aiMessages: AIMessage[] = messages.map((message: { role: "user" | "assistant"; content: string }) => ({
-        role: message.role,
-        content: message.content,
-      }));
-
-      const response = await generateAIResponse(aiMessages, config || {});
-      res.json({ response });
-    } catch (error) {
-      console.error("AI generation error:", error);
-      res.status(500).json({
-        message: "Failed to generate AI response",
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-
   // Multi-agent collaboration endpoint
   app.post("/api/ai/multi-agent", async (req, res) => {
     try {

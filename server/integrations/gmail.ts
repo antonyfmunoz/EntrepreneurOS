@@ -74,6 +74,7 @@ export function readOAuthState(state: string, userId: string, now = Date.now()):
   try {
     const [payload, receivedSignature] = state.split(".");
     if (!payload || !receivedSignature) return null;
+    // codeql[js/insufficient-password-hash] OAuth state is an HMAC signature, not a password hash.
     const expectedSignature = createHmac("sha256", oauthStateSecret()).update(payload).digest();
     const received = Buffer.from(receivedSignature, "base64url");
     if (received.length !== expectedSignature.length || !timingSafeEqual(received, expectedSignature)) return null;
