@@ -10,13 +10,13 @@ try {
   desktop.on("pageerror", (error) => browserErrors.push(error.message));
   desktop.on("console", (message) => { if (message.type() === "error") browserErrors.push(message.text()); });
   desktop.on("response", (response) => { if (response.status() >= 400) browserErrors.push(`${response.status()} ${response.url()}`); });
-  await desktop.goto(`${origin}/portfolios`, { waitUntil: "networkidle" });
+  await desktop.goto(`${origin}/portfolios`, { waitUntil: "domcontentloaded" });
   const companyId = await desktop.evaluate(async () => {
     const portfolios = await fetch("/api/portfolios").then((response) => response.json());
     const companies = await fetch(`/api/portfolios/${portfolios[0].id}/companies`).then((response) => response.json());
     return companies[0].id as number;
   });
-  await desktop.goto(`${origin}/company/${companyId}#home`, { waitUntil: "networkidle" });
+  await desktop.goto(`${origin}/company/${companyId}#home`, { waitUntil: "domcontentloaded" });
   try {
     await desktop.getByRole("heading", { name: "Home", exact: true }).waitFor();
   } catch (error) {
@@ -51,7 +51,7 @@ try {
 
   const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const mobile = await mobileContext.newPage();
-  await mobile.goto(`${origin}/company/${companyId}#my-role`, { waitUntil: "networkidle" });
+  await mobile.goto(`${origin}/company/${companyId}#my-role`, { waitUntil: "domcontentloaded" });
   await mobile.getByRole("heading", { name: "My Role", exact: true }).waitFor();
   const mobileOverflow = await mobile.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   if (mobileOverflow) throw new Error("Mobile workspace has horizontal overflow.");

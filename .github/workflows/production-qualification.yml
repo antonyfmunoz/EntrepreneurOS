@@ -64,7 +64,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y postgresql-client
           pg_dump "$DATABASE_URL" --format=custom --file=eos-ci-backup.dump
-          createdb --host=127.0.0.1 --username=eos_test eos_restore_test
+          PGPASSWORD=eos_test createdb --host=127.0.0.1 --username=eos_test eos_restore_test
           PGPASSWORD=eos_test pg_restore --host=127.0.0.1 --username=eos_test --dbname=eos_restore_test --exit-on-error eos-ci-backup.dump
           PGPASSWORD=eos_test psql --host=127.0.0.1 --username=eos_test --dbname=eos_restore_test --set=ON_ERROR_STOP=1 --command="SELECT count(*) AS restored_migrations FROM eos_schema_migrations;"
       - name: Production build
