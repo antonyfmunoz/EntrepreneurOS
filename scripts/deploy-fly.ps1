@@ -113,24 +113,25 @@ try {
     --build-arg "VITE_POSTHOG_API_KEY=$env:VITE_POSTHOG_API_KEY" --yes
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-  flyctl deploy $releaseContext --app $app --image $imageReference --strategy canary `
-    --env "EOS_RELEASE_SUBJECT=$env:EOS_RELEASE_SUBJECT" `
-    --env "EOS_PRODUCTION_ENVIRONMENT_SUBJECT=$env:EOS_PRODUCTION_ENVIRONMENT_SUBJECT" --yes
-  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-  $env:EOS_PRODUCTION_ORIGIN = $env:EOS_PUBLIC_ORIGIN
   try {
+    flyctl deploy $releaseContext --app $app --image $imageReference --strategy canary `
+      --env "EOS_RELEASE_SUBJECT=$env:EOS_RELEASE_SUBJECT" `
+      --env "EOS_PRODUCTION_ENVIRONMENT_SUBJECT=$env:EOS_PRODUCTION_ENVIRONMENT_SUBJECT" --yes
+    if ($LASTEXITCODE -ne 0) { throw "Fly promotion did not complete successfully." }
+
+    $env:EOS_PRODUCTION_ORIGIN = $env:EOS_PUBLIC_ORIGIN
     npm run test:e2e:production
     if ($LASTEXITCODE -ne 0) { throw "Public production smoke failed." }
     npm run test:e2e:production:authenticated
     if ($LASTEXITCODE -ne 0) { throw "Signed-in role and isolation smoke failed." }
   } catch {
-    Write-Error "Promotion smoke failed; restoring the exact prior image."
+    $promotionError = $_.Exception.Message
+    Write-Warning "Promotion or smoke qualification failed; restoring the exact prior image."
     flyctl deploy $releaseContext --app $app --image $rollbackImage --strategy rolling `
       --env "EOS_RELEASE_SUBJECT=$rollbackSubject" `
       --env "EOS_PRODUCTION_ENVIRONMENT_SUBJECT=$env:EOS_PRODUCTION_ENVIRONMENT_SUBJECT" --yes
     if ($LASTEXITCODE -ne 0) { throw "Promotion failed and automatic rollback also failed. Escalate immediately." }
-    throw "Promotion failed. The prior immutable image was restored; inspect evidence before retrying."
+    throw "Promotion failed: $promotionError The prior immutable image was restored; inspect evidence before retrying."
   }
 
   New-Item -ItemType Directory -Force -Path ".tmp" | Out-Null
