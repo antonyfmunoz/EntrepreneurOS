@@ -20,6 +20,7 @@ import { registerSupportRoutes } from "./routes/support";
 import { registerBillingRoutes, registerBillingWebhook } from "./routes/billing";
 import { registerUserRoutes } from "./routes/users";
 import { registerLegalRoutes, registerPublicLegalRoutes } from "./routes/legal";
+import { registerOperationalRoutes } from "./routes/operations";
 import { errorHandler } from "./middleware/error-handler";
 import { blockLegacyUnscopedApis, requireLocalApiAuth } from "./middleware/api-security";
 import { federationCommandRateLimit, localApiRateLimit } from "./middleware/rate-limit";
@@ -58,6 +59,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerBillingRoutes(app);
   registerUserRoutes(app);
   registerLegalRoutes(app);
+  registerOperationalRoutes(app);
 
   // __ORCHESTRATOR_GENERATED_ROUTES__ (do not remove this marker)
   {

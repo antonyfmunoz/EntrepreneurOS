@@ -11,6 +11,7 @@
     "db:push": "drizzle-kit push",
     "db:migrate": "tsx scripts/run-migration.ts",
     "legal:publish": "tsx scripts/publish-legal-document.ts",
+    "readiness": "tsx scripts/production-readiness.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e:fixture": "tsx scripts/e2e-fixture-server.ts",

@@ -5,21 +5,9 @@ import { z } from "zod";
 import { createSupportTicketSchema, supportTickets } from "@shared/schema";
 import { db } from "../db";
 import { writeLog } from "../observability/logger";
+import { requirePlatformAdmin } from "../security/platform-admin";
 
 const statusSchema = z.enum(["open", "in_progress", "waiting_on_customer", "resolved", "closed"]);
-
-function platformAdminIds(): Set<string> {
-  return new Set((process.env.EOS_PLATFORM_ADMIN_USER_IDS || "").split(",").map((id) => id.trim()).filter(Boolean));
-}
-
-function requirePlatformAdmin(userId: string): void {
-  if (!platformAdminIds().has(userId)) {
-    const error = new Error("Platform support access is not configured for this principal.") as Error & { status?: number; code?: string };
-    error.status = 403;
-    error.code = "platform_admin_required";
-    throw error;
-  }
-}
 
 export function registerSupportRoutes(app: Express): void {
   app.get("/api/support/tickets", async (req, res, next) => {

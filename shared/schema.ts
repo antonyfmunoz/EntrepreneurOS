@@ -277,6 +277,48 @@ export const aiUsageLedger = pgTable("ai_usage_ledger", {
   completedAt: timestamp("completed_at", { withTimezone: true }),
 });
 
+export const operationalControls = pgTable("operational_controls", {
+  controlKey: text("control_key").primaryKey(),
+  status: text("status").notNull(),
+  evidenceUri: text("evidence_uri").notNull(),
+  evidenceHash: text("evidence_hash").notNull(),
+  notes: text("notes"),
+  ownerUserId: text("owner_user_id").notNull().references(() => users.id),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const vendorRegistry = pgTable("vendor_registry", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  serviceCategory: text("service_category").notNull(),
+  riskTier: text("risk_tier").notNull(),
+  status: text("status").notNull(),
+  dataClasses: jsonb("data_classes").notNull().default([]),
+  dpaStatus: text("dpa_status").notNull(),
+  subprocessorStatus: text("subprocessor_status").notNull(),
+  ownerUserId: text("owner_user_id").notNull().references(() => users.id),
+  reviewEvidenceUri: text("review_evidence_uri"),
+  exitPlan: text("exit_plan").notNull(),
+  lastReviewedAt: timestamp("last_reviewed_at", { withTimezone: true }),
+  nextReviewAt: timestamp("next_review_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const serviceOwnership = pgTable("service_ownership", {
+  serviceKey: text("service_key").primaryKey(),
+  displayName: text("display_name").notNull(),
+  ownerUserId: text("owner_user_id").notNull().references(() => users.id),
+  onCallReference: text("on_call_reference").notNull(),
+  availabilityTarget: text("availability_target").notNull(),
+  latencyTarget: text("latency_target").notNull(),
+  errorBudgetPolicy: text("error_budget_policy").notNull(),
+  incidentRunbookUri: text("incident_runbook_uri").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type InsertAgent = z.infer<typeof insertAgentSchema>;
 export type Agent = typeof agents.$inferSelect;
 
