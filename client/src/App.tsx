@@ -16,6 +16,7 @@ import Signup from "@/pages/signup-page";
 import ForgotPassword from "@/pages/forgot-password-page";
 import ResetPassword from "@/pages/reset-password-page";
 import SupportPage from "@/pages/support-page";
+import LegalAcceptancePage from "@/pages/legal-acceptance-page";
 
 import { ClerkProviderWrapper, isClerkConfigured } from "@/lib/clerk";
 import PortfolioList from "@/pages/portfolio-list-page";
@@ -84,6 +85,7 @@ function Router() {
 
       <ProtectedRoute path="/company-setup" component={CompanySetupPage} />
       <ProtectedRoute path="/support" component={SupportPage} />
+      <ProtectedRoute path="/legal/accept" component={LegalAcceptancePage} />
 
       <ProtectedRoute path="/settings">
         {() => (

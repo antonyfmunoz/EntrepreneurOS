@@ -11,6 +11,7 @@ import { client, db } from "./db";
 import { applySecurityHeaders, sanitizeServerErrors } from "./middleware/api-security";
 import { shutdownPosthog } from "./posthog";
 import { requestTelemetry, writeLog } from "./observability/logger";
+import { startAccountDeletionWorker } from "./lifecycle/account-deletion";
 
 const app = express();
 app.use(applySecurityHeaders);
@@ -53,6 +54,7 @@ app.get("/api/ready", async (_req, res) => {
 void (async () => {
   const server = await registerRoutes(app);
   const stopOutbox = startFederationOutboxWorker();
+  const stopDeletionWorker = startAccountDeletionWorker();
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
@@ -78,6 +80,7 @@ void (async () => {
     shuttingDown = true;
     log(`received ${signal}; shutting down`);
     stopOutbox();
+    stopDeletionWorker();
     server.close(() => {
       void Promise.allSettled([client.end({ timeout: 5 }), shutdownPosthog()]).finally(() => process.exit(0));
     });

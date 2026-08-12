@@ -216,6 +216,43 @@ export const billingWebhookEvents = pgTable("billing_webhook_events", {
   processedAt: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const legalDocuments = pgTable("legal_documents", {
+  id: text("id").primaryKey(),
+  documentType: text("document_type").notNull(),
+  title: text("title").notNull(),
+  version: text("version").notNull(),
+  url: text("url").notNull(),
+  checksum: text("checksum").notNull(),
+  required: boolean("required").notNull().default(true),
+  status: text("status").notNull().default("published"),
+  effectiveAt: timestamp("effective_at", { withTimezone: true }).notNull(),
+  publishedAt: timestamp("published_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const legalAcceptances = pgTable("legal_acceptances", {
+  id: text("id").primaryKey(),
+  documentId: text("document_id").notNull().references(() => legalDocuments.id),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  documentChecksum: text("document_checksum").notNull(),
+  ipHash: text("ip_hash").notNull(),
+  userAgentHash: text("user_agent_hash").notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const accountDeletionRequests = pgTable("account_deletion_requests", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().unique(),
+  clerkUserId: text("clerk_user_id"),
+  status: text("status").notNull().default("scheduled"),
+  deleteOwnedOrganizations: boolean("delete_owned_organizations").notNull().default(false),
+  scheduledFor: timestamp("scheduled_for", { withTimezone: true }).notNull(),
+  requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  executedAt: timestamp("executed_at", { withTimezone: true }),
+  attempts: integer("attempts").notNull().default(0),
+  lastError: text("last_error"),
+});
+
 export type InsertAgent = z.infer<typeof insertAgentSchema>;
 export type Agent = typeof agents.$inferSelect;
 

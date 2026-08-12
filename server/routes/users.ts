@@ -1,7 +1,109 @@
-import { Express } from "express";
+import type { Express } from "express";
+import { and, desc, eq } from "drizzle-orm";
+import { z } from "zod";
+import {
+  billingSubscriptions,
+  companies,
+  eosAuditRecords,
+  eosCommunicationMessages,
+  eosMemberships,
+  oauthTokens,
+  portfolios,
+  supportTickets,
+  users,
+} from "@shared/schema";
+import { db } from "../db";
+import { storage } from "../storage";
+import { cancelAccountDeletion, deletionRequestForUser, scheduleAccountDeletion } from "../lifecycle/account-deletion";
+
+const profileUpdateSchema = z.object({
+  username: z.string().trim().min(3).max(64).regex(/^[a-z0-9_]+$/).optional(),
+  fullName: z.string().trim().min(1).max(120).optional(),
+}).strict();
+
+const notificationSchema = z.object({
+  emailNotifications: z.boolean(),
+  pushNotifications: z.boolean(),
+  taskAlerts: z.boolean(),
+  workflowAlerts: z.boolean(),
+});
+
+function publicUser(user: typeof users.$inferSelect) {
+  const { password: _password, metadata: _metadata, ...safe } = user;
+  let preferences: unknown = {};
+  try { preferences = safe.preferences ? JSON.parse(safe.preferences) : {}; } catch {}
+  return { ...safe, avatarUrl: safe.avatar, preferences };
+}
 
 export function registerUserRoutes(app: Express): void {
-  // User route is handled by auth.ts (setupAuth) — /api/user endpoint
-  // This file exists as a placeholder if user-specific routes
-  // beyond auth need to be added in the future.
+  app.get("/api/users/me", (req, res) => res.json(publicUser(req.user)));
+
+  app.put("/api/users/me", async (req, res, next) => {
+    try {
+      const update = profileUpdateSchema.parse(req.body);
+      const user = await storage.updateUser(req.user.id, update);
+      return res.json(publicUser(user));
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ code: "invalid_profile", message: "Check the profile fields and try again.", issues: error.issues });
+      return next(error);
+    }
+  });
+
+  app.put("/api/users/me/notifications", async (req, res, next) => {
+    try {
+      const notifications = notificationSchema.parse(req.body);
+      const existing = typeof req.user.preferences === "string" ? JSON.parse(req.user.preferences || "{}") : {};
+      const user = await storage.updateUser(req.user.id, { preferences: { ...existing, notifications } });
+      return res.json({ notifications: (publicUser(user).preferences as Record<string, unknown>).notifications });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ code: "invalid_notifications", message: "Check notification preferences." });
+      return next(error);
+    }
+  });
+
+  app.get("/api/users/me/export", async (req, res, next) => {
+    try {
+      const userId = req.user.id;
+      const [ownedPortfolios, ownedCompanies, memberships, sentMessages, audit, tickets, subscription, providers] = await Promise.all([
+        db.select().from(portfolios).where(eq(portfolios.ownerId, userId)),
+        db.select().from(companies).where(eq(companies.ownerUserId, userId)),
+        db.select().from(eosMemberships).where(eq(eosMemberships.userId, userId)),
+        db.select().from(eosCommunicationMessages).where(eq(eosCommunicationMessages.senderUserId, userId)).orderBy(desc(eosCommunicationMessages.createdAt)),
+        db.select().from(eosAuditRecords).where(eq(eosAuditRecords.actorUserId, userId)).orderBy(desc(eosAuditRecords.createdAt)),
+        db.select().from(supportTickets).where(eq(supportTickets.userId, userId)).orderBy(desc(supportTickets.createdAt)),
+        db.select({ planKey: billingSubscriptions.planKey, status: billingSubscriptions.status, entitlements: billingSubscriptions.entitlements, currentPeriodEnd: billingSubscriptions.currentPeriodEnd }).from(billingSubscriptions).where(eq(billingSubscriptions.userId, userId)).limit(1),
+        db.select({ provider: oauthTokens.provider, scope: oauthTokens.scope, expiresAt: oauthTokens.expiresAt, createdAt: oauthTokens.createdAt, updatedAt: oauthTokens.updatedAt }).from(oauthTokens).where(eq(oauthTokens.userId, userId)),
+      ]);
+      const exportedAt = new Date().toISOString();
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="entrepreneuros-account-export-${exportedAt.slice(0, 10)}.json"`);
+      return res.json({ format: "entrepreneuros.account-export.v1", exportedAt, account: publicUser(req.user), ownedPortfolios, ownedCompanies, memberships, sentMessages, auditRecords: audit, supportTickets: tickets, billing: subscription[0] || null, connectedProviders: providers });
+    } catch (error) { return next(error); }
+  });
+
+  app.get("/api/users/me/deletion", async (req, res, next) => {
+    try {
+      const request = await deletionRequestForUser(req.user.id);
+      return res.json(request ? { status: request.status, scheduledFor: request.scheduledFor, requestedAt: request.requestedAt, deleteOwnedOrganizations: request.deleteOwnedOrganizations, lastError: request.lastError } : null);
+    } catch (error) { return next(error); }
+  });
+
+  app.post("/api/users/me/deletion", async (req, res, next) => {
+    try {
+      const input = z.object({ confirmation: z.literal("DELETE MY ENTREPRENEUROS ACCOUNT"), deleteOwnedOrganizations: z.boolean() }).parse(req.body);
+      const request = await scheduleAccountDeletion({ userId: req.user.id, clerkUserId: req.user.clerkUserId, deleteOwnedOrganizations: input.deleteOwnedOrganizations });
+      return res.status(202).json({ status: request.status, scheduledFor: request.scheduledFor, deleteOwnedOrganizations: request.deleteOwnedOrganizations });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ code: "deletion_confirmation_required", message: "Type the exact confirmation phrase and choose how owned organizations are handled." });
+      return next(error);
+    }
+  });
+
+  app.delete("/api/users/me/deletion", async (req, res, next) => {
+    try {
+      const request = await cancelAccountDeletion(req.user.id);
+      if (!request) return res.status(409).json({ code: "deletion_not_cancellable", message: "No scheduled deletion can be cancelled." });
+      return res.json({ status: request.status, cancelledAt: request.cancelledAt });
+    } catch (error) { return next(error); }
+  });
 }

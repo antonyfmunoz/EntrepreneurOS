@@ -36,6 +36,9 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
 
   beforeAll(async () => {
     process.env.DATABASE_URL = databaseUrl;
+    await sql`DELETE FROM account_deletion_requests WHERE user_id IN (${ownerId}, ${otherId})`;
+    await sql`DELETE FROM legal_acceptances WHERE user_id IN (${ownerId}, ${otherId})`;
+    await sql`DELETE FROM legal_documents WHERE id LIKE 'legal_test_%'`;
     await sql`DELETE FROM support_tickets WHERE user_id IN (${ownerId}, ${otherId})`;
     await sql`DELETE FROM umh_installations WHERE id = ${internalInstallationId}`;
     await sql`DELETE FROM agents WHERE id = ${agentId}`;
@@ -66,6 +69,9 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
   }, 90_000);
 
   afterAll(async () => {
+    await sql`DELETE FROM account_deletion_requests WHERE user_id IN (${ownerId}, ${otherId})`;
+    await sql`DELETE FROM legal_acceptances WHERE user_id IN (${ownerId}, ${otherId})`;
+    await sql`DELETE FROM legal_documents WHERE id LIKE 'legal_test_%'`;
     await sql`DELETE FROM support_tickets WHERE user_id IN (${ownerId}, ${otherId})`;
     await sql`DELETE FROM umh_installations WHERE id = ${internalInstallationId}`;
     await sql`DELETE FROM agents WHERE id = ${agentId}`;
@@ -100,6 +106,38 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const ownTickets = await api.get("/api/support/tickets").expect(200);
     expect(ownTickets.body.some((ticket: { id: string }) => ticket.id === created.body.id)).toBe(true);
     await api.get("/api/platform/support/tickets").expect(403);
+  });
+
+  it("supports account settings and a secret-free personal data export", async () => {
+    const profile = await api.get("/api/users/me").expect(200);
+    expect(profile.body.password).toBeUndefined();
+    await api.put("/api/users/me").send({ fullName: "EOS Qualified Owner" }).expect(200);
+    await api.put("/api/users/me/notifications").send({ emailNotifications: true, pushNotifications: false, taskAlerts: true, workflowAlerts: true }).expect(200);
+    const exported = await api.get("/api/users/me/export").expect(200);
+    expect(exported.headers["content-disposition"]).toContain("entrepreneuros-account-export");
+    expect(exported.body.format).toBe("entrepreneuros.account-export.v1");
+    expect(exported.body.account.password).toBeUndefined();
+    expect(JSON.stringify(exported.body)).not.toContain("accessToken");
+    expect(JSON.stringify(exported.body)).not.toContain("refreshToken");
+  });
+
+  it("records immutable acceptance of exact published legal versions", async () => {
+    await sql`INSERT INTO legal_documents (id, document_type, title, version, url, checksum, required, status, effective_at) VALUES ('legal_test_terms', 'terms', 'Test Terms', 'test-1', 'https://example.test/terms', ${"a".repeat(64)}, true, 'published', now())`;
+    const status = await api.get("/api/legal/status").expect(200);
+    expect(status.body.missing.some((document: { id: string }) => document.id === "legal_test_terms")).toBe(true);
+    await api.post("/api/legal/acceptances").send({ documentId: "legal_test_terms", accepted: true }).expect(201);
+    const accepted = await api.get("/api/legal/status").expect(200);
+    expect(accepted.body.missing.some((document: { id: string }) => document.id === "legal_test_terms")).toBe(false);
+  });
+
+  it("requires explicit account deletion confirmation and provides a cooling-off cancellation", async () => {
+    await api.post("/api/users/me/deletion").send({ confirmation: "delete me", deleteOwnedOrganizations: false }).expect(400);
+    const scheduled = await api.post("/api/users/me/deletion").send({ confirmation: "DELETE MY ENTREPRENEUROS ACCOUNT", deleteOwnedOrganizations: false }).expect(202);
+    expect(scheduled.body.status).toBe("scheduled");
+    expect(new Date(scheduled.body.scheduledFor).getTime()).toBeGreaterThan(Date.now());
+    await api.delete("/api/users/me/deletion").expect(200);
+    const status = await api.get("/api/users/me/deletion").expect(200);
+    expect(status.body.status).toBe("cancelled");
   });
 
   it("compiles and activates an organization, then completes an evidence-bearing approved mission", async () => {

@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { z } from "zod";
 import { billingConfigured, createCheckout, createPortal, processStripeWebhook, subscriptionForUser } from "../billing/stripe";
+import { legalStatusForUser } from "../legal/service";
 
 export function registerBillingWebhook(app: Express): void {
   app.post("/api/billing/webhook", async (req, res) => {
@@ -26,6 +27,8 @@ export function registerBillingRoutes(app: Express): void {
     try {
       const { planKey } = z.object({ planKey: z.string().min(1).max(80) }).parse(req.body);
       if (!billingConfigured()) return res.status(503).json({ code: "billing_not_configured", message: "Billing is not available in this environment." });
+      const legal = await legalStatusForUser(req.user.id);
+      if (legal.enforcement && (!legal.configurationReady || legal.missing.length)) return res.status(409).json({ code: "legal_acceptance_required", message: "Current required legal documents must be published and accepted before starting a paid plan." });
       return res.json({ url: await createCheckout({ id: req.user.id, email: req.user.email }, planKey) });
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ code: "invalid_plan", message: "A valid plan is required." });

@@ -17,6 +17,12 @@ async function ownsCompany(companyId: number, userId: string): Promise<boolean> 
 }
 
 export function registerCompanyRoutes(app: Express): void {
+  app.get("/api/companies", async (req, res, next) => {
+    try {
+      const rows = await db.select().from(companiesTable).where(eq(companiesTable.ownerUserId, req.user.id));
+      return res.json({ companies: rows });
+    } catch (error) { return next(error); }
+  });
   // GET /api/companies/:id — single company by ID
   app.get("/api/companies/:id", async (req, res) => {
     try {
@@ -264,6 +270,40 @@ export function registerCompanyRoutes(app: Express): void {
         message: "Failed to update company",
         error: error instanceof Error ? error.message : String(error),
       });
+    }
+  });
+
+  app.put("/api/companies/:id", async (req, res, next) => {
+    const updateSchema = z.object({
+      name: z.string().trim().min(1).max(160).optional(),
+      stage: z.string().trim().max(80).optional(),
+      goals: z.string().trim().max(10_000).optional(),
+    }).strict();
+    try {
+      const companyId = Number(req.params.id);
+      if (!Number.isInteger(companyId)) return res.status(400).json({ code: "invalid_company", message: "Invalid company id." });
+      const update = updateSchema.parse(req.body);
+      const [company] = await db.update(companiesTable).set(update).where(and(eq(companiesTable.id, companyId), eq(companiesTable.ownerUserId, req.user.id))).returning();
+      if (!company) return res.status(404).json({ code: "company_not_found", message: "Company not found." });
+      return res.json(company);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ code: "invalid_company_update", message: "Check the company fields.", issues: error.issues });
+      return next(error);
+    }
+  });
+
+  app.put("/api/companies/:id/autonomy", async (req, res, next) => {
+    try {
+      const companyId = Number(req.params.id);
+      const { autonomyLevel } = z.object({ autonomyLevel: z.enum(["observe", "recommend", "assist", "execute"]) }).parse(req.body);
+      const [existing] = await db.select().from(companiesTable).where(and(eq(companiesTable.id, companyId), eq(companiesTable.ownerUserId, req.user.id))).limit(1);
+      if (!existing) return res.status(404).json({ code: "company_not_found", message: "Company not found." });
+      const founderProfile = { ...(existing.founderProfile as Record<string, unknown> || {}), autonomyLevel };
+      const [updated] = await db.update(companiesTable).set({ founderProfile }).where(eq(companiesTable.id, companyId)).returning();
+      return res.json({ autonomyLevel, companyId: updated.id });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ code: "invalid_autonomy", message: "Unknown autonomy level." });
+      return next(error);
     }
   });
 }
