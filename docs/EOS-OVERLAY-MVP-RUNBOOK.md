@@ -71,6 +71,14 @@ For local development with the managed 1Password references, start the applicati
 op run --env-file=.env.op.tpl -- npm run dev
 ```
 
+Promote a qualified commit to the existing Fly application without copying secret values into source or the shell history:
+
+```powershell
+op run --env-file=.env.op.tpl -- powershell -NoProfile -File scripts/deploy-fly.ps1
+```
+
+The helper imports server-side Anthropic/PostHog values and injects only the required client build variables. It fails closed when any required reference is absent.
+
 Running the client without `VITE_CLERK_PUBLISHABLE_KEY` intentionally renders an **Authentication setup required** screen. It must never fall through to protected UI or fail as an unexplained white page.
 
 ## Database
