@@ -2,10 +2,10 @@ import { randomUUID } from "node:crypto";
 import type { Express } from "express";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { operationalControlEvidenceHistory, operationalControls, serviceOwnership, vendorRegistry } from "@shared/schema";
+import { operationalControlEvidenceHistory, operationalControls, serviceOwnership, users, vendorRegistry } from "@shared/schema";
 import { db } from "../db";
 import { productionReadiness } from "../operations/readiness";
-import { requirePlatformAdmin } from "../security/platform-admin";
+import { platformAdminIds, requirePlatformAdmin } from "../security/platform-admin";
 import { dispatchOperationalAlert, operationalAlertsConfigured } from "../observability/alerts";
 import { CONTROL_DEFINITIONS, controlEvidenceIsCurrent } from "../operations/control-definitions";
 import { serviceOwnershipIssues } from "../operations/ownership";
@@ -70,9 +70,11 @@ export function registerOperationalRoutes(app: Express): void {
     try {
       requirePlatformAdmin(req.user.id);
       const serviceKey = z.string().regex(/^[a-z0-9_-]{3,80}$/).parse(req.params.serviceKey);
-      const input = z.object({ displayName: z.string().min(2).max(120), backupOwnerReference: z.string().min(3).max(300), onCallReference: httpsUrl, escalationReference: httpsUrl, availabilityTarget: z.string().min(2).max(120), latencyTarget: z.string().min(2).max(120), errorBudgetPolicy: z.string().min(10).max(3000), incidentRunbookUri: httpsUrl, accessReviewEvidenceUri: httpsUrl, accessReviewedAt: z.coerce.date(), nextAccessReviewAt: z.coerce.date() }).parse(req.body);
-      const ownershipIssues = serviceOwnershipIssues({ ownerUserId: req.user.id, ...input });
+      const input = z.object({ displayName: z.string().min(2).max(120), backupOwnerUserId: z.string().min(3).max(300), onCallReference: httpsUrl, escalationReference: httpsUrl, availabilityTarget: z.string().min(2).max(120), latencyTarget: z.string().min(2).max(120), errorBudgetPolicy: z.string().min(10).max(3000), incidentRunbookUri: httpsUrl, accessReviewEvidenceUri: httpsUrl, accessReviewedAt: z.coerce.date(), nextAccessReviewAt: z.coerce.date() }).parse(req.body);
+      const ownershipIssues = serviceOwnershipIssues({ ownerUserId: req.user.id, ...input }, new Date(), platformAdminIds());
       if (ownershipIssues.length) return res.status(400).json({ code: "invalid_service_ownership_evidence", message: "Service ownership requires a distinct backup owner, current access review, bounded next review, and HTTPS on-call, escalation, runbook, and evidence references.", issues: ownershipIssues });
+      const backupOwner = await db.query.users.findFirst({ where: eq(users.id, input.backupOwnerUserId) });
+      if (!backupOwner) return res.status(400).json({ code: "backup_service_owner_not_found", message: "The backup service owner must be an existing EntrepreneurOS platform administrator." });
       const [ownership] = await db.insert(serviceOwnership).values({ serviceKey, ...input, ownerUserId: req.user.id }).onConflictDoUpdate({ target: serviceOwnership.serviceKey, set: { ...input, ownerUserId: req.user.id, updatedAt: new Date() } }).returning();
       return res.json(ownership);
     } catch (error) { if (error instanceof z.ZodError) return res.status(400).json({ code: "invalid_service_ownership", message: "Service ownership data is incomplete or invalid.", issues: error.issues }); const status = (error as any).status; if (status) return res.status(status).json({ code: (error as any).code, message: (error as Error).message }); return next(error); }

@@ -111,7 +111,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const serviceKey = `test-ownership-${randomUUID()}`;
     const marker = `integration-control-${randomUUID()}`;
     const [original] = await sql<any[]>`SELECT * FROM operational_controls WHERE control_key = ${controlKey}`;
-    process.env.EOS_PLATFORM_ADMIN_USER_IDS = ownerId;
+    process.env.EOS_PLATFORM_ADMIN_USER_IDS = `${ownerId},${otherId}`;
     process.env.EOS_RELEASE_SUBJECT = `git:${"a".repeat(40)}`;
     try {
       const reviewedAt = new Date();
@@ -130,11 +130,13 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         }).expect(200);
       }
       const history = await api.get(`/api/platform/controls/${controlKey}/evidence`).expect(200);
-      expect(history.body.filter((item: { notes?: string }) => item.notes === marker)).toHaveLength(2);
+      const recorded = history.body.filter((item: { notes?: string }) => item.notes === marker);
+      expect(recorded).toHaveLength(2);
+      await expect(sql`UPDATE operational_control_evidence_history SET notes = 'tampered' WHERE id = ${recorded[0].id}`).rejects.toThrow(/immutable/);
 
       const ownership = {
         displayName: "EntrepreneurOS integration fixture",
-        backupOwnerReference: otherId,
+        backupOwnerUserId: otherId,
         onCallReference: "https://operations.example.test/on-call",
         escalationReference: "https://operations.example.test/escalation",
         availabilityTarget: "99.9% monthly",
@@ -145,12 +147,15 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         accessReviewedAt: reviewedAt,
         nextAccessReviewAt: new Date(reviewedAt.getTime() + 30 * 86_400_000),
       };
-      await api.put(`/api/platform/services/${serviceKey}/ownership`).send({ ...ownership, backupOwnerReference: ownerId }).expect(400);
+      await api.put(`/api/platform/services/${serviceKey}/ownership`).send({ ...ownership, backupOwnerUserId: ownerId }).expect(400);
       const created = await api.put(`/api/platform/services/${serviceKey}/ownership`).send(ownership).expect(200);
-      expect(created.body.backupOwnerReference).toBe(otherId);
+      expect(created.body.backupOwnerUserId).toBe(otherId);
     } finally {
       await sql`DELETE FROM service_ownership WHERE service_key = ${serviceKey}`;
-      await sql`DELETE FROM operational_control_evidence_history WHERE control_key = ${controlKey} AND notes = ${marker}`;
+      await sql.begin(async (tx) => {
+        await tx`SELECT set_config('eos.allow_evidence_history_maintenance', 'true', true)`;
+        await tx`DELETE FROM operational_control_evidence_history WHERE control_key = ${controlKey} AND notes = ${marker}`;
+      });
       if (original) {
         await sql`INSERT INTO operational_controls (control_key, status, evidence_uri, evidence_hash, evidence_scope, subject, notes, owner_user_id, reviewed_at, expires_at, updated_at)
           VALUES (${original.control_key}, ${original.status}, ${original.evidence_uri}, ${original.evidence_hash}, ${original.evidence_scope}, ${original.subject}, ${original.notes}, ${original.owner_user_id}, ${original.reviewed_at}, ${original.expires_at}, ${original.updated_at})

@@ -5,7 +5,7 @@ describe("service ownership evidence", () => {
   const now = new Date("2026-08-13T12:00:00Z");
   const valid = {
     ownerUserId: "primary-owner",
-    backupOwnerReference: "backup-owner",
+    backupOwnerUserId: "backup-owner",
     onCallReference: "https://operations.example.com/on-call",
     escalationReference: "https://operations.example.com/escalation",
     incidentRunbookUri: "https://operations.example.com/runbooks/entrepreneuros",
@@ -15,12 +15,16 @@ describe("service ownership evidence", () => {
   };
 
   it("requires a distinct backup owner and current bounded access review", () => {
-    expect(serviceOwnershipIssues(valid, now)).toEqual([]);
-    expect(serviceOwnershipIssues({ ...valid, backupOwnerReference: "primary-owner", accessReviewedAt: new Date("2026-01-01T00:00:00Z"), nextAccessReviewAt: new Date("2027-01-01T00:00:00Z") }, now)).toEqual([
+    expect(serviceOwnershipIssues(valid, now, new Set(["primary-owner", "backup-owner"]))).toEqual([]);
+    expect(serviceOwnershipIssues({ ...valid, backupOwnerUserId: "primary-owner", accessReviewedAt: new Date("2026-01-01T00:00:00Z"), nextAccessReviewAt: new Date("2027-01-01T00:00:00Z") }, now, new Set(["primary-owner", "backup-owner"]))).toEqual([
       "distinct_backup_service_owner",
       "current_access_review",
       "bounded_next_access_review",
     ]);
+  });
+
+  it("requires the backup owner to hold configured platform authority", () => {
+    expect(serviceOwnershipIssues(valid, now, new Set(["primary-owner"]))).toContain("configured_backup_platform_administrator");
   });
 
   it("requires HTTPS operational routes and evidence", () => {

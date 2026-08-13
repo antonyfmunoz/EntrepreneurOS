@@ -328,7 +328,7 @@ export const serviceOwnership = pgTable("service_ownership", {
   serviceKey: text("service_key").primaryKey(),
   displayName: text("display_name").notNull(),
   ownerUserId: text("owner_user_id").notNull().references(() => users.id),
-  backupOwnerReference: text("backup_owner_reference"),
+  backupOwnerUserId: text("backup_owner_user_id").references(() => users.id),
   onCallReference: text("on_call_reference").notNull(),
   escalationReference: text("escalation_reference"),
   availabilityTarget: text("availability_target").notNull(),

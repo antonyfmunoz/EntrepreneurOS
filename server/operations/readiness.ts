@@ -4,6 +4,7 @@ import { db } from "../db";
 import { billingConfigured } from "../billing/stripe";
 import { CONTROL_LAYERS, controlEvidenceIsCurrent } from "./control-definitions";
 import { serviceOwnershipIssues } from "./ownership";
+import { platformAdminIds } from "../security/platform-admin";
 
 export type ReadinessResult = { layer: number; name: string; status: "pass" | "fail"; evidence: string[]; missing: string[] };
 
@@ -37,7 +38,7 @@ export async function productionReadiness() {
     layer.missing.push(...missingVendors.map((name) => `approved_vendor:${name}`));
   }
   const [ownership] = await db.select().from(serviceOwnership).where(eq(serviceOwnership.serviceKey, "entrepreneuros")).limit(1);
-  const ownershipMissing = serviceOwnershipIssues(ownership, now);
+  const ownershipMissing = serviceOwnershipIssues(ownership, now, platformAdminIds());
   if (ownershipMissing.length) {
     const layer = layers.find((item) => item.layer === 20)!;
     layer.status = "fail";
@@ -51,5 +52,5 @@ export async function productionReadiness() {
     ...(!expectedReleaseSubject ? ["release_subject"] : []),
     ...(!expectedEnvironmentSubject ? ["production_environment_subject"] : []),
   ];
-  return { standard: "eos.production-readiness.v1", generatedAt: now.toISOString(), ready: layers.every((layer) => layer.status === "pass") && !configurationMissing.length, layers, configurationMissing, requiredVendors, missingVendors };
+  return { standard: "eos.production-readiness.v1", generatedAt: now.toISOString(), releaseSubject: expectedReleaseSubject || null, environmentSubject: expectedEnvironmentSubject || null, ready: layers.every((layer) => layer.status === "pass") && !configurationMissing.length, layers, configurationMissing, requiredVendors, missingVendors };
 }

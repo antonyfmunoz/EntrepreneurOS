@@ -12,7 +12,7 @@ import { applySecurityHeaders, sanitizeServerErrors } from "./middleware/api-sec
 import { shutdownPosthog } from "./posthog";
 import { requestTelemetry, writeLog } from "./observability/logger";
 import { startAccountDeletionWorker } from "./lifecycle/account-deletion";
-import { productionRuntimeConfigurationIssues } from "./security/release-configuration";
+import { productionRuntimeConfigurationIssues, runtimeReleaseSubject } from "./security/release-configuration";
 
 const app = express();
 app.use(applySecurityHeaders);
@@ -35,7 +35,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.get("/api/health", (_req, res) => {
-  res.status(200).json({ status: "ok", app: "eos" });
+  res.status(200).json({ status: "ok", app: "eos", releaseSubject: runtimeReleaseSubject() });
 });
 
 app.get("/api/ready", async (_req, res) => {
@@ -45,7 +45,7 @@ app.get("/api/ready", async (_req, res) => {
   try {
     await db.execute(sql`select 1`);
     if (configurationIssues.length) return res.status(503).json({ status: "not_ready", reason: "configuration" });
-    return res.status(200).json({ status: "ready", app: "eos" });
+    return res.status(200).json({ status: "ready", app: "eos", releaseSubject: runtimeReleaseSubject() });
   } catch {
     return res.status(503).json({ status: "not_ready", reason: "database" });
   }

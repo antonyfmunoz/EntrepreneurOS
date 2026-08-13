@@ -1,8 +1,10 @@
 import { chromium } from "playwright";
 
 const origin = process.env.EOS_PRODUCTION_ORIGIN || "https://entrepreneuros.net";
+const expectedReleaseSubject = process.env.EOS_EXPECTED_RELEASE_SUBJECT;
 const parsedOrigin = new URL(origin);
 if (parsedOrigin.protocol !== "https:" || ["localhost", "127.0.0.1", "::1"].includes(parsedOrigin.hostname)) throw new Error("Production smoke requires a public HTTPS origin.");
+if (!expectedReleaseSubject || !/^(git:[a-f0-9]{40}|image:sha256:[a-f0-9]{64})$/.test(expectedReleaseSubject)) throw new Error("Production smoke requires the exact immutable EOS_EXPECTED_RELEASE_SUBJECT.");
 const browser = await chromium.launch({ headless: true });
 
 try {
@@ -10,6 +12,9 @@ try {
   const readiness = await fetch(`${origin}/api/ready`);
   if (!health.ok) throw new Error(`Production health returned ${health.status}.`);
   if (!readiness.ok) throw new Error(`Production readiness returned ${readiness.status}.`);
+  const healthBody = await health.json() as { releaseSubject?: string };
+  const readinessBody = await readiness.json() as { releaseSubject?: string };
+  if (healthBody.releaseSubject !== expectedReleaseSubject || readinessBody.releaseSubject !== expectedReleaseSubject) throw new Error("Production health or readiness was served by a different release subject.");
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -23,7 +28,7 @@ try {
   if (!response.headers()["strict-transport-security"]) throw new Error("Production document is missing HSTS.");
   if (!response.headers()["content-security-policy"]) throw new Error("Production document is missing Content Security Policy.");
   if (errors.length) throw new Error(`Production browser errors: ${errors.join(" | ")}`);
-  console.log(JSON.stringify({ productionPublicSmoke: true, origin, health: true, readiness: true, productionIdentity: true, hsts: true, contentSecurityPolicy: true, viewport: "390x844", renderedTextLength: body.length }));
+  console.log(JSON.stringify({ productionPublicSmoke: true, origin, releaseSubject: expectedReleaseSubject, health: true, readiness: true, productionIdentity: true, hsts: true, contentSecurityPolicy: true, viewport: "390x844", renderedTextLength: body.length }));
 } finally {
   await browser.close();
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { productionRuntimeConfigurationIssues } from "../../server/security/release-configuration";
+import { productionRuntimeConfigurationIssues, runtimeReleaseSubject } from "../../server/security/release-configuration";
 
 const valid = {
   DATABASE_URL: "postgresql://app:secret@db.example.com/eos?sslmode=require",
@@ -24,6 +24,7 @@ const valid = {
 describe("production runtime configuration", () => {
   it("accepts a complete production identity and managed runtime", () => {
     expect(productionRuntimeConfigurationIssues(valid)).toEqual([]);
+    expect(runtimeReleaseSubject(valid)).toBe(valid.EOS_RELEASE_SUBJECT);
   });
 
   it("rejects development identity, local storage, weak secrets, and insecure origins", () => {
@@ -62,5 +63,6 @@ describe("production runtime configuration", () => {
       "immutableReleaseSubject",
       "productionEnvironmentSubject",
     ]);
+    expect(runtimeReleaseSubject({ EOS_RELEASE_SUBJECT: "latest" })).toBeNull();
   });
 });
