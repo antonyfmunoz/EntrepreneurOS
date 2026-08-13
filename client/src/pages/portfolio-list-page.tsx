@@ -46,7 +46,7 @@ export default function PortfolioListPage() {
   const portfolios = portfoliosQuery.data ?? [];
 
   return (
-    <UniversalLayout title="Portfolios" floatingPanel={false}>
+    <UniversalLayout title="Portfolios" leftRailItems={[]} floatingPanel={false}>
       <section className="space-y-8 pb-12">
         <div>
           <p className="eos-label flex items-center gap-2"><LayoutGrid className="h-4 w-4 text-primary" />Founder workspace</p>

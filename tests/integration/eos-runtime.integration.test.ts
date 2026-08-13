@@ -98,6 +98,12 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(legacy.headers["ratelimit-remaining"]).toBeDefined();
   });
 
+  it("resolves exactly one founder seat under concurrent workspace loads", async () => {
+    await Promise.all(Array.from({ length: 12 }, () => api.get(`/api/eos/companies/${companyId}/organization-runtime`).expect(200)));
+    const [result] = await sql<Array<{ count: number }>>`SELECT count(*)::int AS count FROM eos_seats WHERE company_id = ${companyId} AND kind = 'founder' AND status = 'active'`;
+    expect(result.count).toBe(1);
+  });
+
   it("persists authenticated support requests without exposing the platform queue", async () => {
     const created = await api.post("/api/support/tickets").send({
       category: "technical",

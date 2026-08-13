@@ -6,10 +6,10 @@
  * here. Historical hand-authored migrations in /scripts/migrations remain in
  * the plan. Each applied file is recorded exactly once by checksum.
  */
-import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import postgres from "postgres";
+import { compatibleMigrationChecksums, migrationChecksum } from "./migration-checksum";
 
 function loadEnvFile(path: string): void {
   if (!existsSync(path)) return;
@@ -74,10 +74,10 @@ async function main() {
     locked = true;
     for (const migration of migrations) {
       const contents = readFileSync(migration.fullPath, "utf8");
-      const checksum = createHash("sha256").update(contents).digest("hex");
+      const checksum = migrationChecksum(contents);
       const existing = await sql<{ checksum: string }[]>`SELECT checksum FROM eos_schema_migrations WHERE id = ${migration.id}`;
       if (existing.length) {
-        if (existing[0].checksum !== checksum) throw new Error(`Previously applied migration changed: ${migration.id}`);
+        if (!compatibleMigrationChecksums(contents).has(existing[0].checksum)) throw new Error(`Previously applied migration changed: ${migration.id}`);
         console.log(`- Skipping ${migration.id} (already applied)`);
         continue;
       }

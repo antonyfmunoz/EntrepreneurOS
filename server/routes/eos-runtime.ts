@@ -60,15 +60,16 @@ async function companyAccess(req: Request) {
   const company = await db.query.companies.findFirst({ where: eq(companies.id, companyId) });
   if (!company) throw new EosRouteError(404, "company_not_found", "Company not found in the active principal scope.");
   if (company.ownerUserId === req.user.id) {
-    let seat = await db.query.eosSeats.findFirst({ where: and(eq(eosSeats.companyId, company.id), eq(eosSeats.kind, "founder")) });
+    let seat = await db.query.eosSeats.findFirst({ where: and(eq(eosSeats.companyId, company.id), eq(eosSeats.kind, "founder"), eq(eosSeats.status, "active")), orderBy: [eosSeats.createdAt] });
     if (!seat) {
-      const [created] = await db.insert(eosSeats).values({
+      await db.insert(eosSeats).values({
         id: randomUUID(), companyId: company.id, title: "Founder / Portfolio Principal", kind: "founder",
         occupantUserId: req.user.id, agentName: company.assistantName || "Assistant", agentMode: "assistant",
         mandate: "Own portfolio direction and final local authority.", authority: { level: "owner" }, toolEntitlements: [],
-      }).returning();
-      seat = created;
+      }).onConflictDoNothing();
+      seat = await db.query.eosSeats.findFirst({ where: and(eq(eosSeats.companyId, company.id), eq(eosSeats.kind, "founder"), eq(eosSeats.status, "active")), orderBy: [eosSeats.createdAt] });
     }
+    if (!seat) throw new EosRouteError(500, "founder_seat_unavailable", "The founder operating seat could not be resolved.");
     return { company, seat, role: "founder" as EosSeatKind, isOwner: true, membership: null };
   }
   const membership = await db.query.eosMemberships.findFirst({
