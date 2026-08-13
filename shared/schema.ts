@@ -911,7 +911,11 @@ export const eosMemberships = pgTable("eos_memberships", {
   classificationCeiling: text("classification_ceiling").notNull().default("internal"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("eos_memberships_one_active_human_per_seat_idx")
+    .on(table.seatId)
+    .where(sql`${table.seatId} IS NOT NULL AND ${table.status} = 'active'`),
+]);
 
 export const eosSeats = pgTable("eos_seats", {
   id: text("id").primaryKey(),
@@ -932,6 +936,40 @@ export const eosSeats = pgTable("eos_seats", {
   uniqueIndex("eos_seats_one_active_founder_per_company_idx")
     .on(table.companyId)
     .where(sql`${table.kind} = 'founder' AND ${table.status} = 'active'`),
+]);
+
+// Invitations are explicit, expiring grants to one organizational seat. The
+// raw acceptance token is never stored, and terminal records shed the invited
+// email while retaining a non-reversible hash for abuse and audit controls.
+export const eosMembershipInvitations = pgTable("eos_membership_invitations", {
+  id: text("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  seatId: text("seat_id").notNull().references(() => eosSeats.id, { onDelete: "cascade" }),
+  invitedEmail: text("invited_email"),
+  emailHash: text("email_hash").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  invitedByUserId: text("invited_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  providerInvitationId: text("provider_invitation_id"),
+  status: text("status").notNull().default("pending_delivery"),
+  purpose: text("purpose").notNull().default("operate"),
+  classificationCeiling: text("classification_ceiling").notNull().default("internal"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  acceptedByUserId: text("accepted_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("eos_membership_invitations_token_hash_idx").on(table.tokenHash),
+  uniqueIndex("eos_membership_invitations_one_pending_per_seat_idx")
+    .on(table.seatId)
+    .where(sql`${table.status} IN ('pending_delivery', 'pending')`),
+  uniqueIndex("eos_membership_invitations_one_pending_email_per_company_idx")
+    .on(table.companyId, table.emailHash)
+    .where(sql`${table.status} IN ('pending_delivery', 'pending')`),
+  index("eos_membership_invitations_expiry_idx").on(table.status, table.expiresAt),
+  check("eos_membership_invitations_status_check", sql`${table.status} IN ('pending_delivery', 'pending', 'accepted', 'revoked', 'expired', 'delivery_failed')`),
+  check("eos_membership_invitations_classification_check", sql`${table.classificationCeiling} IN ('public', 'internal', 'confidential', 'restricted')`),
 ]);
 
 export const eosConversations = pgTable("eos_conversations", {
