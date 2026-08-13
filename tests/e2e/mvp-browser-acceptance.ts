@@ -54,6 +54,10 @@ try {
   const approvalCard = desktop.getByText(`Authorize work packet: ${missionTitle}`, { exact: true }).locator("xpath=ancestor::*[.//button[normalize-space()='Approve']][1]");
   await approvalCard.waitFor();
   await approvalCard.getByRole("button", { name: "Approve", exact: true }).click();
+  const approvalDialog = desktop.getByRole("alertdialog");
+  await approvalDialog.getByRole("heading", { name: "Confirm approval", exact: true }).waitFor();
+  await approvalDialog.getByLabel("Decision note (optional)").fill("Approved in browser acceptance after reviewing the objective and authority boundary.");
+  await approvalDialog.getByRole("button", { name: "Confirm approval", exact: true }).click();
   await desktop.getByText("Work approved", { exact: true }).waitFor();
   await desktop.getByRole("link", { name: "Operations", exact: true }).click();
   const missionCard = desktop.getByText(missionTitle, { exact: true }).locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]");
@@ -65,6 +69,18 @@ try {
   await missionCard.getByText("All required evidence is recorded. This Work Packet can complete after review.", { exact: true }).waitFor();
   await missionCard.getByRole("button", { name: "Complete", exact: true }).click();
   await missionCard.getByText("completed", { exact: true }).waitFor();
+  const rejectedMissionTitle = `Rejected MVP ${Date.now()}`;
+  await desktop.getByPlaceholder("Mission title").fill(rejectedMissionTitle);
+  await desktop.getByPlaceholder("Objective and intended outcome").fill("Verify that rejection requires an auditable reason and an explicit confirmation.");
+  await desktop.getByRole("button", { name: "Create Work Packet", exact: true }).click();
+  const rejectionCard = desktop.getByText(`Authorize work packet: ${rejectedMissionTitle}`, { exact: true }).locator("xpath=ancestor::*[.//button[normalize-space()='Reject']][1]");
+  await rejectionCard.getByRole("button", { name: "Reject", exact: true }).click();
+  const rejectionDialog = desktop.getByRole("alertdialog");
+  const confirmRejection = rejectionDialog.getByRole("button", { name: "Confirm rejection", exact: true });
+  if (await confirmRejection.isEnabled()) throw new Error("Rejection confirmation was enabled without an auditable reason.");
+  await rejectionDialog.getByLabel("Rejection reason").fill("The objective needs a measurable customer outcome before work begins.");
+  await confirmRejection.click();
+  await desktop.getByText("Work rejected", { exact: true }).waitFor();
   await desktop.getByRole("link", { name: "Organization", exact: true }).click();
   await desktop.getByRole("heading", { name: "Organization", exact: true }).waitFor();
   const seatTitle = `Browser QA ${Date.now()}`;
@@ -163,7 +179,7 @@ try {
   await mobile.getByRole("button", { name: /Open .* conversation/ }).click();
   await mobile.locator("#mobile-communication-drawer aside").waitFor();
   if (browserErrors.length) throw new Error(`Browser errors: ${browserErrors.join(" | ")}`);
-  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 7, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, reachableAccountControls: ["settings", "support"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
+  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 7, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, reachableAccountControls: ["settings", "support"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
 } finally {
   await browser.close();
 }
