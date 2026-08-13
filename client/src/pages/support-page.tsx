@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle2, LifeBuoy, Loader2, ShieldCheck } from "lucide-react";
+import { CheckCircle2, LifeBuoy, Loader2, MessageSquareReply, ShieldCheck } from "lucide-react";
+import { SupportOperationsQueue } from "@/components/support-operations-queue";
 import { UniversalLayout } from "@/components/layout/universal-layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ type SupportTicket = {
   status: string;
   createdAt: string;
 };
+type SupportMessage = { id: string; ticketId: string; authorKind: "customer" | "support"; body: string; createdAt: string };
 
 const statusLabels: Record<string, string> = {
   open: "Open",
@@ -32,7 +34,25 @@ export default function SupportPage() {
   const { toast } = useToast();
   const [category, setCategory] = useState("technical");
   const [submittedId, setSubmittedId] = useState<string | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState(() => new URLSearchParams(window.location.search).get("ticket") || "");
+  const [reply, setReply] = useState("");
   const tickets = useQuery<SupportTicket[]>({ queryKey: ["/api/support/tickets"] });
+  const capabilities = useQuery<{ operationalReadiness: boolean }>({ queryKey: ["/api/platform/capabilities"] });
+  const selectedTicket = tickets.data?.find((ticket) => ticket.id === selectedTicketId) || null;
+  const messages = useQuery<SupportMessage[]>({
+    queryKey: ["/api/support/tickets", selectedTicketId, "messages"],
+    queryFn: async () => (await apiRequest<Response>("GET", `/api/support/tickets/${selectedTicketId}/messages`)).json(),
+    enabled: Boolean(selectedTicketId),
+  });
+  const selectTicket = (ticketId: string) => {
+    setSelectedTicketId(ticketId);
+    const url = new URL(window.location.href);
+    url.searchParams.set("ticket", ticketId);
+    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+  };
+  useEffect(() => {
+    if ((!selectedTicketId || !tickets.data?.some((ticket) => ticket.id === selectedTicketId)) && tickets.data?.[0]) selectTicket(tickets.data[0].id);
+  }, [selectedTicketId, tickets.data]);
   const createTicket = useMutation({
     mutationFn: async (payload: { category: string; subject: string; message: string }) => {
       const response = await apiRequest<Response>("POST", "/api/support/tickets", payload);
@@ -40,10 +60,24 @@ export default function SupportPage() {
     },
     onSuccess: async (ticket) => {
       setSubmittedId(ticket.id);
+      selectTicket(ticket.id);
       await queryClient.invalidateQueries({ queryKey: ["/api/support/tickets"] });
       toast({ title: "Support request received", description: `Reference ${ticket.id}` });
     },
     onError: (error) => toast({ title: "Support request not submitted", description: error.message, variant: "destructive" }),
+  });
+  const replyToTicket = useMutation({
+    mutationFn: async () => (await apiRequest<Response>("POST", `/api/support/tickets/${selectedTicketId}/messages`, { body: reply })).json(),
+    onSuccess: async () => {
+      setReply("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/support/tickets"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/support/tickets", selectedTicketId, "messages"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/platform/support/tickets"] }),
+      ]);
+      toast({ title: "Reply sent", description: "Your update is now part of the support record." });
+    },
+    onError: (error) => toast({ title: "Reply not sent", description: error.message, variant: "destructive" }),
   });
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -119,13 +153,14 @@ export default function SupportPage() {
                 {tickets.isError && <p className="text-sm text-destructive">Requests could not be loaded.</p>}
                 {tickets.data?.length === 0 && <p className="text-sm text-muted-foreground">No support requests yet.</p>}
                 {tickets.data?.slice(0, 8).map((ticket) => (
-                  <div key={ticket.id} className="rounded-xl border p-3">
+                  <button type="button" key={ticket.id} onClick={() => selectTicket(ticket.id)} aria-pressed={selectedTicketId === ticket.id} aria-label={`Open support request ${ticket.subject}`} className={`w-full rounded-xl border p-3 text-left transition-colors ${selectedTicketId === ticket.id ? "border-primary bg-primary/5" : "hover:bg-muted"}`}>
                     <div className="flex items-start justify-between gap-2"><p className="text-sm font-medium">{ticket.subject}</p><Badge variant="outline">{statusLabels[ticket.status] || ticket.status}</Badge></div>
                     <p className="mt-1 text-xs text-muted-foreground">{new Date(ticket.createdAt).toLocaleDateString()} · {ticket.id}</p>
-                  </div>
+                  </button>
                 ))}
               </CardContent>
             </Card>
+            {selectedTicket && <Card><CardHeader><CardTitle className="text-base">Support conversation</CardTitle><CardDescription>{selectedTicket.subject} · {statusLabels[selectedTicket.status] || selectedTicket.status}</CardDescription></CardHeader><CardContent><div className="max-h-[360px] space-y-3 overflow-y-auto" aria-label="Support conversation">{messages.isLoading ? <div className="h-24 animate-pulse rounded-xl bg-muted" /> : messages.isError ? <p className="text-sm text-destructive">This conversation could not be loaded.</p> : messages.data?.map((message) => <div key={message.id} className={`rounded-xl p-3 text-sm ${message.authorKind === "support" ? "ml-4 bg-primary/10" : "mr-4 bg-muted"}`}><p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">{message.authorKind === "support" ? "EOS Support" : "You"}</p><p className="mt-2 whitespace-pre-wrap break-words">{message.body}</p><p className="mt-2 text-xs text-muted-foreground">{new Date(message.createdAt).toLocaleString()}</p></div>)}</div>{selectedTicket.status === "closed" ? <p className="mt-4 rounded-xl bg-muted p-3 text-sm text-muted-foreground">This request is closed. Create a new request if you need more help.</p> : <div className="mt-4 space-y-3 border-t pt-4"><label htmlFor="customer-support-reply" className="text-sm font-medium">Add an update</label><Textarea id="customer-support-reply" value={reply} onChange={(event) => setReply(event.target.value)} maxLength={10_000} placeholder="Add new context without passwords, tokens, or recovery codes." /><Button className="w-full" onClick={() => replyToTicket.mutate()} disabled={!reply.trim() || replyToTicket.isPending}>{replyToTicket.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquareReply className="mr-2 h-4 w-4" />}Send update</Button></div>}</CardContent></Card>}
             <Card>
               <CardContent className="flex gap-3 pt-6">
                 <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
@@ -134,6 +169,7 @@ export default function SupportPage() {
             </Card>
           </div>
         </div>
+        {capabilities.data?.operationalReadiness && <div className="mx-auto max-w-5xl"><SupportOperationsQueue /></div>}
       </main>
     </UniversalLayout>
   );

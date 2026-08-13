@@ -48,7 +48,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
 
   beforeAll(async () => {
     process.env.DATABASE_URL = databaseUrl;
-    await sql`DELETE FROM notifications WHERE id IN ('owner_private_notification', 'other_private_notification')`;
+    await sql`DELETE FROM notifications WHERE user_id IN (${ownerId}, ${otherId}) OR id IN ('owner_private_notification', 'other_private_notification')`;
     await sql`DELETE FROM account_deletion_requests WHERE user_id IN (${ownerId}, ${otherId})`;
     await sql`DELETE FROM legal_acceptances WHERE user_id IN (${ownerId}, ${otherId})`;
     await sql`DELETE FROM legal_documents WHERE id LIKE 'legal_test_%'`;
@@ -83,7 +83,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
   }, 90_000);
 
   afterAll(async () => {
-    await sql`DELETE FROM notifications WHERE id IN ('owner_private_notification', 'other_private_notification')`;
+    await sql`DELETE FROM notifications WHERE user_id IN (${ownerId}, ${otherId}) OR id IN ('owner_private_notification', 'other_private_notification')`;
     await sql`DELETE FROM account_deletion_requests WHERE user_id IN (${ownerId}, ${otherId})`;
     await sql`DELETE FROM legal_acceptances WHERE user_id IN (${ownerId}, ${otherId})`;
     await sql`DELETE FROM legal_documents WHERE id LIKE 'legal_test_%'`;
@@ -247,7 +247,8 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     }
   });
 
-  it("persists authenticated support requests without exposing the platform queue", async () => {
+  it("runs a tenant-safe two-way support conversation through the platform queue", async () => {
+    const previousAdmins = process.env.EOS_PLATFORM_ADMIN_USER_IDS;
     const created = await api.post("/api/support/tickets").send({
       category: "technical",
       subject: "Acceptance support request",
@@ -256,7 +257,32 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(created.body.id).toMatch(/^support_/);
     const ownTickets = await api.get("/api/support/tickets").expect(200);
     expect(ownTickets.body.some((ticket: { id: string }) => ticket.id === created.body.id)).toBe(true);
+    const initialMessages = await api.get(`/api/support/tickets/${created.body.id}/messages`).expect(200);
+    expect(initialMessages.body).toEqual([expect.objectContaining({ authorKind: "customer", body: "A qualified support request created by the integration harness." })]);
+    currentUserId = otherId;
+    await api.get(`/api/support/tickets/${created.body.id}/messages`).expect(404);
+    await api.post(`/api/support/tickets/${created.body.id}/messages`).send({ body: "Cross-tenant reply must not land." }).expect(404);
     await api.get("/api/platform/support/tickets").expect(403);
+    process.env.EOS_PLATFORM_ADMIN_USER_IDS = ownerId;
+    try {
+      currentUserId = ownerId;
+      const queue = await api.get("/api/platform/support/tickets?status=open").expect(200);
+      expect(queue.body).toEqual(expect.arrayContaining([expect.objectContaining({ id: created.body.id, reporterEmail: "owner@example.test" })]));
+      const supportReply = await api.post(`/api/platform/support/tickets/${created.body.id}/messages`).send({ body: "We found the issue and need you to confirm the affected workflow.", status: "waiting_on_customer" }).expect(201);
+      expect(supportReply.body.status).toBe("waiting_on_customer");
+      const conversation = await api.get(`/api/support/tickets/${created.body.id}/messages`).expect(200);
+      expect(conversation.body).toEqual(expect.arrayContaining([expect.objectContaining({ authorKind: "support", body: "We found the issue and need you to confirm the affected workflow." })]));
+      const notifications = await api.get("/api/notifications").expect(200);
+      expect(notifications.body).toEqual(expect.arrayContaining([expect.objectContaining({ type: "support-reply", relatedId: created.body.id })]));
+      await api.post(`/api/support/tickets/${created.body.id}/messages`).send({ body: "Confirmed: the affected workflow is the company setup activation." }).expect(201);
+      const reopened = await api.get("/api/support/tickets").expect(200);
+      expect(reopened.body.find((ticket: { id: string }) => ticket.id === created.body.id).status).toBe("open");
+      await api.patch(`/api/platform/support/tickets/${created.body.id}`).send({ status: "closed" }).expect(200);
+      await api.post(`/api/support/tickets/${created.body.id}/messages`).send({ body: "This reply must be rejected after closure." }).expect(409);
+    } finally {
+      if (previousAdmins === undefined) delete process.env.EOS_PLATFORM_ADMIN_USER_IDS; else process.env.EOS_PLATFORM_ADMIN_USER_IDS = previousAdmins;
+      currentUserId = ownerId;
+    }
   });
 
   it("quarantines the legacy AI endpoint before client-controlled roles can execute", async () => {
@@ -283,6 +309,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(exported.headers["content-disposition"]).toContain("entrepreneuros-account-export");
     expect(exported.body.format).toBe("entrepreneuros.account-export.v1");
     expect(exported.body.account.password).toBeUndefined();
+    expect(exported.body.supportConversation).toEqual(expect.any(Array));
     expect(JSON.stringify(exported.body)).not.toContain("accessToken");
     expect(JSON.stringify(exported.body)).not.toContain("refreshToken");
   });
