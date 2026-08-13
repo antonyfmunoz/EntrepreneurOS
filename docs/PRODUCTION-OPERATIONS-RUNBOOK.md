@@ -8,6 +8,12 @@ Only principals listed in `EOS_PLATFORM_ADMIN_USER_IDS` may record evidence. Eve
 
 Release-bound controls must use the runtime's exact immutable `EOS_RELEASE_SUBJECT` (`git:<40-character commit>` or `image:sha256:<digest>`). Environment-bound controls must use the exact `EOS_PRODUCTION_ENVIRONMENT_SUBJECT`. Evidence for an older commit, image, staging environment, or another service cannot qualify the current production release.
 
+## In-product 24-layer operations
+
+Configured platform administrators receive a **Readiness** tab in Settings; ordinary authenticated users do not. The tab displays every layer, its exact missing registered controls, allowed evidence scope, subject binding, and maximum review age. Recording evidence requires a secret-free HTTPS URI, SHA-256 digest, reviewer date, expiry, and the exact release or environment subject where required. A successful save recalculates readiness and exposes the append-only receipt history; the browser does not mark the layer complete on optimistic local state.
+
+The same workspace manages required vendor reviews and EOS service ownership. An approved vendor requires current review evidence, a future review no more than one year after the prior review, resolved DPA and subprocessor decisions, risk/data classification, and an exit plan. Service ownership requires a distinct configured backup administrator, real on-call and escalation routes, current runbook/access-review evidence, approved objectives, and a bounded next access review. The signed alert action reports delivery failure honestly. The UI is an operator surface for existing fail-closed APIs; it does not bypass API authorization, configuration blockers, live drills, professional approvals, or production-subject checks.
+
 ## Incident severity
 
 - **SEV-1:** tenant data exposure, authentication bypass, irreversible data loss, compromised signing/payment/provider key, or total paid-service outage. Stop releases; disable affected effects; notify the service owner immediately.

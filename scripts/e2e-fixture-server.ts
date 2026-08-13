@@ -24,6 +24,9 @@ process.env.EOS_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 23).toString("base6
 process.env.NOTION_CLIENT_ID = "browser-fixture-notion-client";
 process.env.NOTION_CLIENT_SECRET = "browser-fixture-notion-secret";
 process.env.NOTION_REDIRECT_URI = "https://entrepreneuros.net/api/auth/notion/callback";
+process.env.EOS_PLATFORM_ADMIN_USER_IDS = "eos_browser_acceptance_owner";
+process.env.EOS_RELEASE_SUBJECT = `git:${"b".repeat(40)}`;
+process.env.EOS_PRODUCTION_ENVIRONMENT_SUBJECT = "environment:eos-browser-acceptance";
 
 const networkFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {

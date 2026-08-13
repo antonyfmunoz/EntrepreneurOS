@@ -57,6 +57,20 @@ try {
   if (process.env.EOS_CAPTURE_VISUALS === "true") await desktop.screenshot({ path: ".tmp/eos-settings-desktop.png", fullPage: true });
   await desktop.getByRole("tab", { name: "Billing", exact: true }).click();
   await desktop.getByText("Billing is not available in this environment", { exact: true }).waitFor();
+  await desktop.getByRole("tab", { name: "Readiness", exact: true }).click();
+  await desktop.getByRole("heading", { name: "Production readiness", exact: true }).waitFor();
+  await desktop.getByText("Passing layers", { exact: true }).waitFor();
+  await desktop.getByRole("heading", { name: "Vendor review", exact: true }).waitFor();
+  await desktop.getByRole("heading", { name: "Service ownership", exact: true }).waitFor();
+  await desktop.getByRole("button", { name: "Send test alert", exact: true }).waitFor();
+  const readinessRequirement = desktop.getByLabel("Readiness control requirement");
+  await readinessRequirement.waitFor();
+  await desktop.getByLabel("Secret-free HTTPS evidence URL").fill(`https://evidence.example.test/browser-${Date.now()}`);
+  await desktop.getByLabel("SHA-256 evidence hash").fill("d".repeat(64));
+  const evidenceSubject = desktop.getByLabel("Evidence subject");
+  if (!(await evidenceSubject.inputValue())) await evidenceSubject.fill(`Browser-reviewed evidence ${Date.now()}`);
+  await desktop.getByRole("button", { name: "Record reviewed evidence", exact: true }).click();
+  await desktop.getByText(/Evidence recorded for .* The 24-layer decision has been recalculated\./).waitFor();
   await desktop.goto(`${origin}/support`, { waitUntil: "domcontentloaded" });
   await desktop.getByRole("heading", { name: "Support", exact: true }).waitFor();
   await desktop.getByRole("button", { name: "Submit support request", exact: true }).waitFor();
@@ -277,7 +291,7 @@ try {
   await mobile.getByRole("button", { name: /Open .* conversation/ }).click();
   await mobile.locator("#mobile-communication-drawer aside").waitFor();
   if (browserErrors.length) throw new Error(`Browser errors: ${browserErrors.join(" | ")}`);
-  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 8, activeModules: 14, usableModuleControlCenter: true, roleSafeNextActions: true, hierarchyBuilder: true, teamInvitationLifecycle: { create: true, visible: true, revoke: true }, interactiveWorkApprovalLoop: true, assignedWorkLifecycleInWorkRoom: true, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, notFoundRecovery: true, reachableAccountControls: ["profile", "explicit company context", "privacy", "AI spend", "billing", "support"], configurableProviderIntegration: { notion: { perUser: true, verify: true, search: true, sourceAction: true, disconnect: true } }, quarantinedFalseControls: ["notification delivery preferences", "company-wide AI autonomy"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
+  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 8, activeModules: 14, usableModuleControlCenter: true, roleSafeNextActions: true, hierarchyBuilder: true, teamInvitationLifecycle: { create: true, visible: true, revoke: true }, interactiveWorkApprovalLoop: true, assignedWorkLifecycleInWorkRoom: true, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, notFoundRecovery: true, platformReadinessControls: { adminOnly: true, layers: 24, evidenceRecording: true }, reachableAccountControls: ["profile", "explicit company context", "privacy", "AI spend", "billing", "support", "production readiness"], configurableProviderIntegration: { notion: { perUser: true, verify: true, search: true, sourceAction: true, disconnect: true } }, quarantinedFalseControls: ["notification delivery preferences", "company-wide AI autonomy"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
 } finally {
   await browser.close();
 }

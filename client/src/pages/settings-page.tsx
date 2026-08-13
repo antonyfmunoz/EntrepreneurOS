@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, Building2, Check, CreditCard, DollarSign, Download, Loader2, ShieldCheck, UserRound } from "lucide-react";
+import { Bell, Building2, Check, CreditCard, DollarSign, Download, Gauge, Loader2, ShieldCheck, UserRound } from "lucide-react";
+import { ProductionReadinessControls } from "@/components/production-readiness-controls";
 import { UniversalLayout } from "@/components/layout/universal-layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -50,7 +51,7 @@ type BillingStatus = {
   };
 };
 
-const settingsTabs = ["profile", "company", "privacy", "cost", "billing"] as const;
+const settingsTabs = ["profile", "company", "privacy", "cost", "billing", "readiness"] as const;
 type SettingsTab = typeof settingsTabs[number];
 const canonicalCompanyStages = ["idea", "pre-revenue", "revenue", "scaling", "mature"];
 
@@ -84,7 +85,7 @@ function CompanyRequired({ hasCompanies }: { hasCompanies: boolean }) {
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const initialParams = useMemo(() => new URLSearchParams(window.location.search), []);
-  const initialTab = initialParams.has("billing") ? "billing" : "profile";
+  const initialTab = initialParams.has("billing") ? "billing" : initialParams.has("readiness") ? "readiness" : "profile";
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [requestedCompanyId, setRequestedCompanyId] = useState<string | null>(initialParams.get("companyId"));
   const [profileForm, setProfileForm] = useState<Partial<UserProfile>>({});
@@ -128,6 +129,10 @@ export default function SettingsPage() {
     queryKey: ["/api/billing/status"],
     queryFn: async () => (await apiRequest<Response>("GET", "/api/billing/status")).json(),
   });
+  const platformCapabilities = useQuery<{ operationalReadiness: boolean }>({
+    queryKey: ["/api/platform/capabilities"],
+    queryFn: async () => (await apiRequest<Response>("GET", "/api/platform/capabilities")).json(),
+  });
   const deletionRequest = useQuery<{ status: string; scheduledFor: string } | null>({ queryKey: ["/api/users/me/deletion"] });
   const analyticsConsent = useQuery<{ consent: boolean | null; decidedAt: string | null }>({ queryKey: ["/api/users/me/analytics-consent"] });
 
@@ -150,6 +155,9 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!selectedPlan && billing.data?.availablePlans.length === 1) setSelectedPlan(billing.data.availablePlans[0].key);
   }, [billing.data, selectedPlan]);
+  useEffect(() => {
+    if (!platformCapabilities.isLoading && !platformCapabilities.data?.operationalReadiness && activeTab === "readiness") setActiveTab("profile");
+  }, [activeTab, platformCapabilities.data?.operationalReadiness, platformCapabilities.isLoading]);
 
   const selectCompany = (value: string) => {
     setRequestedCompanyId(value);
@@ -239,7 +247,7 @@ export default function SettingsPage() {
           <div>
             <p className="eos-label">Account control</p>
             <h1 className="mt-2 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">Settings</h1>
-            <p className="mt-3 max-w-2xl text-base text-muted-foreground">Control your identity, exact company, privacy, spend, and subscription from one place.</p>
+            <p className="mt-3 max-w-2xl text-base text-muted-foreground">Control your identity, exact company, privacy, spend, subscription, and authorized platform operations from one place.</p>
           </div>
           <div className="w-full sm:w-[280px]">
             <Label htmlFor="settings-company" className="mb-2 block text-xs uppercase tracking-[0.12em] text-muted-foreground">Company context</Label>
@@ -253,12 +261,13 @@ export default function SettingsPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as SettingsTab)}>
-          <TabsList className="mb-6 grid h-auto w-full grid-cols-3 justify-start gap-1 rounded-2xl bg-muted p-1.5 sm:inline-flex sm:w-auto">
+          <TabsList className="mb-6 grid h-auto w-full grid-cols-2 justify-start gap-1 rounded-2xl bg-muted p-1.5 sm:inline-flex sm:w-auto">
             <TabsTrigger className={tabClass("profile")} value="profile">Profile</TabsTrigger>
             <TabsTrigger className={tabClass("company")} value="company">Company</TabsTrigger>
             <TabsTrigger className={tabClass("privacy")} value="privacy">Privacy</TabsTrigger>
             <TabsTrigger className={tabClass("cost")} value="cost">AI spend</TabsTrigger>
             <TabsTrigger className={tabClass("billing")} value="billing">Billing</TabsTrigger>
+            {platformCapabilities.data?.operationalReadiness && <TabsTrigger className={tabClass("readiness")} value="readiness"><Gauge className="mr-1.5 h-4 w-4" />Readiness</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="profile">
@@ -318,6 +327,8 @@ export default function SettingsPage() {
               {billing.isLoading ? <div className="h-36 animate-pulse rounded-xl bg-muted" /> : billing.isError ? <p className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive">Billing status could not be loaded.</p> : !billing.data?.configured ? <div className="rounded-2xl bg-muted p-5"><h3 className="font-semibold">Billing is not available in this environment</h3><p className="mt-2 text-sm text-muted-foreground">No payment will be requested. A verified billing provider and published legal terms are required before checkout can be enabled.</p></div> : billing.data.subscription ? <div className="space-y-5"><div className="rounded-2xl bg-muted p-5"><p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Current plan</p><p className="mt-2 text-xl font-semibold">{titleCase(billing.data.subscription.planKey)}</p><p className="mt-1 text-sm text-muted-foreground">Status: {titleCase(billing.data.subscription.status)}{billing.data.subscription.cancelAtPeriodEnd ? " · Cancels at period end" : ""}</p>{billing.data.subscription.currentPeriodEnd && <p className="mt-1 text-sm text-muted-foreground">Current period ends {new Date(billing.data.subscription.currentPeriodEnd).toLocaleDateString()}.</p>}</div><Button onClick={() => openBillingPortal.mutate()} disabled={openBillingPortal.isPending}>{openBillingPortal.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Manage billing</Button>{openBillingPortal.isError && <p className="text-sm text-destructive">The billing portal could not be opened.</p>}</div> : <div className="space-y-5"><div><Label htmlFor="billing-plan">Plan</Label><Select value={selectedPlan || undefined} onValueChange={setSelectedPlan}><SelectTrigger id="billing-plan" className="mt-2"><SelectValue placeholder="Choose a plan" /></SelectTrigger><SelectContent>{billing.data.availablePlans.map((plan) => <SelectItem key={plan.key} value={plan.key}>{titleCase(plan.key)}</SelectItem>)}</SelectContent></Select></div><div className="flex items-start gap-3 rounded-2xl bg-muted p-5 text-sm text-muted-foreground"><ShieldCheck className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" /><p>Checkout opens on the configured payment provider. EOS never collects raw card details.</p></div><Button onClick={() => startCheckout.mutate()} disabled={!selectedPlan || startCheckout.isPending}>{startCheckout.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Continue to secure checkout</Button>{startCheckout.isError && <p className="text-sm text-destructive">Checkout could not start. Confirm required legal terms are accepted.</p>}</div>}
             </SettingsCard>
           </TabsContent>
+
+          {platformCapabilities.data?.operationalReadiness && <TabsContent value="readiness"><ProductionReadinessControls /></TabsContent>}
         </Tabs>
       </main>
     </UniversalLayout>
