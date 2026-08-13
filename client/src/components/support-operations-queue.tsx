@@ -53,11 +53,11 @@ export function SupportOperationsQueue() {
   };
   const sendReply = useMutation({
     mutationFn: async () => (await apiRequest<Response>("POST", `/api/platform/support/tickets/${selectedId}/messages`, { body: reply, status: nextStatus })).json(),
-    onSuccess: async () => { setReply(""); await refreshQueue(); },
+    onSuccess: async () => { setReply(""); setFilter(nextStatus); await refreshQueue(); },
   });
   const changeStatus = useMutation({
     mutationFn: async () => (await apiRequest<Response>("PATCH", `/api/platform/support/tickets/${selectedId}`, { status: nextStatus })).json(),
-    onSuccess: refreshQueue,
+    onSuccess: async () => { setFilter(nextStatus); await refreshQueue(); },
   });
 
   return (
