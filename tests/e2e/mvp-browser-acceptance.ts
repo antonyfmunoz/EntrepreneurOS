@@ -14,9 +14,9 @@ try {
   const fixture = await desktop.evaluate(async () => {
     const portfolios = await fetch("/api/portfolios").then((response) => response.json());
     const companies = await fetch(`/api/portfolios/${portfolios[0].id}/companies`).then((response) => response.json());
-    return { companyId: companies[0].id as number, portfolioId: portfolios[0].id as number };
+    return { companyId: companies[0].id as number, portfolioId: portfolios[0].id as number, portfolioName: portfolios[0].name as string };
   });
-  const { companyId, portfolioId } = fixture;
+  const { companyId, portfolioId, portfolioName } = fixture;
   await desktop.goto(`${origin}/company/${companyId}#home`, { waitUntil: "domcontentloaded" });
   try {
     await desktop.getByRole("heading", { name: "Home", exact: true }).waitFor();
@@ -82,8 +82,7 @@ try {
   await mobile.getByRole("heading", { name: "Your portfolio", exact: true }).waitFor();
   await assertCompactHeaderAction("Create portfolio", "Your portfolio");
   await mobile.goto(`${origin}/portfolios/${portfolioId}`, { waitUntil: "domcontentloaded" });
-  const portfolioName = await mobile.getByRole("heading", { level: 1 }).textContent();
-  if (!portfolioName) throw new Error("Portfolio title did not render.");
+  await mobile.getByRole("heading", { name: portfolioName, exact: true }).waitFor();
   await assertCompactHeaderAction("Add organization", portfolioName);
   await mobile.goto(`${origin}/company/${companyId}#my-role`, { waitUntil: "domcontentloaded" });
   await mobile.getByRole("heading", { name: "My Role", exact: true }).waitFor();
