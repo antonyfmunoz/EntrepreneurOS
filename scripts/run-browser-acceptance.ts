@@ -60,6 +60,8 @@ function runLoadAcceptance(): Promise<void> {
 try {
   await Promise.all([waitFor("http://127.0.0.1:5111/.well-known/umh/capability-manifest"), waitFor("http://127.0.0.1:5110")]);
   await runAcceptance();
+  const resetResponse = await fetch("http://127.0.0.1:5111/__fixture/reset-rate-limits", { method: "POST" });
+  if (!resetResponse.ok) throw new Error(`Browser fixture rate-limit reset failed with ${resetResponse.status}.`);
   await runLoadAcceptance();
 } finally {
   for (const child of processes) {

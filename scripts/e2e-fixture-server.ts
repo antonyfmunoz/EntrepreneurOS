@@ -11,6 +11,7 @@ import { eq } from "drizzle-orm";
 import { registerRoutes } from "../server/routes";
 import { client, db } from "../server/db";
 import { companies, portfolios, users } from "../shared/schema";
+import { resetInMemoryRateLimitsForFixture } from "../server/middleware/rate-limit";
 
 if (process.env.NODE_ENV !== "test" || process.env.EOS_E2E_FIXTURE !== "true") {
   throw new Error("The EOS browser fixture only runs with NODE_ENV=test and EOS_E2E_FIXTURE=true.");
@@ -70,6 +71,10 @@ app.use(express.urlencoded({ extended: false }));
 app.use((req, _res, next) => {
   (req as any).user = fixtureUser;
   next();
+});
+app.post("/__fixture/reset-rate-limits", (_req, res) => {
+  resetInMemoryRateLimitsForFixture();
+  return res.json({ reset: true });
 });
 
 const server = await registerRoutes(app);

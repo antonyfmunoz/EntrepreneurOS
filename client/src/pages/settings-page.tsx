@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Building2, Check, CreditCard, DollarSign, Download, Loader2, ShieldCheck, UserRound } from "lucide-react";
-import { UniversalLayout } from "@/components/universal-layout";
+import { UniversalLayout } from "@/components/layout/universal-layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -224,13 +224,16 @@ export default function SettingsPage() {
     setProfileErrors(errors);
     if (!Object.keys(errors).length) updateProfile.mutate();
   };
+  const tabClass = (tab: SettingsTab) => activeTab === tab
+    ? "px-2 transition-none sm:px-4"
+    : "px-2 !bg-transparent !text-muted-foreground !shadow-none transition-none sm:px-4";
 
   if (userProfile.isError || companiesQuery.isError) {
-    return <UniversalLayout><main className="mx-auto max-w-4xl px-4 py-10 sm:px-6"><SettingsCard><h1 className="text-2xl font-semibold">Settings could not load</h1><p className="mt-2 text-sm text-muted-foreground">Refresh the account and company data, then try again.</p><Button className="mt-5" onClick={() => void Promise.all([userProfile.refetch(), companiesQuery.refetch()])}>Retry</Button></SettingsCard></main></UniversalLayout>;
+    return <UniversalLayout title="Settings" leftRailItems={[]} floatingPanel={false}><main className="mx-auto max-w-4xl px-4 py-10 sm:px-6"><SettingsCard><h1 className="text-2xl font-semibold">Settings could not load</h1><p className="mt-2 text-sm text-muted-foreground">Refresh the account and company data, then try again.</p><Button className="mt-5" onClick={() => void Promise.all([userProfile.refetch(), companiesQuery.refetch()])}>Retry</Button></SettingsCard></main></UniversalLayout>;
   }
 
   return (
-    <UniversalLayout>
+    <UniversalLayout title="Settings" leftRailItems={[]} floatingPanel={false}>
       <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-9">
         <div className="mb-6 flex flex-col gap-5 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -251,11 +254,11 @@ export default function SettingsPage() {
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as SettingsTab)}>
           <TabsList className="mb-6 grid h-auto w-full grid-cols-3 justify-start gap-1 rounded-2xl bg-muted p-1.5 sm:inline-flex sm:w-auto">
-            <TabsTrigger className="px-2 data-[state=inactive]:!bg-transparent data-[state=inactive]:text-muted-foreground sm:px-4" value="profile">Profile</TabsTrigger>
-            <TabsTrigger className="px-2 data-[state=inactive]:!bg-transparent data-[state=inactive]:text-muted-foreground sm:px-4" value="company">Company</TabsTrigger>
-            <TabsTrigger className="px-2 data-[state=inactive]:!bg-transparent data-[state=inactive]:text-muted-foreground sm:px-4" value="privacy">Privacy</TabsTrigger>
-            <TabsTrigger className="px-2 data-[state=inactive]:!bg-transparent data-[state=inactive]:text-muted-foreground sm:px-4" value="cost">AI spend</TabsTrigger>
-            <TabsTrigger className="px-2 data-[state=inactive]:!bg-transparent data-[state=inactive]:text-muted-foreground sm:px-4" value="billing">Billing</TabsTrigger>
+            <TabsTrigger className={tabClass("profile")} value="profile">Profile</TabsTrigger>
+            <TabsTrigger className={tabClass("company")} value="company">Company</TabsTrigger>
+            <TabsTrigger className={tabClass("privacy")} value="privacy">Privacy</TabsTrigger>
+            <TabsTrigger className={tabClass("cost")} value="cost">AI spend</TabsTrigger>
+            <TabsTrigger className={tabClass("billing")} value="billing">Billing</TabsTrigger>
           </TabsList>
 
           <TabsContent value="profile">
