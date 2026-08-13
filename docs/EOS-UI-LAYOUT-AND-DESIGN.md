@@ -61,6 +61,8 @@ The primary order is:
 
 Role compilation removes any surface the active seat is not authorized to use. Portfolio and organization selection are account-context controls in the profile panel, not operating-navigation entries. Modules is a role-filtered control center: the founder can enter all fourteen non-dormant overlay modules, while lower seats see only the business functions whose operating surfaces are available inside their compiled authority.
 
+Action compilation follows the same boundary. A seat with Operations authority may prepare new governed work. A lower seat practicing in Academy or promoting an assistant recommendation opens existing assigned work when available; otherwise EOS records an approval-gated Work Packet routed to the supervisor instead of navigating the user to a hidden Operations surface or implying that work was authorized.
+
 Unavailable or dormant surfaces remain visible only when their state is clearly labeled. UI presence must never imply authority, provider connectivity, native ownership, or release maturity.
 
 ## Context law

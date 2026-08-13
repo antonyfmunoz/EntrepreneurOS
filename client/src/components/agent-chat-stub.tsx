@@ -21,6 +21,7 @@ export interface AgentChatStubProps {
   compact?: boolean;
   suggestions?: string[];
   onPromoteMessage?: (message: ChatMessage) => void;
+  promoteLabel?: string;
 }
 
 export function AgentChatStub({
@@ -33,6 +34,7 @@ export function AgentChatStub({
   compact = false,
   suggestions = [],
   onPromoteMessage,
+  promoteLabel = "Turn into work",
 }: AgentChatStubProps) {
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -89,7 +91,7 @@ export function AgentChatStub({
                 </div>
                 {onPromoteMessage && message.role === "assistant" && index === messages.length - 1 && (
                   <button type="button" onClick={() => onPromoteMessage(message)} className="mt-1.5 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium text-primary transition-colors hover:bg-primary/10">
-                    <BriefcaseBusiness className="h-3 w-3" />Turn into work
+                    <BriefcaseBusiness className="h-3 w-3" />{promoteLabel}
                   </button>
                 )}
               </div>

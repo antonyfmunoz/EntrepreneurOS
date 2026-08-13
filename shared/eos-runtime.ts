@@ -249,6 +249,15 @@ export function nextUsableSurfaceFor(role: EosSeatKind, reason: EosNextActionRea
   return candidates[reason].find((surface) => allowed.has(surface)) || "home";
 }
 
+export type RolePracticeAction = "prepare_work" | "open_assigned_work" | "request_supervisor_approval";
+
+export function rolePracticeActionFor(role: EosSeatKind, hasActiveWork: boolean): RolePracticeAction {
+  const allowed = new Set(allowedSurfacesFor(role));
+  if (allowed.has("operations")) return "prepare_work";
+  if (hasActiveWork && allowed.has("work-room")) return "open_assigned_work";
+  return "request_supervisor_approval";
+}
+
 export interface EosActiveModule {
   id: number;
   name: string;
