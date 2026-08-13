@@ -52,7 +52,9 @@ $releaseCommit = (git rev-parse HEAD).Trim().ToLowerInvariant()
 if ($releaseCommit -notmatch '^[a-f0-9]{40}$') { throw "Could not resolve an immutable release commit." }
 $releaseBranch = (git branch --show-current).Trim()
 if ($releaseBranch -ne $env:EOS_PRODUCTION_RELEASE_BRANCH) { throw "Production releases must run from the configured release branch." }
-$remoteReleaseCommit = (git ls-remote origin "refs/heads/$releaseBranch").Split("`t")[0].Trim().ToLowerInvariant()
+$escapedReleaseBranch = [Uri]::EscapeDataString($releaseBranch)
+$remoteReleaseCommit = (gh api "repos/$env:EOS_GITHUB_REPOSITORY/commits/$escapedReleaseBranch" --jq '.sha').Trim().ToLowerInvariant()
+if ($LASTEXITCODE -ne 0 -or $remoteReleaseCommit -notmatch '^[a-f0-9]{40}$') { throw "Could not resolve the configured GitHub release-branch head." }
 if ($remoteReleaseCommit -ne $releaseCommit) { throw "The release commit is not the current remote release-branch head." }
 $qualificationRuns = @(gh run list --repo $env:EOS_GITHUB_REPOSITORY --workflow "Production qualification" --event push --commit $releaseCommit --limit 10 --json status,conclusion,headSha,url | ConvertFrom-Json)
 $qualifiedRun = $qualificationRuns | Where-Object { $_.headSha -eq $releaseCommit -and $_.status -eq "completed" -and $_.conclusion -eq "success" } | Select-Object -First 1

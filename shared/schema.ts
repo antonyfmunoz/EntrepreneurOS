@@ -291,6 +291,21 @@ export const operationalControls = pgTable("operational_controls", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const operationalControlEvidenceHistory = pgTable("operational_control_evidence_history", {
+  id: text("id").primaryKey(),
+  controlKey: text("control_key").notNull().references(() => operationalControls.controlKey),
+  status: text("status").notNull(),
+  evidenceUri: text("evidence_uri").notNull(),
+  evidenceHash: text("evidence_hash").notNull(),
+  evidenceScope: text("evidence_scope").notNull(),
+  subject: text("subject").notNull(),
+  notes: text("notes"),
+  ownerUserId: text("owner_user_id").notNull().references(() => users.id),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const vendorRegistry = pgTable("vendor_registry", {
   id: text("id").primaryKey(),
   name: text("name").notNull().unique(),
@@ -313,11 +328,16 @@ export const serviceOwnership = pgTable("service_ownership", {
   serviceKey: text("service_key").primaryKey(),
   displayName: text("display_name").notNull(),
   ownerUserId: text("owner_user_id").notNull().references(() => users.id),
+  backupOwnerReference: text("backup_owner_reference"),
   onCallReference: text("on_call_reference").notNull(),
+  escalationReference: text("escalation_reference"),
   availabilityTarget: text("availability_target").notNull(),
   latencyTarget: text("latency_target").notNull(),
   errorBudgetPolicy: text("error_budget_policy").notNull(),
   incidentRunbookUri: text("incident_runbook_uri").notNull(),
+  accessReviewEvidenceUri: text("access_review_evidence_uri"),
+  accessReviewedAt: timestamp("access_reviewed_at", { withTimezone: true }),
+  nextAccessReviewAt: timestamp("next_access_review_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

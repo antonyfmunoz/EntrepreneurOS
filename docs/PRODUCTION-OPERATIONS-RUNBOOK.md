@@ -4,7 +4,7 @@
 
 The application must not be described as a production-ready public SaaS unless `GET /api/platform/readiness` returns `ready: true` from the production deployment. Repository tests, a healthy URL, or a release owner's opinion cannot replace missing evidence.
 
-Only principals listed in `EOS_PLATFORM_ADMIN_USER_IDS` may record evidence. Every control requires an HTTPS evidence location, SHA-256 hash, evidence scope, named subject, reviewer, review time, and expiry. The code-owned control registry restricts each key to repository, production, or independent-professional evidence and limits its maximum age. Unknown keys, future reviews, stale reviews, overlong validity windows, expired records, and blanket `not_applicable` records are rejected. Evidence that expires or is marked failed stops readiness automatically.
+Only principals listed in `EOS_PLATFORM_ADMIN_USER_IDS` may record evidence. Every control requires an HTTPS evidence location, SHA-256 hash, evidence scope, named subject, reviewer, review time, and expiry. The code-owned control registry restricts each key to repository, production, or independent-professional evidence and limits its maximum age. Unknown keys, future reviews, stale reviews, overlong validity windows, expired records, and blanket `not_applicable` records are rejected. Evidence that expires or is marked failed stops readiness automatically. Updating a control changes its current readiness state but also appends a separate immutable history record; platform administrators can retrieve the latest 100 entries from `GET /api/platform/controls/:controlKey/evidence`.
 
 Release-bound controls must use the runtime's exact immutable `EOS_RELEASE_SUBJECT` (`git:<40-character commit>` or `image:sha256:<digest>`). Environment-bound controls must use the exact `EOS_PRODUCTION_ENVIRONMENT_SUBJECT`. Evidence for an older commit, image, staging environment, or another service cannot qualify the current production release.
 
@@ -26,7 +26,7 @@ The service owner must publish approved RTO and RPO targets in the service owner
 1. Merge to the configured release branch and qualify that exact commit through the push-triggered CI migration, unit/integration, browser, accessibility, dependency, container, and restore checks.
 2. Verify production Clerk, Google/Notion, analytics, Stripe, UMH (if enabled), logging/alerting, support queue, account deletion, legal enforcement, and backups independently.
 3. Perform capacity/load and cold-start checks against a safe production-like environment.
-4. Record current vendor reviews and service ownership.
+4. Record current vendor reviews and service ownership, including a distinct backup owner, HTTPS on-call and escalation routes, the incident runbook, and a current access review with its next review no more than 90 days later.
 5. Deploy with release migrations and a reversible artifact.
 6. Run signed-in role/tenant/browser and provider round trips.
 7. Record `release_owner_approval` last. If any earlier evidence changes, expires, or fails, the approval is no longer sufficient.

@@ -2,7 +2,7 @@ import express from "express";
 import postgres from "postgres";
 import supertest from "supertest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { generateKeyPairSync, sign } from "node:crypto";
+import { generateKeyPairSync, randomUUID, sign } from "node:crypto";
 
 // Vitest intentionally supplies a non-routable DATABASE_URL for unit tests.
 // Integration qualification opts into an explicit disposable database.
@@ -102,6 +102,65 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     await Promise.all(Array.from({ length: 12 }, () => api.get(`/api/eos/companies/${companyId}/organization-runtime`).expect(200)));
     const [result] = await sql<Array<{ count: number }>>`SELECT count(*)::int AS count FROM eos_seats WHERE company_id = ${companyId} AND kind = 'founder' AND status = 'active'`;
     expect(result.count).toBe(1);
+  });
+
+  it("retains operational evidence history and requires complete service ownership", async () => {
+    const previousAdmins = process.env.EOS_PLATFORM_ADMIN_USER_IDS;
+    const previousReleaseSubject = process.env.EOS_RELEASE_SUBJECT;
+    const controlKey = "frontend_acceptance";
+    const serviceKey = `test-ownership-${randomUUID()}`;
+    const marker = `integration-control-${randomUUID()}`;
+    const [original] = await sql<any[]>`SELECT * FROM operational_controls WHERE control_key = ${controlKey}`;
+    process.env.EOS_PLATFORM_ADMIN_USER_IDS = ownerId;
+    process.env.EOS_RELEASE_SUBJECT = `git:${"a".repeat(40)}`;
+    try {
+      const reviewedAt = new Date();
+      const expiresAt = new Date(reviewedAt.getTime() + 7 * 86_400_000);
+      await api.put(`/api/platform/controls/${controlKey}`).send({ status: "pass", evidenceUri: "https://evidence.example.test/report?token=secret", evidenceHash: "a".repeat(64), evidenceScope: "repository", subject: process.env.EOS_RELEASE_SUBJECT, notes: marker, reviewedAt, expiresAt }).expect(400);
+      for (const evidenceHash of ["b".repeat(64), "c".repeat(64)]) {
+        await api.put(`/api/platform/controls/${controlKey}`).send({
+          status: "pass",
+          evidenceUri: `https://evidence.example.test/${marker}/${evidenceHash[0]}`,
+          evidenceHash,
+          evidenceScope: "repository",
+          subject: process.env.EOS_RELEASE_SUBJECT,
+          notes: marker,
+          reviewedAt,
+          expiresAt,
+        }).expect(200);
+      }
+      const history = await api.get(`/api/platform/controls/${controlKey}/evidence`).expect(200);
+      expect(history.body.filter((item: { notes?: string }) => item.notes === marker)).toHaveLength(2);
+
+      const ownership = {
+        displayName: "EntrepreneurOS integration fixture",
+        backupOwnerReference: otherId,
+        onCallReference: "https://operations.example.test/on-call",
+        escalationReference: "https://operations.example.test/escalation",
+        availabilityTarget: "99.9% monthly",
+        latencyTarget: "p95 under 500ms",
+        errorBudgetPolicy: "Escalate when half of the monthly error budget is consumed.",
+        incidentRunbookUri: "https://operations.example.test/runbooks/entrepreneuros",
+        accessReviewEvidenceUri: "https://evidence.example.test/access-review",
+        accessReviewedAt: reviewedAt,
+        nextAccessReviewAt: new Date(reviewedAt.getTime() + 30 * 86_400_000),
+      };
+      await api.put(`/api/platform/services/${serviceKey}/ownership`).send({ ...ownership, backupOwnerReference: ownerId }).expect(400);
+      const created = await api.put(`/api/platform/services/${serviceKey}/ownership`).send(ownership).expect(200);
+      expect(created.body.backupOwnerReference).toBe(otherId);
+    } finally {
+      await sql`DELETE FROM service_ownership WHERE service_key = ${serviceKey}`;
+      await sql`DELETE FROM operational_control_evidence_history WHERE control_key = ${controlKey} AND notes = ${marker}`;
+      if (original) {
+        await sql`INSERT INTO operational_controls (control_key, status, evidence_uri, evidence_hash, evidence_scope, subject, notes, owner_user_id, reviewed_at, expires_at, updated_at)
+          VALUES (${original.control_key}, ${original.status}, ${original.evidence_uri}, ${original.evidence_hash}, ${original.evidence_scope}, ${original.subject}, ${original.notes}, ${original.owner_user_id}, ${original.reviewed_at}, ${original.expires_at}, ${original.updated_at})
+          ON CONFLICT (control_key) DO UPDATE SET status = EXCLUDED.status, evidence_uri = EXCLUDED.evidence_uri, evidence_hash = EXCLUDED.evidence_hash, evidence_scope = EXCLUDED.evidence_scope, subject = EXCLUDED.subject, notes = EXCLUDED.notes, owner_user_id = EXCLUDED.owner_user_id, reviewed_at = EXCLUDED.reviewed_at, expires_at = EXCLUDED.expires_at, updated_at = EXCLUDED.updated_at`;
+      } else {
+        await sql`DELETE FROM operational_controls WHERE control_key = ${controlKey} AND notes = ${marker}`;
+      }
+      if (previousAdmins === undefined) delete process.env.EOS_PLATFORM_ADMIN_USER_IDS; else process.env.EOS_PLATFORM_ADMIN_USER_IDS = previousAdmins;
+      if (previousReleaseSubject === undefined) delete process.env.EOS_RELEASE_SUBJECT; else process.env.EOS_RELEASE_SUBJECT = previousReleaseSubject;
+    }
   });
 
   it("persists authenticated support requests without exposing the platform queue", async () => {
