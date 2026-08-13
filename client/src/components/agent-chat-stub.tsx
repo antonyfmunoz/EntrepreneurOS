@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send } from "lucide-react";
+import { BriefcaseBusiness, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import clsx from "clsx";
@@ -19,6 +19,8 @@ export interface AgentChatStubProps {
   className?: string;
   assistantName?: string;
   compact?: boolean;
+  suggestions?: string[];
+  onPromoteMessage?: (message: ChatMessage) => void;
 }
 
 export function AgentChatStub({
@@ -29,6 +31,8 @@ export function AgentChatStub({
   className,
   assistantName = "Executive Assistant",
   compact = false,
+  suggestions = [],
+  onPromoteMessage,
 }: AgentChatStubProps) {
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -62,7 +66,7 @@ export function AgentChatStub({
             Ask {assistantName} anything
           </div>
         ) : (
-          messages.map((message) => (
+          messages.map((message, index) => (
             <div
               key={message.id}
               className={clsx(
@@ -70,17 +74,24 @@ export function AgentChatStub({
                 message.role === "user" ? "justify-end" : "justify-start"
               )}
             >
-              <div
-                className={clsx(
-                  "min-w-0 break-words [overflow-wrap:anywhere]",
-                  compact ? "w-fit max-w-[75%] rounded-xl px-3 py-2 text-[11px] leading-relaxed" : "max-w-[80%] rounded-[12px] px-4 py-3 text-sm",
-                  message.role === "user"
-                    ? "bg-[#6a37d4] text-white"
-                    : "bg-[#f5f6f7] text-[#2c2f30]"
+              <div className={clsx("min-w-0", compact ? "w-fit max-w-[82%]" : "max-w-[80%]")}>
+                <div
+                  className={clsx(
+                    "min-w-0 break-words [overflow-wrap:anywhere]",
+                    compact ? "rounded-xl px-3 py-2 text-[11px] leading-relaxed" : "rounded-[12px] px-4 py-3 text-sm",
+                    message.role === "user"
+                      ? "bg-[#6a37d4] text-white"
+                      : "bg-[#f5f6f7] text-[#2c2f30]"
+                  )}
+                >
+                  {compact && <div className={clsx("mb-1 flex items-center gap-2 text-[9px] font-medium uppercase tracking-wide", message.role === "user" ? "text-white/70" : "text-muted-foreground")}><span>{message.role === "user" ? "You" : assistantName}</span><span className="ml-auto normal-case tracking-normal">{message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div>}
+                  {message.content}
+                </div>
+                {onPromoteMessage && message.role === "assistant" && index === messages.length - 1 && (
+                  <button type="button" onClick={() => onPromoteMessage(message)} className="mt-1.5 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium text-primary transition-colors hover:bg-primary/10">
+                    <BriefcaseBusiness className="h-3 w-3" />Turn into work
+                  </button>
                 )}
-              >
-                {compact && <div className={clsx("mb-1 flex items-center gap-2 text-[9px] font-medium uppercase tracking-wide", message.role === "user" ? "text-white/70" : "text-muted-foreground")}><span>{message.role === "user" ? "You" : assistantName}</span><span className="ml-auto normal-case tracking-normal">{message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div>}
-                {message.content}
               </div>
             </div>
           ))
@@ -103,6 +114,15 @@ export function AgentChatStub({
         onSubmit={handleSubmit}
         className={clsx("flex-shrink-0 border-t border-[#eff1f2] bg-white/60", compact ? "p-2" : "p-4")}
       >
+        {suggestions.length > 0 && (
+          <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5" aria-label="Suggested requests">
+            {suggestions.map((suggestion) => (
+              <button key={suggestion} type="button" disabled={isLoading} onClick={() => onSendMessage?.(suggestion)} className="flex-shrink-0 rounded-full border border-primary/15 bg-primary/5 px-2.5 py-1 text-[10px] font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50">
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        )}
         <div className={clsx("flex items-center", compact ? "gap-1" : "gap-2")}>
           <div className={clsx("flex min-w-0 flex-1 items-center border border-[#eff1f2] bg-white", compact ? "rounded-lg" : "rounded-xl")}>
             <Input

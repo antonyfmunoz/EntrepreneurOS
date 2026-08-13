@@ -47,7 +47,7 @@ import { useToast } from "@/hooks/use-toast";
 
 type JsonRecord = Record<string, any>;
 
-async function requestJson<T>(method: "GET" | "POST" | "PATCH", url: string, body?: unknown): Promise<T> {
+async function requestJson<T>(method: "GET" | "POST" | "PATCH" | "PUT", url: string, body?: unknown): Promise<T> {
   const response = await apiRequest(method, url, body) as Response;
   return response.json() as Promise<T>;
 }
@@ -94,6 +94,9 @@ export default function EosOverlayPage() {
   const [seatSupervisorId, setSeatSupervisorId] = useState("");
   const [membershipEmail, setMembershipEmail] = useState("");
   const [membershipSeatId, setMembershipSeatId] = useState("");
+  const [monthlyAiBudget, setMonthlyAiBudget] = useState("25");
+  const [perRequestAiBudget, setPerRequestAiBudget] = useState("1");
+  const [aiBudgetEnabled, setAiBudgetEnabled] = useState(true);
   useEffect(() => {
     const syncHash = () => {
       const requested = window.location.hash.slice(1);
@@ -122,6 +125,9 @@ export default function EosOverlayPage() {
   const organizationQuery = useQuery<JsonRecord>({ queryKey: [root, "organization-runtime"], queryFn: () => requestJson("GET", `${root}/organization-runtime`), enabled: Boolean(companyId) });
   const communicationQuery = useQuery<JsonRecord>({ queryKey: [root, "executive-assistant", "messages"], queryFn: () => requestJson("GET", `${root}/executive-assistant/messages`), enabled: Boolean(companyId) });
   const providerExecutionsQuery = useQuery<JsonRecord[]>({ queryKey: [root, "provider-executions"], queryFn: () => requestJson("GET", `${root}/provider-executions`), enabled: Boolean(companyId) });
+  const auditVisible = ["founder", "portfolio_executive", "company_ceo"].includes(contextQuery.data?.principalContext?.role);
+  const auditQuery = useQuery<JsonRecord[]>({ queryKey: [root, "audit"], queryFn: () => requestJson("GET", `${root}/audit`), enabled: Boolean(companyId && auditVisible) });
+  const aiBudgetQuery = useQuery<JsonRecord>({ queryKey: [root, "ai-budget"], queryFn: () => requestJson("GET", `${root}/ai-budget`), enabled: Boolean(companyId && contextQuery.data?.principalContext?.role === "founder") });
   const googleConnected = Boolean(integrationsQuery.data?.find((item) => item.id === "google_workspace")?.connected);
   const notionConnected = Boolean(integrationsQuery.data?.find((item) => item.id === "notion")?.connected);
   const googleContextQuery = useQuery<JsonRecord>({ queryKey: [root, "google-context"], queryFn: () => requestJson("GET", `${root}/integrations/google/context`), enabled: Boolean(companyId && googleConnected && ["home", "work-room", "systems"].includes(activeTab)) });
@@ -167,6 +173,13 @@ export default function EosOverlayPage() {
   useEffect(() => {
     if (!isEditingAssistantName) setAssistantNameDraft(assistantName);
   }, [assistantName, isEditingAssistantName]);
+
+  useEffect(() => {
+    if (!aiBudgetQuery.data?.configured) return;
+    setMonthlyAiBudget(String((aiBudgetQuery.data.monthlyLimitMicros || 0) / 1_000_000));
+    setPerRequestAiBudget(String((aiBudgetQuery.data.perRequestLimitMicros || 0) / 1_000_000));
+    setAiBudgetEnabled(Boolean(aiBudgetQuery.data.enabled));
+  }, [aiBudgetQuery.data]);
 
   const compilerMutation = useMutation({
     mutationFn: async () => requestJson<JsonRecord>("POST", `${root}/compiler/drafts`, {
@@ -335,6 +348,19 @@ export default function EosOverlayPage() {
     onError: (error) => showMutationError("Executive Assistant rename", error),
   });
 
+  const aiBudgetMutation = useMutation({
+    mutationFn: () => requestJson<JsonRecord>("PUT", `${root}/ai-budget`, {
+      monthlyLimitDollars: Number(monthlyAiBudget),
+      perRequestLimitDollars: Number(perRequestAiBudget),
+      enabled: aiBudgetEnabled,
+    }),
+    onSuccess: async () => {
+      await Promise.all([aiBudgetQuery.refetch(), auditQuery.refetch()]);
+      toast({ title: "AI spend controls saved", description: "The monthly and per-request limits are now enforced by the EOS AI gateway." });
+    },
+    onError: (error) => showMutationError("AI spend control update", error),
+  });
+
   const saveAssistantName = () => {
     const nextName = assistantNameDraft.trim();
     if (!nextName || nextName === assistantName || assistantNameMutation.isPending) {
@@ -347,6 +373,21 @@ export default function EosOverlayPage() {
   const sendEaMessage = (content: string) => {
     setEaMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", content, timestamp: new Date() }]);
     eaMessageMutation.mutate(content);
+    window.dispatchEvent(new Event("eos:open-communication"));
+  };
+
+  const goToSurface = (surface: string) => {
+    setActiveTab(surface);
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${surface}`);
+  };
+
+  const openCommunication = () => window.dispatchEvent(new Event("eos:open-communication"));
+
+  const prepareWorkPacket = (title: string, objective: string) => {
+    setPacketTitle(title.slice(0, 200));
+    setPacketObjective(objective.slice(0, 2000));
+    goToSurface("operations");
+    toast({ title: "Work Packet prepared", description: "Review the objective and authority gate, then create it when ready." });
   };
 
   const nextTransition = (status: string): string | undefined => ({ ready: "in_progress", in_progress: "in_review", blocked: "in_progress", in_review: "completed" })[status];
@@ -393,7 +434,7 @@ export default function EosOverlayPage() {
         )}
         <div className="mt-2 flex min-w-0 items-center gap-1.5 overflow-hidden">{isFounder && <Badge variant="secondary" className="h-5 flex-shrink-0 px-1.5 text-[9px]">15 advisors</Badge>}<Badge variant="outline" className="h-5 min-w-0 truncate px-1.5 text-[9px]">{principalContext?.seat || "Active seat"}</Badge></div>
       </div>
-      <div className="min-h-0 flex-1"><AgentChatStub messages={eaMessages} onSendMessage={sendEaMessage} isLoading={eaMessageMutation.isPending} placeholder={`Message ${assistantName}…`} assistantName={assistantName} compact className="h-full shadow-none" /></div>
+      <div className="min-h-0 flex-1"><AgentChatStub messages={eaMessages} onSendMessage={sendEaMessage} onPromoteMessage={(message) => prepareWorkPacket("EA recommendation", message.content)} suggestions={["Brief me", "Prioritize work", "Prepare a decision"]} isLoading={eaMessageMutation.isPending} placeholder={`Message ${assistantName}…`} assistantName={assistantName} compact className="h-full shadow-none" /></div>
       <div className="flex flex-shrink-0 items-center gap-1.5 border-t border-border/70 px-3 py-1.5 text-[9px] text-muted-foreground"><ShieldCheck className="h-3 w-3 flex-shrink-0 text-primary" /><span className="truncate">EOS authority · advice is not execution</span></div>
     </div>
   );
@@ -430,7 +471,16 @@ export default function EosOverlayPage() {
       roleName={principalContext?.seat || "Founder / Portfolio Principal"}
       leftRailItems={nav}
       rightRailContent={intelligenceRail}
-      floatingPanel={<FloatingAIPanel assistantName={assistantName} seatName={principalContext?.seat} openWork={activePackets.length} approvals={approvals.filter((approval) => approval.status === "pending").length} nextAction={nextAction} />}
+      floatingPanel={<FloatingAIPanel assistantName={assistantName} seatName={principalContext?.seat} openWork={activePackets.length} approvals={approvals.filter((approval) => approval.status === "pending").length} nextAction={nextAction}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">Choose a controlled next step. Consequential actions still enter the approval and evidence lifecycle.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => goToSurface("operations")}><Workflow className="mr-1.5 h-3.5 w-3.5" />Open work</Button>
+            <Button size="sm" variant="outline" onClick={() => goToSurface("review")}><ClipboardCheck className="mr-1.5 h-3.5 w-3.5" />Review decisions</Button>
+            <Button size="sm" onClick={() => sendEaMessage("Brief me on the current state, the most important risk, and the next authorized action.")}><MessagesSquare className="mr-1.5 h-3.5 w-3.5" />Ask {assistantName}</Button>
+          </div>
+        </div>
+      </FloatingAIPanel>}
     >
       <div className="space-y-8">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -446,8 +496,8 @@ export default function EosOverlayPage() {
           </TabsList>
 
           <TabsContent value="home" className="space-y-6">
-            <Card><CardHeader><CardTitle>Morning Brief</CardTitle><CardDescription>{briefQuery.data?.generatedAt ? `Generated ${new Date(briefQuery.data.generatedAt).toLocaleString()}` : "Loading current state…"}</CardDescription></CardHeader><CardContent><p className="text-lg">{briefQuery.data?.headline}</p></CardContent></Card>
-            <div className="grid gap-4 lg:grid-cols-2"><ListCard title="Priority missions" empty="No open missions yet." items={briefQuery.data?.priorities || []} /><ListCard title="Exceptions" empty="No active exceptions." items={briefQuery.data?.exceptions || []} /></div>
+            <Card><CardHeader><CardTitle>Morning Brief</CardTitle><CardDescription>{briefQuery.data?.generatedAt ? `Generated ${new Date(briefQuery.data.generatedAt).toLocaleString()}` : "Loading current state…"}</CardDescription></CardHeader><CardContent className="space-y-5"><p className="text-lg">{briefQuery.data?.headline}</p><div className="flex flex-wrap gap-2"><Button onClick={() => sendEaMessage("Brief me on today's priorities, exceptions, decisions, and the next authorized action.")}><MessagesSquare className="mr-2 h-4 w-4" />Discuss with {assistantName}</Button><Button variant="outline" onClick={() => goToSurface("operations")}><Plus className="mr-2 h-4 w-4" />Create mission</Button>{approvals.some((item) => item.status === "pending") && <Button variant="outline" onClick={() => goToSurface("review")}><ClipboardCheck className="mr-2 h-4 w-4" />Review pending decisions</Button>}</div></CardContent></Card>
+            <div className="grid gap-4 lg:grid-cols-2"><ListCard title="Priority missions" empty="No open missions yet." items={briefQuery.data?.priorities || []} actionLabel="Open mission" onSelect={() => goToSurface("operations")} /><ListCard title="Exceptions" empty="No active exceptions." items={briefQuery.data?.exceptions || []} actionLabel="Resolve" onSelect={() => goToSurface("review")} /></div>
           </TabsContent>
 
           <TabsContent value="command" className="space-y-6">
@@ -484,7 +534,7 @@ export default function EosOverlayPage() {
           </TabsContent>
 
           <TabsContent value="commercial" className="space-y-6">
-            <Card><CardHeader><CardTitle>Stakeholder and commercial overlay</CardTitle><CardDescription>The universal relationship surface is present, but EOS does not claim native CRM authority in this MVP.</CardDescription></CardHeader><CardContent className="grid gap-4 md:grid-cols-2"><Fact label="Surface language" value="Leads, accounts, customers, opportunities" /><Fact label="Canonical objects" value="Party, Relationship, Offer, Commitment, Agreement, Value Flow" /><Fact label="Current authority" value="Connected provider or manual source" /><Fact label="Fallback" value="Use the authoritative provider and attach source evidence to the Work Packet" /></CardContent></Card>
+            <Card><CardHeader><CardTitle>Commercial action room</CardTitle><CardDescription>Turn a customer, offer, pipeline, or relationship question into an accountable decision or mission.</CardDescription></CardHeader><CardContent className="space-y-5"><div className="grid gap-4 md:grid-cols-2"><Fact label="Offer" value={company.offer || "Needs definition"} /><Fact label="Target customer" value={company.targetCustomer || "Needs definition"} /></div><div className="flex flex-wrap gap-2"><Button onClick={() => sendEaMessage(`Assess the commercial position for ${company.name}: offer, target customer, pipeline assumptions, risks, and the next decision required.`)}><MessagesSquare className="mr-2 h-4 w-4" />Ask {assistantName} for assessment</Button><Button variant="outline" onClick={() => prepareWorkPacket("Validate commercial assumptions", `Test the offer and target-customer assumptions for ${company.name}, document evidence, and return the next commercial decision.`)}><BriefcaseBusiness className="mr-2 h-4 w-4" />Create commercial mission</Button></div><Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Overlay authority</AlertTitle><AlertDescription>EOS coordinates the work and evidence; it does not silently replace the authoritative CRM or provider record.</AlertDescription></Alert></CardContent></Card>
             <Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Overlay contract</AlertTitle><AlertDescription>Provider records remain authoritative until a field-level native cutover is explicitly qualified.</AlertDescription></Alert>
           </TabsContent>
 
@@ -506,10 +556,11 @@ export default function EosOverlayPage() {
           <TabsContent value="review" className="space-y-6">
             <section className="space-y-3"><div><p className="eos-label">Assigned authority queue</p><h2 className="mt-1 text-xl font-semibold">Decisions requiring this seat</h2></div>{approvals.map((approval) => <Card key={approval.id}><CardContent className="flex flex-col gap-4 pt-8 md:flex-row md:items-center md:justify-between"><div><h3 className="font-semibold">{approval.summary}</h3><StateBadge state={approval.status} /></div>{approval.status === "pending" && <div className="flex gap-2"><Button variant="outline" onClick={() => approvalMutation.mutate({ id: approval.id, decision: "rejected" })}>Reject</Button><Button onClick={() => approvalMutation.mutate({ id: approval.id, decision: "approved" })}>Approve</Button></div>}</CardContent></Card>)}{!approvals.length && <EmptyState icon={ClipboardCheck} title="No assigned decisions" description="Only approvals assigned to this principal appear here." />}</section>
             <Card><CardHeader><CardTitle>Provider reconciliation</CardTitle><CardDescription>External effects remain explicit through request, approval, receipt, and reconciliation.</CardDescription></CardHeader><CardContent className="space-y-3">{(providerExecutionsQuery.data || []).map((execution) => <div key={execution.id} className="rounded-xl bg-muted p-4"><div className="flex items-center justify-between gap-3"><span className="font-medium">{execution.operation}</span><StateBadge state={execution.status} /></div><p className="mt-1 text-sm text-muted-foreground">{execution.reconciliationStatus.replaceAll("_", " ")} · trace {execution.traceId.slice(0, 8)}</p></div>)}{!providerExecutionsQuery.data?.length && <p className="text-sm text-muted-foreground">No provider executions in this visibility scope.</p>}</CardContent></Card>
+            {auditVisible && <Card><CardHeader><CardTitle>Recent control receipts</CardTitle><CardDescription>Persisted audit evidence for actions within this seat's visibility.</CardDescription></CardHeader><CardContent className="space-y-3">{(auditQuery.data || []).slice(0, 12).map((record) => <div key={record.id} className="flex flex-col gap-2 rounded-xl bg-muted p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">{String(record.action).replaceAll("_", " ")}</p><p className="mt-1 text-xs text-muted-foreground">{record.targetType} · {new Date(record.createdAt).toLocaleString()}</p></div><div className="flex items-center gap-2"><StateBadge state={record.result || "recorded"} /><code className="text-[10px] text-muted-foreground">{String(record.traceId || "").slice(0, 8)}</code></div></div>)}{auditQuery.isLoading && <p className="text-sm text-muted-foreground">Loading signed control history…</p>}{!auditQuery.isLoading && !auditQuery.data?.length && <p className="text-sm text-muted-foreground">No audit receipts are visible yet.</p>}</CardContent></Card>}
           </TabsContent>
 
           <TabsContent value="academy" className="space-y-6">
-            <Card><CardHeader><CardTitle>Seat Academy</CardTitle><CardDescription>Learning is compiled from this seat's mandate, current work, policies, evidence requirements, and canonical operating context.</CardDescription></CardHeader><CardContent className="space-y-4"><Fact label="Current learning objective" value={`Operate the ${principalContext?.seat || "active seat"} within its authority ceiling`} /><Fact label="Practical exercise" value={activePackets[0]?.title || "Create the first evidence-bearing Work Packet"} /><Fact label="Advancement proof" value="Reviewed output, named evidence, and supervisor acceptance" /></CardContent></Card>
+            <Card><CardHeader><CardTitle>Seat Academy</CardTitle><CardDescription>Practice inside real work, then prove advancement with reviewed evidence.</CardDescription></CardHeader><CardContent className="space-y-5"><Fact label="Current learning objective" value={`Operate the ${principalContext?.seat || "active seat"} within its authority ceiling`} /><Fact label="Practical exercise" value={activePackets[0]?.title || "Create the first evidence-bearing Work Packet"} /><Fact label="Advancement proof" value="Reviewed output, named evidence, and supervisor acceptance" /><div className="flex flex-wrap gap-2"><Button onClick={() => prepareWorkPacket(`Seat practice: ${principalContext?.seat || "active role"}`, `Complete a practical exercise for the ${principalContext?.seat || "active role"}, record evidence, and request supervisor review.`)}><BookOpen className="mr-2 h-4 w-4" />Start practical exercise</Button><Button variant="outline" onClick={() => sendEaMessage(`Coach me on the next practical skill for the ${principalContext?.seat || "active role"}. Ground it in current work and define the evidence required.`)}><MessagesSquare className="mr-2 h-4 w-4" />Ask role coach</Button></div></CardContent></Card>
             {notionContextQuery.data && <ListCard title="Canonical Notion references" empty="No shared Notion pages were returned." items={(notionContextQuery.data.results || []).map((item: JsonRecord) => ({ ...item, title: item.title, objective: item.lastEditedTime ? `Updated ${new Date(item.lastEditedTime).toLocaleString()}` : "Reference", status: "reference" }))} />}
           </TabsContent>
 
@@ -523,11 +574,11 @@ export default function EosOverlayPage() {
           </TabsContent>
 
           <TabsContent value="intelligence" className="space-y-6">
-            <Card><CardHeader><CardTitle>{assistantName} · {isFounder ? "Executive Office" : `${principalContext?.seat} assistant`}</CardTitle><CardDescription>{isFounder ? "One founder-facing conversation, orchestrating portfolio advisors and company CEO Agents without flattening the organization." : "A persistent Role Agent operating as the human seat occupant's assistant inside the reporting hierarchy."}</CardDescription></CardHeader><CardContent className="space-y-4"><p className="text-muted-foreground">{assistantName} may explain state, preserve provenance, and draft bounded work. It may not expand this seat's visibility, grant authority, or execute consequential effects.</p><div className="grid gap-4 md:grid-cols-3"><Fact label="Channel" value={principalContext?.visibility?.communicationPath || assistantName} /><Fact label="Operating mode" value={principalContext?.communicationMode?.replaceAll("_", " ") || "assistant"} /><Fact label="Authority" value="Advice only; EOS approvals govern effects" /></div></CardContent></Card>
+            <Card><CardHeader><CardTitle>{assistantName} · {isFounder ? "Executive Office" : `${principalContext?.seat} assistant`}</CardTitle><CardDescription>{isFounder ? "One founder-facing conversation, orchestrating portfolio advisors and company CEO Agents without flattening the organization." : "A persistent Role Agent operating as the human seat occupant's assistant inside the reporting hierarchy."}</CardDescription></CardHeader><CardContent className="space-y-4"><p className="text-muted-foreground">{assistantName} may explain state, preserve provenance, and draft bounded work. It may not expand this seat's visibility, grant authority, or execute consequential effects.</p><div className="grid gap-4 md:grid-cols-3"><Fact label="Channel" value={principalContext?.visibility?.communicationPath || assistantName} /><Fact label="Operating mode" value={principalContext?.communicationMode?.replaceAll("_", " ") || "assistant"} /><Fact label="Authority" value="Advice only; EOS approvals govern effects" /></div><Button onClick={openCommunication}><MessagesSquare className="mr-2 h-4 w-4" />Open {assistantName} conversation</Button></CardContent></Card>
             {advisorVisible && <div><p className="eos-label">Portfolio intelligence</p><h2 className="mt-1 text-xl font-semibold">15-advisor council</h2><p className="mt-2 max-w-3xl text-sm text-muted-foreground">The mandates are stable; each consultation is personalized, persisted, and synthesized by the EA with source identity and dissent retained.</p></div>}
             {councilQuery.isLoading && <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Compiling the advisor council…</CardContent></Card>}
             {councilQuery.isError && <Alert variant="destructive"><AlertTitle>Advisor council unavailable</AlertTitle><AlertDescription>Retry the workspace. No substitute council is implied.</AlertDescription></Alert>}
-            {advisorVisible && <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{(councilQuery.data?.advisors || []).map((advisor: JsonRecord, index: number) => <Card key={advisor.id}><CardContent className="pt-8"><div className="flex items-start justify-between gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-muted text-sm font-semibold text-primary">{index + 1}</span><Badge variant="outline">{advisor.timeHorizon}</Badge></div><h3 className="mt-5 font-semibold">{advisor.name}</h3><p className="mt-2 text-sm text-muted-foreground">{advisor.mandate}</p>{advisor.professionalBoundary && <p className="mt-3 rounded-lg bg-muted p-3 text-xs text-muted-foreground">{advisor.professionalBoundary}</p>}</CardContent></Card>)}</div>}
+            {advisorVisible && <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{(councilQuery.data?.advisors || []).map((advisor: JsonRecord, index: number) => <Card key={advisor.id}><CardContent className="flex h-full flex-col pt-8"><div className="flex items-start justify-between gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-muted text-sm font-semibold text-primary">{index + 1}</span><Badge variant="outline">{advisor.timeHorizon}</Badge></div><h3 className="mt-5 font-semibold">{advisor.name}</h3><p className="mt-2 flex-1 text-sm text-muted-foreground">{advisor.mandate}</p>{advisor.professionalBoundary && <p className="mt-3 rounded-lg bg-muted p-3 text-xs text-muted-foreground">{advisor.professionalBoundary}</p>}<Button className="mt-4 w-full" variant="outline" onClick={() => sendEaMessage(`Consult the ${advisor.name} perspective on our current company priorities. Return its assumptions, risks, recommendation, and material dissent through your EA synthesis.`)}><MessagesSquare className="mr-2 h-4 w-4" />Consult through {assistantName}</Button></CardContent></Card>)}</div>}
             {advisorVisible && <Card><CardHeader><CardTitle>Recent advisor artifacts</CardTitle><CardDescription>Each artifact identifies which advisor was actually consulted and which model produced the result.</CardDescription></CardHeader><CardContent className="space-y-3">{(consultationsQuery.data || []).slice(0, 12).map((item) => <div key={item.id} className="rounded-xl bg-muted p-4"><div className="flex items-center justify-between gap-3"><span className="font-medium">{item.advisorName}</span><StateBadge state={item.status} /></div><p className="mt-2 text-sm text-muted-foreground">{item.response}</p><p className="mt-2 text-xs text-muted-foreground">{item.model || "No provider model"} · {new Date(item.createdAt).toLocaleString()}</p></div>)}{!consultationsQuery.data?.length && <p className="text-sm text-muted-foreground">Advisor artifacts appear after the EA convenes relevant seats for a founder request.</p>}</CardContent></Card>}
             {advisorVisible && <Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Council outputs are advisory artifacts</AlertTitle><AlertDescription>The founder does not manage fifteen parallel chats. {assistantName} convenes the relevant perspectives, returns a synthesis with dissent and provenance, and moves requested action into the Work Packet and approval lifecycle.</AlertDescription></Alert>}
           </TabsContent>
@@ -548,6 +599,7 @@ export default function EosOverlayPage() {
               />
             ))}
             {!integrationsQuery.isLoading && !integrationsQuery.data?.length && <EmptyState icon={Blocks} title="Integration state unavailable" description="Refresh the workspace to reload provider configuration and health." />}
+            {isFounder && <Card><CardHeader><CardTitle>AI spend controls</CardTitle><CardDescription>Set enforceable limits for advisor, EA, and role-agent model usage.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><label htmlFor="monthly-ai-budget" className="eos-label">Monthly limit (USD)</label><Input id="monthly-ai-budget" type="number" min="1" max="10000" step="1" value={monthlyAiBudget} onChange={(event) => setMonthlyAiBudget(event.target.value)} className="mt-2" /></div><div><label htmlFor="request-ai-budget" className="eos-label">Per-request limit (USD)</label><Input id="request-ai-budget" type="number" min="0.01" max="1000" step="0.01" value={perRequestAiBudget} onChange={(event) => setPerRequestAiBudget(event.target.value)} className="mt-2" /></div></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={aiBudgetEnabled} onChange={(event) => setAiBudgetEnabled(event.target.checked)} />Enforce AI spend controls</label><div className="flex flex-wrap items-center gap-3"><Button disabled={aiBudgetMutation.isPending || !Number(monthlyAiBudget) || !Number(perRequestAiBudget) || Number(perRequestAiBudget) > Number(monthlyAiBudget)} onClick={() => aiBudgetMutation.mutate()}>{aiBudgetMutation.isPending ? "Saving…" : "Save spend controls"}</Button>{aiBudgetQuery.data && <span className="text-sm text-muted-foreground">Spent this month: ${((aiBudgetQuery.data.spentMicros || 0) / 1_000_000).toFixed(2)}</span>}</div></CardContent></Card>}
             <Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Standalone-safe operation</AlertTitle><AlertDescription>EOS keeps manifests, work, approvals, audit, and evidence available when Universal Meta Harness or providers are offline.</AlertDescription></Alert>
           </TabsContent>
         </Tabs>
@@ -562,7 +614,7 @@ function Metric({ label, value, icon: Icon }: { label: string; value: number; ic
 
 function Fact({ label, value }: { label: string; value: string }) { return <div className="rounded-lg bg-muted/50 p-3"><div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div><div className="mt-1">{value}</div></div>; }
 
-function ListCard({ title, items, empty }: { title: string; items: JsonRecord[]; empty: string }) { return <Card><CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader><CardContent className="space-y-3">{items.map((item, index) => <div key={item.id} className={index % 2 === 0 ? "rounded-xl bg-muted p-4" : "rounded-xl bg-[#f5f6f7] p-4"}><div className="flex items-center justify-between gap-2"><span className="font-medium">{item.title}</span><StateBadge state={item.status} /></div><p className="mt-1 text-sm text-muted-foreground">{item.objective}</p></div>)}{!items.length && <p className="text-sm text-muted-foreground">{empty}</p>}</CardContent></Card>; }
+function ListCard({ title, items, empty, actionLabel, onSelect }: { title: string; items: JsonRecord[]; empty: string; actionLabel?: string; onSelect?: (item: JsonRecord) => void }) { return <Card><CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader><CardContent className="space-y-3">{items.map((item, index) => <div key={item.id} className={index % 2 === 0 ? "rounded-xl bg-muted p-4" : "rounded-xl bg-[#f5f6f7] p-4"}><div className="flex items-center justify-between gap-2"><span className="font-medium">{item.title}</span><StateBadge state={item.status} /></div><p className="mt-1 text-sm text-muted-foreground">{item.objective}</p>{onSelect && <Button size="sm" variant="ghost" className="mt-2 -ml-3 text-primary" onClick={() => onSelect(item)}>{actionLabel || "Open"}<ExternalLink className="ml-1.5 h-3.5 w-3.5" /></Button>}</div>)}{!items.length && <p className="text-sm text-muted-foreground">{empty}</p>}</CardContent></Card>; }
 
 function EmptyState({ icon: Icon, title, description }: { icon: typeof Workflow; title: string; description: string }) { return <Card><CardContent className="py-12 text-center"><Icon className="mx-auto h-8 w-8 text-muted-foreground" /><h3 className="mt-3 font-semibold">{title}</h3><p className="mt-1 text-sm text-muted-foreground">{description}</p></CardContent></Card>; }
 

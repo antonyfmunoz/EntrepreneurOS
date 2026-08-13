@@ -6,7 +6,7 @@
 
 ## Release definition
 
-The required overlay MVP is the governed EntrepreneurOS runtime, not the eventual fully native 17-module platform. It includes seven closure areas:
+The required overlay MVP is the governed EntrepreneurOS runtime, not the eventual fully native 17-module platform. It includes eight closure areas:
 
 1. role-compiled visibility enforced at the API, data projection, navigation, and agent-context layers;
 2. a persistent Founder Executive Assistant, fifteen founder-profiled portfolio advisors, Company CEO Agent delegation, and seat-specific Role Agent assistants respecting the reporting hierarchy;
@@ -14,7 +14,8 @@ The required overlay MVP is the governed EntrepreneurOS runtime, not the eventua
 4. an approval-gated customer-value provider loop with effect request, provider receipt, evidence, audit, failure blocking, and reconciliation;
 5. live Google Workspace and Notion context adapters with explicit provider health and scope evidence;
 6. My Role, Work Room, Review Room, Academy, and Portfolio Map operator surfaces inside the canonical EOS shell;
-7. reproducible migrations, qualification commands, source control, deployment, and honest release evidence.
+7. an interaction-first operator loop in which descriptive state leads to a controlled next action, EA output can become governed work, approvals change durable state, and audit receipts expose the result;
+8. reproducible migrations, qualification commands, source control, deployment, and honest release evidence.
 
 ## Current qualification evidence
 
@@ -27,7 +28,7 @@ The required overlay MVP is the governed EntrepreneurOS runtime, not the eventua
 | Compiler lifecycle | Pass | draft → diagnostic → proposed → review → approved → provisioning → verifying → active, with provisioning and verification gates |
 | Hierarchical communication | Pass | Persistent per-seat channels; Role Agent assistant mode; three selected advisor calls; current/specified Company CEO Agent calls; one persisted Executive Assistant synthesis with provenance |
 | Consequential provider loop | Pass in deterministic adapter test | Gmail request → assigned approval → provider execution → receipt evidence → audit → reconciled status; provider failure blocks the Work Packet |
-| Browser acceptance | Pass | Seven operator surfaces at 1440×1000; hierarchy-builder interaction; 390×844 no overflow; movable communication FAB; full-width mobile communication drawer; no browser errors |
+| Browser acceptance | Pass | Seven operator surfaces at 1440×1000; mission creation → assigned approval → durable decision → audit receipt; hierarchy builder; enforced AI spend controls; 390×844 no overflow; movable communication FAB; full-width contextual communication launch; no browser errors; zero serious/critical accessibility findings |
 | Source control | Pass | `feature/company-system` is protected, strict/up-to-date, conversation-resolved, admin-enforced, and requires both `qualify` and fail-closed `Analyze (javascript-typescript)` checks |
 | Supply-chain evidence | Pass | Protected-branch qualification generates a production-only CycloneDX SBOM, hashes and retains it, and issues SLSA provenance on push; commit `22fadc620fcb147b54930a14dbf5bd626f8f82b5` was independently verified against the signed subject |
 | Static application security | Pass with one reviewed false positive | CodeQL reports zero open alerts on the protected product branch. The only accepted raw SARIF result is the exact Gmail OAuth-state HMAC verification rule/path, capped at one; it is message authentication with timing-safe comparison, not password storage |

@@ -46,6 +46,16 @@ export function UniversalLayout({
   const hasCustomLeft = Boolean(leftRailItems?.length);
   const hasRight = Boolean(rightRailContent);
 
+  useEffect(() => {
+    const openCommunication = () => {
+      if (!hasRight) return;
+      if (window.matchMedia("(min-width: 1280px)").matches) right.setCollapsed(false);
+      else setMobileRightOpen(true);
+    };
+    window.addEventListener("eos:open-communication", openCommunication);
+    return () => window.removeEventListener("eos:open-communication", openCommunication);
+  }, [hasRight, right.setCollapsed]);
+
   const customNavigation = (
     <CustomNavigation items={leftRailItems ?? []} collapsed={left.collapsed} onNavigate={() => setMobileLeftOpen(false)} />
   );

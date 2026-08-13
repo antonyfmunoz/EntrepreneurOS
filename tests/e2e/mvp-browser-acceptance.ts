@@ -23,6 +23,19 @@ try {
     await desktop.screenshot({ path: ".tmp/e2e-failure.png", fullPage: true });
     throw new Error(`Home did not render. URL=${desktop.url()} body=${(await desktop.locator("body").innerText()).slice(0, 1200)} browserErrors=${browserErrors.join(" | ")}`, { cause: error });
   }
+  await desktop.getByRole("button", { name: "Create mission" }).click();
+  await desktop.getByRole("heading", { name: "Operations", exact: true }).waitFor();
+  const missionTitle = `Interactive MVP ${Date.now()}`;
+  await desktop.getByPlaceholder("Mission title").fill(missionTitle);
+  await desktop.getByPlaceholder("Objective and intended outcome").fill("Verify the interactive decision, work, approval, and audit loop.");
+  await desktop.getByRole("button", { name: "Create Work Packet" }).click();
+  await desktop.getByText(missionTitle, { exact: true }).waitFor();
+  await desktop.getByRole("link", { name: "Review Room", exact: true }).click();
+  await desktop.getByRole("heading", { name: "Review Room", exact: true }).waitFor();
+  const approvalCard = desktop.getByText(`Authorize work packet: ${missionTitle}`, { exact: true }).locator("xpath=ancestor::*[.//button[normalize-space()='Approve']][1]");
+  await approvalCard.waitFor();
+  await approvalCard.getByRole("button", { name: "Approve", exact: true }).click();
+  await desktop.getByText("Work approved", { exact: true }).waitFor();
   await desktop.getByRole("link", { name: "Organization", exact: true }).click();
   await desktop.getByRole("heading", { name: "Organization", exact: true }).waitFor();
   const seatTitle = `Browser QA ${Date.now()}`;
@@ -34,6 +47,13 @@ try {
     await desktop.getByRole("link", { name: surface, exact: true }).click();
     await desktop.getByRole("heading", { name: surface, exact: true }).waitFor();
   }
+  await desktop.getByLabel("Monthly limit (USD)").fill("30");
+  await desktop.getByLabel("Per-request limit (USD)").fill("2");
+  await desktop.getByRole("button", { name: "Save spend controls" }).click();
+  await desktop.getByText("Spent this month:", { exact: false }).waitFor();
+  await desktop.getByRole("link", { name: "Review Room", exact: true }).click();
+  await desktop.getByRole("heading", { name: "Recent control receipts" }).waitFor();
+  await desktop.getByText("ai budget.updated", { exact: true }).first().waitFor();
   const desktopOverflow = await desktop.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   if (desktopOverflow) throw new Error("Desktop workspace has horizontal overflow.");
   // Radix Toast injects two aria-hidden focus guards with tabindex=0 to keep
@@ -70,8 +90,12 @@ try {
   const box = await drawer.boundingBox();
   if (!box || Math.abs(box.width - 390) > 2) throw new Error(`Mobile communication drawer is ${box?.width ?? 0}px instead of full width.`);
   await drawer.getByRole("button", { name: "Close communication" }).click();
+  await mobile.goto(`${origin}/company/${companyId}#intelligence`, { waitUntil: "domcontentloaded" });
+  await mobile.getByRole("heading", { name: "Intelligence", exact: true }).waitFor();
+  await mobile.getByRole("button", { name: /Open .* conversation/ }).click();
+  await mobile.locator("#mobile-communication-drawer aside").waitFor();
   if (browserErrors.length) throw new Error(`Browser errors: ${browserErrors.join(" | ")}`);
-  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 7, hierarchyBuilder: true, desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
+  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 7, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, aiSpendControls: true, auditReceipts: true, desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
 } finally {
   await browser.close();
 }
