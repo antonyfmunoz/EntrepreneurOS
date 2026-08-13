@@ -114,6 +114,16 @@ try {
   await mobile.getByText("Organizations", { exact: true }).first().waitFor();
   if (await mobile.getByText("Operating contexts", { exact: true }).count()) throw new Error("The obsolete operating-context metric is still shown beside Organizations.");
   await assertCompactHeaderAction("Add organization", portfolioName);
+  await mobile.goto(`${origin}/company-setup?portfolioId=${portfolioId}`, { waitUntil: "domcontentloaded" });
+  await mobile.getByRole("heading", { name: "Build the operating foundation", exact: true }).waitFor();
+  await mobile.getByLabel("Step 2 of 6: Company", { exact: true }).waitFor();
+  if (await mobile.getByRole("button", { name: "Open navigation", exact: true }).count()) throw new Error("Company setup exposes operating navigation before an organization exists.");
+  const setupOverflow = await mobile.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  if (setupOverflow) throw new Error("Mobile company setup has horizontal overflow.");
+  await mobile.getByRole("button", { name: "Back", exact: true }).click();
+  await mobile.getByLabel("Step 1 of 6: Portfolio", { exact: true }).waitFor();
+  await mobile.getByText(portfolioName, { exact: true }).locator("xpath=ancestor::button[1]").click();
+  await mobile.getByLabel("Step 2 of 6: Company", { exact: true }).waitFor();
   await mobile.goto(`${origin}/company/${companyId}#my-role`, { waitUntil: "domcontentloaded" });
   await mobile.getByRole("heading", { name: "My Role", exact: true }).waitFor();
   await assertCompactHeaderAction("Refresh workspace", "My Role");
@@ -139,7 +149,7 @@ try {
   await mobile.getByRole("button", { name: /Open .* conversation/ }).click();
   await mobile.locator("#mobile-communication-drawer aside").waitFor();
   if (browserErrors.length) throw new Error(`Browser errors: ${browserErrors.join(" | ")}`);
-  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 7, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
+  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 7, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, guidedCompanySetup: true, aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
 } finally {
   await browser.close();
 }

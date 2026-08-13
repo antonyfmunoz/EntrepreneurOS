@@ -1,13 +1,15 @@
-import { useState, useCallback, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import UniversalLayout from "@/components/layout/universal-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { apiRequest } from "@/lib/queryClient";
-import { ChevronRight, Check } from "lucide-react";
+import { normalizeOptionalGoals } from "@/lib/company-setup";
+import { ArrowLeft, ChevronRight } from "lucide-react";
 
 // Types
 interface Portfolio {
@@ -92,6 +94,7 @@ export default function CompanySetupPage() {
   const [founderValues, setFounderValues] = useState("");
   const [decisionStyle, setDecisionStyle] = useState("");
   const [workingStyle, setWorkingStyle] = useState("");
+  const requestedPortfolioHandled = useRef(false);
 
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -107,6 +110,16 @@ export default function CompanySetupPage() {
 
   const portfolios = portfoliosData ?? [];
 
+  useEffect(() => {
+    if (requestedPortfolioHandled.current || portfoliosLoading || portfoliosError || !selectedPortfolioId) return;
+    requestedPortfolioHandled.current = true;
+    if (portfolios.some((portfolio) => String(portfolio.id) === selectedPortfolioId)) {
+      setCurrentStep(1);
+      return;
+    }
+    setSelectedPortfolioId("");
+  }, [portfolios, portfoliosError, portfoliosLoading, selectedPortfolioId]);
+
   const createPortfolioMutation = useMutation<PortfolioCreateResponse, Error, PortfolioCreatePayload>({
     mutationFn: async (data: PortfolioCreatePayload) => {
       const response = await apiRequest("POST", "/api/portfolios", data);
@@ -115,7 +128,10 @@ export default function CompanySetupPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["portfolios"] });
       setSelectedPortfolioId(String(data.id));
+      setPortfolioName("");
+      setPortfolioDescription("");
       setShowCreatePortfolio(false);
+      setCurrentStep(1);
       if (typeof window !== "undefined" && (window as any).posthog) {
         (window as any).posthog.capture("portfolio_created_inline", { portfolioId: data.id });
       }
@@ -231,7 +247,7 @@ export default function CompanySetupPage() {
     });
   }, [portfolioName, portfolioDescription, createPortfolioMutation]);
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback((goalsOverride?: string) => {
     if (!validateStep(4)) return;
 
     createCompanyMutation.mutate({
@@ -240,7 +256,7 @@ export default function CompanySetupPage() {
       stage,
       industry,
       businessModel,
-      goals: goals.trim() || undefined,
+      goals: normalizeOptionalGoals(goalsOverride ?? goals),
       assistantName: assistantName.trim(),
       founderProfile: {
         vision: founderVision.trim(),
@@ -253,6 +269,7 @@ export default function CompanySetupPage() {
 
   const handleSelectPortfolio = useCallback((portfolioId: string) => {
     setSelectedPortfolioId(portfolioId);
+    setCurrentStep(1);
     if (typeof window !== "undefined" && (window as any).posthog) {
       (window as any).posthog.capture("portfolio_selected", { portfolioId });
     }
@@ -260,59 +277,46 @@ export default function CompanySetupPage() {
 
   const stepNames = ["Portfolio", "Company", "Stage", "Model", "Executive Office", "Goals"];
   const totalSteps = 6;
+  const selectedPortfolio = portfolios.find((portfolio) => String(portfolio.id) === selectedPortfolioId);
 
   const getStepName = (step: number): string => stepNames[step] || "";
 
   return (
-    <div className="min-h-screen bg-surface flex items-center justify-center px-4 py-8">
-      <div className="w-full max-w-2xl">
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <h1 className="font-mono font-bold text-4xl text-text mb-2">Build your operating system</h1>
-          <p className="font-mono text-sm text-text-secondary">Set up your portfolio and create your first company.</p>
+    <UniversalLayout
+      title="Company setup"
+      portfolioName={selectedPortfolio?.name}
+      portfolioHref={selectedPortfolio ? `/portfolios/${selectedPortfolio.id}` : "/portfolios"}
+      leftRailItems={[]}
+      floatingPanel={false}
+    >
+      <section className="mx-auto w-full max-w-2xl pb-10">
+        <Link href={selectedPortfolio ? `/portfolios/${selectedPortfolio.id}` : "/portfolios"} className="inline-flex items-center text-sm font-medium text-primary hover:text-[#5a2dc0]">
+          <ArrowLeft className="mr-1.5 h-4 w-4" />Cancel setup
+        </Link>
+
+        <div className="mt-6">
+          <p className="eos-label">Organization setup</p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">Build the operating foundation</h1>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">Define the minimum context EOS needs to create a useful, role-aware workspace.</p>
         </div>
 
-        {/* Step Indicator */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-2">
-            {stepNames.map((name, idx) => (
-              <div key={idx} className="flex items-center flex-1">
-                <div className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${
-                  idx < currentStep
-                    ? "bg-primary border-primary text-text-on-primary"
-                    : idx === currentStep
-                    ? "border-primary text-primary bg-surface"
-                    : "border-border text-text-tertiary bg-surface"
-                } font-mono text-xs font-semibold transition-all duration-200`}>
-                  {idx < currentStep ? <Check className="w-4 h-4" /> : idx + 1}
-                </div>
-                {idx < totalSteps - 1 && (
-                  <div className={`flex-1 h-0.5 mx-2 ${
-                    idx < currentStep ? "bg-primary" : "bg-border"
-                  } transition-all duration-200`} />
-                )}
-              </div>
-            ))}
+        <div className="my-7 rounded-xl bg-[#eff1f2] p-4 sm:p-5" aria-label={`Step ${currentStep + 1} of ${totalSteps}: ${getStepName(currentStep)}`}>
+          <div className="flex items-center justify-between gap-4">
+            <div><p className="eos-label">Step {currentStep + 1} of {totalSteps}</p><p className="mt-1 font-semibold">{getStepName(currentStep)}</p></div>
+            <span className="text-sm text-muted-foreground">{Math.round(((currentStep + 1) / totalSteps) * 100)}%</span>
           </div>
-          <div className="flex justify-between">
-            {stepNames.map((name, idx) => (
-              <div key={idx} className="flex-1 text-center">
-                <p className={`font-mono text-xs uppercase tracking-wide ${
-                  idx === currentStep ? "text-text" : "text-text-tertiary"
-                }`}>
-                  {name}
-                </p>
-              </div>
-            ))}
-          </div>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white" aria-hidden="true"><div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${((currentStep + 1) / totalSteps) * 100}%` }} /></div>
+          <ol className="mt-4 hidden grid-cols-6 gap-2 sm:grid">
+            {stepNames.map((name, idx) => <li key={name} className={`truncate text-center text-[10px] font-medium uppercase tracking-wide ${idx === currentStep ? "text-primary" : idx < currentStep ? "text-foreground" : "text-muted-foreground"}`}>{idx < currentStep ? "Done" : name}</li>)}
+          </ol>
         </div>
 
         {/* Wizard Content */}
-        <div className="bg-surface-elevated rounded-lg border border-border shadow-lg p-8 min-h-[400px]">
+        <div className="min-h-[400px] rounded-2xl bg-white p-5 shadow-[0_8px_32px_rgba(106,55,212,0.08)] sm:p-8">
           {currentStep === 0 && (
             <div className="space-y-6">
               <div>
-                <h2 className="font-mono font-semibold text-2xl text-text mb-4">Select or create a portfolio</h2>
+                <h2 className="mb-4 text-2xl font-semibold">Select or create a portfolio</h2>
                 {portfoliosLoading && (
                   <div className="space-y-3">
                     <div className="bg-surface-subtle rounded-md h-16 animate-pulse" />
@@ -324,7 +328,7 @@ export default function CompanySetupPage() {
                     <p className="font-mono text-sm text-destructive mb-3">Connection failed. Try again.</p>
                     <Button
                       onClick={() => queryClient.invalidateQueries({ queryKey: ["portfolios"] })}
-                      className="bg-destructive hover:bg-destructive-hover text-text-on-primary font-mono font-semibold text-sm uppercase tracking-wide px-4 py-2 rounded-md"
+                      variant="destructive"
                     >
                       Retry
                     </Button>
@@ -338,15 +342,15 @@ export default function CompanySetupPage() {
                           <button
                             key={portfolio.id}
                             onClick={() => handleSelectPortfolio(String(portfolio.id))}
-                            className={`w-full text-left bg-surface border rounded-md p-4 transition-all duration-150 ${
+                            className={`w-full rounded-xl border bg-muted/40 p-4 text-left transition-all duration-150 ${
                               selectedPortfolioId === String(portfolio.id)
                                 ? "border-primary ring-2 ring-primary"
-                                : "border-border hover:border-border-hover hover:bg-surface-subtle"
+                                : "border-border hover:border-primary/30 hover:bg-muted"
                             }`}
                           >
-                            <p className="font-mono font-semibold text-base text-text">{portfolio.name}</p>
+                            <p className="text-base font-semibold">{portfolio.name}</p>
                             {portfolio.description && (
-                              <p className="font-mono text-sm text-text-secondary mt-1">{portfolio.description}</p>
+                              <p className="mt-1 text-sm text-muted-foreground">{portfolio.description}</p>
                             )}
                           </button>
                         ))}
@@ -359,15 +363,16 @@ export default function CompanySetupPage() {
                     {!showCreatePortfolio && (
                       <Button
                         onClick={() => setShowCreatePortfolio(true)}
-                        className="w-full bg-surface-subtle hover:bg-border text-text font-mono font-medium text-sm uppercase tracking-wide px-6 py-3 rounded-md border border-border transition-all duration-150"
+                        variant="secondary"
+                        className="w-full"
                       >
                         Create portfolio
                       </Button>
                     )}
                     {showCreatePortfolio && (
-                      <div className="bg-surface border border-border rounded-md p-6 space-y-4">
+                      <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-5 sm:p-6">
                         <div>
-                          <Label htmlFor="portfolioName" className="font-mono text-xs uppercase tracking-wide text-text-secondary">
+                          <Label htmlFor="portfolioName" className="eos-label">
                             Portfolio Name
                           </Label>
                           <Input
@@ -375,16 +380,14 @@ export default function CompanySetupPage() {
                             value={portfolioName}
                             onChange={(e) => setPortfolioName(e.target.value)}
                             placeholder="e.g., My Ventures"
-                            className={`mt-2 bg-surface-subtle border rounded-md px-4 py-3 font-mono text-base text-text placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-150 ${
-                              errors.portfolioName ? "border-destructive" : "border-border"
-                            }`}
+                            className={`mt-2 ${errors.portfolioName ? "border-destructive" : ""}`}
                           />
                           {errors.portfolioName && (
                             <p className="mt-1 font-mono text-xs text-destructive">{errors.portfolioName}</p>
                           )}
                         </div>
                         <div>
-                          <Label htmlFor="portfolioDescription" className="font-mono text-xs uppercase tracking-wide text-text-secondary">
+                          <Label htmlFor="portfolioDescription" className="eos-label">
                             Description
                           </Label>
                           <p className="font-mono text-xs text-text-tertiary mt-1 mb-2">Optional. Describe what this portfolio contains.</p>
@@ -393,20 +396,20 @@ export default function CompanySetupPage() {
                             value={portfolioDescription}
                             onChange={(e) => setPortfolioDescription(e.target.value)}
                             placeholder="e.g., Holding company for all my projects"
-                            className="mt-2 bg-surface-subtle border border-border rounded-md px-4 py-3 font-mono text-base text-text placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-150 min-h-[80px]"
+                            className="mt-2 min-h-[80px]"
                           />
                         </div>
                         <div className="flex space-x-3">
                           <Button
                             onClick={handleCreatePortfolio}
                             disabled={createPortfolioMutation.isPending}
-                            className="flex-1 bg-primary hover:bg-primary-hover text-text-on-primary font-mono font-semibold text-sm uppercase tracking-wide px-6 py-3 rounded-md transition-colors duration-150"
+                            className="flex-1"
                           >
                             {createPortfolioMutation.isPending ? "Saving..." : "Save portfolio"}
                           </Button>
                           <Button
                             onClick={() => setShowCreatePortfolio(false)}
-                            className="bg-surface-subtle hover:bg-border text-text font-mono font-medium text-sm uppercase tracking-wide px-6 py-3 rounded-md border border-border transition-all duration-150"
+                            variant="secondary"
                           >
                             Cancel
                           </Button>
@@ -428,9 +431,9 @@ export default function CompanySetupPage() {
           {currentStep === 1 && (
             <div className="space-y-6">
               <div>
-                <h2 className="font-mono font-semibold text-2xl text-text mb-4">What's your company called?</h2>
+                <h2 className="mb-4 text-2xl font-semibold">What's your company called?</h2>
                 <div>
-                  <Label htmlFor="companyName" className="font-mono text-xs uppercase tracking-wide text-text-secondary">
+                  <Label htmlFor="companyName" className="eos-label">
                     Company Name
                   </Label>
                   <Input
@@ -438,9 +441,7 @@ export default function CompanySetupPage() {
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
                     placeholder="e.g., Acme Labs"
-                    className={`mt-2 bg-surface-subtle border rounded-md px-4 py-3 font-mono text-base text-text placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-150 ${
-                      errors.companyName ? "border-destructive" : "border-border"
-                    }`}
+                    className={`mt-2 ${errors.companyName ? "border-destructive" : ""}`}
                   />
                   {errors.companyName && (
                     <p className="mt-1 font-mono text-xs text-destructive">{errors.companyName}</p>
@@ -453,21 +454,21 @@ export default function CompanySetupPage() {
           {currentStep === 2 && (
             <div className="space-y-6">
               <div>
-                <h2 className="font-mono font-semibold text-2xl text-text mb-2">What stage?</h2>
-                <p className="font-mono text-sm text-text-secondary mb-4">We'll adapt your operating system to your scale.</p>
+                <h2 className="mb-2 text-2xl font-semibold">What stage?</h2>
+                <p className="mb-4 text-sm text-muted-foreground">We'll adapt your operating system to your scale.</p>
                 <RadioGroup value={stage} onValueChange={setStage}>
                   <div className="space-y-3">
                     {STAGES.map((s) => (
                       <label
                         key={s.value}
-                        className={`flex items-center space-x-3 bg-surface border rounded-md p-4 cursor-pointer transition-all duration-150 ${
+                        className={`flex cursor-pointer items-center space-x-3 rounded-xl border bg-muted/40 p-4 transition-all duration-150 ${
                           stage === s.value
                             ? "border-primary ring-2 ring-primary"
-                            : "border-border hover:border-border-hover hover:bg-surface-subtle"
+                            : "border-border hover:border-primary/30 hover:bg-muted"
                         }`}
                       >
                         <RadioGroupItem value={s.value} id={s.value} className="border-border" />
-                        <span className="font-mono text-base text-text">{s.label}</span>
+                        <span className="text-base">{s.label}</span>
                       </label>
                     ))}
                   </div>
@@ -482,10 +483,10 @@ export default function CompanySetupPage() {
           {currentStep === 3 && (
             <div className="space-y-6">
               <div>
-                <h2 className="font-mono font-semibold text-2xl text-text mb-4">Industry and business model</h2>
+                <h2 className="mb-4 text-2xl font-semibold">Industry and business model</h2>
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="industry" className="font-mono text-xs uppercase tracking-wide text-text-secondary">
+                    <Label htmlFor="industry" className="eos-label">
                       Industry
                     </Label>
                     <Input
@@ -493,16 +494,14 @@ export default function CompanySetupPage() {
                       value={industry}
                       onChange={(e) => setIndustry(e.target.value)}
                       placeholder="e.g., SaaS, E-commerce, Consulting"
-                      className={`mt-2 bg-surface-subtle border rounded-md px-4 py-3 font-mono text-base text-text placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-150 ${
-                        errors.industry ? "border-destructive" : "border-border"
-                      }`}
+                      className={`mt-2 ${errors.industry ? "border-destructive" : ""}`}
                     />
                     {errors.industry && (
                       <p className="mt-1 font-mono text-xs text-destructive">{errors.industry}</p>
                     )}
                   </div>
                   <div>
-                    <Label className="font-mono text-xs uppercase tracking-wide text-text-secondary mb-3 block">
+                    <Label className="eos-label mb-3 block">
                       Business Model
                     </Label>
                     <RadioGroup value={businessModel} onValueChange={setBusinessModel}>
@@ -510,14 +509,14 @@ export default function CompanySetupPage() {
                         {BUSINESS_MODELS.map((model) => (
                           <label
                             key={model.value}
-                            className={`flex items-center space-x-3 bg-surface border rounded-md p-4 cursor-pointer transition-all duration-150 ${
+                            className={`flex cursor-pointer items-center space-x-3 rounded-xl border bg-muted/40 p-4 transition-all duration-150 ${
                               businessModel === model.value
                                 ? "border-primary ring-2 ring-primary"
-                                : "border-border hover:border-border-hover hover:bg-surface-subtle"
+                                : "border-border hover:border-primary/30 hover:bg-muted"
                             }`}
                           >
                             <RadioGroupItem value={model.value} id={model.value} className="border-border" />
-                            <span className="font-mono text-base text-text">{model.label}</span>
+                            <span className="text-base">{model.label}</span>
                           </label>
                         ))}
                       </div>
@@ -534,24 +533,24 @@ export default function CompanySetupPage() {
           {currentStep === 4 && (
             <div className="space-y-6">
               <div>
-                <h2 className="font-mono font-semibold text-2xl text-text mb-2">Name your Executive Assistant</h2>
-                <p className="font-mono text-sm text-text-secondary mb-5">This is the founder-facing agent. It will coordinate the portfolio advisor council and company CEO agents on your behalf.</p>
+                <h2 className="mb-2 text-2xl font-semibold">Name your Executive Assistant</h2>
+                <p className="mb-5 text-sm text-muted-foreground">This is the founder-facing agent. It will coordinate the portfolio advisor council and company CEO agents on your behalf.</p>
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="assistantName" className="font-mono text-xs uppercase tracking-wide text-text-secondary">Executive Assistant name</Label>
+                    <Label htmlFor="assistantName" className="eos-label">Executive Assistant name</Label>
                     <Input id="assistantName" value={assistantName} onChange={(event) => setAssistantName(event.target.value)} placeholder="Choose any name" className={`mt-2 ${errors.assistantName ? "border-destructive" : ""}`} />
                     {errors.assistantName && <p className="mt-1 font-mono text-xs text-destructive">{errors.assistantName}</p>}
                   </div>
                   <div>
-                    <Label htmlFor="founderVision" className="font-mono text-xs uppercase tracking-wide text-text-secondary">Founder vision</Label>
+                    <Label htmlFor="founderVision" className="eos-label">Founder vision</Label>
                     <Textarea id="founderVision" value={founderVision} onChange={(event) => setFounderVision(event.target.value)} placeholder="What are you ultimately building, and what must remain true as it grows?" className={`mt-2 min-h-[96px] ${errors.founderVision ? "border-destructive" : ""}`} />
                     {errors.founderVision && <p className="mt-1 font-mono text-xs text-destructive">{errors.founderVision}</p>}
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <div><Label htmlFor="founderValues" className="font-mono text-xs uppercase tracking-wide text-text-secondary">Values and standards</Label><Textarea id="founderValues" value={founderValues} onChange={(event) => setFounderValues(event.target.value)} placeholder="The principles the council must protect" className="mt-2 min-h-[90px]" /></div>
-                    <div><Label htmlFor="decisionStyle" className="font-mono text-xs uppercase tracking-wide text-text-secondary">Decision style</Label><Textarea id="decisionStyle" value={decisionStyle} onChange={(event) => setDecisionStyle(event.target.value)} placeholder="How you want facts, options, risks, and recommendations presented" className="mt-2 min-h-[90px]" /></div>
+                    <div><Label htmlFor="founderValues" className="eos-label">Values and standards</Label><Textarea id="founderValues" value={founderValues} onChange={(event) => setFounderValues(event.target.value)} placeholder="The principles the council must protect" className="mt-2 min-h-[90px]" /></div>
+                    <div><Label htmlFor="decisionStyle" className="eos-label">Decision style</Label><Textarea id="decisionStyle" value={decisionStyle} onChange={(event) => setDecisionStyle(event.target.value)} placeholder="How you want facts, options, risks, and recommendations presented" className="mt-2 min-h-[90px]" /></div>
                   </div>
-                  <div><Label htmlFor="workingStyle" className="font-mono text-xs uppercase tracking-wide text-text-secondary">Working style</Label><Textarea id="workingStyle" value={workingStyle} onChange={(event) => setWorkingStyle(event.target.value)} placeholder="Cadence, communication preferences, watchouts, and how the system should support you" className="mt-2 min-h-[90px]" /></div>
+                  <div><Label htmlFor="workingStyle" className="eos-label">Working style</Label><Textarea id="workingStyle" value={workingStyle} onChange={(event) => setWorkingStyle(event.target.value)} placeholder="Cadence, communication preferences, watchouts, and how the system should support you" className="mt-2 min-h-[90px]" /></div>
                 </div>
               </div>
             </div>
@@ -560,13 +559,13 @@ export default function CompanySetupPage() {
           {currentStep === 5 && (
             <div className="space-y-6">
               <div>
-                <h2 className="font-mono font-semibold text-2xl text-text mb-2">What are your top 3 goals for the next quarter?</h2>
-                <p className="font-mono text-xs text-text-tertiary mb-4">Optional but recommended. Be specific.</p>
+                <h2 className="mb-2 text-2xl font-semibold">What are your top 3 goals for the next quarter?</h2>
+                <p className="mb-4 text-sm text-muted-foreground">Optional but recommended. Be specific.</p>
                 <Textarea
                   value={goals}
                   onChange={(e) => setGoals(e.target.value)}
                   placeholder="e.g., 10x revenue, hire 5 engineers, launch product line"
-                  className="bg-surface-subtle border border-border rounded-md px-4 py-3 font-mono text-base text-text placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-150 min-h-[120px]"
+                  className="min-h-[120px]"
                 />
               </div>
             </div>
@@ -574,11 +573,12 @@ export default function CompanySetupPage() {
         </div>
 
         {/* Navigation Buttons */}
-        <div className="mt-6 flex justify-between">
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
           {currentStep > 0 && (
             <Button
               onClick={() => setCurrentStep((prev) => prev - 1)}
-              className="bg-surface-subtle hover:bg-border text-text font-mono font-medium text-sm uppercase tracking-wide px-6 py-3 rounded-md border border-border transition-all duration-150"
+              variant="secondary"
+              className="w-full sm:w-auto"
             >
               Back
             </Button>
@@ -587,27 +587,26 @@ export default function CompanySetupPage() {
             <Button
               onClick={handleContinue}
               disabled={currentStep === 0 && !selectedPortfolioId}
-              className="ml-auto bg-primary hover:bg-primary-hover text-text-on-primary font-mono font-semibold text-sm uppercase tracking-wide px-6 py-3 rounded-md transition-colors duration-150 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full sm:ml-auto sm:w-auto"
             >
               <span>Continue</span>
               <ChevronRight className="w-4 h-4" />
             </Button>
           )}
           {currentStep === 5 && (
-            <div className="ml-auto flex space-x-3">
+            <div className="flex w-full flex-col-reverse gap-3 sm:ml-auto sm:w-auto sm:flex-row">
               <Button
-                onClick={() => {
-                  setGoals("");
-                  handleSubmit();
-                }}
-                className="bg-surface-subtle hover:bg-border text-text font-mono font-medium text-sm uppercase tracking-wide px-6 py-3 rounded-md border border-border transition-all duration-150"
+                onClick={() => handleSubmit("")}
+                disabled={createCompanyMutation.isPending}
+                variant="secondary"
+                className="w-full sm:w-auto"
               >
                 Skip for now
               </Button>
               <Button
-                onClick={handleSubmit}
+                onClick={() => handleSubmit()}
                 disabled={createCompanyMutation.isPending}
-                className="bg-primary hover:bg-primary-hover text-text-on-primary font-mono font-semibold text-sm uppercase tracking-wide px-6 py-3 rounded-md transition-colors duration-150"
+                className="w-full sm:w-auto"
               >
                 {createCompanyMutation.isPending ? "Creating..." : "Open command center"}
               </Button>
@@ -620,7 +619,7 @@ export default function CompanySetupPage() {
             <p className="font-mono text-sm text-destructive">Connection failed. Try again.</p>
           </div>
         )}
-      </div>
-    </div>
+      </section>
+    </UniversalLayout>
   );
 }
