@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Home, FolderKanban } from "lucide-react";
+import { FolderKanban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function NotFoundPage() {
@@ -14,7 +14,7 @@ export default function NotFoundPage() {
     }
   }, [location]);
 
-  const handleBackToHome = () => {
+  const handleReturnToPortfolios = () => {
     if (typeof window !== "undefined" && (window as any).posthog) {
       (window as any).posthog.capture("back_to_home_clicked");
     }
@@ -40,24 +40,14 @@ export default function NotFoundPage() {
           </div>
         </div>
 
-        <div className="space-y-4 pt-4">
-          <Link href="/command-center">
-            <Button
-              onClick={handleBackToHome}
-              className="w-full bg-primary hover:bg-primary-hover text-text-on-primary font-mono font-semibold text-sm uppercase tracking-wide px-6 py-3 rounded-md transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-            >
-              <Home className="w-4 h-4 mr-2" />
-              Go to command center
-            </Button>
-          </Link>
-
+        <div className="pt-4">
           <Link href="/portfolios">
             <Button
-              variant="secondary"
-              className="w-full bg-surface-subtle hover:bg-border text-text font-mono font-medium text-sm uppercase tracking-wide px-6 py-3 rounded-md border border-border transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              onClick={handleReturnToPortfolios}
+              className="w-full font-mono font-semibold text-sm uppercase tracking-wide px-6 py-3 rounded-md transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
             >
               <FolderKanban className="w-4 h-4 mr-2" />
-              View portfolios
+              Return to portfolios
             </Button>
           </Link>
         </div>

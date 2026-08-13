@@ -109,7 +109,7 @@ export default function ResetPasswordPage() {
       setIsSuccess(true);
       
       setTimeout(() => {
-        setLocation("/sign-in");
+        setLocation("/login");
       }, 2000);
     } catch (error) {
       setErrors({ general: "Connection failed. Try again." });
@@ -271,7 +271,7 @@ export default function ResetPasswordPage() {
             </Button>
 
             <div className="text-center pt-2">
-              <Link href="/sign-in" className="font-mono text-sm text-text-secondary hover:text-text transition-colors">Back to sign in</Link>
+              <Link href="/login" className="font-mono text-sm text-text-secondary hover:text-text transition-colors">Back to sign in</Link>
             </div>
           </form>
         </CardContent>
