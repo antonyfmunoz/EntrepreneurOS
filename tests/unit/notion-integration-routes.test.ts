@@ -11,6 +11,15 @@ const notionAdapter = vi.hoisted(() => ({
   readOAuthState: vi.fn(),
   exchangeCode: vi.fn(),
 }));
+const gmailAdapter = vi.hoisted(() => ({
+  isConfigured: vi.fn(() => false),
+  getAuthUrl: vi.fn(),
+  readOAuthState: vi.fn(),
+  exchangeCode: vi.fn(),
+  connectionSummary: vi.fn(async () => ({ configured: false, connected: false, grantedScopes: [] })),
+  verifyConnection: vi.fn(async () => ({ configured: false, connected: false, healthy: false, services: {}, grantedScopes: [] })),
+  disconnect: vi.fn(async () => ({ success: true, providerRevoked: true })),
+}));
 const storageAdapter = vi.hoisted(() => ({
   getIntegrations: vi.fn(async () => []),
   upsertOauthToken: vi.fn(),
@@ -18,14 +27,7 @@ const storageAdapter = vi.hoisted(() => ({
 }));
 
 vi.mock("../../server/integrations/notion", () => notionAdapter);
-vi.mock("../../server/integrations/gmail", () => ({
-  isConfigured: vi.fn(() => false),
-  getAuthUrl: vi.fn(),
-  readOAuthState: vi.fn(),
-  exchangeCode: vi.fn(),
-  connectionSummary: vi.fn(async () => ({ configured: false, connected: false, grantedScopes: [] })),
-  verifyConnection: vi.fn(async () => ({ configured: false, connected: false, healthy: false, services: {}, grantedScopes: [] })),
-}));
+vi.mock("../../server/integrations/gmail", () => gmailAdapter);
 vi.mock("../../server/storage", () => ({ storage: storageAdapter }));
 
 import { registerIntegrationRoutes } from "../../server/routes/integrations";
@@ -36,6 +38,7 @@ describe("Notion integration HTTP controls", () => {
 
   beforeEach(() => {
     for (const mock of Object.values(notionAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
+    for (const mock of Object.values(gmailAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
     storageAdapter.upsertOauthToken.mockReset();
     const app = express();
     app.use(express.json());
@@ -63,6 +66,11 @@ describe("Notion integration HTTP controls", () => {
   it("revokes and deletes only the signed-in user's connection", async () => {
     await api.post("/api/integrations/notion/disconnect").send({}).expect(200, { success: true, providerRevoked: true });
     expect(notionAdapter.disconnect).toHaveBeenCalledWith(userId);
+  });
+
+  it("routes Google disconnect through provider revocation for the signed-in user", async () => {
+    await api.post("/api/integrations/gmail/disconnect").send({}).expect(200, { success: true, providerRevoked: true });
+    expect(gmailAdapter.disconnect).toHaveBeenCalledWith(userId);
   });
 
   it("stores callback credentials encrypted and returns to the initiating company", async () => {

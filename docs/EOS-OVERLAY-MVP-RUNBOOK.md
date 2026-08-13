@@ -53,6 +53,8 @@ Public Google Workspace OAuth:
 
 The Google authorization request includes Gmail send, Calendar read-only, and Drive metadata read-only. Existing grants must reconnect after a scope expansion; a configured refresh token is not proof that all three services are authorized.
 
+Disconnecting Google Workspace first asks Google to revoke the user's refresh token (or access token when no refresh token exists), then removes the encrypted EOS credential. The response includes `providerRevoked`. If it is `false`, the connection is still removed from EOS and the UI directs the user to remove EntrepreneurOS from their Google account security controls. Never describe local token deletion alone as provider revocation.
+
 Public Notion OAuth:
 
 - `NOTION_CLIENT_ID`
@@ -61,6 +63,8 @@ Public Notion OAuth:
 
 Notion credentials are stored per EOS user after authorization. A shared
 deployment API token must not be used for tenant workspace access.
+
+Disconnecting Notion uses the public integration revocation endpoint before removing the encrypted EOS credential and returns the same truthful `providerRevoked` outcome. An already-invalid grant is treated as revoked so reconnect/disconnect remains idempotent.
 
 Optional intelligence and product analytics:
 

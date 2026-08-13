@@ -262,27 +262,36 @@ export async function searchWorkspace(userId: string, query = "", pageSize = 20)
   });
 }
 
-export async function disconnect(userId: string): Promise<{ success: true; providerRevoked: boolean }> {
+export async function revokeAuthorization(userId: string): Promise<{ providerRevoked: boolean }> {
   const token = await storage.getOauthToken(userId, "notion");
-  if (!token) return { success: true, providerRevoked: true };
+  if (!token) return { providerRevoked: true };
   let providerRevoked = false;
   try {
-    try {
-      const response = await notionFetch("/oauth/revoke", {
-        method: "POST",
-        headers: {
-          Authorization: basicAuthorization(),
-          "Content-Type": "application/json",
-          "Notion-Version": NOTION_VERSION,
-        },
-        body: JSON.stringify({ token: decryptCredential(token.accessToken) }),
-      });
-      providerRevoked = response.ok;
-    } catch {
-      providerRevoked = false;
+    const response = await notionFetch("/oauth/revoke", {
+      method: "POST",
+      headers: {
+        Authorization: basicAuthorization(),
+        "Content-Type": "application/json",
+        "Notion-Version": NOTION_VERSION,
+      },
+      body: JSON.stringify({ token: decryptCredential(token.accessToken) }),
+    });
+    providerRevoked = response.ok;
+    if (!providerRevoked && response.status === 400) {
+      const body = await response.json().catch(() => ({})) as { code?: string };
+      providerRevoked = body.code === "invalid_grant" || body.code === "invalid_token";
     }
+  } catch {
+    providerRevoked = false;
+  }
+  return { providerRevoked };
+}
+
+export async function disconnect(userId: string): Promise<{ success: true; providerRevoked: boolean }> {
+  try {
+    const result = await revokeAuthorization(userId);
+    return { success: true, providerRevoked: result.providerRevoked };
   } finally {
     await storage.deleteOauthToken(userId, "notion");
   }
-  return { success: true, providerRevoked };
 }

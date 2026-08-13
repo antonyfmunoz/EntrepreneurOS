@@ -42,6 +42,9 @@ globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => 
       last_edited_time: "2026-08-13T12:00:00.000Z",
     }] }), { status: 200, headers: { "content-type": "application/json" } });
   }
+  if (url === "https://api.notion.com/v1/oauth/revoke") {
+    return new Response(null, { status: 200 });
+  }
   return networkFetch(input, init);
 };
 

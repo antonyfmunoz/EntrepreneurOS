@@ -90,4 +90,15 @@ describe("Notion public OAuth", () => {
     await expect(disconnect("owner-1")).resolves.toEqual({ success: true, providerRevoked: false });
     expect(oauthStore.deleteOauthToken).toHaveBeenCalledWith("owner-1", "notion");
   });
+
+  it("treats Notion's invalid_grant response as already revoked", async () => {
+    oauthStore.getOauthToken.mockResolvedValue({ accessToken: encryptCredential("expired-access"), metadata: {} });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ code: "invalid_grant" }), {
+      status: 400,
+      headers: { "content-type": "application/json" },
+    })));
+
+    await expect(disconnect("owner-1")).resolves.toEqual({ success: true, providerRevoked: true });
+    expect(oauthStore.deleteOauthToken).toHaveBeenCalledWith("owner-1", "notion");
+  });
 });

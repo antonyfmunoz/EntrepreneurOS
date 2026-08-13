@@ -8,6 +8,11 @@ import { generateKeyPairSync, randomUUID, sign } from "node:crypto";
 // Integration qualification opts into an explicit disposable database.
 const databaseUrl = process.env.EOS_TEST_DATABASE_URL;
 
+const providerLifecycle = vi.hoisted(() => ({
+  gmailRevoke: vi.fn(async () => ({ providerRevoked: true })),
+  notionRevoke: vi.fn(async () => ({ providerRevoked: true })),
+}));
+
 vi.mock("../../server/integrations/gmail", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../server/integrations/gmail")>();
   return {
@@ -16,7 +21,13 @@ vi.mock("../../server/integrations/gmail", async (importOriginal) => {
     isConnected: async () => true,
     verifyConnection: async () => ({ configured: true, connected: true, healthy: true, services: { Gmail: true, Calendar: true, Drive: true }, grantedScopes: actual.requestedScopes() }),
     sendEmail: async () => ({ messageId: "gmail-provider-receipt-test" }),
+    revokeAuthorization: providerLifecycle.gmailRevoke,
   };
+});
+
+vi.mock("../../server/integrations/notion", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../server/integrations/notion")>();
+  return { ...actual, revokeAuthorization: providerLifecycle.notionRevoke };
 });
 
 vi.mock("../../server/ai/gateway", () => ({
@@ -273,29 +284,61 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     await sql`INSERT INTO ai_messages (id, role, content, user_id) VALUES ('delete_ai_message', 'user', 'Personal conversation', ${deletionUserId})`;
     await sql`INSERT INTO folders (id, name, user_id) VALUES ('delete_folder', 'Private folder', ${deletionUserId})`;
     await sql`INSERT INTO documents (id, title, content, folder_id, user_id) VALUES ('delete_document', 'Private document', 'Personal document content', 'delete_folder', ${deletionUserId})`;
+    await sql`INSERT INTO oauth_tokens (id, user_id, provider, access_token, metadata) VALUES
+      ('delete_google_token', ${deletionUserId}, 'gmail', 'encrypted-google-token', '{}'::jsonb),
+      ('delete_notion_token', ${deletionUserId}, 'notion', 'encrypted-notion-token', '{}'::jsonb)`;
 
     const { scheduleAccountDeletion, processDueAccountDeletion } = await import("../../server/lifecycle/account-deletion");
     const request = await scheduleAccountDeletion({ userId: deletionUserId, clerkUserId: null, deleteOwnedOrganizations: false });
     await sql`UPDATE account_deletion_requests SET scheduled_for = now() - interval '1 minute' WHERE id = ${request.id}`;
     expect(await processDueAccountDeletion(request.id)).toBe(true);
+    expect(providerLifecycle.gmailRevoke).toHaveBeenCalledWith(deletionUserId);
+    expect(providerLifecycle.notionRevoke).toHaveBeenCalledWith(deletionUserId);
 
     const [principal] = await sql<Array<{ email: string; full_name: string | null; clerk_user_id: string | null; metadata: { accountDeleted?: boolean } }>>`SELECT email, full_name, clerk_user_id, metadata FROM users WHERE id = ${deletionUserId}`;
     expect(principal.email).toMatch(/^deleted\+.+@users\.invalid$/);
     expect(principal.full_name).toBeNull();
     expect(principal.clerk_user_id).toBeNull();
     expect(principal.metadata.accountDeleted).toBe(true);
-    const [personalRows] = await sql<Array<{ notifications: number; ai_messages: number; documents: number; folders: number }>>`
+    const [personalRows] = await sql<Array<{ notifications: number; ai_messages: number; documents: number; folders: number; oauth_tokens: number }>>`
       SELECT
         (SELECT count(*)::int FROM notifications WHERE user_id = ${deletionUserId}) AS notifications,
         (SELECT count(*)::int FROM ai_messages WHERE user_id = ${deletionUserId}) AS ai_messages,
         (SELECT count(*)::int FROM documents WHERE user_id = ${deletionUserId}) AS documents,
-        (SELECT count(*)::int FROM folders WHERE user_id = ${deletionUserId}) AS folders
+        (SELECT count(*)::int FROM folders WHERE user_id = ${deletionUserId}) AS folders,
+        (SELECT count(*)::int FROM oauth_tokens WHERE user_id = ${deletionUserId}) AS oauth_tokens
     `;
-    expect(personalRows).toEqual({ notifications: 0, ai_messages: 0, documents: 0, folders: 0 });
+    expect(personalRows).toEqual({ notifications: 0, ai_messages: 0, documents: 0, folders: 0, oauth_tokens: 0 });
     const [deletion] = await sql<Array<{ status: string }>>`SELECT status FROM account_deletion_requests WHERE id = ${request.id}`;
     expect(deletion.status).toBe("executed");
 
     await sql`DELETE FROM account_deletion_requests WHERE id = ${request.id}`;
+    await sql`DELETE FROM users WHERE id = ${deletionUserId}`;
+  });
+
+  it("fails account deletion closed when external provider revocation cannot be confirmed", async () => {
+    const deletionUserId = "test_eos_deletion_provider_failure";
+    await sql`DELETE FROM account_deletion_requests WHERE user_id = ${deletionUserId}`;
+    await sql`DELETE FROM users WHERE id = ${deletionUserId}`;
+    await sql`INSERT INTO users (id, username, password, email) VALUES (${deletionUserId}, 'delete_provider_failure', 'not-used', 'provider-failure@example.test')`;
+    await sql`INSERT INTO oauth_tokens (id, user_id, provider, access_token, metadata) VALUES ('delete_failed_google_token', ${deletionUserId}, 'gmail', 'encrypted-google-token', '{}'::jsonb)`;
+    providerLifecycle.gmailRevoke.mockResolvedValueOnce({ providerRevoked: false });
+
+    const { scheduleAccountDeletion, processDueAccountDeletion } = await import("../../server/lifecycle/account-deletion");
+    const request = await scheduleAccountDeletion({ userId: deletionUserId, clerkUserId: null, deleteOwnedOrganizations: false });
+    await sql`UPDATE account_deletion_requests SET scheduled_for = now() - interval '1 minute' WHERE id = ${request.id}`;
+    expect(await processDueAccountDeletion(request.id)).toBe(true);
+
+    const [deletion] = await sql<Array<{ status: string; last_error: string | null }>>`SELECT status, last_error FROM account_deletion_requests WHERE id = ${request.id}`;
+    expect(deletion.status).toBe("failed");
+    expect(deletion.last_error).toContain("operations review");
+    const [principal] = await sql<Array<{ email: string }>>`SELECT email FROM users WHERE id = ${deletionUserId}`;
+    expect(principal.email).toBe("provider-failure@example.test");
+    const [tokenCount] = await sql<Array<{ count: number }>>`SELECT count(*)::int AS count FROM oauth_tokens WHERE user_id = ${deletionUserId}`;
+    expect(tokenCount.count).toBe(1);
+
+    await sql`DELETE FROM account_deletion_requests WHERE id = ${request.id}`;
+    await sql`DELETE FROM oauth_tokens WHERE user_id = ${deletionUserId}`;
     await sql`DELETE FROM users WHERE id = ${deletionUserId}`;
   });
 

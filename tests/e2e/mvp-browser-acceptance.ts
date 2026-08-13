@@ -169,6 +169,9 @@ try {
   await desktop.getByRole("button", { name: "Load workspace", exact: true }).click();
   await desktop.getByText("Quarterly plan operating plan", { exact: true }).waitFor();
   await desktop.getByRole("button", { name: "Open in Notion", exact: true }).waitFor();
+  await notionCard.getByRole("button", { name: "Disconnect", exact: true }).click();
+  await desktop.getByText("Notion disconnected", { exact: true }).waitFor();
+  await desktop.getByRole("button", { name: "Connect Notion", exact: true }).waitFor();
   await desktop.getByLabel("Monthly limit (USD)").fill("30");
   await desktop.getByLabel("Per-request limit (USD)").fill("2");
   await desktop.getByRole("button", { name: "Save spend controls" }).click();
@@ -269,7 +272,7 @@ try {
   await mobile.getByRole("button", { name: /Open .* conversation/ }).click();
   await mobile.locator("#mobile-communication-drawer aside").waitFor();
   if (browserErrors.length) throw new Error(`Browser errors: ${browserErrors.join(" | ")}`);
-  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 8, activeModules: 14, usableModuleControlCenter: true, roleSafeNextActions: true, hierarchyBuilder: true, teamInvitationLifecycle: { create: true, visible: true, revoke: true }, interactiveWorkApprovalLoop: true, assignedWorkLifecycleInWorkRoom: true, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, reachableAccountControls: ["profile", "explicit company context", "privacy", "AI spend", "billing", "support"], configurableProviderIntegration: { notion: { perUser: true, verify: true, search: true, sourceAction: true } }, quarantinedFalseControls: ["notification delivery preferences", "company-wide AI autonomy"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
+  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 8, activeModules: 14, usableModuleControlCenter: true, roleSafeNextActions: true, hierarchyBuilder: true, teamInvitationLifecycle: { create: true, visible: true, revoke: true }, interactiveWorkApprovalLoop: true, assignedWorkLifecycleInWorkRoom: true, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, reachableAccountControls: ["profile", "explicit company context", "privacy", "AI spend", "billing", "support"], configurableProviderIntegration: { notion: { perUser: true, verify: true, search: true, sourceAction: true, disconnect: true } }, quarantinedFalseControls: ["notification delivery preferences", "company-wide AI autonomy"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
 } finally {
   await browser.close();
 }

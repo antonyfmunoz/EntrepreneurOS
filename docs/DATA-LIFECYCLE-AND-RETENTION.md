@@ -10,9 +10,10 @@ This document distinguishes implemented lifecycle behavior from policy decisions
 2. EntrepreneurOS schedules the request after a configurable one-to-thirty-day cooling-off period; the current default is seven days.
 3. The person may cancel while the request is scheduled.
 4. If owned portfolios or companies remain, execution stops until ownership is transferred. Personal-account deletion never silently destroys organization evidence.
-5. In production, identity-provider deletion must be available; otherwise execution fails closed for operations review.
-6. Execution removes personal working data and provider credentials, releases hybrid-role seats, detaches communication authorship, and anonymizes the remaining principal.
-7. Immutable operational evidence retains only its reference to that anonymized principal.
+5. Before erasure, EntrepreneurOS asks each connected provider to revoke the person's external authorization. An unavailable or unconfirmed provider revocation fails closed and preserves the local credential so operations can retry safely; deleting only the local token would orphan a potentially live external grant.
+6. In production, identity-provider deletion must be available; otherwise execution fails closed for operations review.
+7. After provider and identity revocation succeed, execution removes personal working data and provider credentials, releases hybrid-role seats, detaches communication authorship, and anonymizes the remaining principal.
+8. Immutable operational evidence retains only its reference to that anonymized principal.
 
 ## Erased or detached at execution
 

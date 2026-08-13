@@ -13,6 +13,7 @@ export const GOOGLE_WORKSPACE_SERVICES = ["Gmail", "Calendar", "Drive"] as const
 
 export const GOOGLE_WORKSPACE_TOOLS = [
   "google.workspace.health.verify",
+  "google.workspace.authorization.revoke",
   "google.calendar.upcoming.read",
   "google.drive.recent_metadata.read",
   "gmail.send_with_local_approval",
@@ -195,6 +196,44 @@ export async function isConnected(userId: string): Promise<boolean> {
     return Object.values(scopeCoverage((token.scope || "").split(/\s+/).filter(Boolean))).every(Boolean);
   } catch {
     return false;
+  }
+}
+
+export async function revokeAuthorization(userId: string): Promise<{ providerRevoked: boolean }> {
+  const token = await storage.getOauthToken(userId, "gmail");
+  if (!token) return { providerRevoked: true };
+
+  let providerRevoked = false;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const credential = decryptCredential(token.refreshToken || token.accessToken);
+    const response = await fetch("https://oauth2.googleapis.com/revoke", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token: credential }),
+      signal: controller.signal,
+    });
+    if (response.ok) {
+      providerRevoked = true;
+    } else if (response.status === 400) {
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      providerRevoked = body.error === "invalid_token";
+    }
+  } catch {
+    providerRevoked = false;
+  } finally {
+    clearTimeout(timeout);
+  }
+  return { providerRevoked };
+}
+
+export async function disconnect(userId: string): Promise<{ success: true; providerRevoked: boolean }> {
+  try {
+    const result = await revokeAuthorization(userId);
+    return { success: true, providerRevoked: result.providerRevoked };
+  } finally {
+    await storage.deleteOauthToken(userId, "gmail");
   }
 }
 
