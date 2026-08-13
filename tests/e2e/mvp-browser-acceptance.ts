@@ -83,16 +83,20 @@ try {
   await approvalDialog.getByLabel("Decision note (optional)").fill("Approved in browser acceptance after reviewing the objective and authority boundary.");
   await approvalDialog.getByRole("button", { name: "Confirm approval", exact: true }).click();
   await desktop.getByText("Work approved", { exact: true }).waitFor();
-  await desktop.getByRole("link", { name: "Operations", exact: true }).click();
-  const missionCard = desktop.getByText(missionTitle, { exact: true }).locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]");
-  await missionCard.getByRole("button", { name: "Start / resume", exact: true }).click();
-  await missionCard.getByRole("button", { name: "Submit for review", exact: true }).click();
-  await missionCard.getByLabel(`Evidence details for ${missionTitle}`).fill("Browser acceptance verified the governed work result.");
-  await missionCard.getByRole("button", { name: "Record required evidence", exact: true }).click();
+  await desktop.getByRole("link", { name: "Work Room", exact: true }).click();
+  await desktop.getByText(missionTitle, { exact: true }).locator("xpath=ancestor::button[1]").click();
+  const selectedWorkHeading = desktop.getByRole("heading", { name: missionTitle, exact: true });
+  await selectedWorkHeading.waitFor();
+  await desktop.getByRole("button", { name: "Start / resume work", exact: true }).click();
+  await desktop.getByRole("button", { name: "Submit work for review", exact: true }).click();
+  await desktop.getByLabel(`Work Room evidence for ${missionTitle}`).fill("Browser acceptance verified the governed work result.");
+  await desktop.getByRole("button", { name: "Record required evidence", exact: true }).click();
   await desktop.getByText("Required evidence recorded", { exact: true }).waitFor();
-  await missionCard.getByText("All required evidence is recorded. This Work Packet can complete after review.", { exact: true }).waitFor();
-  await missionCard.getByRole("button", { name: "Complete", exact: true }).click();
-  await missionCard.getByText("completed", { exact: true }).waitFor();
+  await desktop.getByText("All required evidence is recorded. Submit or complete the work when ready.", { exact: true }).waitFor();
+  await desktop.getByRole("button", { name: "Complete work", exact: true }).click();
+  await selectedWorkHeading.waitFor({ state: "detached" });
+  await desktop.getByRole("link", { name: "Operations", exact: true }).click();
+  await desktop.getByText(missionTitle, { exact: true }).locator("xpath=ancestor::*[.//*[normalize-space()='completed']][1]").waitFor();
   const rejectedMissionTitle = `Rejected MVP ${Date.now()}`;
   await desktop.getByPlaceholder("Mission title").fill(rejectedMissionTitle);
   await desktop.getByPlaceholder("Objective and intended outcome").fill("Verify that rejection requires an auditable reason and an explicit confirmation.");
@@ -248,7 +252,7 @@ try {
   await mobile.getByRole("button", { name: /Open .* conversation/ }).click();
   await mobile.locator("#mobile-communication-drawer aside").waitFor();
   if (browserErrors.length) throw new Error(`Browser errors: ${browserErrors.join(" | ")}`);
-  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 8, activeModules: 14, usableModuleControlCenter: true, roleSafeNextActions: true, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, reachableAccountControls: ["profile", "explicit company context", "privacy", "AI spend", "billing", "support"], quarantinedFalseControls: ["notification delivery preferences", "company-wide AI autonomy"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
+  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 8, activeModules: 14, usableModuleControlCenter: true, roleSafeNextActions: true, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, assignedWorkLifecycleInWorkRoom: true, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, reachableAccountControls: ["profile", "explicit company context", "privacy", "AI spend", "billing", "support"], quarantinedFalseControls: ["notification delivery preferences", "company-wide AI autonomy"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
 } finally {
   await browser.close();
 }
