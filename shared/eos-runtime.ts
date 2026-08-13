@@ -223,17 +223,57 @@ export function visibilityPolicyFor(role: EosSeatKind): SeatVisibilityPolicy {
 }
 
 const surfacePolicies: Record<EosSeatKind, readonly string[]> = {
-  founder: ["home", "command", "organization", "my-role", "commercial", "operations", "work-room", "review", "academy", "portfolio-map", "capital", "intelligence", "systems"],
-  portfolio_executive: ["home", "command", "organization", "my-role", "operations", "work-room", "review", "academy", "portfolio-map", "capital", "intelligence", "systems"],
-  company_ceo: ["home", "command", "organization", "my-role", "commercial", "operations", "work-room", "review", "academy", "capital", "intelligence", "systems"],
-  functional_executive: ["home", "command", "organization", "my-role", "operations", "work-room", "review", "academy", "intelligence", "systems"],
-  manager: ["home", "my-role", "operations", "work-room", "review", "academy", "intelligence"],
-  individual_contributor: ["home", "my-role", "work-room", "academy", "intelligence"],
-  external: ["home", "my-role", "work-room"],
+  founder: ["home", "command", "organization", "my-role", "modules", "commercial", "operations", "work-room", "review", "academy", "portfolio-map", "capital", "intelligence", "systems"],
+  portfolio_executive: ["home", "command", "organization", "my-role", "modules", "operations", "work-room", "review", "academy", "portfolio-map", "capital", "intelligence", "systems"],
+  company_ceo: ["home", "command", "organization", "my-role", "modules", "commercial", "operations", "work-room", "review", "academy", "capital", "intelligence", "systems"],
+  functional_executive: ["home", "command", "organization", "my-role", "modules", "operations", "work-room", "review", "academy", "intelligence", "systems"],
+  manager: ["home", "my-role", "modules", "operations", "work-room", "review", "academy", "intelligence"],
+  individual_contributor: ["home", "my-role", "modules", "work-room", "academy", "intelligence"],
+  external: ["home", "my-role", "modules", "work-room"],
 };
 
 export function allowedSurfacesFor(role: EosSeatKind): readonly string[] {
   return surfacePolicies[role];
+}
+
+export interface EosActiveModule {
+  id: number;
+  name: string;
+  activation: "active" | "partial";
+  operatingSurface: "command" | "commercial" | "operations" | "work-room" | "systems";
+  overlayBoundary: string;
+  missionTitle: string;
+  missionObjective: string;
+  evidenceRequirement: string;
+  fallback: string;
+}
+
+/**
+ * The fourteen non-dormant EOS modules from the MVP-to-native blueprint.
+ * These definitions intentionally route overlay work through the canonical
+ * Work Packet, approval, evidence, and provider-control runtime. They do not
+ * claim that the future native systems already exist.
+ */
+export const eosActiveModules: readonly EosActiveModule[] = [
+  { id: 1, name: "Recruiting & Candidate Portal", activation: "active", operatingSurface: "operations", overlayBoundary: "Coordinate provider or form intake, assessment, review, decision, and onboarding handoff without exposing internal candidate deliberation.", missionTitle: "Advance a recruiting decision", missionObjective: "Move one candidate or open role through intake, assessment, accountable review, decision, and evidence-backed handoff.", evidenceRequirement: "Candidate decision record or reviewed assessment", fallback: "Create a local recruiting Work Packet and attach provider links or reviewed notes as evidence." },
+  { id: 2, name: "Lead Capture & Marketing Qualification", activation: "active", operatingSurface: "commercial", overlayBoundary: "Ingest consented lead and attribution context from connected providers; EOS governs qualification and routing.", missionTitle: "Qualify and route a lead cohort", missionObjective: "Review consent, attribution, fit, and routing for a defined lead or cohort and return an accountable next commercial action.", evidenceRequirement: "Qualification rationale and source reference", fallback: "Record the source and qualification in a local Work Packet when the CRM or form provider is unavailable." },
+  { id: 3, name: "Sales Opportunity & Commercial Decision", activation: "active", operatingSurface: "commercial", overlayBoundary: "Unify opportunity context while the CRM, communications, proposals, and offers remain authoritative provider records.", missionTitle: "Advance a commercial opportunity", missionObjective: "Evaluate one opportunity, its customer need, offer, risks, forecast, and required commercial decision with source-backed evidence.", evidenceRequirement: "Opportunity decision and supporting customer evidence", fallback: "Use a local commercial Work Packet and reconcile the decision to the authoritative CRM later." },
+  { id: 4, name: "Contracting & Payment Activation", activation: "active", operatingSurface: "commercial", overlayBoundary: "Coordinate agreement and payment activation through approved provider links and events; EOS does not claim ledger or legal authority.", missionTitle: "Prepare a contract and payment decision", missionObjective: "Assemble the commercial terms, professional review needs, payment activation steps, authority gate, and provider references for one agreement.", evidenceRequirement: "Approved terms and provider activation receipt", fallback: "Prepare a governed local packet; a qualified human must execute legal or payment actions in the authoritative provider." },
+  { id: 5, name: "Client Onboarding Portal", activation: "active", operatingSurface: "operations", overlayBoundary: "Coordinate scoped intake, access, checklist, approvals, and handoff while external identity and provider records retain authority.", missionTitle: "Complete a client onboarding milestone", missionObjective: "Move one client through the next onboarding milestone with named inputs, access requirements, owner, approval, and completion evidence.", evidenceRequirement: "Completed onboarding milestone and client-visible confirmation", fallback: "Run the checklist as a local Work Packet and share only explicitly authorized artifacts." },
+  { id: 6, name: "Fulfillment & Work Delivery", activation: "active", operatingSurface: "work-room", overlayBoundary: "Coordinate deliverables, issues, change requests, review, and proof around connected project, document, and file systems.", missionTitle: "Deliver a client outcome", missionObjective: "Advance one deliverable from scoped work through review, change control, acceptance, and evidence-backed handoff.", evidenceRequirement: "Reviewed deliverable or observed outcome", fallback: "Operate the delivery packet locally and attach authoritative document or project links when available." },
+  { id: 7, name: "Customer Success, Reporting & Renewal", activation: "partial", operatingSurface: "operations", overlayBoundary: "Summarize health, outcomes, issues, reports, and renewal reminders from evidence without inventing unsupported attribution.", missionTitle: "Review customer health and renewal readiness", missionObjective: "Assess one customer relationship using current outcomes, risks, open issues, evidence, and the next renewal or retention decision.", evidenceRequirement: "Customer health review with outcome evidence", fallback: "Create a local review packet and reconcile communications to the customer system when restored." },
+  { id: 8, name: "Executive Command & Operating Cadence", activation: "active", operatingSurface: "command", overlayBoundary: "Direct objectives, constraints, decisions, commitments, approvals, and cadence from canonical EOS state.", missionTitle: "Run the next operating review", missionObjective: "Review current objectives, constraints, decisions, commitments, approvals, and accountable next actions for the organization.", evidenceRequirement: "Recorded decisions, owners, and commitments", fallback: "Use the EOS command state and local approval queue even when external providers are offline." },
+  { id: 9, name: "Finance Control & Commercial Events", activation: "partial", operatingSurface: "operations", overlayBoundary: "Coordinate provider-backed invoice, payment, accounting, budget, approval, and reconciliation events without claiming ledger truth.", missionTitle: "Review a financial control event", missionObjective: "Review one budget, invoice, payment, or reconciliation event, identify the authority gate, and record the accountable decision.", evidenceRequirement: "Provider receipt or reviewed reconciliation record", fallback: "Record the control decision locally; the accounting, banking, payroll, or payment provider remains authoritative." },
+  { id: 10, name: "Operations, Administration & Vendor Control", activation: "active", operatingSurface: "operations", overlayBoundary: "Govern recurring work, vendors, assets, access, obligations, and administrative requests through accountable packets.", missionTitle: "Resolve an operating control", missionObjective: "Advance one vendor, asset, access, obligation, or recurring-work request through ownership, approval, and verified completion.", evidenceRequirement: "Completed control checklist or provider receipt", fallback: "Operate the request locally and reconcile provider state after recovery." },
+  { id: 11, name: "Product, Offer & Template Evolution", activation: "partial", operatingSurface: "operations", overlayBoundary: "Coordinate feedback, experiments, version proposals, and release decisions without presenting drafts as released product truth.", missionTitle: "Evaluate a product or offer change", missionObjective: "Turn feedback or an experiment into a versioned proposal, compatibility assessment, release decision, and measurable verification plan.", evidenceRequirement: "Versioned proposal and reviewed experiment evidence", fallback: "Run the proposal and approval locally; publish only through the authoritative product or content system." },
+  { id: 12, name: "Technology, Integrations & Automation Control", activation: "partial", operatingSurface: "systems", overlayBoundary: "Expose provider binding, health, entitlement, retries, fallback, reconciliation, and replacement status before external effects.", missionTitle: "Qualify an integration or automation", missionObjective: "Verify one integration's identity, authority, health, failure behavior, fallback, evidence, and recovery path before enabling consequential use.", evidenceRequirement: "Health check, authority proof, and recovery result", fallback: "Keep EOS standalone-safe and route work through local packets until the provider is healthy and authorized." },
+  { id: 13, name: "Legal Obligations, Rights & Compliance", activation: "partial", operatingSurface: "operations", overlayBoundary: "Index obligations, rights, consent, risks, controls, and professional-review needs while authoritative documents remain external.", missionTitle: "Review an obligation or rights decision", missionObjective: "Identify one obligation, consent, rights, retention, or compliance decision, its source, owner, deadline, professional boundary, and required evidence.", evidenceRequirement: "Authoritative source link and qualified review record", fallback: "Track the obligation locally and stop at the professional-review boundary; EOS does not provide legal approval." },
+  { id: 14, name: "Brand, Media & Proof Distribution", activation: "active", operatingSurface: "commercial", overlayBoundary: "Coordinate creator or provider assets, claims, rights, approvals, distribution, attribution, and outcomes with source identity preserved.", missionTitle: "Approve a proof-backed distribution action", missionObjective: "Prepare one brand or media asset for distribution by verifying its claim, evidence, rights, audience, approval, channel, and outcome measure.", evidenceRequirement: "Approved asset, rights record, and distribution receipt", fallback: "Prepare the governed packet locally and distribute only through an authorized provider or CreatorOS/UMH path." },
+] as const;
+
+export function eosModulesForRole(role: EosSeatKind): readonly EosActiveModule[] {
+  const allowed = new Set(allowedSurfacesFor(role));
+  return eosActiveModules.filter((module) => allowed.has(module.operatingSurface));
 }
 
 export function canSeeSeat(actor: EosSeatKind, target: EosSeatKind): boolean {

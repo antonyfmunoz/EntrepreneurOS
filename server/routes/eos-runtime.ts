@@ -828,7 +828,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
     const perRequestLimitMicros = Math.round(input.perRequestLimitDollars * 1_000_000);
     const [budget] = await db.insert(aiBudgets).values({ companyId: access.company.id, monthlyLimitMicros, perRequestLimitMicros, enabled: input.enabled, updatedByUserId: req.user.id }).onConflictDoUpdate({ target: aiBudgets.companyId, set: { monthlyLimitMicros, perRequestLimitMicros, enabled: input.enabled, updatedByUserId: req.user.id, updatedAt: new Date() } }).returning();
     const trace = tracePair();
-    await db.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "ai_budget.updated", targetType: "ai_budget", targetId: String(access.company.id), traceId: trace.traceId, correlationId: trace.correlationId, result: "configured", details: { monthlyLimitMicros, perRequestLimitMicros, enabled: input.enabled } });
+    await db.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "ai_budget.updated", targetType: "ai_budget", targetId: String(access.company.id), traceId: trace.traceId, correlationId: trace.correlationId, result: "configured", details: { monthlyLimitMicros, perRequestLimitMicros, enabled: input.enabled }, createdAt: new Date() });
     return { body: budget };
   }));
 }
