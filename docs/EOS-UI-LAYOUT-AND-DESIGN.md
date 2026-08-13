@@ -115,6 +115,8 @@ The user must never infer which organization, authority context, provider record
 - UI is a projection of canonical state, not an independent source of truth.
 - Context appears before consequence.
 - Disabled actions explain missing authority, evidence, or prerequisite.
+- Home and HUD next actions must resolve to a surface inside the active seat's compiled navigation; no role may be sent to a founder-only destination and silently bounced back.
+- My Role must expose the next assigned-work, decision, practice, or role-assistant action available to the seat rather than stopping at a descriptive authority summary.
 - Status must be backed by state, event, and evidence.
 - Domain language may adapt; canonical semantics do not.
 - High-risk commands preview their effect and require fresh local authorization.

@@ -236,6 +236,19 @@ export function allowedSurfacesFor(role: EosSeatKind): readonly string[] {
   return surfacePolicies[role];
 }
 
+export type EosNextActionReason = "organization_setup" | "approval" | "active_work" | "new_work";
+
+export function nextUsableSurfaceFor(role: EosSeatKind, reason: EosNextActionReason): string {
+  const allowed = new Set(allowedSurfacesFor(role));
+  const candidates: Record<EosNextActionReason, readonly string[]> = {
+    organization_setup: ["organization", "intelligence", "my-role"],
+    approval: ["review", "work-room", "my-role"],
+    active_work: ["work-room", "my-role"],
+    new_work: ["operations", "intelligence", "my-role"],
+  };
+  return candidates[reason].find((surface) => allowed.has(surface)) || "home";
+}
+
 export interface EosActiveModule {
   id: number;
   name: string;

@@ -106,7 +106,14 @@ try {
   if (await desktop.getByPlaceholder("Mission title").inputValue() !== "Module 12: Qualify an integration or automation") throw new Error("Module 12 did not prepare its governed Work Packet.");
   if (!await desktop.getByPlaceholder("Objective and intended outcome").inputValue()) throw new Error("The module Work Packet objective was not prepared.");
   await desktop.getByText("Health check, authority proof, and recovery result", { exact: true }).waitFor();
-  for (const surface of ["My Role", "Work Room", "Review Room", "Academy", "Portfolio Map", "Systems"]) {
+  await desktop.getByRole("link", { name: "My Role", exact: true }).click();
+  await desktop.getByRole("heading", { name: "My Role", exact: true }).waitFor();
+  const roleActions = desktop.getByRole("heading", { name: "My next move", exact: true }).locator("xpath=ancestor::*[.//button[normalize-space()='Open assigned work']][1]");
+  await roleActions.getByRole("button", { name: "Practice this role", exact: true }).waitFor();
+  await roleActions.getByRole("button", { name: "Ask Assistant", exact: true }).waitFor();
+  await roleActions.getByRole("button", { name: "Open assigned work", exact: true }).click();
+  await desktop.getByRole("heading", { name: "Work Room", exact: true }).waitFor();
+  for (const surface of ["Review Room", "Academy", "Portfolio Map", "Systems"]) {
     await desktop.getByRole("link", { name: surface, exact: true }).click();
     await desktop.getByRole("heading", { name: surface, exact: true }).waitFor();
   }
@@ -197,7 +204,7 @@ try {
   await mobile.getByRole("button", { name: /Open .* conversation/ }).click();
   await mobile.locator("#mobile-communication-drawer aside").waitFor();
   if (browserErrors.length) throw new Error(`Browser errors: ${browserErrors.join(" | ")}`);
-  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 8, activeModules: 14, usableModuleControlCenter: true, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, reachableAccountControls: ["settings", "support"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
+  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 8, activeModules: 14, usableModuleControlCenter: true, roleSafeNextActions: true, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, reachableAccountControls: ["settings", "support"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
 } finally {
   await browser.close();
 }

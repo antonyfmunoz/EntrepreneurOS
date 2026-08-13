@@ -10,6 +10,7 @@ import {
   eosActiveModules,
   eosModulesForRole,
   manifestInputSchema,
+  nextUsableSurfaceFor,
   selectAdvisorSeats,
   workPacketCreateSchema,
   visibilityPolicyFor,
@@ -103,6 +104,18 @@ describe("EOS overlay runtime contracts", () => {
     expect(eosActiveModules.every((module) => allowedSurfacesFor("founder").includes(module.operatingSurface))).toBe(true);
     expect(eosModulesForRole("external").map((module) => module.id)).toEqual([6]);
     expect(eosModulesForRole("manager").every((module) => ["operations", "work-room"].includes(module.operatingSurface))).toBe(true);
+  });
+
+  it("never offers a role a next-action surface outside its compiled authority", () => {
+    expect(nextUsableSurfaceFor("founder", "organization_setup")).toBe("organization");
+    expect(nextUsableSurfaceFor("manager", "organization_setup")).toBe("intelligence");
+    expect(nextUsableSurfaceFor("individual_contributor", "new_work")).toBe("intelligence");
+    expect(nextUsableSurfaceFor("external", "new_work")).toBe("my-role");
+    for (const role of ["founder", "portfolio_executive", "company_ceo", "functional_executive", "manager", "individual_contributor", "external"] as const) {
+      for (const reason of ["organization_setup", "approval", "active_work", "new_work"] as const) {
+        expect(allowedSurfacesFor(role)).toContain(nextUsableSurfaceFor(role, reason));
+      }
+    }
   });
 
   it("selects relevant advisor agents while preserving the EA as the only founder-facing channel", () => {
