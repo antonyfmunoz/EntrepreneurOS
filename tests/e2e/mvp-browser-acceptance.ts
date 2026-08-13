@@ -11,11 +11,12 @@ try {
   desktop.on("console", (message) => { if (message.type() === "error") browserErrors.push(message.text()); });
   desktop.on("response", (response) => { if (response.status() >= 400) browserErrors.push(`${response.status()} ${response.url()}`); });
   await desktop.goto(`${origin}/portfolios`, { waitUntil: "domcontentloaded" });
-  const companyId = await desktop.evaluate(async () => {
+  const fixture = await desktop.evaluate(async () => {
     const portfolios = await fetch("/api/portfolios").then((response) => response.json());
     const companies = await fetch(`/api/portfolios/${portfolios[0].id}/companies`).then((response) => response.json());
-    return companies[0].id as number;
+    return { companyId: companies[0].id as number, portfolioId: portfolios[0].id as number };
   });
+  const { companyId, portfolioId } = fixture;
   await desktop.goto(`${origin}/company/${companyId}#home`, { waitUntil: "domcontentloaded" });
   try {
     await desktop.getByRole("heading", { name: "Home", exact: true }).waitFor();
@@ -71,8 +72,22 @@ try {
 
   const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const mobile = await mobileContext.newPage();
+  const assertCompactHeaderAction = async (label: string, headingName: string) => {
+    const action = mobile.getByRole("button", { name: label, exact: true }).or(mobile.getByRole("link", { name: label, exact: true })).first();
+    const [actionBox, headingBox] = await Promise.all([action.boundingBox(), mobile.getByRole("heading", { name: headingName, exact: true }).boundingBox()]);
+    if (!actionBox || actionBox.width > 48 || actionBox.height > 48 || Math.abs(actionBox.width - actionBox.height) > 2) throw new Error(`${label} is not a compact square header action.`);
+    if (!headingBox || actionBox.x <= headingBox.x) throw new Error(`${label} is not positioned to the right of the page title.`);
+  };
+  await mobile.goto(`${origin}/portfolios`, { waitUntil: "domcontentloaded" });
+  await mobile.getByRole("heading", { name: "Your portfolio", exact: true }).waitFor();
+  await assertCompactHeaderAction("Create portfolio", "Your portfolio");
+  await mobile.goto(`${origin}/portfolios/${portfolioId}`, { waitUntil: "domcontentloaded" });
+  const portfolioName = await mobile.getByRole("heading", { level: 1 }).textContent();
+  if (!portfolioName) throw new Error("Portfolio title did not render.");
+  await assertCompactHeaderAction("Add organization", portfolioName);
   await mobile.goto(`${origin}/company/${companyId}#my-role`, { waitUntil: "domcontentloaded" });
   await mobile.getByRole("heading", { name: "My Role", exact: true }).waitFor();
+  await assertCompactHeaderAction("Refresh workspace", "My Role");
   const mobileOverflow = await mobile.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   if (mobileOverflow) throw new Error("Mobile workspace has horizontal overflow.");
   const fab = mobile.getByRole("button", { name: "Open communication" });
@@ -95,7 +110,7 @@ try {
   await mobile.getByRole("button", { name: /Open .* conversation/ }).click();
   await mobile.locator("#mobile-communication-drawer aside").waitFor();
   if (browserErrors.length) throw new Error(`Browser errors: ${browserErrors.join(" | ")}`);
-  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 7, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, aiSpendControls: true, auditReceipts: true, desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
+  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 7, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
 } finally {
   await browser.close();
 }

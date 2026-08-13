@@ -454,6 +454,21 @@ export default function EosOverlayPage() {
     intelligence: "Intelligence",
     systems: "Systems",
   };
+  const sectionDescription: Record<string, string> = {
+    home: "See priorities, decisions, and the next move at a glance.",
+    command: "Direct work, resolve constraints, and keep execution moving.",
+    organization: "Shape the structure, authority, and operating rules.",
+    "my-role": "Know your scope, responsibilities, and next actions.",
+    commercial: "Turn market signals into accountable commercial action.",
+    operations: "Create, assign, and advance evidence-backed work.",
+    "work-room": "Move active work from intent to verified outcome.",
+    review: "Approve, reject, and audit consequential decisions.",
+    academy: "Build role mastery through real, evidence-backed practice.",
+    "portfolio-map": "See the portfolio structure within your authority scope.",
+    capital: "Activate capital controls only when financial authority is configured.",
+    intelligence: `Work with ${assistantName} to turn context into clear decisions.`,
+    systems: "Connect providers and control how EOS operates.",
+  };
   const nextAction = manifest?.status !== "active"
     ? `Advance the organization manifest${manifest?.status ? ` from ${manifest.status.replaceAll("_", " ")}` : ""}`
     : approvals.some((approval) => approval.status === "pending")
@@ -483,9 +498,12 @@ export default function EosOverlayPage() {
       </FloatingAIPanel>}
     >
       <div className="space-y-8">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="max-w-3xl"><div className="eos-label flex items-center gap-2"><Command className="h-4 w-4 text-primary" /> EOS overlay · {company.stage || "MVP"}</div><h1 className="mt-3 text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">{sectionTitle[activeTab]}</h1><p className="mt-2 text-muted-foreground">{company.name} · Context, authority, state, and evidence remain visible before consequence.</p></div>
-          <Button variant="outline" onClick={refresh} disabled={isRefreshing}><RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />{isRefreshing ? "Refreshing" : "Refresh"}</Button>
+        <div>
+          <div className="eos-label flex items-center gap-2"><Command className="h-4 w-4 text-primary" /> EOS overlay · {company.stage || "MVP"}</div>
+          <div className="mt-3 flex items-start justify-between gap-4">
+            <div className="min-w-0 max-w-3xl"><h1 className="text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">{sectionTitle[activeTab]}</h1><p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">{sectionDescription[activeTab]}</p></div>
+            <Button size="icon" variant="secondary" className="h-11 w-11 flex-shrink-0 rounded-xl" onClick={refresh} disabled={isRefreshing} aria-label={isRefreshing ? "Refreshing workspace" : "Refresh workspace"} title={isRefreshing ? "Refreshing workspace" : "Refresh workspace"}><RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} /></Button>
+          </div>
         </div>
 
         {[briefQuery, packetsQuery, approvalsQuery, evidenceQuery, integrationsQuery].some((query) => query.isError) && <Alert variant="destructive"><AlertTitle>Some workspace data could not be loaded</AlertTitle><AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><span>The organization is available, but one or more operating surfaces need to be retried.</span><Button size="sm" variant="outline" onClick={refresh}>Retry workspace data</Button></AlertDescription></Alert>}
