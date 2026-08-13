@@ -69,6 +69,17 @@ try {
   await desktop.getByRole("link", { name: "Review Room", exact: true }).click();
   await desktop.getByRole("heading", { name: "Recent control receipts" }).waitFor();
   await desktop.getByText("ai budget.updated", { exact: true }).first().waitFor();
+  const legacySurfaceRedirects = [
+    { path: "org", hash: "organization", heading: "Organization" },
+    { path: "chat", hash: "intelligence", heading: "Intelligence" },
+    { path: "workflows/new", hash: "operations", heading: "Operations" },
+    { path: "tasks/new", hash: "work-room", heading: "Work Room" },
+  ];
+  for (const legacy of legacySurfaceRedirects) {
+    await desktop.goto(`${origin}/company/${companyId}/${legacy.path}`, { waitUntil: "domcontentloaded" });
+    await desktop.getByRole("heading", { name: legacy.heading, exact: true }).waitFor();
+    if (new URL(desktop.url()).hash !== `#${legacy.hash}`) throw new Error(`Legacy ${legacy.path} did not converge on the ${legacy.hash} EOS surface.`);
+  }
   const desktopOverflow = await desktop.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   if (desktopOverflow) throw new Error("Desktop workspace has horizontal overflow.");
   // Radix Toast injects two aria-hidden focus guards with tabindex=0 to keep

@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useParams } from "wouter";
 import { queryClient, setTokenGetter } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -29,11 +29,14 @@ const LegalAcceptancePage = lazy(() => import("@/pages/legal-acceptance-page"));
 const PortfolioList = lazy(() => import("@/pages/portfolio-list-page"));
 const PortfolioDetail = lazy(() => import("@/pages/portfolio-detail-page"));
 const EosOverlayPage = lazy(() => import("@/pages/eos-overlay-page"));
-const AgentChatPage = lazy(() => import("@/pages/agent-chat-page"));
-const Workflows = lazy(() => import("@/pages/workflows-page"));
 const NotFoundPage = lazy(() => import("@/pages/not-found-page"));
-const OrgChartPage = lazy(() => import("@/pages/org-chart-page"));
-const TaskBoard = lazy(() => import("@/pages/task-board-page-new"));
+
+type CanonicalCompanySurface = "organization" | "intelligence" | "operations" | "work-room";
+
+function LegacyCompanySurfaceRedirect({ surface }: { surface: CanonicalCompanySurface }) {
+  const { companyId = "" } = useParams<{ companyId: string }>();
+  return <Redirect to={`/company/${encodeURIComponent(companyId)}#${surface}`} />;
+}
 
 function ClerkTokenProvider({ children }: { children: React.ReactNode }) {
   const { getToken } = useAuth();
@@ -107,30 +110,42 @@ function Router() {
       <ProtectedRoute path="/company/:companyId/org">
         {() => (
           <CompanyGate>
-            <OrgChartPage />
+            <LegacyCompanySurfaceRedirect surface="organization" />
           </CompanyGate>
         )}
+      </ProtectedRoute>
+      <ProtectedRoute path="/company/:companyId/org/:rest*">
+        {() => <CompanyGate><LegacyCompanySurfaceRedirect surface="organization" /></CompanyGate>}
       </ProtectedRoute>
       <ProtectedRoute path="/company/:companyId/chat">
         {() => (
           <CompanyGate>
-            <AgentChatPage />
+            <LegacyCompanySurfaceRedirect surface="intelligence" />
           </CompanyGate>
         )}
+      </ProtectedRoute>
+      <ProtectedRoute path="/company/:companyId/chat/:rest*">
+        {() => <CompanyGate><LegacyCompanySurfaceRedirect surface="intelligence" /></CompanyGate>}
       </ProtectedRoute>
       <ProtectedRoute path="/company/:companyId/workflows">
         {() => (
           <CompanyGate>
-            <Workflows />
+            <LegacyCompanySurfaceRedirect surface="operations" />
           </CompanyGate>
         )}
+      </ProtectedRoute>
+      <ProtectedRoute path="/company/:companyId/workflows/:rest*">
+        {() => <CompanyGate><LegacyCompanySurfaceRedirect surface="operations" /></CompanyGate>}
       </ProtectedRoute>
       <ProtectedRoute path="/company/:companyId/tasks">
         {() => (
           <CompanyGate>
-            <TaskBoard />
+            <LegacyCompanySurfaceRedirect surface="work-room" />
           </CompanyGate>
         )}
+      </ProtectedRoute>
+      <ProtectedRoute path="/company/:companyId/tasks/:rest*">
+        {() => <CompanyGate><LegacyCompanySurfaceRedirect surface="work-room" /></CompanyGate>}
       </ProtectedRoute>
 
       {/* Catch-all must stay LAST inside the Switch — wouter matches in order. */}
