@@ -543,10 +543,10 @@ export default function EosOverlayPage() {
 
           <TabsContent value="command" className="space-y-6">
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <Metric label="Open Work Packets" value={contextQuery.data?.counts?.openWorkPackets || 0} icon={Workflow} />
-              <Metric label="Pending approvals" value={contextQuery.data?.counts?.pendingApprovals || 0} icon={ClipboardCheck} />
-              <Metric label="Evidence records" value={contextQuery.data?.counts?.evidence || 0} icon={FileCheck2} />
-              <Metric label="Blocked" value={contextQuery.data?.counts?.blocked || 0} icon={Activity} />
+              <Metric label="Open Work Packets" value={contextQuery.data?.counts?.openWorkPackets || 0} icon={Workflow} actionLabel="Open active work" onClick={() => goToSurface("work-room")} />
+              <Metric label="Pending approvals" value={contextQuery.data?.counts?.pendingApprovals || 0} icon={ClipboardCheck} actionLabel="Review decisions" onClick={() => goToSurface("review")} />
+              <Metric label="Evidence records" value={contextQuery.data?.counts?.evidence || 0} icon={FileCheck2} actionLabel="Open evidence" onClick={() => goToSurface("operations")} />
+              <Metric label="Blocked" value={contextQuery.data?.counts?.blocked || 0} icon={Activity} actionLabel="Resolve blocked work" onClick={() => goToSurface("work-room")} />
             </div>
             <Card><CardHeader><CardTitle>Organization command state</CardTitle><CardDescription>The current phase, constraint, authority gate, and next safe move.</CardDescription></CardHeader><CardContent className="grid gap-4 md:grid-cols-2"><Fact label="Lifecycle stage" value={company.stage || "MVP"} /><Fact label="Manifest" value={manifest ? `v${manifest.version} · ${manifest.status}` : "Not compiled"} /><Fact label="Current constraint" value={manifest?.status === "active" ? activePackets.length ? `${activePackets.length} active Work Packet${activePackets.length === 1 ? "" : "s"}` : "No active mission" : "Organization manifest not active"} /><Fact label="Next safe action" value={nextAction} /></CardContent></Card>
           </TabsContent>
@@ -649,8 +649,8 @@ export default function EosOverlayPage() {
   );
 }
 
-function Metric({ label, value, icon: Icon }: { label: string; value: number; icon: typeof Activity }) {
-  return <Card><CardContent className="pt-8"><div className="flex items-center justify-between"><div><div className="text-2xl font-semibold">{value}</div><div className="eos-label mt-1">{label}</div></div><Icon className="h-5 w-5 text-primary" /></div></CardContent></Card>;
+function Metric({ label, value, icon: Icon, actionLabel, onClick }: { label: string; value: number; icon: typeof Activity; actionLabel: string; onClick: () => void }) {
+  return <button type="button" onClick={onClick} aria-label={`${label}: ${value}. ${actionLabel}`} className="group rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><Card className="h-full transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:shadow-[0_10px_32px_rgba(106,55,212,0.12)]"><CardContent className="pt-8"><div className="flex items-center justify-between"><div><div className="text-2xl font-semibold">{value}</div><div className="eos-label mt-1">{label}</div><div className="mt-3 text-xs font-medium text-primary">{actionLabel} →</div></div><Icon className="h-5 w-5 text-primary" /></div></CardContent></Card></button>;
 }
 
 function Fact({ label, value }: { label: string; value: string }) { return <div className="rounded-lg bg-muted/50 p-3"><div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div><div className="mt-1">{value}</div></div>; }
