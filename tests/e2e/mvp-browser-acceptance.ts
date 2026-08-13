@@ -140,6 +140,7 @@ try {
   for (const surface of ["Review Room", "Academy", "Portfolio Map", "Systems"]) {
     await desktop.getByRole("link", { name: surface, exact: true }).click();
     await desktop.getByRole("heading", { name: surface, exact: true }).waitFor();
+    if (surface === "Academy") await desktop.getByRole("button", { name: "Start practical exercise", exact: true }).waitFor();
   }
   await desktop.getByLabel("Monthly limit (USD)").fill("30");
   await desktop.getByLabel("Per-request limit (USD)").fill("2");

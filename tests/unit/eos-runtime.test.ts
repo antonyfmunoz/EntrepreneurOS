@@ -11,6 +11,7 @@ import {
   eosModulesForRole,
   manifestInputSchema,
   nextUsableSurfaceFor,
+  rolePracticeActionFor,
   selectAdvisorSeats,
   workPacketCreateSchema,
   visibilityPolicyFor,
@@ -116,6 +117,13 @@ describe("EOS overlay runtime contracts", () => {
         expect(allowedSurfacesFor(role)).toContain(nextUsableSurfaceFor(role, reason));
       }
     }
+  });
+
+  it("keeps Academy practice inside the seat's work-creation authority", () => {
+    expect(rolePracticeActionFor("founder", false)).toBe("prepare_work");
+    expect(rolePracticeActionFor("manager", true)).toBe("prepare_work");
+    expect(rolePracticeActionFor("individual_contributor", true)).toBe("open_assigned_work");
+    expect(rolePracticeActionFor("individual_contributor", false)).toBe("request_supervisor_approval");
   });
 
   it("selects relevant advisor agents while preserving the EA as the only founder-facing channel", () => {

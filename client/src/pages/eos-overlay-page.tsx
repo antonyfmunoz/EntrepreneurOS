@@ -43,7 +43,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { eosActiveModules, nextUsableSurfaceFor, type EosActiveModule, type EosNextActionReason } from "@shared/eos-runtime";
+import { eosActiveModules, nextUsableSurfaceFor, rolePracticeActionFor, type EosActiveModule, type EosNextActionReason } from "@shared/eos-runtime";
 
 type JsonRecord = Record<string, any>;
 
@@ -166,6 +166,7 @@ export default function EosOverlayPage() {
   const selectedModule = visibleModules.find((module) => module.id === selectedModuleId) || visibleModules[0];
   const manifestModuleIds = new Set<number>(manifest?.manifest?.enabledModules || eosActiveModules.map((module) => module.id));
   const moduleState = (module: EosActiveModule) => manifestModuleIds.has(module.id) ? `overlay_${module.activation === "active" ? "ready" : "partial"}` : "not_enabled";
+  const practiceAction = rolePracticeActionFor(principalContext?.role || "external", activePackets.length > 0);
 
   useEffect(() => {
     if (!principalContext || allowedSurfaces.has(activeTab)) return;
@@ -246,6 +247,24 @@ export default function EosOverlayPage() {
       toast({ title: "Work Packet created", description: packetApproval ? "It is waiting for local approval." : "It is ready to start." });
     },
     onError: (error) => showMutationError("Work Packet creation", error),
+  });
+
+  const requestScopedWorkMutation = useMutation({
+    mutationFn: ({ title, objective, evidenceRequirement }: { title: string; objective: string; evidenceRequirement: string }) => requestJson<JsonRecord>("POST", `${root}/work-packets`, {
+      title: title.slice(0, 200),
+      objective: objective.slice(0, 2000),
+      priority: "medium",
+      requiresApproval: true,
+      toolPack: [],
+      evidenceRequirements: [evidenceRequirement.slice(0, 300)],
+      source: "manual",
+    }),
+    onSuccess: async () => {
+      await refresh();
+      goToSurface("work-room");
+      toast({ title: "Practice request recorded", description: "The Work Packet is waiting for approval through your reporting chain." });
+    },
+    onError: (error) => showMutationError("Practice request", error),
   });
 
   const approvalMutation = useMutation({
@@ -414,6 +433,23 @@ export default function EosOverlayPage() {
     toast({ title: "Work Packet prepared", description: "Review the objective and authority gate, then create it when ready." });
   };
 
+  const requestSupervisorWork = (title: string, objective: string, evidenceRequirement = "Supervisor-reviewed output and named evidence") => {
+    requestScopedWorkMutation.mutate({ title, objective, evidenceRequirement });
+  };
+
+  const startRolePractice = () => {
+    const title = `Seat practice: ${principalContext?.seat || "active role"}`;
+    const objective = `Complete a practical exercise for the ${principalContext?.seat || "active role"}, record evidence, and request supervisor review.`;
+    if (practiceAction === "prepare_work") return prepareWorkPacket(title, objective, "Supervisor-reviewed output and named evidence");
+    if (practiceAction === "open_assigned_work") return goToSurface("work-room");
+    requestSupervisorWork(title, objective);
+  };
+
+  const promoteAssistantMessage = (message: ChatMessage) => {
+    if (allowedSurfaces.has("operations")) return prepareWorkPacket(`${assistantName} recommendation`, message.content);
+    requestSupervisorWork(`${assistantName} recommendation`, message.content, "Supervisor decision and reviewed outcome");
+  };
+
   const openModule = (module: EosActiveModule) => {
     setSelectedModuleId(module.id);
     goToSurface("modules");
@@ -463,7 +499,7 @@ export default function EosOverlayPage() {
         )}
         <div className="mt-2 flex min-w-0 items-center gap-1.5 overflow-hidden">{isFounder && <Badge variant="secondary" className="h-5 flex-shrink-0 px-1.5 text-[9px]">15 advisors</Badge>}<Badge variant="outline" className="h-5 min-w-0 truncate px-1.5 text-[9px]">{principalContext?.seat || "Active seat"}</Badge></div>
       </div>
-      <div className="min-h-0 flex-1"><AgentChatStub messages={eaMessages} onSendMessage={sendEaMessage} onPromoteMessage={(message) => prepareWorkPacket("EA recommendation", message.content)} suggestions={["Brief me", "Prioritize work", "Prepare a decision"]} isLoading={eaMessageMutation.isPending} placeholder={`Message ${assistantName}…`} assistantName={assistantName} compact className="h-full shadow-none" /></div>
+      <div className="min-h-0 flex-1"><AgentChatStub messages={eaMessages} onSendMessage={sendEaMessage} onPromoteMessage={promoteAssistantMessage} promoteLabel={allowedSurfaces.has("operations") ? "Turn into work" : "Request supervisor approval"} suggestions={["Brief me", "Prioritize work", "Prepare a decision"]} isLoading={eaMessageMutation.isPending} placeholder={`Message ${assistantName}…`} assistantName={assistantName} compact className="h-full shadow-none" /></div>
       <div className="flex flex-shrink-0 items-center gap-1.5 border-t border-border/70 px-3 py-1.5 text-[9px] text-muted-foreground"><ShieldCheck className="h-3 w-3 flex-shrink-0 text-primary" /><span className="truncate">EOS authority · advice is not execution</span></div>
     </div>
   );
@@ -696,7 +732,7 @@ export default function EosOverlayPage() {
           </TabsContent>
 
           <TabsContent value="academy" className="space-y-6">
-            <Card><CardHeader><CardTitle>Seat Academy</CardTitle><CardDescription>Practice inside real work, then prove advancement with reviewed evidence.</CardDescription></CardHeader><CardContent className="space-y-5"><Fact label="Current learning objective" value={`Operate the ${principalContext?.seat || "active seat"} within its authority ceiling`} /><Fact label="Practical exercise" value={activePackets[0]?.title || "Create the first evidence-bearing Work Packet"} /><Fact label="Advancement proof" value="Reviewed output, named evidence, and supervisor acceptance" /><div className="flex flex-wrap gap-2"><Button onClick={() => prepareWorkPacket(`Seat practice: ${principalContext?.seat || "active role"}`, `Complete a practical exercise for the ${principalContext?.seat || "active role"}, record evidence, and request supervisor review.`)}><BookOpen className="mr-2 h-4 w-4" />Start practical exercise</Button><Button variant="outline" onClick={() => sendEaMessage(`Coach me on the next practical skill for the ${principalContext?.seat || "active role"}. Ground it in current work and define the evidence required.`)}><MessagesSquare className="mr-2 h-4 w-4" />Ask role coach</Button></div></CardContent></Card>
+            <Card><CardHeader><CardTitle>Seat Academy</CardTitle><CardDescription>Practice inside real work, then prove advancement with reviewed evidence.</CardDescription></CardHeader><CardContent className="space-y-5"><Fact label="Current learning objective" value={`Operate the ${principalContext?.seat || "active seat"} within its authority ceiling`} /><Fact label="Practical exercise" value={activePackets[0]?.title || (practiceAction === "prepare_work" ? "Create the first evidence-bearing Work Packet" : "Request a supervisor-approved practice assignment")} /><Fact label="Advancement proof" value="Reviewed output, named evidence, and supervisor acceptance" /><div className="flex flex-wrap gap-2"><Button onClick={startRolePractice} disabled={requestScopedWorkMutation.isPending}><BookOpen className="mr-2 h-4 w-4" />{practiceAction === "prepare_work" ? "Start practical exercise" : practiceAction === "open_assigned_work" ? "Open practical work" : requestScopedWorkMutation.isPending ? "Requesting…" : "Request practice assignment"}</Button><Button variant="outline" onClick={() => sendEaMessage(`Coach me on the next practical skill for the ${principalContext?.seat || "active role"}. Ground it in current work and define the evidence required.`)}><MessagesSquare className="mr-2 h-4 w-4" />Ask role coach</Button></div></CardContent></Card>
             {notionContextQuery.data && <ListCard title="Canonical Notion references" empty="No shared Notion pages were returned." items={(notionContextQuery.data.results || []).map((item: JsonRecord) => ({ ...item, title: item.title, objective: item.lastEditedTime ? `Updated ${new Date(item.lastEditedTime).toLocaleString()}` : "Reference", status: "reference" }))} />}
           </TabsContent>
 
