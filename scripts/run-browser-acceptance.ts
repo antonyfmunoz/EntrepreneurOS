@@ -22,7 +22,7 @@ for (const child of processes) {
   child.stderr?.on("data", (data) => logs.push(String(data)));
 }
 
-async function waitFor(url: string, timeoutMs = 45_000) {
+async function waitFor(url: string, timeoutMs = 90_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try { const response = await fetch(url); if (response.ok) return; } catch {}

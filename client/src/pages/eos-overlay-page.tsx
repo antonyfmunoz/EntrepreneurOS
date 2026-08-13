@@ -77,7 +77,7 @@ export default function EosOverlayPage() {
   const [packetTitle, setPacketTitle] = useState("");
   const [packetObjective, setPacketObjective] = useState("");
   const [packetApproval, setPacketApproval] = useState(true);
-  const [evidenceTitle, setEvidenceTitle] = useState<Record<string, string>>({});
+  const [evidenceDetails, setEvidenceDetails] = useState<Record<string, string>>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [eaMessages, setEaMessages] = useState<ChatMessage[]>([]);
   const [isEditingAssistantName, setIsEditingAssistantName] = useState(false);
@@ -251,13 +251,18 @@ export default function EosOverlayPage() {
   });
 
   const evidenceMutation = useMutation({
-    mutationFn: ({ packetId, title }: { packetId: string; title: string }) => requestJson("POST", `${root}/evidence`, {
+    mutationFn: ({ packetId, requirement, details }: { packetId: string; requirement: string; details: string }) => requestJson("POST", `${root}/evidence`, {
       workPacketId: packetId,
       evidenceType: "artifact",
-      title,
-      details: { capturedFrom: "eos_overlay" },
+      title: requirement,
+      ...( /^https:\/\/\S+$/i.test(details.trim()) ? { uri: details.trim() } : {} ),
+      details: { capturedFrom: "eos_overlay", note: details.trim() },
     }),
-    onSuccess: async (_, variables) => { setEvidenceTitle((current) => ({ ...current, [variables.packetId]: "" })); await refresh(); },
+    onSuccess: async (_, variables) => {
+      setEvidenceDetails((current) => ({ ...current, [variables.packetId]: "" }));
+      await refresh();
+      toast({ title: "Required evidence recorded", description: variables.requirement });
+    },
     onError: (error) => showMutationError("Evidence recording", error),
   });
 
@@ -581,7 +586,35 @@ export default function EosOverlayPage() {
 
           <TabsContent value="operations" className="space-y-8">
             <Card><CardHeader><CardTitle>Create Work Packet</CardTitle><CardDescription>A mission is a governed unit of work with objective, authority, lifecycle, and evidence.</CardDescription></CardHeader><CardContent className="grid gap-3"><Input value={packetTitle} onChange={(event) => setPacketTitle(event.target.value)} placeholder="Mission title" /><Textarea value={packetObjective} onChange={(event) => setPacketObjective(event.target.value)} placeholder="Objective and intended outcome" /><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={packetApproval} onChange={(event) => setPacketApproval(event.target.checked)} /> Require local approval before work begins</label><Button className="w-fit" disabled={packetTitle.trim().length < 3 || packetObjective.trim().length < 3 || packetMutation.isPending} onClick={() => packetMutation.mutate()}><Plus className="mr-2 h-4 w-4" />{packetMutation.isPending ? "Creating…" : "Create Work Packet"}</Button></CardContent></Card>
-            <div className="space-y-3">{packets.map((packet) => { const next = nextTransition(packet.status); const packetEvidence = evidence.filter((item) => item.workPacketId === packet.id); return <Card key={packet.id}><CardContent className="pt-8"><div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{packet.title}</h3><StateBadge state={packet.status} /><Badge variant="outline">{packet.priority}</Badge></div><p className="mt-2 text-sm text-muted-foreground">{packet.objective}</p><p className="mt-2 text-xs text-muted-foreground">Evidence {packetEvidence.length}/{Math.max(1, packet.evidenceRequirements?.length || 1)} · Trace {packet.traceId?.slice(0, 8)}</p></div><div className="flex flex-wrap gap-2">{next && <Button size="sm" variant="outline" disabled={transitionMutation.isPending || (next === "completed" && packetEvidence.length === 0)} onClick={() => transitionMutation.mutate({ id: packet.id, status: next })}>{next === "in_progress" ? "Start / resume" : next === "in_review" ? "Submit for review" : "Complete"}</Button>}</div></div>{!["completed", "cancelled"].includes(packet.status) && <div className="mt-5 flex flex-col gap-2 sm:flex-row"><Input value={evidenceTitle[packet.id] || ""} onChange={(event) => setEvidenceTitle((current) => ({ ...current, [packet.id]: event.target.value }))} placeholder="Evidence title" /><Button variant="secondary" disabled={!evidenceTitle[packet.id]?.trim()} onClick={() => evidenceMutation.mutate({ packetId: packet.id, title: evidenceTitle[packet.id] })}>Record evidence</Button></div>}</CardContent></Card>; })}{!packets.length && <EmptyState icon={Workflow} title="No Work Packets" description="Create the first evidence-bearing mission above." />}</div>
+            <div className="space-y-3">{packets.map((packet) => {
+              const next = nextTransition(packet.status);
+              const packetEvidence = evidence.filter((item) => item.workPacketId === packet.id);
+              const requirements = Array.isArray(packet.evidenceRequirements) && packet.evidenceRequirements.length
+                ? packet.evidenceRequirements.map(String)
+                : ["A reviewable artifact or observed outcome"];
+              const recordedTitles = new Set(packetEvidence.map((item) => String(item.title).trim().toLowerCase()));
+              const missingRequirements = requirements.filter((requirement) => !recordedTitles.has(requirement.trim().toLowerCase()));
+              const nextRequirement = missingRequirements[0];
+              return <Card key={packet.id}><CardContent className="pt-8">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{packet.title}</h3><StateBadge state={packet.status} /><Badge variant="outline">{packet.priority}</Badge></div>
+                    <p className="mt-2 text-sm text-muted-foreground">{packet.objective}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">Required evidence {requirements.length - missingRequirements.length}/{requirements.length} · Trace {packet.traceId?.slice(0, 8)}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">{next && <Button size="sm" variant="outline" disabled={transitionMutation.isPending || (next === "completed" && missingRequirements.length > 0)} onClick={() => transitionMutation.mutate({ id: packet.id, status: next })}>{next === "in_progress" ? "Start / resume" : next === "in_review" ? "Submit for review" : "Complete"}</Button>}</div>
+                </div>
+                {!["completed", "cancelled"].includes(packet.status) && nextRequirement && <div className="mt-5 rounded-xl bg-muted/60 p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Required next</p>
+                  <p className="mt-1 text-sm font-medium">{nextRequirement}</p>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <Input aria-label={`Evidence details for ${packet.title}`} value={evidenceDetails[packet.id] || ""} onChange={(event) => setEvidenceDetails((current) => ({ ...current, [packet.id]: event.target.value }))} placeholder="Add a proof note or HTTPS link" />
+                    <Button variant="secondary" disabled={!evidenceDetails[packet.id]?.trim() || evidenceMutation.isPending} onClick={() => evidenceMutation.mutate({ packetId: packet.id, requirement: nextRequirement, details: evidenceDetails[packet.id] })}>{evidenceMutation.isPending ? "Recording…" : "Record required evidence"}</Button>
+                  </div>
+                </div>}
+                {!["completed", "cancelled"].includes(packet.status) && !nextRequirement && <div className="mt-5 flex items-center gap-2 rounded-xl bg-primary/10 p-4 text-sm font-medium text-primary"><BadgeCheck className="h-4 w-4" />All required evidence is recorded. This Work Packet can complete after review.</div>}
+              </CardContent></Card>;
+            })}{!packets.length && <EmptyState icon={Workflow} title="No Work Packets" description="Create the first evidence-bearing mission above." />}</div>
 
             <section className="space-y-3"><div><p className="eos-label">Authority queue</p><h2 className="mt-1 text-xl font-semibold">Approvals</h2></div>{approvals.map((approval) => <Card key={approval.id}><CardContent className="flex flex-col gap-4 pt-8 md:flex-row md:items-center md:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{approval.summary}</h3><StateBadge state={approval.status} /></div><p className="mt-1 text-xs text-muted-foreground">Requested {new Date(approval.createdAt).toLocaleString()}</p></div>{approval.status === "pending" && <div className="flex gap-2"><Button variant="outline" disabled={approvalMutation.isPending} onClick={() => approvalMutation.mutate({ id: approval.id, decision: "rejected" })}>Reject</Button><Button disabled={approvalMutation.isPending} onClick={() => approvalMutation.mutate({ id: approval.id, decision: "approved" })}>{approvalMutation.isPending ? "Saving…" : "Approve"}</Button></div>}</CardContent></Card>)}{!approvals.length && <EmptyState icon={ClipboardCheck} title="No approval requests" description="Approval-gated missions will appear here." />}</section>
 

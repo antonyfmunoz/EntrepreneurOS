@@ -55,6 +55,16 @@ try {
   await approvalCard.waitFor();
   await approvalCard.getByRole("button", { name: "Approve", exact: true }).click();
   await desktop.getByText("Work approved", { exact: true }).waitFor();
+  await desktop.getByRole("link", { name: "Operations", exact: true }).click();
+  const missionCard = desktop.getByText(missionTitle, { exact: true }).locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]");
+  await missionCard.getByRole("button", { name: "Start / resume", exact: true }).click();
+  await missionCard.getByRole("button", { name: "Submit for review", exact: true }).click();
+  await missionCard.getByLabel(`Evidence details for ${missionTitle}`).fill("Browser acceptance verified the governed work result.");
+  await missionCard.getByRole("button", { name: "Record required evidence", exact: true }).click();
+  await desktop.getByText("Required evidence recorded", { exact: true }).waitFor();
+  await missionCard.getByText("All required evidence is recorded. This Work Packet can complete after review.", { exact: true }).waitFor();
+  await missionCard.getByRole("button", { name: "Complete", exact: true }).click();
+  await missionCard.getByText("completed", { exact: true }).waitFor();
   await desktop.getByRole("link", { name: "Organization", exact: true }).click();
   await desktop.getByRole("heading", { name: "Organization", exact: true }).waitFor();
   const seatTitle = `Browser QA ${Date.now()}`;
@@ -153,7 +163,7 @@ try {
   await mobile.getByRole("button", { name: /Open .* conversation/ }).click();
   await mobile.locator("#mobile-communication-drawer aside").waitFor();
   if (browserErrors.length) throw new Error(`Browser errors: ${browserErrors.join(" | ")}`);
-  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 7, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, actionableCommandMetrics: true, guidedCompanySetup: true, reachableAccountControls: ["settings", "support"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
+  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 7, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, reachableAccountControls: ["settings", "support"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
 } finally {
   await browser.close();
 }
