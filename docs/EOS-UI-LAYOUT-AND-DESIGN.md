@@ -1,7 +1,7 @@
 # EOS UI Layout and Design Contract
 
 **Status:** Canonical implementation contract
-**Version:** 1.5
+**Version:** 1.6
 **Reconciled:** 2026-08-13
 
 ## Source authority
@@ -64,6 +64,8 @@ Role compilation removes any surface the active seat is not authorized to use. P
 Action compilation follows the same boundary. A seat with Operations authority may prepare new governed work. A lower seat practicing in Academy or promoting an assistant recommendation opens existing assigned work when available; otherwise EOS records an approval-gated Work Packet routed to the supervisor instead of navigating the user to a hidden Operations surface or implying that work was authorized.
 
 Unavailable or dormant surfaces remain visible only when their state is clearly labeled. UI presence must never imply authority, provider connectivity, native ownership, or release maturity.
+
+Portfolio Map is an operating surface, not a decorative org chart. It renders only seats already filtered into the active principal's visibility scope. Selecting a seat reveals its mandate, reporting parent, visible direct reports, current human-agent operating mode, and visible active-work count. Follow-up actions may open the authorized organization or work surface, or ask the active communication agent for a scoped accountability brief; the map never grants cross-seat authority or exposes hidden identities.
 
 ## Context law
 

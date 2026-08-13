@@ -13,11 +13,13 @@ The required overlay MVP is the governed EntrepreneurOS runtime, not the eventua
 3. the complete Organization Compiler lifecycle from draft through verified activation;
 4. an approval-gated customer-value provider loop with effect request, provider receipt, evidence, audit, failure blocking, and reconciliation;
 5. live Google Workspace and Notion context adapters with explicit provider health and scope evidence;
-6. My Role, Modules, Work Room, Review Room, Academy, and Portfolio Map operator surfaces inside the canonical EOS shell, including a role-filtered control center for all fourteen non-dormant business modules;
+6. My Role, Modules, Work Room, Review Room, Academy, and Portfolio Map operator surfaces inside the canonical EOS shell, including a role-filtered control center for all fourteen non-dormant business modules and a selectable accountability map that exposes reporting lines, visible direct reports, active seat work, human-agent mode, and authorized follow-up actions;
 7. an interaction-first operator loop in which descriptive state leads to a controlled next action that is guaranteed to exist inside the active seat's compiled authority; every visible module can prepare governed work or route through the seat's assistant, approvals change durable state, and audit receipts expose the result;
 8. usable account controls that require explicit company context, preserve it in shareable URLs, connect billing to actual server/provider state, and remove settings claims that are not runtime-enforced; plus reproducible migrations, qualification commands, source control, deployment, and honest release evidence.
 
 ## Current qualification evidence
+
+The current usability increment also replaces the static Portfolio Map with a selectable, visibility-filtered accountability tool. It exposes reporting context, visible direct reports, active seat work, human-agent mode, and real organization, work-room, and assistant actions without expanding the active principal's authority.
 
 | Gate | Result | Evidence |
 |---|---|---|
