@@ -35,7 +35,7 @@ export default function PortfolioDetailPage() {
   });
 
   if (portfolioQuery.isLoading || companiesQuery.isLoading) {
-    return <FullPageStatus label="Portfolio" title="Loading organizations" description="Resolving the companies and operating contexts available in this portfolio." />;
+    return <FullPageStatus label="Portfolio" title="Loading organizations" description="Resolving the organizations available in this portfolio." />;
   }
 
   if (portfolioQuery.error || companiesQuery.error || !portfolioQuery.data) {
@@ -60,7 +60,7 @@ export default function PortfolioDetailPage() {
         <div>
           <Link href="/portfolios"><a className="inline-flex items-center text-sm font-medium text-primary hover:text-[#5a2dc0]"><ArrowLeft className="mr-1.5 h-4 w-4" />All portfolios</a></Link>
           <div className="mt-6">
-            <p className="eos-label flex items-center gap-2"><LayoutGrid className="h-4 w-4 text-primary" />Portfolio context</p>
+            <p className="eos-label flex items-center gap-2"><LayoutGrid className="h-4 w-4 text-primary" />Organizations</p>
             <div className="mt-3 flex items-start justify-between gap-4">
               <div className="min-w-0 max-w-2xl">
                 <h1 className="text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">{portfolio.name}</h1>
@@ -71,9 +71,8 @@ export default function PortfolioDetailPage() {
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div>
           <Metric label="Organizations" value={companies.length} />
-          <Metric label="Operating contexts" value={companies.length} />
         </div>
 
         {companies.length === 0 ? (
@@ -81,7 +80,7 @@ export default function PortfolioDetailPage() {
             <CardContent className="px-6 py-14 text-center sm:px-12 sm:py-20">
               <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-white text-primary shadow-[0_8px_32px_rgba(106,55,212,0.08)]"><Building2 className="h-7 w-7" /></span>
               <h2 className="mt-6 text-xl font-semibold">Add the first organization</h2>
-              <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">Create a company inside this portfolio, then compile its operating context in EntrepreneurOS.</p>
+              <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">Create a company inside this portfolio, then configure how it operates in EntrepreneurOS.</p>
               <Button asChild className="mt-7"><Link href={`/company-setup?portfolioId=${portfolio.id}`}><Plus className="mr-2 h-4 w-4" />Add organization</Link></Button>
             </CardContent>
           </Card>

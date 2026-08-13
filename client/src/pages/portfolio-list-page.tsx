@@ -28,14 +28,14 @@ export default function PortfolioListPage() {
   });
 
   if (portfoliosQuery.isLoading) {
-    return <FullPageStatus label="Portfolio" title="Loading your portfolio" description="Resolving the organizations available in your authority scope." />;
+    return <FullPageStatus label="Portfolios" title="Loading your portfolios" description="Resolving the organizations available in your authority scope." />;
   }
 
   if (portfoliosQuery.error) {
     return (
       <FullPageStatus
         label="Portfolio unavailable"
-        title="We could not load your portfolio"
+        title="We could not load your portfolios"
         description="Your session is still protected. Retry the request; if it continues, the deployment or data service needs attention."
         busy={false}
         action={<Button onClick={() => portfoliosQuery.refetch()}><RefreshCw className="mr-2 h-4 w-4" />Retry</Button>}
@@ -46,14 +46,14 @@ export default function PortfolioListPage() {
   const portfolios = portfoliosQuery.data ?? [];
 
   return (
-    <UniversalLayout title="Portfolio" floatingPanel={false}>
+    <UniversalLayout title="Portfolios" floatingPanel={false}>
       <section className="space-y-8 pb-12">
         <div>
           <p className="eos-label flex items-center gap-2"><LayoutGrid className="h-4 w-4 text-primary" />Founder workspace</p>
           <div className="mt-3 flex items-start justify-between gap-4">
             <div className="min-w-0 max-w-2xl">
-              <h1 className="text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">Your portfolio</h1>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground sm:text-base">Choose a portfolio or create the next one.</p>
+              <h1 className="text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">Your Portfolios</h1>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground sm:text-base">Create a new portfolio or enter an existing organization.</p>
             </div>
             <Button size="icon" className="h-11 w-11 flex-shrink-0 rounded-xl" onClick={() => setIsCreateOpen(true)} aria-label="Create portfolio" title="Create portfolio">
               <Plus className="h-4 w-4" />
@@ -80,7 +80,7 @@ export default function PortfolioListPage() {
                     <CardContent className="flex min-h-52 flex-col p-6 sm:p-8">
                       <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#eff1f2] text-primary"><Building2 className="h-5 w-5" /></span>
                       <h2 className="mt-6 text-xl font-semibold">{portfolio.name}</h2>
-                      <p className="mt-2 line-clamp-3 flex-1 text-sm text-muted-foreground">{portfolio.description || "Open this portfolio to manage its organizations and operating context."}</p>
+                      <p className="mt-2 line-clamp-3 flex-1 text-sm text-muted-foreground">{portfolio.description || "Open this portfolio to manage its organizations."}</p>
                       <div className="mt-6 flex items-center justify-between gap-4">
                         <span className="eos-label">{typeof portfolio.companyCount === "number" ? `${portfolio.companyCount} ${portfolio.companyCount === 1 ? "organization" : "organizations"}` : "Portfolio"}</span>
                         <span className="flex items-center text-sm font-medium text-primary">Open <ArrowRight className="ml-1.5 h-4 w-4 transition-transform group-hover:translate-x-0.5" /></span>

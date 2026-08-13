@@ -6,7 +6,7 @@ export function CompanyGate({ children }: { children: React.ReactNode }) {
   const { hasCompany, isLoading } = useCompany();
 
   if (isLoading) {
-    return <FullPageStatus label="Organization context" title="Loading your workspace" description="Resolving your portfolio, organization, and operating authority." />;
+    return <FullPageStatus label="Organization" title="Loading your workspace" description="Resolving your portfolio, organization, and operating authority." />;
   }
 
   if (!hasCompany) {
