@@ -156,11 +156,21 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const previousReleaseSubject = process.env.EOS_RELEASE_SUBJECT;
     const controlKey = "frontend_acceptance";
     const serviceKey = `test-ownership-${randomUUID()}`;
+    const vendorId = `test-vendor-${randomUUID()}`;
     const marker = `integration-control-${randomUUID()}`;
     const [original] = await sql<any[]>`SELECT * FROM operational_controls WHERE control_key = ${controlKey}`;
+    currentUserId = ownerId;
+    await api.get("/api/platform/capabilities").expect(200, { operationalReadiness: false });
+    await api.get("/api/platform/readiness").expect(403);
     process.env.EOS_PLATFORM_ADMIN_USER_IDS = `${ownerId},${otherId}`;
     process.env.EOS_RELEASE_SUBJECT = `git:${"a".repeat(40)}`;
     try {
+      await api.get("/api/platform/capabilities").expect(200, { operationalReadiness: true });
+      const operators = await api.get("/api/platform/operators").expect(200);
+      expect(operators.body.map((operator: { id: string }) => operator.id)).toEqual(expect.arrayContaining([ownerId, otherId]));
+      const readiness = await api.get("/api/platform/readiness").expect(200);
+      expect(readiness.body.layers).toHaveLength(24);
+      expect(readiness.body.layers[0].requirements).toEqual([expect.objectContaining({ key: "frontend_acceptance", subjectKind: "release", satisfied: expect.any(Boolean) })]);
       const reviewedAt = new Date();
       const expiresAt = new Date(reviewedAt.getTime() + 7 * 86_400_000);
       await api.put(`/api/platform/controls/${controlKey}`).send({ status: "pass", evidenceUri: "https://evidence.example.test/report?token=secret", evidenceHash: "a".repeat(64), evidenceScope: "repository", subject: process.env.EOS_RELEASE_SUBJECT, notes: marker, reviewedAt, expiresAt }).expect(400);
@@ -197,8 +207,30 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       await api.put(`/api/platform/services/${serviceKey}/ownership`).send({ ...ownership, backupOwnerUserId: ownerId }).expect(400);
       const created = await api.put(`/api/platform/services/${serviceKey}/ownership`).send(ownership).expect(200);
       expect(created.body.backupOwnerUserId).toBe(otherId);
+      const fetchedOwnership = await api.get(`/api/platform/services/${serviceKey}/ownership`).expect(200);
+      expect(fetchedOwnership.body).toEqual(expect.objectContaining({ serviceKey, backupOwnerUserId: otherId }));
+
+      const vendor = {
+        name: "Qualification Vendor",
+        serviceCategory: "Test service",
+        riskTier: "high",
+        status: "approved",
+        dataClasses: ["account metadata"],
+        dpaStatus: "executed",
+        subprocessorStatus: "reviewed",
+        reviewEvidenceUri: "https://evidence.example.test/vendor-review",
+        exitPlan: "Export test records and revoke all test credentials.",
+        lastReviewedAt: reviewedAt,
+        nextReviewAt: new Date(reviewedAt.getTime() + 90 * 86_400_000),
+      };
+      await api.put(`/api/platform/vendors/${vendorId}`).send({ ...vendor, dpaStatus: "pending" }).expect(400);
+      const savedVendor = await api.put(`/api/platform/vendors/${vendorId}`).send(vendor).expect(200);
+      expect(savedVendor.body).toEqual(expect.objectContaining({ id: vendorId, status: "approved" }));
+      const vendors = await api.get("/api/platform/vendors").expect(200);
+      expect(vendors.body).toEqual(expect.arrayContaining([expect.objectContaining({ id: vendorId, name: "Qualification Vendor" })]));
     } finally {
       await sql`DELETE FROM service_ownership WHERE service_key = ${serviceKey}`;
+      await sql`DELETE FROM vendor_registry WHERE id = ${vendorId}`;
       await sql.begin(async (tx) => {
         await tx`SELECT set_config('eos.allow_evidence_history_maintenance', 'true', true)`;
         await tx`DELETE FROM operational_control_evidence_history WHERE control_key = ${controlKey} AND notes = ${marker}`;

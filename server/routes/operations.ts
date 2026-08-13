@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Express } from "express";
-import { desc, eq } from "drizzle-orm";
+import { asc, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { operationalControlEvidenceHistory, operationalControls, serviceOwnership, users, vendorRegistry } from "@shared/schema";
 import { db } from "../db";
@@ -15,7 +15,33 @@ const httpsUrl = z.string().url().refine((value) => {
   return url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash;
 }, "Secret-free HTTPS URL required");
 
+const vendorInput = z.object({
+  name: z.string().min(2).max(120),
+  serviceCategory: z.string().min(2).max(120),
+  riskTier: z.enum(["low", "medium", "high", "critical"]),
+  status: z.enum(["proposed", "approved", "restricted", "retiring", "retired"]),
+  dataClasses: z.array(z.string().max(80)).max(30),
+  dpaStatus: z.enum(["not_required", "pending", "executed", "rejected"]),
+  subprocessorStatus: z.enum(["not_applicable", "pending", "reviewed"]),
+  reviewEvidenceUri: httpsUrl.optional(),
+  exitPlan: z.string().min(10).max(5000),
+  lastReviewedAt: z.coerce.date().optional(),
+  nextReviewAt: z.coerce.date().optional(),
+}).superRefine((value, context) => {
+  if (value.status !== "approved") return;
+  const now = new Date();
+  if (!value.reviewEvidenceUri) context.addIssue({ code: "custom", path: ["reviewEvidenceUri"], message: "Approved vendors require review evidence." });
+  if (!value.lastReviewedAt || value.lastReviewedAt > new Date(now.getTime() + 5 * 60_000) || value.lastReviewedAt < new Date(now.getTime() - 365 * 86_400_000)) context.addIssue({ code: "custom", path: ["lastReviewedAt"], message: "Approved vendors require a current review date." });
+  if (!value.lastReviewedAt || !value.nextReviewAt || value.nextReviewAt <= now || value.nextReviewAt > new Date(value.lastReviewedAt.getTime() + 365 * 86_400_000)) context.addIssue({ code: "custom", path: ["nextReviewAt"], message: "Approved vendors require a bounded future review." });
+  if (!["executed", "not_required"].includes(value.dpaStatus)) context.addIssue({ code: "custom", path: ["dpaStatus"], message: "Approved vendors require a resolved DPA decision." });
+  if (!["reviewed", "not_applicable"].includes(value.subprocessorStatus)) context.addIssue({ code: "custom", path: ["subprocessorStatus"], message: "Approved vendors require a resolved subprocessor review." });
+});
+
 export function registerOperationalRoutes(app: Express): void {
+  app.get("/api/platform/capabilities", (req, res) => {
+    return res.json({ operationalReadiness: platformAdminIds().has(req.user.id) });
+  });
+
   app.post("/api/platform/alerts/test", async (req, res, next) => {
     try {
       requirePlatformAdmin(req.user.id);
@@ -27,6 +53,15 @@ export function registerOperationalRoutes(app: Express): void {
 
   app.get("/api/platform/readiness", async (req, res, next) => {
     try { requirePlatformAdmin(req.user.id); return res.json(await productionReadiness()); } catch (error) { const status = (error as any).status; if (status) return res.status(status).json({ code: (error as any).code, message: (error as Error).message }); return next(error); }
+  });
+
+  app.get("/api/platform/operators", async (req, res, next) => {
+    try {
+      requirePlatformAdmin(req.user.id);
+      const ids = Array.from(platformAdminIds());
+      const operators = ids.length ? await db.select({ id: users.id, email: users.email, fullName: users.fullName }).from(users).where(inArray(users.id, ids)).orderBy(asc(users.email)) : [];
+      return res.json(operators.map((operator) => ({ ...operator, current: operator.id === req.user.id })));
+    } catch (error) { const status = (error as any).status; if (status) return res.status(status).json({ code: (error as any).code, message: (error as Error).message }); return next(error); }
   });
 
   app.get("/api/platform/controls/:controlKey/evidence", async (req, res, next) => {
@@ -60,10 +95,22 @@ export function registerOperationalRoutes(app: Express): void {
     try {
       requirePlatformAdmin(req.user.id);
       const id = z.string().regex(/^[a-z0-9_-]{3,80}$/).parse(req.params.vendorId);
-      const input = z.object({ name: z.string().min(2).max(120), serviceCategory: z.string().min(2).max(120), riskTier: z.enum(["low", "medium", "high", "critical"]), status: z.enum(["proposed", "approved", "restricted", "retiring", "retired"]), dataClasses: z.array(z.string().max(80)).max(30), dpaStatus: z.enum(["not_required", "pending", "executed", "rejected"]), subprocessorStatus: z.enum(["not_applicable", "pending", "reviewed"]), reviewEvidenceUri: httpsUrl.optional(), exitPlan: z.string().min(10).max(5000), lastReviewedAt: z.coerce.date().optional(), nextReviewAt: z.coerce.date().optional() }).parse(req.body);
+      const input = vendorInput.parse(req.body);
       const [vendor] = await db.insert(vendorRegistry).values({ id, ...input, ownerUserId: req.user.id }).onConflictDoUpdate({ target: vendorRegistry.id, set: { ...input, ownerUserId: req.user.id, updatedAt: new Date() } }).returning();
       return res.json(vendor);
     } catch (error) { if (error instanceof z.ZodError) return res.status(400).json({ code: "invalid_vendor_record", message: "Vendor review data is incomplete or invalid.", issues: error.issues }); const status = (error as any).status; if (status) return res.status(status).json({ code: (error as any).code, message: (error as Error).message }); return next(error); }
+  });
+
+  app.get("/api/platform/vendors", async (req, res, next) => {
+    try { requirePlatformAdmin(req.user.id); return res.json(await db.select().from(vendorRegistry).orderBy(asc(vendorRegistry.name))); } catch (error) { const status = (error as any).status; if (status) return res.status(status).json({ code: (error as any).code, message: (error as Error).message }); return next(error); }
+  });
+
+  app.get("/api/platform/services/:serviceKey/ownership", async (req, res, next) => {
+    try {
+      requirePlatformAdmin(req.user.id);
+      const serviceKey = z.string().regex(/^[a-z0-9_-]{3,80}$/).parse(req.params.serviceKey);
+      return res.json((await db.select().from(serviceOwnership).where(eq(serviceOwnership.serviceKey, serviceKey)).limit(1))[0] || null);
+    } catch (error) { if (error instanceof z.ZodError) return res.status(400).json({ code: "invalid_service_ownership", message: "The service key is invalid." }); const status = (error as any).status; if (status) return res.status(status).json({ code: (error as any).code, message: (error as Error).message }); return next(error); }
   });
 
   app.put("/api/platform/services/:serviceKey/ownership", async (req, res, next) => {
