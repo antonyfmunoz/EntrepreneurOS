@@ -1,7 +1,7 @@
 # EOS UI Layout and Design Contract
 
 **Status:** Canonical implementation contract
-**Version:** 1.4
+**Version:** 1.5
 **Reconciled:** 2026-08-13
 
 ## Source authority
@@ -76,6 +76,8 @@ Principal
 ```
 
 The user must never infer which organization, authority context, provider record, or evidence requirement an action affects.
+
+Account settings follow the same law. With one owned company EOS may select it automatically. With multiple owned companies, company and AI-spend controls remain inactive until the user selects an exact company. That selection is visible, URL-addressable, and carried from an active company workspace. A settings control must change an enforced runtime state or explicitly state that the capability is unavailable; storing an unused preference is not a functional control.
 
 ## Visual system
 

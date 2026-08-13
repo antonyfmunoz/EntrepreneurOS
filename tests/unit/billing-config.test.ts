@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { billingConfigured } from "../../server/billing/stripe";
+import { availableBillingPlans, billingConfigured } from "../../server/billing/stripe";
 
 afterEach(() => {
   delete process.env.STRIPE_RESTRICTED_KEY;
@@ -20,5 +20,15 @@ describe("billing configuration", () => {
     process.env.STRIPE_WEBHOOK_SECRET = "whsec_fixture";
     process.env.EOS_STRIPE_PLANS = JSON.stringify({ founder: { priceId: "price_fixture", entitlements: ["portfolio"] } });
     expect(billingConfigured()).toBe(true);
+    expect(availableBillingPlans()).toEqual([{ key: "founder" }]);
+  });
+
+  it("exposes only valid configured plan keys, never provider price ids", () => {
+    process.env.EOS_STRIPE_PLANS = JSON.stringify({
+      team: { priceId: "price_team", entitlements: ["portfolio"] },
+      broken: { priceId: "product_not_a_price", entitlements: [] },
+      founder: { priceId: "price_founder", entitlements: ["portfolio"] },
+    });
+    expect(availableBillingPlans()).toEqual([{ key: "founder" }, { key: "team" }]);
   });
 });

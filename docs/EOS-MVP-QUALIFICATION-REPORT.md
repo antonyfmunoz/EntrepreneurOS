@@ -15,7 +15,7 @@ The required overlay MVP is the governed EntrepreneurOS runtime, not the eventua
 5. live Google Workspace and Notion context adapters with explicit provider health and scope evidence;
 6. My Role, Modules, Work Room, Review Room, Academy, and Portfolio Map operator surfaces inside the canonical EOS shell, including a role-filtered control center for all fourteen non-dormant business modules;
 7. an interaction-first operator loop in which descriptive state leads to a controlled next action that is guaranteed to exist inside the active seat's compiled authority; every visible module can prepare governed work or route through the seat's assistant, approvals change durable state, and audit receipts expose the result;
-8. reproducible migrations, qualification commands, source control, deployment, and honest release evidence.
+8. usable account controls that require explicit company context, preserve it in shareable URLs, connect billing to actual server/provider state, and remove settings claims that are not runtime-enforced; plus reproducible migrations, qualification commands, source control, deployment, and honest release evidence.
 
 ## Current qualification evidence
 
@@ -23,12 +23,12 @@ The required overlay MVP is the governed EntrepreneurOS runtime, not the eventua
 |---|---|---|
 | Static type safety | Pass | `npm run check` |
 | Production build | Pass | Vite client plus bundled server and migration/import runners |
-| Unit and isolated-database integration | Pass | 19 files, 86 tests, no skips against disposable PostgreSQL in local qualification; protected-branch qualification must repeat this result for the exact commit |
+| Unit and isolated-database integration | Pass | 20 files, 91 tests, no skips against disposable PostgreSQL in local qualification; protected-branch qualification must repeat this result for the exact commit |
 | Tenant and role isolation | Pass | Cross-tenant denial; seat membership; reporting-subtree filtering; founder-profile, manifest, audit, advisor-deliberation, and Notion-search denial for a manager |
 | Compiler lifecycle | Pass | draft → diagnostic → proposed → review → approved → provisioning → verifying → active, with provisioning and verification gates |
 | Hierarchical communication | Pass | Persistent per-seat channels; Role Agent assistant mode; three selected advisor calls; current/specified Company CEO Agent calls; one persisted Executive Assistant synthesis with provenance |
 | Consequential provider loop | Pass in deterministic adapter test | Gmail request → assigned approval → provider execution → receipt evidence → audit → reconciled status; provider failure blocks the Work Packet |
-| Browser acceptance | Pass | Eight operator surfaces at 1440×1000; all 14 founder-visible modules are enterable and Module 12 prepares its governed objective and exact proof requirement; My Role exposes assigned-work, role-practice, and assistant actions; mission creation → assigned approval → durable decision → audit receipt; hierarchy builder; enforced AI spend controls; obsolete Organization, Chat, Workflow, and Task URLs converge on the corresponding governed EOS surfaces; 390×844 no overflow; movable communication FAB; full-width contextual communication launch; no browser errors; zero serious/critical accessibility findings |
+| Browser acceptance | Pass | Eight operator surfaces at 1440×1000; all 14 founder-visible modules are enterable and Module 12 prepares its governed objective and exact proof requirement; My Role exposes assigned-work, role-practice, and assistant actions; mission creation → assigned approval → durable decision → audit receipt; hierarchy builder; Settings preserves exact company context and exposes real profile, company, privacy, AI-spend, billing, and support paths; non-enforced delivery/autonomy controls are absent; obsolete Organization, Chat, Workflow, and Task URLs converge on governed EOS surfaces; 390×844 no overflow; movable communication FAB; full-width contextual communication launch; no browser errors; zero serious/critical accessibility findings |
 | Operational evidence and ownership | Pass in repository and managed development PostgreSQL | Accepted control updates append immutable history; migration 0018 adds a database trigger that rejects update/delete tampering outside an explicit maintenance transaction; the backup owner must be a distinct configured platform administrator backed by a real user record; incomplete escalation, runbook, or access-review evidence fails closed |
 | Source control | Pass | `feature/company-system` is protected, strict/up-to-date, conversation-resolved, admin-enforced, and requires both `qualify` and fail-closed `Analyze (javascript-typescript)` checks |
 | Supply-chain evidence | Pass | Protected-branch qualification generates a production-only CycloneDX SBOM, hashes and retains it, and issues SLSA provenance on push; commit `22fadc620fcb147b54930a14dbf5bd626f8f82b5` was independently verified against the signed subject |
@@ -54,6 +54,7 @@ The required overlay MVP is the governed EntrepreneurOS runtime, not the eventua
 - A mocked provider receipt test is not represented as a live customer email.
 - A healthy refresh token is not represented as Calendar authorization while Calendar returns 403.
 - A development Clerk tenant is not represented as production-hardened identity.
+- Persisted preferences are not represented as working notification delivery or agent execution authority; those controls are quarantined until a real enforcement path exists.
 - UMH live round-trip delivery is not represented as complete while the deployment-managed adapter remains disabled.
 
 ## Remaining external closure gates

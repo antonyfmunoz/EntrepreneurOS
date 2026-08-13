@@ -296,18 +296,10 @@ export function registerCompanyRoutes(app: Express): void {
     }
   });
 
-  app.put("/api/companies/:id/autonomy", async (req, res, next) => {
-    try {
-      const companyId = Number(req.params.id);
-      const { autonomyLevel } = z.object({ autonomyLevel: z.enum(["observe", "recommend", "assist", "execute"]) }).parse(req.body);
-      const [existing] = await db.select().from(companiesTable).where(and(eq(companiesTable.id, companyId), eq(companiesTable.ownerUserId, req.user.id))).limit(1);
-      if (!existing) return res.status(404).json({ code: "company_not_found", message: "Company not found." });
-      const founderProfile = { ...(existing.founderProfile as Record<string, unknown> || {}), autonomyLevel };
-      const [updated] = await db.update(companiesTable).set({ founderProfile }).where(eq(companiesTable.id, companyId)).returning();
-      return res.json({ autonomyLevel, companyId: updated.id });
-    } catch (error) {
-      if (error instanceof z.ZodError) return res.status(400).json({ code: "invalid_autonomy", message: "Unknown autonomy level." });
-      return next(error);
-    }
+  app.put("/api/companies/:id/autonomy", (_req, res) => {
+    return res.status(410).json({
+      code: "autonomy_not_runtime_enforced",
+      message: "A company-wide autonomy switch is unavailable. EOS authority is enforced through roles, work packets, approvals, and evidence requirements.",
+    });
   });
 }

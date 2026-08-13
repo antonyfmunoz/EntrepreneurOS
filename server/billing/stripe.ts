@@ -20,6 +20,10 @@ export function billingConfigured(): boolean {
   return Boolean(process.env.STRIPE_RESTRICTED_KEY?.startsWith("rk_") && process.env.STRIPE_WEBHOOK_SECRET?.startsWith("whsec_") && Object.keys(planConfig()).length);
 }
 
+export function availableBillingPlans(): Array<{ key: string }> {
+  return Object.keys(planConfig()).sort().map((key) => ({ key }));
+}
+
 function stripeClient(): Stripe {
   const key = process.env.STRIPE_RESTRICTED_KEY;
   if (!key?.startsWith("rk_")) throw new Error("Stripe billing requires a restricted server key.");
