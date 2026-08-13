@@ -85,6 +85,7 @@ function Router() {
       <Route path="/" component={RootRedirect} />
 
       <Route path="/login" component={Login} />
+      <Route path="/sign-in">{() => <Redirect to="/login" />}</Route>
       <Route path="/signup" component={Signup} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />

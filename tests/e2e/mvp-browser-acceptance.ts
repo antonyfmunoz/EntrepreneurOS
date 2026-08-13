@@ -62,6 +62,11 @@ try {
   await desktop.getByRole("button", { name: "Submit support request", exact: true }).waitFor();
   if (await desktop.getByLabel("Executive decision control HUD").count()) throw new Error("Account support still renders a company operating HUD.");
   if (await desktop.getByRole("navigation", { name: "EOS primary navigation" }).count()) throw new Error("Account support still renders company operating navigation.");
+  await desktop.goto(`${origin}/this-route-does-not-exist`, { waitUntil: "domcontentloaded" });
+  await desktop.getByRole("heading", { name: "Page not found", exact: true }).waitFor();
+  if (await desktop.getByRole("link", { name: "Go to command center", exact: true }).count()) throw new Error("The not-found recovery still points to the retired command center.");
+  await desktop.getByRole("link", { name: "Return to portfolios", exact: true }).click();
+  await desktop.getByRole("heading", { name: "Your Portfolios", exact: true }).waitFor();
   await desktop.goto(`${origin}/company/${companyId}#home`, { waitUntil: "domcontentloaded" });
   await desktop.getByRole("heading", { name: "Home", exact: true }).waitFor();
   await desktop.getByRole("button", { name: "Create mission" }).click();
@@ -272,7 +277,7 @@ try {
   await mobile.getByRole("button", { name: /Open .* conversation/ }).click();
   await mobile.locator("#mobile-communication-drawer aside").waitFor();
   if (browserErrors.length) throw new Error(`Browser errors: ${browserErrors.join(" | ")}`);
-  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 8, activeModules: 14, usableModuleControlCenter: true, roleSafeNextActions: true, hierarchyBuilder: true, teamInvitationLifecycle: { create: true, visible: true, revoke: true }, interactiveWorkApprovalLoop: true, assignedWorkLifecycleInWorkRoom: true, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, reachableAccountControls: ["profile", "explicit company context", "privacy", "AI spend", "billing", "support"], configurableProviderIntegration: { notion: { perUser: true, verify: true, search: true, sourceAction: true, disconnect: true } }, quarantinedFalseControls: ["notification delivery preferences", "company-wide AI autonomy"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
+  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 8, activeModules: 14, usableModuleControlCenter: true, roleSafeNextActions: true, hierarchyBuilder: true, teamInvitationLifecycle: { create: true, visible: true, revoke: true }, interactiveWorkApprovalLoop: true, assignedWorkLifecycleInWorkRoom: true, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, notFoundRecovery: true, reachableAccountControls: ["profile", "explicit company context", "privacy", "AI spend", "billing", "support"], configurableProviderIntegration: { notion: { perUser: true, verify: true, search: true, sourceAction: true, disconnect: true } }, quarantinedFalseControls: ["notification delivery preferences", "company-wide AI autonomy"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
 } finally {
   await browser.close();
 }
