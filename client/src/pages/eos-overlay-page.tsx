@@ -43,7 +43,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { eosActiveModules, type EosActiveModule } from "@shared/eos-runtime";
+import { eosActiveModules, nextUsableSurfaceFor, type EosActiveModule, type EosNextActionReason } from "@shared/eos-runtime";
 
 type JsonRecord = Record<string, any>;
 
@@ -503,34 +503,39 @@ export default function EosOverlayPage() {
   const pendingApprovalCount = approvals.filter((approval) => approval.status === "pending").length;
   const operatingStateReady = manifest?.status !== "active" || (packetsQuery.isSuccess && approvalsQuery.isSuccess);
   const operatingStateFailed = manifest?.status === "active" && (packetsQuery.isError || approvalsQuery.isError);
-  const nextActionTarget = !operatingStateReady
-    ? undefined
-    : manifest?.status !== "active"
-      ? "organization"
-      : pendingApprovalCount
-        ? "review"
-        : activePackets.length
-          ? "work-room"
-          : "operations";
+  const nextActionReason: EosNextActionReason = manifest?.status !== "active"
+    ? "organization_setup"
+    : pendingApprovalCount
+      ? "approval"
+      : activePackets.length
+        ? "active_work"
+        : "new_work";
+  const nextActionTarget = operatingStateReady && principalContext?.role
+    ? nextUsableSurfaceFor(principalContext.role, nextActionReason)
+    : undefined;
   const nextAction = !operatingStateReady
     ? operatingStateFailed ? "Retry workspace data" : "Loading current priorities"
-    : manifest?.status !== "active"
-      ? `Advance the organization manifest${manifest?.status ? ` from ${manifest.status.replaceAll("_", " ")}` : ""}`
-      : pendingApprovalCount
-        ? "Review pending approvals"
-        : activePackets.length
+    : nextActionReason === "organization_setup"
+      ? nextActionTarget === "organization" ? `Advance the organization manifest${manifest?.status ? ` from ${manifest.status.replaceAll("_", " ")}` : ""}` : "Escalate organization setup through your reporting path"
+      : nextActionReason === "approval"
+        ? nextActionTarget === "review" ? "Review pending approvals" : "Advance assigned work within your authority"
+        : nextActionReason === "active_work"
           ? "Advance the highest-priority Work Packet"
-          : "Create the next evidence-bearing mission";
+          : nextActionTarget === "operations" ? "Create the next evidence-bearing mission" : `Ask ${assistantName} for the next authorized action`;
   const nextActionLabel = !operatingStateReady
     ? operatingStateFailed ? "Retry next action" : "Loading next action…"
-    : manifest?.status !== "active"
+    : nextActionReason === "organization_setup" && nextActionTarget === "organization"
       ? "Continue organization setup"
-      : pendingApprovalCount
+      : nextActionReason === "approval" && nextActionTarget === "review"
         ? `Review ${pendingApprovalCount} pending decision${pendingApprovalCount === 1 ? "" : "s"}`
-        : activePackets.length
-          ? "Open active work"
-          : "Create a mission";
-  const NextActionIcon = !operatingStateReady ? RefreshCw : nextActionTarget === "organization" ? Network : nextActionTarget === "review" ? ClipboardCheck : nextActionTarget === "work-room" ? BriefcaseBusiness : Plus;
+        : nextActionTarget === "work-room"
+          ? "Open assigned work"
+          : nextActionTarget === "operations"
+            ? "Create a mission"
+            : nextActionTarget === "intelligence"
+              ? `Ask ${assistantName}`
+              : "Review my role";
+  const NextActionIcon = !operatingStateReady ? RefreshCw : nextActionTarget === "organization" ? Network : nextActionTarget === "review" ? ClipboardCheck : nextActionTarget === "work-room" ? BriefcaseBusiness : nextActionTarget === "intelligence" ? MessagesSquare : nextActionTarget === "my-role" ? UserRound : Plus;
   const runNextAction = () => {
     if (nextActionTarget) goToSurface(nextActionTarget);
     else if (operatingStateFailed) void refresh();
@@ -572,7 +577,7 @@ export default function EosOverlayPage() {
           </TabsList>
 
           <TabsContent value="home" className="space-y-6">
-            <Card><CardHeader><CardTitle>Morning Brief</CardTitle><CardDescription>{briefQuery.data?.generatedAt ? `Generated ${new Date(briefQuery.data.generatedAt).toLocaleString()}` : "Loading current state…"}</CardDescription></CardHeader><CardContent className="space-y-5"><p className="text-lg">{briefQuery.data?.headline}</p><div className="flex flex-wrap gap-2"><Button disabled={!operatingStateReady && !operatingStateFailed} onClick={runNextAction}><NextActionIcon className={`mr-2 h-4 w-4 ${!operatingStateReady && !operatingStateFailed ? "animate-spin" : ""}`} />{nextActionLabel}</Button><Button variant="outline" onClick={() => sendEaMessage("Brief me on today's priorities, exceptions, decisions, and the next authorized action.")}><MessagesSquare className="mr-2 h-4 w-4" />Discuss with {assistantName}</Button>{operatingStateReady && nextActionTarget !== "operations" && <Button variant="outline" onClick={() => goToSurface("operations")}><Plus className="mr-2 h-4 w-4" />Create mission</Button>}</div></CardContent></Card>
+            <Card><CardHeader><CardTitle>Morning Brief</CardTitle><CardDescription>{briefQuery.data?.generatedAt ? `Generated ${new Date(briefQuery.data.generatedAt).toLocaleString()}` : "Loading current state…"}</CardDescription></CardHeader><CardContent className="space-y-5"><p className="text-lg">{briefQuery.data?.headline}</p><div className="flex flex-wrap gap-2"><Button disabled={!operatingStateReady && !operatingStateFailed} onClick={runNextAction}><NextActionIcon className={`mr-2 h-4 w-4 ${!operatingStateReady && !operatingStateFailed ? "animate-spin" : ""}`} />{nextActionLabel}</Button><Button variant="outline" onClick={() => sendEaMessage("Brief me on today's priorities, exceptions, decisions, and the next authorized action.")}><MessagesSquare className="mr-2 h-4 w-4" />Discuss with {assistantName}</Button>{operatingStateReady && allowedSurfaces.has("operations") && nextActionTarget !== "operations" && <Button variant="outline" onClick={() => goToSurface("operations")}><Plus className="mr-2 h-4 w-4" />Create mission</Button>}</div></CardContent></Card>
             <div className="grid gap-4 lg:grid-cols-2"><ListCard title="Priority missions" empty="No open missions yet." items={briefQuery.data?.priorities || []} actionLabel="Open mission" onSelect={() => goToSurface("operations")} /><ListCard title="Exceptions" empty="No active exceptions." items={briefQuery.data?.exceptions || []} actionLabel="Resolve" onSelect={() => goToSurface("review")} /></div>
           </TabsContent>
 
@@ -607,6 +612,7 @@ export default function EosOverlayPage() {
 
           <TabsContent value="my-role" className="space-y-6">
             <Card><CardHeader><CardTitle>{principalContext?.seat}</CardTitle><CardDescription>Your compiled seat, visibility ceiling, communication path, and tool authority.</CardDescription></CardHeader><CardContent className="space-y-5"><div className="grid gap-3 md:grid-cols-3"><Fact label="Role" value={(principalContext?.role || "unresolved").replaceAll("_", " ")} /><Fact label="Visibility" value={principalContext?.visibility?.scope || "unresolved"} /><Fact label="Assistant" value={assistantName} /></div><div><p className="eos-label mb-2">Tool entitlements</p><div className="flex flex-wrap gap-2">{(principalContext?.toolEntitlements || []).length ? principalContext.toolEntitlements.map((tool: string) => <Badge key={tool} variant="outline">{tool}</Badge>) : <span className="text-sm text-muted-foreground">No delegated provider tools; local work remains available.</span>}</div></div><Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Authority is explicit</AlertTitle><AlertDescription>{assistantName} can assist this seat but cannot expand its visibility, approve its own request, or communicate around the reporting hierarchy.</AlertDescription></Alert></CardContent></Card>
+            <Card><CardHeader><CardTitle>My next move</CardTitle><CardDescription>Use only actions available inside this seat's compiled authority.</CardDescription></CardHeader><CardContent className="space-y-4"><Fact label="Current priority" value={pendingApprovalCount && allowedSurfaces.has("review") ? `${pendingApprovalCount} assigned decision${pendingApprovalCount === 1 ? "" : "s"}` : activePackets[0]?.title || nextAction} /><div className="flex flex-wrap gap-2">{pendingApprovalCount > 0 && allowedSurfaces.has("review") && <Button onClick={() => goToSurface("review")}><ClipboardCheck className="mr-2 h-4 w-4" />Review assigned decisions</Button>}{allowedSurfaces.has("work-room") && <Button variant={pendingApprovalCount > 0 && allowedSurfaces.has("review") ? "outline" : "default"} onClick={() => goToSurface("work-room")}><BriefcaseBusiness className="mr-2 h-4 w-4" />Open assigned work</Button>}{allowedSurfaces.has("academy") && <Button variant="outline" onClick={() => goToSurface("academy")}><BookOpen className="mr-2 h-4 w-4" />Practice this role</Button>}<Button variant="outline" onClick={() => sendEaMessage(`Brief me on the next action for my ${principalContext?.seat || "current seat"}. Keep it inside my authority and reporting path.`)}><MessagesSquare className="mr-2 h-4 w-4" />Ask {assistantName}</Button></div></CardContent></Card>
           </TabsContent>
 
           <TabsContent value="modules" className="space-y-6">
