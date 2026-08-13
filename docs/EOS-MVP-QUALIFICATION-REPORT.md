@@ -27,6 +27,8 @@ Settings now includes a platform-administrator-only readiness workspace. It make
 
 Support now closes the in-product service loop: customers and platform administrators share a durable, tenant-safe ticket conversation; administrators triage and reply from an operations queue; replies update customer-visible state and create an in-app notification; customer follow-up reopens resolved or waiting requests; and closed requests reject further replies. This does not invent staffing, response-time, or emergency-channel commitments.
 
+AI cost control now exposes the complete owner loop instead of only two limit fields: hard monthly/per-request enforcement, a configurable deduplicated warning threshold, completed/reserved/failed totals, current-month ledger detail, and evidence-bound reconciliation of unresolved reservations with an audit receipt. Provider invoices remain the financial authority and still require production reconciliation evidence.
+
 | Gate | Result | Evidence |
 |---|---|---|
 | Static type safety | Pass | `npm run check` |

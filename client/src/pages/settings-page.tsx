@@ -36,7 +36,23 @@ type AiBudget = {
   enabled: boolean;
   monthlyLimitMicros: number | null;
   perRequestLimitMicros: number | null;
+  alertThresholdPercent: number;
+  thresholdAlert: { createdAt: string; usageMicros: number; limitMicros: number } | null;
   spentMicros: number;
+  completedMicros: number;
+  reservedMicros: number;
+  failedCount: number;
+  entries: Array<{
+    id: string;
+    context: string;
+    model: string;
+    status: "reserved" | "completed" | "failed";
+    reservedCostMicros: number;
+    actualCostMicros: number | null;
+    reconciliationEvidenceUri: string | null;
+    createdAt: string;
+    completedAt: string | null;
+  }>;
 };
 
 type BillingStatus = {
@@ -85,7 +101,7 @@ function CompanyRequired({ hasCompanies }: { hasCompanies: boolean }) {
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const initialParams = useMemo(() => new URLSearchParams(window.location.search), []);
-  const initialTab = initialParams.has("billing") ? "billing" : initialParams.has("readiness") ? "readiness" : "profile";
+  const initialTab = initialParams.has("billing") ? "billing" : initialParams.has("readiness") ? "readiness" : initialParams.has("cost") ? "cost" : "profile";
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [requestedCompanyId, setRequestedCompanyId] = useState<string | null>(initialParams.get("companyId"));
   const [profileForm, setProfileForm] = useState<Partial<UserProfile>>({});
@@ -94,6 +110,11 @@ export default function SettingsPage() {
   const [deletionConfirmation, setDeletionConfirmation] = useState("");
   const [monthlyAiBudget, setMonthlyAiBudget] = useState("25");
   const [perRequestAiBudget, setPerRequestAiBudget] = useState("1");
+  const [aiAlertThreshold, setAiAlertThreshold] = useState("80");
+  const [reconciliationUsageId, setReconciliationUsageId] = useState("");
+  const [reconciliationStatus, setReconciliationStatus] = useState<"completed" | "failed">("completed");
+  const [reconciliationCost, setReconciliationCost] = useState("");
+  const [reconciliationEvidence, setReconciliationEvidence] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("");
 
   const userProfile = useQuery<UserProfile>({
@@ -151,7 +172,9 @@ export default function SettingsPage() {
   useEffect(() => {
     if (aiBudget.data?.monthlyLimitMicros != null) setMonthlyAiBudget((aiBudget.data.monthlyLimitMicros / 1_000_000).toString());
     if (aiBudget.data?.perRequestLimitMicros != null) setPerRequestAiBudget((aiBudget.data.perRequestLimitMicros / 1_000_000).toString());
-  }, [aiBudget.data]);
+    if (aiBudget.data?.alertThresholdPercent != null) setAiAlertThreshold(String(aiBudget.data.alertThresholdPercent));
+    if (!reconciliationUsageId || !aiBudget.data?.entries.some((entry) => entry.id === reconciliationUsageId && entry.status === "reserved")) setReconciliationUsageId(aiBudget.data?.entries.find((entry) => entry.status === "reserved")?.id || "");
+  }, [aiBudget.data, reconciliationUsageId]);
   useEffect(() => {
     if (!selectedPlan && billing.data?.availablePlans.length === 1) setSelectedPlan(billing.data.availablePlans[0].key);
   }, [billing.data, selectedPlan]);
@@ -187,10 +210,25 @@ export default function SettingsPage() {
       return (await apiRequest<Response>("PUT", `/api/eos/companies/${selectedCompanyId}/ai-budget`, {
         monthlyLimitDollars: Number(monthlyAiBudget),
         perRequestLimitDollars: Number(perRequestAiBudget),
+        alertThresholdPercent: Number(aiAlertThreshold),
         enabled: true,
       })).json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/eos/companies", selectedCompanyId, "ai-budget"] }),
+  });
+  const reconcileAiUsage = useMutation({
+    mutationFn: async () => {
+      if (!selectedCompanyId || !reconciliationUsageId) throw new Error("Choose an unresolved reservation.");
+      return (await apiRequest<Response>("POST", `/api/eos/companies/${selectedCompanyId}/ai-usage/${reconciliationUsageId}/reconcile`, { status: reconciliationStatus, actualCostDollars: reconciliationStatus === "failed" ? 0 : Number(reconciliationCost), evidenceUri: reconciliationEvidence.trim() })).json();
+    },
+    onSuccess: async () => {
+      setReconciliationCost("");
+      setReconciliationEvidence("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/eos/companies", selectedCompanyId, "ai-budget"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] }),
+      ]);
+    },
   });
   const startCheckout = useMutation({
     mutationFn: async () => (await apiRequest<Response>("POST", "/api/billing/checkout", { planKey: selectedPlan })).json() as Promise<{ url: string }>,
@@ -313,10 +351,14 @@ export default function SettingsPage() {
             {!selectedCompanyId ? <CompanyRequired hasCompanies={companies.length > 0} /> : <SettingsCard>
               <div className="mb-6 flex items-start gap-3"><DollarSign className="mt-0.5 h-5 w-5 text-primary" /><div><h2 className="text-xl font-semibold">AI spend for {selectedCompanySummary?.name}</h2><p className="mt-1 text-sm text-muted-foreground">Hard per-request and monthly limits are enforced before model calls.</p></div></div>
               {aiBudget.isLoading ? <div className="h-36 animate-pulse rounded-xl bg-muted" /> : <div className="space-y-5">
-                <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="monthly-ai-budget">Monthly limit (USD)</Label><Input id="monthly-ai-budget" type="number" min="0.01" max="10000" step="0.01" value={monthlyAiBudget} onChange={(event) => setMonthlyAiBudget(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="request-ai-budget">Per-request limit (USD)</Label><Input id="request-ai-budget" type="number" min="0.01" max="1000" step="0.01" value={perRequestAiBudget} onChange={(event) => setPerRequestAiBudget(event.target.value)} /></div></div>
-                <div className="rounded-2xl bg-muted p-5 text-sm"><p className="font-medium">Current protected usage</p><p className="mt-2 text-muted-foreground">Spent and reserved this month: ${((aiBudget.data?.spentMicros ?? 0) / 1_000_000).toFixed(4)}</p>{!aiBudget.data?.configured && <p className="mt-2 text-amber-800">The model cost catalog is not configured in this environment; execution remains fail-closed.</p>}</div>
-                <Button onClick={() => updateAiBudget.mutate()} disabled={updateAiBudget.isPending || !Number(monthlyAiBudget) || !Number(perRequestAiBudget) || Number(perRequestAiBudget) > Number(monthlyAiBudget)}>{updateAiBudget.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save AI budget</Button>
+                <div className="grid gap-4 sm:grid-cols-3"><div className="space-y-2"><Label htmlFor="monthly-ai-budget">Monthly limit (USD)</Label><Input id="monthly-ai-budget" type="number" min="0.01" max="10000" step="0.01" value={monthlyAiBudget} onChange={(event) => setMonthlyAiBudget(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="request-ai-budget">Per-request limit (USD)</Label><Input id="request-ai-budget" type="number" min="0.01" max="1000" step="0.01" value={perRequestAiBudget} onChange={(event) => setPerRequestAiBudget(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="ai-alert-threshold">Alert at percent</Label><Input id="ai-alert-threshold" type="number" min="1" max="100" step="1" value={aiAlertThreshold} onChange={(event) => setAiAlertThreshold(event.target.value)} /></div></div>
+                <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-2xl bg-muted p-4 text-sm"><p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">Completed</p><p className="mt-2 text-lg font-semibold">${((aiBudget.data?.completedMicros ?? 0) / 1_000_000).toFixed(4)}</p></div><div className="rounded-2xl bg-muted p-4 text-sm"><p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">Reserved</p><p className="mt-2 text-lg font-semibold">${((aiBudget.data?.reservedMicros ?? 0) / 1_000_000).toFixed(4)}</p></div><div className="rounded-2xl bg-muted p-4 text-sm"><p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">Failed calls</p><p className="mt-2 text-lg font-semibold">{aiBudget.data?.failedCount ?? 0}</p></div></div>
+                {aiBudget.data?.thresholdAlert && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">Monthly threshold notification sent</p><p className="mt-1">EOS notified the budget owner at ${(aiBudget.data.thresholdAlert.usageMicros / 1_000_000).toFixed(4)} of ${(aiBudget.data.thresholdAlert.limitMicros / 1_000_000).toFixed(2)} on {new Date(aiBudget.data.thresholdAlert.createdAt).toLocaleString()}.</p></div>}
+                <Button onClick={() => updateAiBudget.mutate()} disabled={updateAiBudget.isPending || !Number(monthlyAiBudget) || !Number(perRequestAiBudget) || Number(perRequestAiBudget) > Number(monthlyAiBudget) || Number(aiAlertThreshold) < 1 || Number(aiAlertThreshold) > 100}>{updateAiBudget.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save AI budget</Button>
                 {updateAiBudget.isSuccess && <p className="text-sm text-emerald-700">AI budget updated for {selectedCompanySummary?.name}.</p>}{updateAiBudget.isError && <p className="text-sm text-destructive">The budget could not be saved. Use positive limits with the per-request limit no greater than the monthly limit.</p>}
+                <div className="border-t pt-5"><h3 className="font-semibold">Current-month AI ledger</h3><p className="mt-1 text-sm text-muted-foreground">Completed costs, unresolved reservations, failed calls, model, and operating context. Provider invoices remain authoritative for production reconciliation.</p>{aiBudget.data?.entries.length ? <div className="mt-4 overflow-x-auto"><table className="min-w-full text-left text-sm"><thead><tr className="border-b text-xs uppercase tracking-[0.1em] text-muted-foreground"><th className="px-2 py-3">Context</th><th className="px-2 py-3">Model</th><th className="px-2 py-3">Status</th><th className="px-2 py-3">Cost</th><th className="px-2 py-3">Time</th></tr></thead><tbody>{aiBudget.data.entries.map((entry) => <tr key={entry.id} className="border-b last:border-0"><td className="px-2 py-3 font-medium">{titleCase(entry.context)}</td><td className="px-2 py-3 text-muted-foreground">{entry.model}</td><td className="px-2 py-3">{titleCase(entry.status)}</td><td className="px-2 py-3">${(((entry.status === "completed" ? entry.actualCostMicros : entry.status === "reserved" ? entry.reservedCostMicros : 0) || 0) / 1_000_000).toFixed(4)}</td><td className="px-2 py-3 text-muted-foreground">{new Date(entry.createdAt).toLocaleString()}</td></tr>)}</tbody></table></div> : <p className="mt-4 rounded-xl bg-muted p-4 text-sm text-muted-foreground">No AI ledger entries for this month.</p>}</div>
+                {aiBudget.data?.entries.some((entry) => entry.status === "reserved") && <div className="border-t pt-5"><h3 className="font-semibold">Reconcile unresolved reservation</h3><p className="mt-1 text-sm text-muted-foreground">Use a secret-free provider receipt or reviewed reconciliation artifact. This changes durable cost state and is audited.</p><div className="mt-4 space-y-4"><div className="space-y-2"><Label htmlFor="ai-reservation">Reservation</Label><Select value={reconciliationUsageId} onValueChange={setReconciliationUsageId}><SelectTrigger id="ai-reservation"><SelectValue /></SelectTrigger><SelectContent>{aiBudget.data.entries.filter((entry) => entry.status === "reserved").map((entry) => <SelectItem key={entry.id} value={entry.id}>{titleCase(entry.context)} · ${(entry.reservedCostMicros / 1_000_000).toFixed(4)}</SelectItem>)}</SelectContent></Select></div><div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="ai-reconciliation-status">Outcome</Label><Select value={reconciliationStatus} onValueChange={(value) => setReconciliationStatus(value as "completed" | "failed")}><SelectTrigger id="ai-reconciliation-status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="completed">Completed with actual cost</SelectItem><SelectItem value="failed">Failed with no provider cost</SelectItem></SelectContent></Select></div><div className="space-y-2"><Label htmlFor="ai-reconciliation-cost">Actual cost (USD)</Label><Input id="ai-reconciliation-cost" type="number" min="0" max="10000" step="0.000001" value={reconciliationStatus === "failed" ? "0" : reconciliationCost} onChange={(event) => setReconciliationCost(event.target.value)} disabled={reconciliationStatus === "failed"} /></div></div><div className="space-y-2"><Label htmlFor="ai-reconciliation-evidence">Secret-free evidence URL</Label><Input id="ai-reconciliation-evidence" type="url" value={reconciliationEvidence} onChange={(event) => setReconciliationEvidence(event.target.value)} placeholder="https://evidence.example.com/provider/receipt" /></div><Button variant="outline" onClick={() => reconcileAiUsage.mutate()} disabled={reconcileAiUsage.isPending || !reconciliationUsageId || !reconciliationEvidence.trim() || (reconciliationStatus === "completed" && !Number(reconciliationCost))}>{reconcileAiUsage.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Record reconciliation</Button>{reconcileAiUsage.isError && <p role="alert" className="text-sm text-destructive">The reservation could not be reconciled. Confirm it is unresolved and the evidence URL contains no query, fragment, or credentials.</p>}</div></div>}
+                {reconcileAiUsage.isSuccess && <p className="text-sm text-emerald-700">Reservation reconciled and the ledger has been recalculated.</p>}
               </div>}
             </SettingsCard>}
           </TabsContent>
