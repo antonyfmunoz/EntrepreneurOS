@@ -74,8 +74,7 @@ export function registerIntegrationRoutes(app: Express): void {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
     try {
       const userId = (req.user as any).id;
-      await storage.deleteOauthToken(userId, "gmail");
-      res.json({ success: true });
+      res.json(await gmail.disconnect(userId));
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

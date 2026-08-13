@@ -23,6 +23,8 @@ import {
 import { clerkClient } from "../clerkAdmin";
 import { db } from "../db";
 import { writeLog } from "../observability/logger";
+import * as gmail from "../integrations/gmail";
+import * as notion from "../integrations/notion";
 
 const graceDays = Math.max(1, Math.min(30, Number(process.env.EOS_ACCOUNT_DELETION_GRACE_DAYS || 7)));
 
@@ -87,6 +89,13 @@ async function executeOne(request: typeof accountDeletionRequests.$inferSelect):
     if (ownedCompanies.length || ownedPortfolios.length) {
       await db.update(accountDeletionRequests).set({ status: "blocked", lastError: "Owned organizations must be transferred before personal account deletion." }).where(eq(accountDeletionRequests.id, request.id));
       return;
+    }
+    const providerRevocations = await Promise.all([
+      gmail.revokeAuthorization(request.userId),
+      notion.revokeAuthorization(request.userId),
+    ]);
+    if (providerRevocations.some((result) => !result.providerRevoked)) {
+      throw new Error("External provider authorization revocation could not be confirmed.");
     }
     if (request.clerkUserId && clerkClient) {
       try { await clerkClient.users.deleteUser(request.clerkUserId); } catch (error) {
