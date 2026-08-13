@@ -101,7 +101,9 @@ export function UniversalLayout({
 
       {hasLeft && mobileLeftOpen && (
         <MobileRail side="left" title="EntrepreneurOS" hideAt="lg" onClose={() => setMobileLeftOpen(false)}>
-          <CustomNavigation items={leftRailItems ?? []} collapsed={false} onNavigate={() => setMobileLeftOpen(false)} />
+          {hasCustomLeft
+            ? <CustomNavigation items={leftRailItems ?? []} collapsed={false} onNavigate={() => setMobileLeftOpen(false)} />
+            : <LeftRail collapsed={false} />}
         </MobileRail>
       )}
       {hasRight && !mobileRightOpen && (

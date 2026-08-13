@@ -465,29 +465,41 @@ export default function EosOverlayPage() {
     intelligence: `Work with ${assistantName} to turn context into clear decisions.`,
     systems: "Connect providers and control how EOS operates.",
   };
-  const nextAction = manifest?.status !== "active"
-    ? `Advance the organization manifest${manifest?.status ? ` from ${manifest.status.replaceAll("_", " ")}` : ""}`
-    : approvals.some((approval) => approval.status === "pending")
-      ? "Review pending approvals"
-      : activePackets.length
-        ? "Advance the highest-priority Work Packet"
-        : "Create the next evidence-bearing mission";
   const pendingApprovalCount = approvals.filter((approval) => approval.status === "pending").length;
-  const nextActionTarget = manifest?.status !== "active"
-    ? "organization"
-    : pendingApprovalCount
-      ? "review"
-      : activePackets.length
-        ? "work-room"
-        : "operations";
-  const nextActionLabel = manifest?.status !== "active"
-    ? "Continue organization setup"
-    : pendingApprovalCount
-      ? `Review ${pendingApprovalCount} pending decision${pendingApprovalCount === 1 ? "" : "s"}`
-      : activePackets.length
-        ? "Open active work"
-        : "Create a mission";
-  const NextActionIcon = nextActionTarget === "organization" ? Network : nextActionTarget === "review" ? ClipboardCheck : nextActionTarget === "work-room" ? BriefcaseBusiness : Plus;
+  const operatingStateReady = manifest?.status !== "active" || (packetsQuery.isSuccess && approvalsQuery.isSuccess);
+  const operatingStateFailed = manifest?.status === "active" && (packetsQuery.isError || approvalsQuery.isError);
+  const nextActionTarget = !operatingStateReady
+    ? undefined
+    : manifest?.status !== "active"
+      ? "organization"
+      : pendingApprovalCount
+        ? "review"
+        : activePackets.length
+          ? "work-room"
+          : "operations";
+  const nextAction = !operatingStateReady
+    ? operatingStateFailed ? "Retry workspace data" : "Loading current priorities"
+    : manifest?.status !== "active"
+      ? `Advance the organization manifest${manifest?.status ? ` from ${manifest.status.replaceAll("_", " ")}` : ""}`
+      : pendingApprovalCount
+        ? "Review pending approvals"
+        : activePackets.length
+          ? "Advance the highest-priority Work Packet"
+          : "Create the next evidence-bearing mission";
+  const nextActionLabel = !operatingStateReady
+    ? operatingStateFailed ? "Retry next action" : "Loading next action…"
+    : manifest?.status !== "active"
+      ? "Continue organization setup"
+      : pendingApprovalCount
+        ? `Review ${pendingApprovalCount} pending decision${pendingApprovalCount === 1 ? "" : "s"}`
+        : activePackets.length
+          ? "Open active work"
+          : "Create a mission";
+  const NextActionIcon = !operatingStateReady ? RefreshCw : nextActionTarget === "organization" ? Network : nextActionTarget === "review" ? ClipboardCheck : nextActionTarget === "work-room" ? BriefcaseBusiness : Plus;
+  const runNextAction = () => {
+    if (nextActionTarget) goToSurface(nextActionTarget);
+    else if (operatingStateFailed) void refresh();
+  };
 
   return (
     <UniversalLayout
@@ -502,7 +514,7 @@ export default function EosOverlayPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">Choose a controlled next step. Consequential actions still enter the approval and evidence lifecycle.</p>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => goToSurface(nextActionTarget)}><NextActionIcon className="mr-1.5 h-3.5 w-3.5" />{nextActionLabel}</Button>
+            <Button size="sm" disabled={!operatingStateReady && !operatingStateFailed} onClick={runNextAction}><NextActionIcon className={`mr-1.5 h-3.5 w-3.5 ${!operatingStateReady && !operatingStateFailed ? "animate-spin" : ""}`} />{nextActionLabel}</Button>
             <Button size="sm" variant="outline" onClick={() => sendEaMessage("Brief me on the current state, the most important risk, and the next authorized action.")}><MessagesSquare className="mr-1.5 h-3.5 w-3.5" />Ask {assistantName}</Button>
           </div>
         </div>
@@ -525,7 +537,7 @@ export default function EosOverlayPage() {
           </TabsList>
 
           <TabsContent value="home" className="space-y-6">
-            <Card><CardHeader><CardTitle>Morning Brief</CardTitle><CardDescription>{briefQuery.data?.generatedAt ? `Generated ${new Date(briefQuery.data.generatedAt).toLocaleString()}` : "Loading current state…"}</CardDescription></CardHeader><CardContent className="space-y-5"><p className="text-lg">{briefQuery.data?.headline}</p><div className="flex flex-wrap gap-2"><Button onClick={() => goToSurface(nextActionTarget)}><NextActionIcon className="mr-2 h-4 w-4" />{nextActionLabel}</Button><Button variant="outline" onClick={() => sendEaMessage("Brief me on today's priorities, exceptions, decisions, and the next authorized action.")}><MessagesSquare className="mr-2 h-4 w-4" />Discuss with {assistantName}</Button>{nextActionTarget !== "operations" && <Button variant="outline" onClick={() => goToSurface("operations")}><Plus className="mr-2 h-4 w-4" />Create mission</Button>}</div></CardContent></Card>
+            <Card><CardHeader><CardTitle>Morning Brief</CardTitle><CardDescription>{briefQuery.data?.generatedAt ? `Generated ${new Date(briefQuery.data.generatedAt).toLocaleString()}` : "Loading current state…"}</CardDescription></CardHeader><CardContent className="space-y-5"><p className="text-lg">{briefQuery.data?.headline}</p><div className="flex flex-wrap gap-2"><Button disabled={!operatingStateReady && !operatingStateFailed} onClick={runNextAction}><NextActionIcon className={`mr-2 h-4 w-4 ${!operatingStateReady && !operatingStateFailed ? "animate-spin" : ""}`} />{nextActionLabel}</Button><Button variant="outline" onClick={() => sendEaMessage("Brief me on today's priorities, exceptions, decisions, and the next authorized action.")}><MessagesSquare className="mr-2 h-4 w-4" />Discuss with {assistantName}</Button>{operatingStateReady && nextActionTarget !== "operations" && <Button variant="outline" onClick={() => goToSurface("operations")}><Plus className="mr-2 h-4 w-4" />Create mission</Button>}</div></CardContent></Card>
             <div className="grid gap-4 lg:grid-cols-2"><ListCard title="Priority missions" empty="No open missions yet." items={briefQuery.data?.priorities || []} actionLabel="Open mission" onSelect={() => goToSurface("operations")} /><ListCard title="Exceptions" empty="No active exceptions." items={briefQuery.data?.exceptions || []} actionLabel="Resolve" onSelect={() => goToSurface("review")} /></div>
           </TabsContent>
 
