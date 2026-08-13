@@ -43,6 +43,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { eosActiveModules, type EosActiveModule } from "@shared/eos-runtime";
 
 type JsonRecord = Record<string, any>;
 
@@ -78,6 +79,8 @@ export default function EosOverlayPage() {
   const [packetTitle, setPacketTitle] = useState("");
   const [packetObjective, setPacketObjective] = useState("");
   const [packetApproval, setPacketApproval] = useState(true);
+  const [packetEvidenceRequirements, setPacketEvidenceRequirements] = useState<string[]>(["A reviewable artifact or observed outcome"]);
+  const [selectedModuleId, setSelectedModuleId] = useState(1);
   const [evidenceDetails, setEvidenceDetails] = useState<Record<string, string>>({});
   const [decisionDraft, setDecisionDraft] = useState<{ id: string; summary: string; decision: "approved" | "rejected" } | null>(null);
   const [decisionReason, setDecisionReason] = useState("");
@@ -103,7 +106,7 @@ export default function EosOverlayPage() {
       const requested = window.location.hash.slice(1);
       const aliases: Record<string, string> = { brief: "home", missions: "operations", approvals: "operations", evidence: "operations" };
       const tab = aliases[requested] ?? requested;
-      if (["home", "command", "organization", "my-role", "commercial", "operations", "work-room", "review", "academy", "portfolio-map", "capital", "intelligence", "systems"].includes(tab)) setActiveTab(tab);
+      if (["home", "command", "organization", "my-role", "modules", "commercial", "operations", "work-room", "review", "academy", "portfolio-map", "capital", "intelligence", "systems"].includes(tab)) setActiveTab(tab);
     };
     syncHash();
     window.addEventListener("hashchange", syncHash);
@@ -159,6 +162,10 @@ export default function EosOverlayPage() {
   const assistantName = principalContext?.communicationAgent || company?.assistantName || "Assistant";
   const isFounder = principalContext?.role === "founder";
   const allowedSurfaces = new Set<string>(principalContext?.allowedSurfaces || []);
+  const visibleModules = eosActiveModules.filter((module) => allowedSurfaces.has(module.operatingSurface));
+  const selectedModule = visibleModules.find((module) => module.id === selectedModuleId) || visibleModules[0];
+  const manifestModuleIds = new Set<number>(manifest?.manifest?.enabledModules || eosActiveModules.map((module) => module.id));
+  const moduleState = (module: EosActiveModule) => manifestModuleIds.has(module.id) ? `overlay_${module.activation === "active" ? "ready" : "partial"}` : "not_enabled";
 
   useEffect(() => {
     if (!principalContext || allowedSurfaces.has(activeTab)) return;
@@ -231,11 +238,11 @@ export default function EosOverlayPage() {
       priority: "medium",
       requiresApproval: packetApproval,
       toolPack: [],
-      evidenceRequirements: ["A reviewable artifact or observed outcome"],
+      evidenceRequirements: packetEvidenceRequirements,
       source: "manual",
     }),
     onSuccess: async () => {
-      setPacketTitle(""); setPacketObjective(""); await refresh();
+      setPacketTitle(""); setPacketObjective(""); setPacketEvidenceRequirements(["A reviewable artifact or observed outcome"]); await refresh();
       toast({ title: "Work Packet created", description: packetApproval ? "It is waiting for local approval." : "It is ready to start." });
     },
     onError: (error) => showMutationError("Work Packet creation", error),
@@ -399,11 +406,18 @@ export default function EosOverlayPage() {
     setDecisionDraft({ id: approval.id, summary: approval.summary, decision });
   };
 
-  const prepareWorkPacket = (title: string, objective: string) => {
+  const prepareWorkPacket = (title: string, objective: string, evidenceRequirement = "A reviewable artifact or observed outcome") => {
     setPacketTitle(title.slice(0, 200));
     setPacketObjective(objective.slice(0, 2000));
+    setPacketEvidenceRequirements([evidenceRequirement.slice(0, 300)]);
     goToSurface("operations");
     toast({ title: "Work Packet prepared", description: "Review the objective and authority gate, then create it when ready." });
+  };
+
+  const openModule = (module: EosActiveModule) => {
+    setSelectedModuleId(module.id);
+    goToSurface("modules");
+    window.requestAnimationFrame(() => document.getElementById("module-workspace")?.scrollIntoView({ behavior: "auto", block: "start" }));
   };
 
   const nextTransition = (status: string): string | undefined => ({ ready: "in_progress", in_progress: "in_review", blocked: "in_progress", in_review: "completed" })[status];
@@ -413,13 +427,14 @@ export default function EosOverlayPage() {
     { icon: Command, label: "Command", href: `#command`, active: activeTab === "command" },
     { icon: Network, label: "Organization", href: `#organization`, active: activeTab === "organization" },
     { icon: UserRound, label: "My Role", href: `#my-role`, active: activeTab === "my-role" },
+    { icon: Blocks, label: "Modules", href: `#modules`, active: activeTab === "modules" },
     { icon: BriefcaseBusiness, label: "Stakeholder / Commercial", href: `#commercial`, active: activeTab === "commercial", status: "overlay" },
     { icon: Workflow, label: "Operations", href: `#operations`, active: activeTab === "operations" },
     { icon: BriefcaseBusiness, label: "Work Room", href: `#work-room`, active: activeTab === "work-room" },
     { icon: ClipboardCheck, label: "Review Room", href: `#review`, active: activeTab === "review" },
     { icon: BookOpen, label: "Academy", href: `#academy`, active: activeTab === "academy" },
     { icon: Map, label: "Portfolio Map", href: `#portfolio-map`, active: activeTab === "portfolio-map" },
-    { icon: Landmark, label: "Capital & Finance", href: `#capital`, active: activeTab === "capital", status: "dormant" },
+    { icon: Landmark, label: "Capital & Investor Relations", href: `#capital`, active: activeTab === "capital", status: "dormant" },
     { icon: Bot, label: "Intelligence", href: `#intelligence`, active: activeTab === "intelligence" },
     { icon: Blocks, label: "Systems", href: `#systems`, active: activeTab === "systems" },
   ].filter((item) => allowedSurfaces.has(item.href.slice(1))), [activeTab, principalContext?.role]);
@@ -458,13 +473,14 @@ export default function EosOverlayPage() {
     command: "Command",
     organization: "Organization",
     "my-role": "My Role",
+    modules: "Modules",
     commercial: "Stakeholder / Commercial",
     operations: "Operations",
     "work-room": "Work Room",
     review: "Review Room",
     academy: "Academy",
     "portfolio-map": "Portfolio Map",
-    capital: "Capital & Finance",
+    capital: "Capital & Investor Relations",
     intelligence: "Intelligence",
     systems: "Systems",
   };
@@ -473,13 +489,14 @@ export default function EosOverlayPage() {
     command: "Direct work, resolve constraints, and keep execution moving.",
     organization: "Shape the structure, authority, and operating rules.",
     "my-role": "Know your scope, responsibilities, and next actions.",
+    modules: "Enter a business function and move it through governed work.",
     commercial: "Turn market signals into accountable commercial action.",
     operations: "Create, assign, and advance evidence-backed work.",
     "work-room": "Move active work from intent to verified outcome.",
     review: "Approve, reject, and audit consequential decisions.",
     academy: "Build role mastery through real, evidence-backed practice.",
     "portfolio-map": "See the portfolio structure within your authority scope.",
-    capital: "Activate capital controls only when financial authority is configured.",
+    capital: "Prepare the dormant investor-relations architecture without implying financial authority.",
     intelligence: `Work with ${assistantName} to turn context into clear decisions.`,
     systems: "Connect providers and control how EOS operates.",
   };
@@ -551,7 +568,7 @@ export default function EosOverlayPage() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="sr-only">
-            <TabsTrigger value="home">Home</TabsTrigger><TabsTrigger value="command">Command</TabsTrigger><TabsTrigger value="organization">Organization</TabsTrigger><TabsTrigger value="my-role">My Role</TabsTrigger><TabsTrigger value="commercial">Commercial</TabsTrigger><TabsTrigger value="operations">Operations</TabsTrigger><TabsTrigger value="work-room">Work Room</TabsTrigger><TabsTrigger value="review">Review</TabsTrigger><TabsTrigger value="academy">Academy</TabsTrigger><TabsTrigger value="portfolio-map">Portfolio Map</TabsTrigger><TabsTrigger value="capital">Capital</TabsTrigger><TabsTrigger value="intelligence">Intelligence</TabsTrigger><TabsTrigger value="systems">Systems</TabsTrigger>
+            <TabsTrigger value="home">Home</TabsTrigger><TabsTrigger value="command">Command</TabsTrigger><TabsTrigger value="organization">Organization</TabsTrigger><TabsTrigger value="my-role">My Role</TabsTrigger><TabsTrigger value="modules">Modules</TabsTrigger><TabsTrigger value="commercial">Commercial</TabsTrigger><TabsTrigger value="operations">Operations</TabsTrigger><TabsTrigger value="work-room">Work Room</TabsTrigger><TabsTrigger value="review">Review</TabsTrigger><TabsTrigger value="academy">Academy</TabsTrigger><TabsTrigger value="portfolio-map">Portfolio Map</TabsTrigger><TabsTrigger value="capital">Capital</TabsTrigger><TabsTrigger value="intelligence">Intelligence</TabsTrigger><TabsTrigger value="systems">Systems</TabsTrigger>
           </TabsList>
 
           <TabsContent value="home" className="space-y-6">
@@ -575,7 +592,7 @@ export default function EosOverlayPage() {
               {manifest ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted p-5"><div><div className="font-medium">Manifest v{manifest.version}</div><div className="text-sm text-muted-foreground">{manifest.status === "active" ? "Authoritative local organization contract" : "Compiler lifecycle requires explicit review, provisioning, and verification"}</div></div><div className="flex items-center gap-2"><StateBadge state={manifest.status} />{nextManifestStatus(manifest.status) && <Button onClick={() => manifestTransitionMutation.mutate({ id: manifest.id, status: nextManifestStatus(manifest.status)! })} disabled={manifestTransitionMutation.isPending}>Advance to {nextManifestStatus(manifest.status)!.replaceAll("_", " ")}</Button>}{manifest.status === "verifying" && <Button onClick={() => activateMutation.mutate(manifest.id)} disabled={activateMutation.isPending}>{activateMutation.isPending ? "Activating…" : "Activate verified manifest"}</Button>}</div></div> : <Alert><Sparkles className="h-4 w-4" /><AlertTitle>No manifest compiled</AlertTitle><AlertDescription>The app is usable, but organizational defaults have not yet been made explicit.</AlertDescription></Alert>}
               <Button onClick={() => compilerMutation.mutate()} disabled={compilerMutation.isPending}>{compilerMutation.isPending ? "Compiling…" : manifest ? "Compile next draft" : "Compile organization draft"}</Button>
             </CardContent></Card>
-            <Card><CardHeader><CardTitle>Enabled MVP modules</CardTitle><CardDescription>The overlay activates the fourteen non-dormant modules; capital, M&A, and board governance remain architecturally mapped but dormant.</CardDescription></CardHeader><CardContent className="flex flex-wrap gap-2">{Array.from({ length: 14 }, (_, index) => <Badge key={index} variant="outline">Module {index + 1}</Badge>)}</CardContent></Card>
+            <Card><CardHeader><CardTitle>Operating modules</CardTitle><CardDescription>Enter the non-dormant business functions available to this seat. Each one routes into governed work, approvals, evidence, provider controls, or a safe fallback.</CardDescription></CardHeader><CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="text-2xl font-semibold">{visibleModules.length}</div><p className="text-sm text-muted-foreground">of 14 non-dormant overlay modules visible in this authority scope</p></div><Button onClick={() => goToSurface("modules")}><Blocks className="mr-2 h-4 w-4" />Open module control center</Button></CardContent></Card>
             <Card><CardHeader><CardTitle>Role-compiled visibility</CardTitle><CardDescription>Every screen, search result, metric, message, approval, and agent context is compiled for the active seat. Higher organizational accountability receives broader authorized downline visibility.</CardDescription></CardHeader><CardContent className="space-y-5">
               <div className="grid gap-3 md:grid-cols-3"><Fact label="Active seat" value={principalContext?.seat || "Founder / Portfolio Principal"} /><Fact label="Visibility scope" value={principalContext?.visibility?.scope || "portfolio"} /><Fact label="Communication path" value={principalContext?.visibility?.communicationPath || `Founder ↔ ${assistantName}`} /></div>
               <div className="grid gap-3 lg:grid-cols-2"><div className="rounded-xl bg-muted p-4"><p className="eos-label mb-2">Visible in this seat</p><ul className="space-y-2 text-sm text-muted-foreground">{(principalContext?.visibility?.sees || []).map((item: string) => <li key={item}>• {item}</li>)}</ul></div><div className="rounded-xl bg-muted p-4"><p className="eos-label mb-2">Still requires a separate grant</p><ul className="space-y-2 text-sm text-muted-foreground">{(principalContext?.visibility?.cannotSee || []).map((item: string) => <li key={item}>• {item}</li>)}</ul></div></div>
@@ -592,13 +609,39 @@ export default function EosOverlayPage() {
             <Card><CardHeader><CardTitle>{principalContext?.seat}</CardTitle><CardDescription>Your compiled seat, visibility ceiling, communication path, and tool authority.</CardDescription></CardHeader><CardContent className="space-y-5"><div className="grid gap-3 md:grid-cols-3"><Fact label="Role" value={(principalContext?.role || "unresolved").replaceAll("_", " ")} /><Fact label="Visibility" value={principalContext?.visibility?.scope || "unresolved"} /><Fact label="Assistant" value={assistantName} /></div><div><p className="eos-label mb-2">Tool entitlements</p><div className="flex flex-wrap gap-2">{(principalContext?.toolEntitlements || []).length ? principalContext.toolEntitlements.map((tool: string) => <Badge key={tool} variant="outline">{tool}</Badge>) : <span className="text-sm text-muted-foreground">No delegated provider tools; local work remains available.</span>}</div></div><Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Authority is explicit</AlertTitle><AlertDescription>{assistantName} can assist this seat but cannot expand its visibility, approve its own request, or communicate around the reporting hierarchy.</AlertDescription></Alert></CardContent></Card>
           </TabsContent>
 
+          <TabsContent value="modules" className="space-y-6">
+            {selectedModule && <Card id="module-workspace" className="scroll-mt-72 border-primary/20">
+              <CardHeader className="gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">Module {selectedModule.id}</Badge><StateBadge state={moduleState(selectedModule)} /></div><CardTitle className="mt-3">{selectedModule.name}</CardTitle><CardDescription className="mt-2 max-w-3xl">{selectedModule.overlayBoundary}</CardDescription></div>
+                <div className="flex flex-wrap gap-2">
+                  {allowedSurfaces.has("operations") && <Button onClick={() => prepareWorkPacket(`Module ${selectedModule.id}: ${selectedModule.missionTitle}`, selectedModule.missionObjective, selectedModule.evidenceRequirement)}><Plus className="mr-2 h-4 w-4" />Prepare governed mission</Button>}
+                  <Button variant="outline" onClick={() => sendEaMessage(`For EOS module ${selectedModule.id}, ${selectedModule.name}, assess the current state in my authority scope and prepare the next safe action. Preserve source identity, approvals, and required evidence.`)}><MessagesSquare className="mr-2 h-4 w-4" />Ask {assistantName}</Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid gap-3 md:grid-cols-3"><Fact label="Operating surface" value={sectionTitle[selectedModule.operatingSurface]} /><Fact label="Required proof" value={selectedModule.evidenceRequirement} /><Fact label="Manual fallback" value={selectedModule.fallback} /></div>
+                <div className="flex flex-wrap items-center gap-3"><Button variant="secondary" onClick={() => goToSurface(selectedModule.operatingSurface)}>Open {sectionTitle[selectedModule.operatingSurface]}</Button><span className="text-xs text-muted-foreground">The overlay coordinates work here; authoritative provider records remain authoritative until a qualified native cutover.</span></div>
+              </CardContent>
+            </Card>}
+            <div>
+              <p className="eos-label">Role-available business functions</p>
+              <h2 className="mt-1 text-xl font-semibold">Choose a module</h2>
+              <p className="mt-2 max-w-3xl text-sm text-muted-foreground">You see only modules whose operating surface is available to your compiled seat. Opening one reveals a real next action, proof requirement, and fallback.</p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {visibleModules.map((module) => <Card key={module.id} className={selectedModule?.id === module.id ? "border-primary/30 shadow-[0_8px_28px_rgba(106,55,212,0.10)]" : ""}><CardContent className="flex h-full flex-col pt-8"><div className="flex items-center justify-between gap-3"><Badge variant="outline">Module {module.id}</Badge><StateBadge state={moduleState(module)} /></div><h3 className="mt-5 font-semibold">{module.name}</h3><p className="mt-2 flex-1 text-sm text-muted-foreground">{module.missionObjective}</p><Button className="mt-5 w-full" variant={selectedModule?.id === module.id ? "default" : "outline"} aria-pressed={selectedModule?.id === module.id} onClick={() => openModule(module)}>Open module</Button></CardContent></Card>)}
+            </div>
+            {!visibleModules.length && <EmptyState icon={Blocks} title="No operating modules are assigned" description="Ask your direct supervisor to review this seat's authority and tool entitlements." />}
+            <Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Dormant modules stay dormant</AlertTitle><AlertDescription>Capital & Investor Relations, M&amp;A, and Board &amp; Advisor Governance remain mapped for the future but cannot initiate active workflows in this MVP.</AlertDescription></Alert>
+          </TabsContent>
+
           <TabsContent value="commercial" className="space-y-6">
             <Card><CardHeader><CardTitle>Commercial action room</CardTitle><CardDescription>Turn a customer, offer, pipeline, or relationship question into an accountable decision or mission.</CardDescription></CardHeader><CardContent className="space-y-5"><div className="grid gap-4 md:grid-cols-2"><Fact label="Offer" value={company.offer || "Needs definition"} /><Fact label="Target customer" value={company.targetCustomer || "Needs definition"} /></div><div className="flex flex-wrap gap-2"><Button onClick={() => sendEaMessage(`Assess the commercial position for ${company.name}: offer, target customer, pipeline assumptions, risks, and the next decision required.`)}><MessagesSquare className="mr-2 h-4 w-4" />Ask {assistantName} for assessment</Button><Button variant="outline" onClick={() => prepareWorkPacket("Validate commercial assumptions", `Test the offer and target-customer assumptions for ${company.name}, document evidence, and return the next commercial decision.`)}><BriefcaseBusiness className="mr-2 h-4 w-4" />Create commercial mission</Button></div><Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Overlay authority</AlertTitle><AlertDescription>EOS coordinates the work and evidence; it does not silently replace the authoritative CRM or provider record.</AlertDescription></Alert></CardContent></Card>
             <Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Overlay contract</AlertTitle><AlertDescription>Provider records remain authoritative until a field-level native cutover is explicitly qualified.</AlertDescription></Alert>
           </TabsContent>
 
           <TabsContent value="operations" className="space-y-8">
-            <Card><CardHeader><CardTitle>Create Work Packet</CardTitle><CardDescription>A mission is a governed unit of work with objective, authority, lifecycle, and evidence.</CardDescription></CardHeader><CardContent className="grid gap-3"><Input value={packetTitle} onChange={(event) => setPacketTitle(event.target.value)} placeholder="Mission title" /><Textarea value={packetObjective} onChange={(event) => setPacketObjective(event.target.value)} placeholder="Objective and intended outcome" /><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={packetApproval} onChange={(event) => setPacketApproval(event.target.checked)} /> Require local approval before work begins</label><Button className="w-fit" disabled={packetTitle.trim().length < 3 || packetObjective.trim().length < 3 || packetMutation.isPending} onClick={() => packetMutation.mutate()}><Plus className="mr-2 h-4 w-4" />{packetMutation.isPending ? "Creating…" : "Create Work Packet"}</Button></CardContent></Card>
+            <Card><CardHeader><CardTitle>Create Work Packet</CardTitle><CardDescription>A mission is a governed unit of work with objective, authority, lifecycle, and evidence.</CardDescription></CardHeader><CardContent className="grid gap-3"><Input value={packetTitle} onChange={(event) => setPacketTitle(event.target.value)} placeholder="Mission title" /><Textarea value={packetObjective} onChange={(event) => setPacketObjective(event.target.value)} placeholder="Objective and intended outcome" /><div className="rounded-xl bg-muted p-3"><p className="eos-label">Required proof</p><p className="mt-1 text-sm">{packetEvidenceRequirements[0]}</p></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={packetApproval} onChange={(event) => setPacketApproval(event.target.checked)} /> Require local approval before work begins</label><Button className="w-fit" disabled={packetTitle.trim().length < 3 || packetObjective.trim().length < 3 || packetMutation.isPending} onClick={() => packetMutation.mutate()}><Plus className="mr-2 h-4 w-4" />{packetMutation.isPending ? "Creating…" : "Create Work Packet"}</Button></CardContent></Card>
             <div className="space-y-3">{packets.map((packet) => {
               const next = nextTransition(packet.status);
               const packetEvidence = evidence.filter((item) => item.workPacketId === packet.id);
@@ -656,7 +699,7 @@ export default function EosOverlayPage() {
           </TabsContent>
 
           <TabsContent value="capital" className="space-y-6">
-            <EmptyState icon={Landmark} title="Capital & Finance is dormant" description="The surface is architecturally mapped but intentionally inactive until a real legal-entity, account, currency, ledger, and approval boundary is configured." />
+            <EmptyState icon={Landmark} title="Capital & Investor Relations is dormant" description="The surface is architecturally mapped but intentionally inactive until a real legal-entity, account, instrument, investor, authority, and approval boundary is configured." />
             <Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>No implied ledger authority</AlertTitle><AlertDescription>Models, forecasts, and Notion references are not represented as settled financial truth.</AlertDescription></Alert>
           </TabsContent>
 

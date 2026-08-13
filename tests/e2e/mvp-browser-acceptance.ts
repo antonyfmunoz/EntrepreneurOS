@@ -88,6 +88,24 @@ try {
   await desktop.getByPlaceholder("Role Agent name").fill("Quinn");
   await desktop.getByRole("button", { name: "Create accountable seat" }).click();
   await desktop.getByText(seatTitle, { exact: true }).first().waitFor();
+  const modulesLink = desktop.getByRole("link", { name: "Modules", exact: true });
+  if (!await modulesLink.count()) {
+    const debugContext = await desktop.evaluate(async (id) => fetch(`/api/eos/companies/${id}/context`).then((response) => response.json()), companyId);
+    throw new Error(`Modules navigation is unavailable. allowedSurfaces=${JSON.stringify(debugContext?.principalContext?.allowedSurfaces)} navigation=${JSON.stringify(await primaryNavigation.innerText())}`);
+  }
+  await modulesLink.click();
+  await desktop.getByRole("heading", { name: "Modules", exact: true }).waitFor();
+  const moduleLaunchers = desktop.getByRole("button", { name: "Open module", exact: true });
+  if (await moduleLaunchers.count() !== 14) throw new Error("The founder module control center did not expose all fourteen active overlay modules.");
+  const technologyModule = desktop.getByText("Technology, Integrations & Automation Control", { exact: true }).locator("xpath=ancestor::*[.//button[normalize-space()='Open module']][1]");
+  await technologyModule.getByRole("button", { name: "Open module", exact: true }).click();
+  await desktop.getByRole("heading", { name: "Technology, Integrations & Automation Control", exact: true }).first().waitFor();
+  if (process.env.EOS_CAPTURE_VISUALS === "true") await desktop.screenshot({ path: ".tmp/eos-modules-desktop.png", fullPage: true });
+  await desktop.getByRole("button", { name: "Prepare governed mission", exact: true }).click();
+  await desktop.getByRole("heading", { name: "Operations", exact: true }).waitFor();
+  if (await desktop.getByPlaceholder("Mission title").inputValue() !== "Module 12: Qualify an integration or automation") throw new Error("Module 12 did not prepare its governed Work Packet.");
+  if (!await desktop.getByPlaceholder("Objective and intended outcome").inputValue()) throw new Error("The module Work Packet objective was not prepared.");
+  await desktop.getByText("Health check, authority proof, and recovery result", { exact: true }).waitFor();
   for (const surface of ["My Role", "Work Room", "Review Room", "Academy", "Portfolio Map", "Systems"]) {
     await desktop.getByRole("link", { name: surface, exact: true }).click();
     await desktop.getByRole("heading", { name: surface, exact: true }).waitFor();
@@ -179,7 +197,7 @@ try {
   await mobile.getByRole("button", { name: /Open .* conversation/ }).click();
   await mobile.locator("#mobile-communication-drawer aside").waitFor();
   if (browserErrors.length) throw new Error(`Browser errors: ${browserErrors.join(" | ")}`);
-  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 7, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, reachableAccountControls: ["settings", "support"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
+  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 8, activeModules: 14, usableModuleControlCenter: true, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, reachableAccountControls: ["settings", "support"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
 } finally {
   await browser.close();
 }

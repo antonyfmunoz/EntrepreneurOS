@@ -1,8 +1,8 @@
 # EOS UI Layout and Design Contract
 
 **Status:** Canonical implementation contract
-**Version:** 1.3
-**Reconciled:** 2026-08-11
+**Version:** 1.4
+**Reconciled:** 2026-08-13
 
 ## Source authority
 
@@ -45,17 +45,21 @@ Google Workspace is the first consequential integration: Gmail execution remains
 The primary order is:
 
 1. Home
-2. Portfolio
-3. Organizations
-4. Command
-5. Organization
+2. Command
+3. Organization
+4. My Role
+5. Modules
 6. Stakeholder / Commercial
 7. Operations
-8. Capital & Finance
-9. Intelligence
-10. Systems
+8. Work Room
+9. Review Room
+10. Academy
+11. Portfolio Map
+12. Capital & Investor Relations (dormant)
+13. Intelligence
+14. Systems
 
-Role compilation may add My Role, Work Room, Review Room, Academy, and Portfolio Map between these universal anchors. Those surfaces are mandatory operator experiences in the overlay MVP, but are displayed only when the active seat's policy grants them.
+Role compilation removes any surface the active seat is not authorized to use. Portfolio and organization selection are account-context controls in the profile panel, not operating-navigation entries. Modules is a role-filtered control center: the founder can enter all fourteen non-dormant overlay modules, while lower seats see only the business functions whose operating surfaces are available inside their compiled authority.
 
 Unavailable or dormant surfaces remain visible only when their state is clearly labeled. UI presence must never imply authority, provider connectivity, native ownership, or release maturity.
 

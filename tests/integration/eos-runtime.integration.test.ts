@@ -310,6 +310,8 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
   it("enforces owner-scoped AI budget configuration", async () => {
     const configured = await api.put(`/api/eos/companies/${companyId}/ai-budget`).send({ monthlyLimitDollars: 25, perRequestLimitDollars: 1, enabled: true }).expect(200);
     expect(configured.body.monthlyLimitMicros).toBe(25_000_000);
+    const audit = await api.get(`/api/eos/companies/${companyId}/audit`).expect(200);
+    expect(audit.body[0].action).toBe("ai_budget.updated");
     const status = await api.get(`/api/eos/companies/${companyId}/ai-budget`).expect(200);
     expect(status.body.configured).toBe(true);
     expect(status.body.spentMicros).toBe(0);

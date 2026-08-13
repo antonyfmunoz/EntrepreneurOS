@@ -121,11 +121,12 @@ The implementation-level visual and shell authority is `docs/EOS-UI-LAYOUT-AND-D
 
 ### 6.1 Persistent application shell
 
-- **Global identity bar:** principal, portfolio switcher, organization/entity switcher, purpose/context indicator, notifications, search, and account.
-- **Left navigation:** Home, Portfolios, Organizations, Command, Organization, Commercial, Operations, Capital & Finance, Intelligence, Systems.
-- **Context header:** active portfolio, organization, seat/role, lifecycle stage, current constraint, authority summary, sync health, and source freshness.
+- **Global identity bar:** the current portfolio and organization names on the left when selected; notifications and a single account control on the right. Portfolio and organization switching live in the account panel rather than the operating navigation.
+- **Left navigation:** EntrepreneurOS identity plus the role-compiled operating surfaces: Home, Command, Organization, My Role, Modules, Commercial, Operations, Work Room, Review Room, Academy, Portfolio Map, dormant Capital & Investor Relations, Intelligence, and Systems where authorized.
+- **Floating decision HUD:** current assistant, open work, approvals, next action, and controlled decision shortcuts float above the workspace without obscuring its page heading.
+- **Context header:** the page title, concise action-oriented description, and compact square page action; role, lifecycle, authority, sync health, and source freshness appear inside the relevant workspace rather than as decorative nesting under the global bar.
 - **Workspace:** the selected operating surface.
-- **Right communication rail:** the founder's named Executive Assistant or the active seat's Role Agent assistant, with conversation, explanations, suggested actions, source/evidence links, and pending approvals.
+- **Right communication rail:** a full-height, compact chat rail for the founder's named Executive Assistant or the active seat's Role Agent assistant, with conversation, explanations, suggested actions, source/evidence links, and pending approvals. On mobile it opens full-width from a movable LyfeOS-style communication FAB.
 - **Global command palette:** navigate, inspect, draft, plan, simulate, create Work Packet, request approval, or invoke a connected capability.
 
 ### 6.2 Boxed operator experience
@@ -136,12 +137,13 @@ These are views over canonical objects, not separate databases:
 2. **Organization/Campaign Compiler:** new/existing organization intake, current-state reconciliation, package selection, proposed manifest, review, approval, provisioning, verification, and activation.
 3. **Home / Morning Brief:** cross-company commitments, objectives, issues, risks, approvals, stale integrations, current missions, and next actions.
 4. **Character Sheet / My Role:** role, seat, mandate, authority ceiling, tool entitlements, scorecard, learning path, missions, reviewer, and advancement requirements.
-5. **Mission Board:** governed Work Packets with objective, prerequisites, tool pack, authority, evidence, due logic, reviewer, stop conditions, and resulting state changes.
-6. **Command Center:** objectives, metrics, constraints, issues, decisions, commitments, approvals, simulations, and operating cadence.
-7. **Work Room:** the active Work Packet, required method, supporting records, provider actions, artifacts, evidence, collaboration, blockers, and handoff.
-8. **Review Room:** output/evidence review, approval, rejection, remediation, exception, rollback, and outcome capture.
-9. **Academy:** concepts, worked examples, simulations, bounded missions, evidence rubrics, certification, remediation, and next-level rules.
-10. **World/Portfolio Map:** authorized portfolios, organization nodes, relationships, lifecycle, shared services, dependencies, risks, and consolidated outcomes.
+5. **Module Control Center:** the fourteen non-dormant business functions filtered to the active seat, each with its honest overlay boundary, exact proof requirement, governed mission entry, operating-surface route, assistant escalation, and safe fallback.
+6. **Mission Board:** governed Work Packets with objective, prerequisites, tool pack, authority, evidence, due logic, reviewer, stop conditions, and resulting state changes.
+7. **Command Center:** objectives, metrics, constraints, issues, decisions, commitments, approvals, simulations, and operating cadence.
+8. **Work Room:** the active Work Packet, required method, supporting records, provider actions, artifacts, evidence, collaboration, blockers, and handoff.
+9. **Review Room:** output/evidence review, approval, rejection, remediation, exception, rollback, and outcome capture.
+10. **Academy:** concepts, worked examples, simulations, bounded missions, evidence rubrics, certification, remediation, and next-level rules.
+11. **World/Portfolio Map:** authorized portfolios, organization nodes, relationships, lifecycle, shared services, dependencies, risks, and consolidated outcomes.
 
 ### 6.3 Role-adaptive presentation
 
@@ -530,6 +532,7 @@ Provisional MVP targets, to be ratified before release:
 
 ### Wave 4 — full non-dormant reference instance
 
+- the overlay module control center establishes enterable, role-permissioned mission and fallback paths for all 14 non-dormant modules without claiming provider activation;
 - activate and dry-run qualify all 14 non-dormant modules;
 - exact accounts, owners, permissions, recovery owners, external/internal actor surfaces, fixtures, fallbacks, and integrated whole-business rehearsal;
 - no open critical/high activation defect and explicit owner release decision.
@@ -563,6 +566,7 @@ Replace in this order:
 - a new authorized principal can create/select a portfolio and compile an organization without founder walkthrough;
 - the selected portfolio/organization is explicit on every protected surface;
 - the principal sees the correct role, authority, tools, objectives, and next Work Packet;
+- every non-dormant module available to the principal is enterable and can initiate governed work, open its operating surface, or use the role-correct assistant and documented fallback;
 - one complete customer-value fixture crosses connected providers with attributable approvals, evidence, failures, and reconciliation;
 - every enabled integration has exact account scope, health, fallback, revocation, source authority, and replacement trigger;
 - critical operations survive provider/UMH outage through queued or manual fallback;

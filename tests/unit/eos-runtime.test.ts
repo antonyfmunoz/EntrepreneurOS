@@ -7,6 +7,8 @@ import {
   canSeeSeat,
   canTransitionWorkPacket,
   evidenceCreateSchema,
+  eosActiveModules,
+  eosModulesForRole,
   manifestInputSchema,
   selectAdvisorSeats,
   workPacketCreateSchema,
@@ -88,9 +90,19 @@ describe("EOS overlay runtime contracts", () => {
 
   it("compiles product surfaces by seat instead of rendering one universal dashboard", () => {
     expect(allowedSurfacesFor("founder")).toContain("portfolio-map");
+    expect(allowedSurfacesFor("founder")).toContain("modules");
     expect(allowedSurfacesFor("manager")).toContain("review");
     expect(allowedSurfacesFor("manager")).not.toContain("capital");
     expect(allowedSurfacesFor("individual_contributor")).toEqual(expect.arrayContaining(["my-role", "work-room", "academy"]));
+  });
+
+  it("routes all fourteen active modules into usable governed overlay surfaces", () => {
+    expect(eosActiveModules).toHaveLength(14);
+    expect(eosActiveModules.map((module) => module.id)).toEqual(Array.from({ length: 14 }, (_, index) => index + 1));
+    expect(eosActiveModules.every((module) => module.missionTitle && module.missionObjective && module.evidenceRequirement && module.fallback)).toBe(true);
+    expect(eosActiveModules.every((module) => allowedSurfacesFor("founder").includes(module.operatingSurface))).toBe(true);
+    expect(eosModulesForRole("external").map((module) => module.id)).toEqual([6]);
+    expect(eosModulesForRole("manager").every((module) => ["operations", "work-room"].includes(module.operatingSurface))).toBe(true);
   });
 
   it("selects relevant advisor agents while preserving the EA as the only founder-facing channel", () => {
