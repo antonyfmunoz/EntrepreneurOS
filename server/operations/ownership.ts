@@ -2,7 +2,7 @@ const DAY_MS = 86_400_000;
 
 type ServiceOwnershipEvidence = {
   ownerUserId: string;
-  backupOwnerReference: string | null;
+  backupOwnerUserId: string | null;
   onCallReference: string;
   escalationReference: string | null;
   incidentRunbookUri: string;
@@ -20,10 +20,11 @@ function isHttpsReference(value: string | null): boolean {
   }
 }
 
-export function serviceOwnershipIssues(ownership: ServiceOwnershipEvidence | undefined, now = new Date()): string[] {
+export function serviceOwnershipIssues(ownership: ServiceOwnershipEvidence | undefined, now = new Date(), configuredPlatformAdministrators?: Set<string>): string[] {
   if (!ownership) return ["service_owner_and_on_call"];
   const issues: string[] = [];
-  if (!ownership.backupOwnerReference?.trim() || ownership.backupOwnerReference.trim() === ownership.ownerUserId) issues.push("distinct_backup_service_owner");
+  if (!ownership.backupOwnerUserId?.trim() || ownership.backupOwnerUserId.trim() === ownership.ownerUserId) issues.push("distinct_backup_service_owner");
+  else if (configuredPlatformAdministrators && !configuredPlatformAdministrators.has(ownership.backupOwnerUserId.trim())) issues.push("configured_backup_platform_administrator");
   if (!isHttpsReference(ownership.onCallReference)) issues.push("https_on_call_route");
   if (!isHttpsReference(ownership.escalationReference)) issues.push("https_escalation_route");
   if (!isHttpsReference(ownership.incidentRunbookUri)) issues.push("https_incident_runbook");

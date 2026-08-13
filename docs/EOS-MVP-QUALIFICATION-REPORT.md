@@ -1,6 +1,6 @@
 # EOS Overlay MVP Qualification Report
 
-**Assessment date:** 2026-08-12
+**Assessment date:** 2026-08-13
 **Scope:** EntrepreneurOS repository and projection-side UMH adapter only
 **Decision:** Repository-qualified production foundation; the deployed Fly v27 pilot is not the qualified public SaaS release. Production identity, billing, analytics, provider authorization, staffing, approvals, and live drills remain external acceptance gates.
 
@@ -23,13 +23,13 @@ The required overlay MVP is the governed EntrepreneurOS runtime, not the eventua
 |---|---|---|
 | Static type safety | Pass | `npm run check` |
 | Production build | Pass | Vite client plus bundled server and migration/import runners |
-| Unit and isolated-database integration | Pass | 18 files, 80 tests, no skips against disposable PostgreSQL in protected-branch qualification |
+| Unit and isolated-database integration | Pass | 18 files, 81 tests, no skips against disposable PostgreSQL in protected-branch qualification |
 | Tenant and role isolation | Pass | Cross-tenant denial; seat membership; reporting-subtree filtering; founder-profile, manifest, audit, advisor-deliberation, and Notion-search denial for a manager |
 | Compiler lifecycle | Pass | draft → diagnostic → proposed → review → approved → provisioning → verifying → active, with provisioning and verification gates |
 | Hierarchical communication | Pass | Persistent per-seat channels; Role Agent assistant mode; three selected advisor calls; current/specified Company CEO Agent calls; one persisted Executive Assistant synthesis with provenance |
 | Consequential provider loop | Pass in deterministic adapter test | Gmail request → assigned approval → provider execution → receipt evidence → audit → reconciled status; provider failure blocks the Work Packet |
 | Browser acceptance | Pass | Seven operator surfaces at 1440×1000; mission creation → assigned approval → durable decision → audit receipt; hierarchy builder; enforced AI spend controls; 390×844 no overflow; movable communication FAB; full-width contextual communication launch; no browser errors; zero serious/critical accessibility findings |
-| Operational evidence and ownership | Pass in repository and managed development PostgreSQL | Accepted control updates append immutable history; incomplete backup ownership, escalation, runbook, or access-review evidence fails closed; migration 0017 applied successfully |
+| Operational evidence and ownership | Pass in repository and managed development PostgreSQL | Accepted control updates append immutable history; migration 0018 adds a database trigger that rejects update/delete tampering outside an explicit maintenance transaction; the backup owner must be a distinct configured platform administrator backed by a real user record; incomplete escalation, runbook, or access-review evidence fails closed |
 | Source control | Pass | `feature/company-system` is protected, strict/up-to-date, conversation-resolved, admin-enforced, and requires both `qualify` and fail-closed `Analyze (javascript-typescript)` checks |
 | Supply-chain evidence | Pass | Protected-branch qualification generates a production-only CycloneDX SBOM, hashes and retains it, and issues SLSA provenance on push; commit `22fadc620fcb147b54930a14dbf5bd626f8f82b5` was independently verified against the signed subject |
 | Static application security | Pass with one reviewed false positive | CodeQL reports zero open alerts on the protected product branch. The only accepted raw SARIF result is the exact Gmail OAuth-state HMAC verification rule/path, capped at one; it is message authentication with timing-safe comparison, not password storage |

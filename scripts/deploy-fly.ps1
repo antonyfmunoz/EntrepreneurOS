@@ -121,7 +121,16 @@ try {
       --env "EOS_PRODUCTION_ENVIRONMENT_SUBJECT=$env:EOS_PRODUCTION_ENVIRONMENT_SUBJECT" --yes
     if ($LASTEXITCODE -ne 0) { throw "Fly promotion did not complete successfully." }
 
+    $promotedMachines = @(flyctl machines list --app $app --json | ConvertFrom-Json)
+    if ($LASTEXITCODE -ne 0 -or -not $promotedMachines.Count) { throw "Could not inspect the promoted production machines." }
+    $promotedImages = @($promotedMachines | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
+    $promotedSubjects = @($promotedMachines | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Select-Object -Unique)
+    if ($promotedImages.Count -ne 1 -or $promotedImages[0] -notmatch '^registry\.fly\.io/[a-z0-9-]+@sha256:[a-f0-9]{64}$') { throw "Promoted machines do not share one immutable image digest." }
+    if ($promotedSubjects.Count -ne 1 -or $promotedSubjects[0] -ne $env:EOS_RELEASE_SUBJECT) { throw "Promoted machines do not report the exact release subject." }
+    $promotedImage = $promotedImages[0]
+
     $env:EOS_PRODUCTION_ORIGIN = $env:EOS_PUBLIC_ORIGIN
+    $env:EOS_EXPECTED_RELEASE_SUBJECT = $env:EOS_RELEASE_SUBJECT
     npm run test:e2e:production
     if ($LASTEXITCODE -ne 0) { throw "Public production smoke failed." }
     npm run test:e2e:production:authenticated
@@ -133,6 +142,10 @@ try {
       --env "EOS_RELEASE_SUBJECT=$rollbackSubject" `
       --env "EOS_PRODUCTION_ENVIRONMENT_SUBJECT=$env:EOS_PRODUCTION_ENVIRONMENT_SUBJECT" --yes
     if ($LASTEXITCODE -ne 0) { throw "Promotion failed and automatic rollback also failed. Escalate immediately." }
+    $restoredMachines = @(flyctl machines list --app $app --json | ConvertFrom-Json)
+    $restoredImages = @($restoredMachines | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
+    $restoredSubjects = @($restoredMachines | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Select-Object -Unique)
+    if ($LASTEXITCODE -ne 0 -or $restoredImages.Count -ne 1 -or $restoredImages[0] -ne $rollbackImage -or $restoredSubjects.Count -ne 1 -or $restoredSubjects[0] -ne $rollbackSubject) { throw "Promotion failed and rollback returned without proving the prior immutable image and subject. Escalate immediately." }
     throw "Promotion failed: $promotionError The prior immutable image was restored; inspect evidence before retrying."
   }
 
@@ -143,7 +156,8 @@ try {
     app = $app
     releaseCommit = $releaseCommit
     releaseSubject = $env:EOS_RELEASE_SUBJECT
-    image = $imageReference
+    image = $promotedImage
+    imageTag = $imageReference
     rollbackImage = $rollbackImage
     rollbackSubject = $rollbackSubject
     qualificationRun = $qualifiedRun.url

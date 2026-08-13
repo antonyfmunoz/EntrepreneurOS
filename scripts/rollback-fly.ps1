@@ -15,6 +15,11 @@ flyctl deploy --app $app --image $image --strategy rolling `
   --env "EOS_PRODUCTION_ENVIRONMENT_SUBJECT=$environmentSubject" --yes
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+$machines = @(flyctl machines list --app $app --json | ConvertFrom-Json)
+$images = @($machines | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
+$subjects = @($machines | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Select-Object -Unique)
+if ($LASTEXITCODE -ne 0 -or $images.Count -ne 1 -or $images[0] -ne $image -or $subjects.Count -ne 1 -or $subjects[0] -ne $subject) { throw "Rollback returned without proving the requested immutable image and release subject." }
+
 $origin = if ($env:EOS_PRODUCTION_ORIGIN) { $env:EOS_PRODUCTION_ORIGIN } elseif ($env:EOS_PUBLIC_ORIGIN) { $env:EOS_PUBLIC_ORIGIN } else { "https://entrepreneuros.net" }
 $health = Invoke-WebRequest -UseBasicParsing -Uri "$origin/api/health" -TimeoutSec 30
 if ($health.StatusCode -ne 200) { throw "Rollback image did not restore public health." }
