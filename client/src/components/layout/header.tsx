@@ -74,7 +74,7 @@ export default function Header({
   const destinations = useMemo(() => {
     const companyRoot = companyHref || "";
     return [
-      { label: "Portfolio", detail: "Portfolio and organization selection", href: portfolioHref || "/portfolios" },
+      { label: "Portfolios", detail: "Portfolio and organization selection", href: portfolioHref || "/portfolios" },
       ...(companyRoot ? [
         { label: "Home", detail: companyName || "Organization home", href: `${companyRoot}#home` },
         { label: "Command", detail: "Operating state and next action", href: `${companyRoot}#command` },
@@ -91,9 +91,9 @@ export default function Header({
       <header className="eos-glass sticky top-0 z-50 flex-shrink-0 px-3 sm:px-5 lg:px-8">
         <div className="flex h-16 w-full items-center">
           <div className="flex min-w-0 flex-1 items-center gap-3 lg:gap-7">
-          <Button variant="ghost" size="icon" onClick={onLeftMenuClick} className="lg:hidden" aria-label="Open navigation">
+          {onLeftMenuClick && <Button variant="ghost" size="icon" onClick={onLeftMenuClick} className="lg:hidden" aria-label="Open navigation">
             <Menu className="h-5 w-5" />
-          </Button>
+          </Button>}
 
           {(portfolioName || companyName) && (
             <div className="flex min-w-0 items-center gap-2 text-sm" aria-label="Current workspace">

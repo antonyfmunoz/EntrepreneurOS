@@ -43,7 +43,8 @@ export function UniversalLayout({
   const right = useRailCollapse("ui.rightRail.collapsed");
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
-  const hasCustomLeft = Boolean(leftRailItems?.length);
+  const hasCustomLeft = leftRailItems !== undefined;
+  const hasLeft = leftRailItems === undefined || leftRailItems.length > 0;
   const hasRight = Boolean(rightRailContent);
 
   useEffect(() => {
@@ -69,14 +70,14 @@ export function UniversalLayout({
         companyName={companyName}
         companyHref={companyHref}
         roleName={roleName}
-        onLeftMenuClick={() => setMobileLeftOpen(true)}
+        onLeftMenuClick={hasLeft ? () => setMobileLeftOpen(true) : undefined}
       />
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <aside className={(left.collapsed ? "w-12 " : "w-[240px] ") + "relative hidden min-h-0 flex-shrink-0 overflow-visible border-r border-border/60 bg-[#eff1f2] transition-[width] duration-200 lg:block"}>
+        {hasLeft && <aside className={(left.collapsed ? "w-12 " : "w-[240px] ") + "relative hidden min-h-0 flex-shrink-0 overflow-visible border-r border-border/60 bg-[#eff1f2] transition-[width] duration-200 lg:block"}>
           <RailToggle side="left" collapsed={left.collapsed} onClick={left.toggle} />
           <div className="h-full overflow-y-auto py-3">{hasCustomLeft ? customNavigation : <LeftRail collapsed={left.collapsed} />}</div>
-        </aside>
+        </aside>}
 
         <main className="relative min-w-0 flex-1 overflow-y-auto bg-white">
           {floatingPanel === false ? null : floatingPanel ?? <FloatingAIPanel />}
@@ -98,7 +99,7 @@ export function UniversalLayout({
         )}
       </div>
 
-      {mobileLeftOpen && (
+      {hasLeft && mobileLeftOpen && (
         <MobileRail side="left" title="EntrepreneurOS" hideAt="lg" onClose={() => setMobileLeftOpen(false)}>
           <CustomNavigation items={leftRailItems ?? []} collapsed={false} onNavigate={() => setMobileLeftOpen(false)} />
         </MobileRail>

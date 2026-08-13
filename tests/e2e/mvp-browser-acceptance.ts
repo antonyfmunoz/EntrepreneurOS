@@ -24,6 +24,12 @@ try {
     await desktop.screenshot({ path: ".tmp/e2e-failure.png", fullPage: true });
     throw new Error(`Home did not render. URL=${desktop.url()} body=${(await desktop.locator("body").innerText()).slice(0, 1200)} browserErrors=${browserErrors.join(" | ")}`, { cause: error });
   }
+  const decisionHud = desktop.getByLabel("Executive decision control HUD");
+  await decisionHud.getByRole("button", { name: /Next: Advance the organization manifest/ }).click();
+  await decisionHud.getByRole("button", { name: "Continue organization setup", exact: true }).click();
+  await desktop.getByRole("heading", { name: "Organization", exact: true }).waitFor();
+  await desktop.getByRole("link", { name: "Home", exact: true }).click();
+  await desktop.getByRole("heading", { name: "Home", exact: true }).waitFor();
   const primaryNavigation = desktop.getByRole("navigation", { name: "EOS primary navigation" });
   if (await primaryNavigation.getByRole("link", { name: "Portfolio", exact: true }).count()) throw new Error("Portfolio switching is still present in the EOS operating navigation.");
   if (await primaryNavigation.getByRole("link", { name: "Organizations", exact: true }).count()) throw new Error("Organization switching is still present in the EOS operating navigation.");
@@ -89,6 +95,8 @@ try {
   await mobile.goto(`${origin}/portfolios`, { waitUntil: "domcontentloaded" });
   await mobile.getByRole("heading", { name: "Your Portfolios", exact: true }).waitFor();
   await mobile.getByText("Create a new portfolio or enter an existing organization.", { exact: true }).waitFor();
+  if (await mobile.getByRole("button", { name: "Open navigation", exact: true }).count()) throw new Error("Portfolio selection still exposes organization operating navigation.");
+  if (await mobile.getByRole("navigation", { name: "EOS primary navigation" }).count()) throw new Error("Portfolio selection still renders a non-functional operating rail.");
   await assertCompactHeaderAction("Create portfolio", "Your Portfolios");
   await mobile.goto(`${origin}/portfolios/${portfolioId}`, { waitUntil: "domcontentloaded" });
   await mobile.getByRole("heading", { name: portfolioName, exact: true }).waitFor();

@@ -55,7 +55,7 @@ export default function PortfolioDetailPage() {
   const companies = companiesQuery.data ?? [];
 
   return (
-    <UniversalLayout title="Organizations" portfolioName={portfolio.name} portfolioHref={`/portfolios/${portfolio.id}`} floatingPanel={false}>
+    <UniversalLayout title="Organizations" portfolioName={portfolio.name} portfolioHref={`/portfolios/${portfolio.id}`} leftRailItems={[]} floatingPanel={false}>
       <section className="space-y-8 pb-12">
         <div>
           <Link href="/portfolios"><a className="inline-flex items-center text-sm font-medium text-primary hover:text-[#5a2dc0]"><ArrowLeft className="mr-1.5 h-4 w-4" />All portfolios</a></Link>
