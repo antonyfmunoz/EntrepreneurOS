@@ -37,9 +37,25 @@ try {
   const accountPanel = desktop.getByRole("region", { name: "account panel" });
   await accountPanel.getByRole("link", { name: "Portfolios", exact: true }).waitFor();
   await accountPanel.getByRole("link", { name: "Organizations", exact: true }).waitFor();
-  await accountPanel.getByRole("link", { name: "Settings", exact: true }).waitFor();
+  const settingsLink = accountPanel.getByRole("link", { name: "Settings", exact: true });
+  await settingsLink.waitFor();
   await accountPanel.getByRole("link", { name: "Support", exact: true }).waitFor();
-  await accountPanel.getByRole("button", { name: "Close account panel" }).click();
+  if (await settingsLink.getAttribute("href") !== `/settings?companyId=${companyId}`) throw new Error("Company settings did not preserve the active company context.");
+  await settingsLink.click();
+  await desktop.getByRole("heading", { name: "Settings", exact: true }).waitFor();
+  await desktop.getByLabel("Company context").waitFor();
+  if (await desktop.getByLabel("Company context").textContent() !== "EOS Browser Acceptance") throw new Error("Settings did not resolve the explicitly selected company.");
+  if (await desktop.getByRole("tab", { name: "AI Autonomy", exact: true }).count()) throw new Error("The non-enforced AI autonomy control is still exposed.");
+  if (await desktop.getByRole("tab", { name: "Notifications", exact: true }).count()) throw new Error("The non-enforced outbound notification controls are still exposed.");
+  await desktop.getByRole("tab", { name: "Company", exact: true }).click();
+  await desktop.getByText("Only this selected company will be changed.", { exact: true }).waitFor();
+  if (await desktop.getByRole("tab", { name: "Company", exact: true }).getAttribute("data-state") !== "active") throw new Error("Company settings tab did not become active.");
+  if (await desktop.getByRole("tab", { name: "Profile", exact: true }).getAttribute("data-state") !== "inactive") throw new Error("Profile settings tab remained active after changing tabs.");
+  if (process.env.EOS_CAPTURE_VISUALS === "true") await desktop.screenshot({ path: ".tmp/eos-settings-desktop.png", fullPage: true });
+  await desktop.getByRole("tab", { name: "Billing", exact: true }).click();
+  await desktop.getByText("Billing is not available in this environment", { exact: true }).waitFor();
+  await desktop.goto(`${origin}/company/${companyId}#home`, { waitUntil: "domcontentloaded" });
+  await desktop.getByRole("heading", { name: "Home", exact: true }).waitFor();
   await desktop.getByRole("button", { name: "Create mission" }).click();
   await desktop.getByRole("heading", { name: "Operations", exact: true }).waitFor();
   const missionTitle = `Interactive MVP ${Date.now()}`;
@@ -184,6 +200,14 @@ try {
   await assertCompactHeaderAction("Refresh workspace", "My Role");
   const mobileOverflow = await mobile.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   if (mobileOverflow) throw new Error("Mobile workspace has horizontal overflow.");
+  await mobile.goto(`${origin}/settings?companyId=${companyId}`, { waitUntil: "domcontentloaded" });
+  await mobile.getByRole("heading", { name: "Settings", exact: true }).waitFor();
+  await mobile.getByRole("tab", { name: "Billing", exact: true }).click();
+  await mobile.getByText("Billing is not available in this environment", { exact: true }).waitFor();
+  if (process.env.EOS_CAPTURE_VISUALS === "true") await mobile.screenshot({ path: ".tmp/eos-settings-mobile.png", fullPage: true });
+  if (await mobile.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)) throw new Error("Mobile settings has horizontal overflow.");
+  await mobile.goto(`${origin}/company/${companyId}#my-role`, { waitUntil: "domcontentloaded" });
+  await mobile.getByRole("heading", { name: "My Role", exact: true }).waitFor();
   const fab = mobile.getByRole("button", { name: "Open communication" });
   const beforeDrag = await fab.boundingBox();
   if (!beforeDrag) throw new Error("Communication FAB did not render.");
@@ -204,7 +228,7 @@ try {
   await mobile.getByRole("button", { name: /Open .* conversation/ }).click();
   await mobile.locator("#mobile-communication-drawer aside").waitFor();
   if (browserErrors.length) throw new Error(`Browser errors: ${browserErrors.join(" | ")}`);
-  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 8, activeModules: 14, usableModuleControlCenter: true, roleSafeNextActions: true, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, reachableAccountControls: ["settings", "support"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
+  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 8, activeModules: 14, usableModuleControlCenter: true, roleSafeNextActions: true, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, reachableAccountControls: ["profile", "explicit company context", "privacy", "AI spend", "billing", "support"], quarantinedFalseControls: ["notification delivery preferences", "company-wide AI autonomy"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
 } finally {
   await browser.close();
 }

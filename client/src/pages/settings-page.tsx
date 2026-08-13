@@ -1,17 +1,17 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useUser } from "@clerk/clerk-react";
-import { Camera, Check, DollarSign, Download, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Bell, Building2, Check, CreditCard, DollarSign, Download, Loader2, ShieldCheck, UserRound } from "lucide-react";
 import { UniversalLayout } from "@/components/universal-layout";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { apiRequest } from "@/lib/queryClient";
+import { resolveSettingsCompanyId, settingsCompanyUrl } from "@/lib/settings-context";
 
 type UserProfile = {
   id: string;
@@ -22,7 +22,7 @@ type UserProfile = {
 };
 
 type CompanySettings = {
-  id: string;
+  id: number;
   name: string;
   stage?: string;
   industry?: string;
@@ -30,108 +30,170 @@ type CompanySettings = {
   goals?: string;
 };
 
-type NotificationPreferences = {
-  emailNotifications: boolean;
-  pushNotifications: boolean;
-  taskAlerts: boolean;
-  workflowAlerts: boolean;
+type AiBudget = {
+  configured: boolean;
+  enabled: boolean;
+  monthlyLimitMicros: number | null;
+  perRequestLimitMicros: number | null;
+  spentMicros: number;
 };
 
-type AutonomySettings = {
-  autonomyLevel: "observe" | "recommend" | "assist" | "execute";
+type BillingStatus = {
+  configured: boolean;
+  availablePlans: Array<{ key: string }>;
+  subscription: null | {
+    planKey: string;
+    status: string;
+    entitlements: string[];
+    cancelAtPeriodEnd: boolean;
+    currentPeriodEnd: string | null;
+  };
 };
 
-type CompaniesResponse = {
-  companies: CompanySettings[];
-};
+const settingsTabs = ["profile", "company", "privacy", "cost", "billing"] as const;
+type SettingsTab = typeof settingsTabs[number];
+const canonicalCompanyStages = ["idea", "pre-revenue", "revenue", "scaling", "mature"];
+
+function titleCase(value: string): string {
+  return value.replace(/[-_]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function SettingsCard({ children }: { children: ReactNode }) {
+  return <Card className="rounded-[1.5rem] border-white/70 bg-white p-5 shadow-sm sm:p-8">{children}</Card>;
+}
+
+function CompanyRequired({ hasCompanies }: { hasCompanies: boolean }) {
+  return (
+    <SettingsCard>
+      <div className="flex items-start gap-3">
+        <Building2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" />
+        <div>
+          <h2 className="text-lg font-semibold">Choose a company first</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {hasCompanies
+              ? "Company settings are intentionally inactive until you choose the exact company above."
+              : "Create or enter an organization before configuring company controls."}
+          </p>
+          {!hasCompanies && <a href="/portfolios" className="mt-4 inline-flex text-sm font-semibold text-primary hover:underline">Go to your portfolios</a>}
+        </div>
+      </div>
+    </SettingsCard>
+  );
+}
 
 export default function SettingsPage() {
-  const { user } = useUser();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState("profile");
+  const initialParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const initialTab = initialParams.has("billing") ? "billing" : "profile";
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+  const [requestedCompanyId, setRequestedCompanyId] = useState<string | null>(initialParams.get("companyId"));
+  const [profileForm, setProfileForm] = useState<Partial<UserProfile>>({});
+  const [companyForm, setCompanyForm] = useState<Partial<CompanySettings>>({});
+  const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
   const [deletionConfirmation, setDeletionConfirmation] = useState("");
   const [monthlyAiBudget, setMonthlyAiBudget] = useState("25");
   const [perRequestAiBudget, setPerRequestAiBudget] = useState("1");
+  const [selectedPlan, setSelectedPlan] = useState("");
 
-  const { data: userProfile, isLoading: loadingUser, error: userError } = useQuery<UserProfile>({
+  const userProfile = useQuery<UserProfile>({
     queryKey: ["/api/users/me"],
-    queryFn: async () => {
-      const response = await apiRequest<Response>("GET", "/api/users/me");
-      return response.json();
-    },
+    queryFn: async () => (await apiRequest<Response>("GET", "/api/users/me")).json(),
   });
-
-  const { data: companiesData, isLoading: loadingCompanies } = useQuery<CompaniesResponse>({
+  const companiesQuery = useQuery<{ companies: CompanySettings[] }>({
     queryKey: ["/api/companies"],
-    queryFn: async () => {
-      const response = await apiRequest<Response>("GET", "/api/companies");
-      return response.json();
-    },
+    queryFn: async () => (await apiRequest<Response>("GET", "/api/companies")).json(),
   });
+  const companies = companiesQuery.data?.companies ?? [];
+  const selectedCompanyId = resolveSettingsCompanyId(requestedCompanyId, companies);
+  const selectedCompanySummary = companies.find((company) => company.id === selectedCompanyId) ?? null;
 
-  const { data: companySettings } = useQuery<CompanySettings>({
-    queryKey: ["/api/companies", companiesData?.companies?.[0]?.id],
-    queryFn: async () => {
-      const companyId = companiesData?.companies?.[0]?.id;
-      if (!companyId) throw new Error("No company found");
-      const response = await apiRequest<Response>("GET", `/api/companies/${companyId}`);
-      return response.json();
-    },
-    enabled: !!companiesData?.companies?.[0]?.id,
+  useEffect(() => {
+    if (!requestedCompanyId && selectedCompanyId) {
+      setRequestedCompanyId(String(selectedCompanyId));
+      window.history.replaceState({}, "", settingsCompanyUrl(selectedCompanyId));
+    }
+  }, [requestedCompanyId, selectedCompanyId]);
+
+  const companySettings = useQuery<CompanySettings>({
+    queryKey: ["/api/companies", selectedCompanyId],
+    queryFn: async () => (await apiRequest<Response>("GET", `/api/companies/${selectedCompanyId}`)).json(),
+    enabled: selectedCompanyId !== null,
   });
-
-  const updateProfileMutation = useMutation({
-    mutationFn: async (data: Partial<UserProfile>) => {
-      const response = await apiRequest<Response>("PUT", "/api/users/me", data);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
-    },
+  const aiBudget = useQuery<AiBudget>({
+    queryKey: ["/api/eos/companies", selectedCompanyId, "ai-budget"],
+    queryFn: async () => (await apiRequest<Response>("GET", `/api/eos/companies/${selectedCompanyId}/ai-budget`)).json(),
+    enabled: selectedCompanyId !== null,
   });
-
-  const updateCompanyMutation = useMutation({
-    mutationFn: async (data: Partial<CompanySettings>) => {
-      const companyId = companySettings?.id;
-      if (!companyId) throw new Error("No company found");
-      const response = await apiRequest<Response>("PUT", `/api/companies/${companyId}`, data);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
-    },
+  const billing = useQuery<BillingStatus>({
+    queryKey: ["/api/billing/status"],
+    queryFn: async () => (await apiRequest<Response>("GET", "/api/billing/status")).json(),
   });
+  const deletionRequest = useQuery<{ status: string; scheduledFor: string } | null>({ queryKey: ["/api/users/me/deletion"] });
+  const analyticsConsent = useQuery<{ consent: boolean | null; decidedAt: string | null }>({ queryKey: ["/api/users/me/analytics-consent"] });
 
-  const updateNotificationsMutation = useMutation({
-    mutationFn: async (data: NotificationPreferences) => {
-      const response = await apiRequest<Response>("PUT", "/api/users/me/notifications", data);
-      return response.json();
-    },
+  useEffect(() => {
+    if (userProfile.data) setProfileForm({ username: userProfile.data.username ?? "", fullName: userProfile.data.fullName ?? "" });
+  }, [userProfile.data]);
+  useEffect(() => {
+    if (companySettings.data) {
+      setCompanyForm({
+        name: companySettings.data.name ?? "",
+        stage: companySettings.data.stage ?? "",
+        goals: companySettings.data.goals ?? "",
+      });
+    }
+  }, [companySettings.data]);
+  useEffect(() => {
+    if (aiBudget.data?.monthlyLimitMicros != null) setMonthlyAiBudget((aiBudget.data.monthlyLimitMicros / 1_000_000).toString());
+    if (aiBudget.data?.perRequestLimitMicros != null) setPerRequestAiBudget((aiBudget.data.perRequestLimitMicros / 1_000_000).toString());
+  }, [aiBudget.data]);
+  useEffect(() => {
+    if (!selectedPlan && billing.data?.availablePlans.length === 1) setSelectedPlan(billing.data.availablePlans[0].key);
+  }, [billing.data, selectedPlan]);
+
+  const selectCompany = (value: string) => {
+    setRequestedCompanyId(value);
+    setCompanyForm({});
+    window.history.replaceState({}, "", settingsCompanyUrl(Number(value)));
+  };
+
+  const updateProfile = useMutation({
+    mutationFn: async () => (await apiRequest<Response>("PUT", "/api/users/me", profileForm)).json(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/users/me"] }),
   });
-
-  const updateAutonomyMutation = useMutation({
-    mutationFn: async (data: AutonomySettings) => {
-      const companyId = companySettings?.id;
-      if (!companyId) throw new Error("No company found");
-      const response = await apiRequest<Response>("PUT", `/api/companies/${companyId}/autonomy`, data);
-      return response.json();
-    },
-  });
-
-  const aiBudget = useQuery<{ configured: boolean; enabled: boolean; monthlyLimitMicros: number | null; perRequestLimitMicros: number | null; spentMicros: number }>({
-    queryKey: ["/api/eos/companies", companiesData?.companies?.[0]?.id, "ai-budget"],
-    queryFn: async () => {
-      const response = await apiRequest<Response>("GET", `/api/eos/companies/${companiesData!.companies[0].id}/ai-budget`);
-      return response.json();
-    },
-    enabled: Boolean(companiesData?.companies?.[0]?.id),
-  });
-
-  const exportAccountMutation = useMutation({
+  const updateCompany = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest<Response>("GET", "/api/users/me/export");
-      return await response.blob();
+      if (!selectedCompanyId) throw new Error("Choose a company first.");
+      return (await apiRequest<Response>("PUT", `/api/companies/${selectedCompanyId}`, companyForm)).json();
     },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/companies"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/companies", selectedCompanyId] }),
+      ]);
+    },
+  });
+  const updateAiBudget = useMutation({
+    mutationFn: async () => {
+      if (!selectedCompanyId) throw new Error("Choose a company first.");
+      return (await apiRequest<Response>("PUT", `/api/eos/companies/${selectedCompanyId}/ai-budget`, {
+        monthlyLimitDollars: Number(monthlyAiBudget),
+        perRequestLimitDollars: Number(perRequestAiBudget),
+        enabled: true,
+      })).json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/eos/companies", selectedCompanyId, "ai-budget"] }),
+  });
+  const startCheckout = useMutation({
+    mutationFn: async () => (await apiRequest<Response>("POST", "/api/billing/checkout", { planKey: selectedPlan })).json() as Promise<{ url: string }>,
+    onSuccess: ({ url }) => window.location.assign(url),
+  });
+  const openBillingPortal = useMutation({
+    mutationFn: async () => (await apiRequest<Response>("POST", "/api/billing/portal")).json() as Promise<{ url: string }>,
+    onSuccess: ({ url }) => window.location.assign(url),
+  });
+  const exportAccount = useMutation({
+    mutationFn: async () => (await apiRequest<Response>("GET", "/api/users/me/export")).blob(),
     onSuccess: (blob) => {
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -141,529 +203,120 @@ export default function SettingsPage() {
       URL.revokeObjectURL(url);
     },
   });
-  const updateAiBudgetMutation = useMutation({
-    mutationFn: async () => {
-      const companyId = companiesData?.companies?.[0]?.id;
-      if (!companyId) throw new Error("No company selected.");
-      const response = await apiRequest<Response>("PUT", `/api/eos/companies/${companyId}/ai-budget`, { monthlyLimitDollars: Number(monthlyAiBudget), perRequestLimitDollars: Number(perRequestAiBudget), enabled: true });
-      return response.json();
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/eos/companies", companiesData?.companies?.[0]?.id, "ai-budget"] }),
-  });
-
-  const deletionRequest = useQuery<{ status: string; scheduledFor: string; deleteOwnedOrganizations: boolean; lastError?: string } | null>({ queryKey: ["/api/users/me/deletion"] });
-  const analyticsConsent = useQuery<{ consent: boolean | null; decidedAt: string | null }>({ queryKey: ["/api/users/me/analytics-consent"] });
   const updateAnalyticsConsent = useMutation({
-    mutationFn: async (consent: boolean) => {
-      const response = await apiRequest<Response>("PUT", "/api/users/me/analytics-consent", { consent });
-      return response.json();
-    },
+    mutationFn: async (consent: boolean) => (await apiRequest<Response>("PUT", "/api/users/me/analytics-consent", { consent })).json(),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/users/me/analytics-consent"] }),
   });
-  const scheduleDeletionMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest<Response>("POST", "/api/users/me/deletion", { confirmation: deletionConfirmation, deleteOwnedOrganizations: false });
-      return response.json();
-    },
+  const scheduleDeletion = useMutation({
+    mutationFn: async () => (await apiRequest<Response>("POST", "/api/users/me/deletion", { confirmation: deletionConfirmation, deleteOwnedOrganizations: false })).json(),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/users/me/deletion"] }),
   });
-  const cancelDeletionMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest<Response>("DELETE", "/api/users/me/deletion");
-      return response.json();
-    },
+  const cancelDeletion = useMutation({
+    mutationFn: async () => (await apiRequest<Response>("DELETE", "/api/users/me/deletion")).json(),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/users/me/deletion"] }),
   });
 
-  const [profileForm, setProfileForm] = useState<Partial<UserProfile>>({});
-  const [companyForm, setCompanyForm] = useState<Partial<CompanySettings>>({});
-  const [notificationForm, setNotificationForm] = useState<NotificationPreferences>({
-    emailNotifications: true,
-    pushNotifications: true,
-    taskAlerts: true,
-    workflowAlerts: true,
-  });
-  const [autonomyForm, setAutonomyForm] = useState<AutonomySettings>({
-    autonomyLevel: "recommend",
-  });
-
-  const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
-  const [companyErrors, setCompanyErrors] = useState<Record<string, string>>({});
-
-  const validateProfile = (): boolean => {
+  const saveProfile = () => {
     const errors: Record<string, string> = {};
-    
-    if (profileForm.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profileForm.email)) {
-      errors.email = "Invalid email format.";
-    }
-    
     if (profileForm.username && (profileForm.username.length < 3 || !/^[a-z0-9_]+$/.test(profileForm.username))) {
-      errors.username = "Username can only contain lowercase letters, numbers, and underscores.";
+      errors.username = "Use at least three lowercase letters, numbers, or underscores.";
     }
-
     setProfileErrors(errors);
-    return Object.keys(errors).length === 0;
+    if (!Object.keys(errors).length) updateProfile.mutate();
   };
 
-  const handleSaveProfile = () => {
-    if (!validateProfile()) return;
-    updateProfileMutation.mutate(profileForm);
-  };
-
-  const handleSaveCompany = () => {
-    updateCompanyMutation.mutate(companyForm);
-  };
-
-  const handleSaveNotifications = () => {
-    updateNotificationsMutation.mutate(notificationForm);
-  };
-
-  const handleSaveAutonomy = () => {
-    updateAutonomyMutation.mutate(autonomyForm);
-  };
-
-  if (userError) {
-    return (
-      <UniversalLayout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Card className="p-8 max-w-md w-full text-center">
-            <p className="font-mono text-sm text-destructive mb-4">Failed to load settings. Refresh the page.</p>
-            <Button onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/users/me"] })}>
-              Retry
-            </Button>
-          </Card>
-        </div>
-      </UniversalLayout>
-    );
+  if (userProfile.isError || companiesQuery.isError) {
+    return <UniversalLayout><main className="mx-auto max-w-4xl px-4 py-10 sm:px-6"><SettingsCard><h1 className="text-2xl font-semibold">Settings could not load</h1><p className="mt-2 text-sm text-muted-foreground">Refresh the account and company data, then try again.</p><Button className="mt-5" onClick={() => void Promise.all([userProfile.refetch(), companiesQuery.refetch()])}>Retry</Button></SettingsCard></main></UniversalLayout>;
   }
 
   return (
     <UniversalLayout>
-      <div className="max-w-4xl mx-auto px-6 py-8">
-        <div className="mb-8">
-          <h1 className="font-mono font-bold text-4xl text-text mb-2">Settings</h1>
-          <p className="font-mono text-base text-text-secondary">
-            Manage your profile, company settings, notifications, and AI autonomy.
-          </p>
+      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-9">
+        <div className="mb-6 flex flex-col gap-5 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="eos-label">Account control</p>
+            <h1 className="mt-2 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">Settings</h1>
+            <p className="mt-3 max-w-2xl text-base text-muted-foreground">Control your identity, exact company, privacy, spend, and subscription from one place.</p>
+          </div>
+          <div className="w-full sm:w-[280px]">
+            <Label htmlFor="settings-company" className="mb-2 block text-xs uppercase tracking-[0.12em] text-muted-foreground">Company context</Label>
+            {companiesQuery.isLoading ? <div className="h-10 animate-pulse rounded-xl bg-muted" /> : companies.length ? (
+              <Select value={selectedCompanyId ? String(selectedCompanyId) : undefined} onValueChange={selectCompany}>
+                <SelectTrigger id="settings-company" aria-label="Company context"><SelectValue placeholder="Choose a company" /></SelectTrigger>
+                <SelectContent>{companies.map((company) => <SelectItem key={company.id} value={String(company.id)}>{company.name}</SelectItem>)}</SelectContent>
+              </Select>
+            ) : <Button asChild variant="outline" className="w-full"><a href="/portfolios">Create an organization</a></Button>}
+          </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-8 h-auto flex-wrap justify-start">
-            <TabsTrigger value="profile">Profile</TabsTrigger>
-            <TabsTrigger value="company">Company</TabsTrigger>
-            <TabsTrigger value="notifications">Notifications</TabsTrigger>
-            <TabsTrigger value="autonomy">AI Autonomy</TabsTrigger>
-            <TabsTrigger value="privacy">Data & Privacy</TabsTrigger>
-            <TabsTrigger value="cost">AI Cost</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as SettingsTab)}>
+          <TabsList className="mb-6 grid h-auto w-full grid-cols-3 justify-start gap-1 rounded-2xl bg-muted p-1.5 sm:inline-flex sm:w-auto">
+            <TabsTrigger className="px-2 data-[state=inactive]:!bg-transparent data-[state=inactive]:text-muted-foreground sm:px-4" value="profile">Profile</TabsTrigger>
+            <TabsTrigger className="px-2 data-[state=inactive]:!bg-transparent data-[state=inactive]:text-muted-foreground sm:px-4" value="company">Company</TabsTrigger>
+            <TabsTrigger className="px-2 data-[state=inactive]:!bg-transparent data-[state=inactive]:text-muted-foreground sm:px-4" value="privacy">Privacy</TabsTrigger>
+            <TabsTrigger className="px-2 data-[state=inactive]:!bg-transparent data-[state=inactive]:text-muted-foreground sm:px-4" value="cost">AI spend</TabsTrigger>
+            <TabsTrigger className="px-2 data-[state=inactive]:!bg-transparent data-[state=inactive]:text-muted-foreground sm:px-4" value="billing">Billing</TabsTrigger>
           </TabsList>
 
           <TabsContent value="profile">
-            <Card className="p-8">
-              {loadingUser ? (
-                <div className="space-y-6">
-                  <div className="h-24 w-24 rounded-full bg-surface-subtle animate-pulse" />
-                  <div className="space-y-4">
-                    <div className="h-10 bg-surface-subtle animate-pulse rounded-md" />
-                    <div className="h-10 bg-surface-subtle animate-pulse rounded-md" />
-                    <div className="h-10 bg-surface-subtle animate-pulse rounded-md" />
-                  </div>
+            <SettingsCard>
+              <div className="mb-6 flex items-start gap-3"><UserRound className="mt-0.5 h-5 w-5 text-primary" /><div><h2 className="text-xl font-semibold">Your profile</h2><p className="mt-1 text-sm text-muted-foreground">The name teammates see inside EOS.</p></div></div>
+              {userProfile.isLoading ? <div className="h-32 animate-pulse rounded-xl bg-muted" /> : <div className="space-y-5">
+                <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" value={userProfile.data?.email ?? ""} disabled /><p className="text-xs text-muted-foreground">Email and profile photo are managed by your identity provider.</p></div>
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <div className="space-y-2"><Label htmlFor="fullName">Full name</Label><Input id="fullName" value={profileForm.fullName ?? ""} onChange={(event) => setProfileForm((current) => ({ ...current, fullName: event.target.value }))} /></div>
+                  <div className="space-y-2"><Label htmlFor="username">Username</Label><Input id="username" value={profileForm.username ?? ""} onChange={(event) => setProfileForm((current) => ({ ...current, username: event.target.value }))} />{profileErrors.username && <p className="text-xs text-destructive">{profileErrors.username}</p>}</div>
                 </div>
-              ) : (
-                <div className="space-y-6">
-                  <div className="flex items-center space-x-4">
-                    <div className="relative">
-                      <div className="w-24 h-24 rounded-full bg-surface-subtle overflow-hidden">
-                        {userProfile?.avatarUrl ? (
-                          <img src={userProfile.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Camera className="w-8 h-8 text-text-tertiary" />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-sm text-text-secondary">Your identity photo is managed from the account menu in the top-right corner.</p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="you@company.com"
-                      defaultValue={userProfile?.email}
-                      disabled
-                    />
-                    <p className="font-mono text-xs text-text-secondary">Email changes are managed by the identity provider.</p>
-                    {profileErrors.email && (
-                      <p className="font-mono text-xs text-destructive">{profileErrors.email}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="username">Username</Label>
-                    <Input
-                      id="username"
-                      placeholder="jsmith"
-                      defaultValue={userProfile?.username}
-                      onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
-                    />
-                    {profileErrors.username && (
-                      <p className="font-mono text-xs text-destructive">{profileErrors.username}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="fullName">Full Name</Label>
-                    <Input
-                      id="fullName"
-                      placeholder="Jane Smith"
-                      defaultValue={userProfile?.fullName}
-                      onChange={(e) => setProfileForm({ ...profileForm, fullName: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="flex justify-end space-x-3">
-                    <Button
-                      onClick={handleSaveProfile}
-                      disabled={updateProfileMutation.isPending}
-                    >
-                      {updateProfileMutation.isPending ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <Check className="w-4 h-4 mr-2" />
-                          Save profile
-                        </>
-                      )}
-                    </Button>
-                  </div>
-
-                  {updateProfileMutation.isError && (
-                    <p className="font-mono text-xs text-destructive text-right">Failed to save changes. Try again.</p>
-                  )}
-                  {updateProfileMutation.isSuccess && (
-                    <p className="font-mono text-xs text-success text-right">Profile updated.</p>
-                  )}
-                </div>
-              )}
-            </Card>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-5"><a href="#" onClick={(event) => { event.preventDefault(); document.querySelector<HTMLButtonElement>('[aria-label="Notifications"]')?.click(); }} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"><Bell className="h-4 w-4" />Open in-app notifications</a><Button onClick={saveProfile} disabled={updateProfile.isPending}>{updateProfile.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}Save profile</Button></div>
+                {updateProfile.isSuccess && <p className="text-right text-sm text-emerald-700">Profile updated.</p>}{updateProfile.isError && <p className="text-right text-sm text-destructive">Profile changes could not be saved.</p>}
+              </div>}
+            </SettingsCard>
           </TabsContent>
 
           <TabsContent value="company">
-            <Card className="p-8">
-              {loadingCompanies ? (
-                <div className="space-y-4">
-                  <div className="h-10 bg-surface-subtle animate-pulse rounded-md" />
-                  <div className="h-10 bg-surface-subtle animate-pulse rounded-md" />
-                  <div className="h-10 bg-surface-subtle animate-pulse rounded-md" />
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="companyName">Company Name</Label>
-                    <Input
-                      id="companyName"
-                      placeholder="Acme Labs"
-                      defaultValue={companySettings?.name}
-                      onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="stage">Stage</Label>
-                    <Select
-                      defaultValue={companySettings?.stage}
-                      onValueChange={(value) => setCompanyForm({ ...companyForm, stage: value })}
-                    >
-                      <SelectTrigger id="stage">
-                        <SelectValue placeholder="Select stage" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="idea">Idea</SelectItem>
-                        <SelectItem value="pre-revenue">Pre-revenue</SelectItem>
-                        <SelectItem value="revenue">Revenue</SelectItem>
-                        <SelectItem value="scaling">Scaling</SelectItem>
-                        <SelectItem value="mature">Mature</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-
-                  <div className="space-y-2">
-                    <Label htmlFor="goals">Goals</Label>
-                    <Textarea
-                      id="goals"
-                      placeholder="10x revenue, hire 5 engineers, launch product line"
-                      defaultValue={companySettings?.goals}
-                      onChange={(e) => setCompanyForm({ ...companyForm, goals: e.target.value })}
-                      className="min-h-[120px]"
-                    />
-                  </div>
-
-                  <div className="flex justify-end">
-                    <Button
-                      onClick={handleSaveCompany}
-                      disabled={updateCompanyMutation.isPending}
-                    >
-                      {updateCompanyMutation.isPending ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <Check className="w-4 h-4 mr-2" />
-                          Save company
-                        </>
-                      )}
-                    </Button>
-                  </div>
-
-                  {updateCompanyMutation.isError && (
-                    <p className="font-mono text-xs text-destructive text-right">Failed to save changes. Try again.</p>
-                  )}
-                  {updateCompanyMutation.isSuccess && (
-                    <p className="font-mono text-xs text-success text-right">Company settings updated.</p>
-                  )}
-                </div>
-              )}
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="notifications">
-            <Card className="p-8">
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <Label htmlFor="emailNotifications">Email Notifications</Label>
-                    <p className="font-mono text-xs text-text-secondary">
-                      Receive alerts and updates via email.
-                    </p>
-                  </div>
-                  <Switch
-                    id="emailNotifications"
-                    checked={notificationForm.emailNotifications}
-                    onCheckedChange={(checked) =>
-                      setNotificationForm({ ...notificationForm, emailNotifications: checked })
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <Label htmlFor="pushNotifications">Push Notifications</Label>
-                    <p className="font-mono text-xs text-text-secondary">
-                      Receive browser notifications for tasks and workflows.
-                    </p>
-                  </div>
-                  <Switch
-                    id="pushNotifications"
-                    checked={notificationForm.pushNotifications}
-                    onCheckedChange={(checked) =>
-                      setNotificationForm({ ...notificationForm, pushNotifications: checked })
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <Label htmlFor="taskAlerts">Task Alerts</Label>
-                    <p className="font-mono text-xs text-text-secondary">
-                      Get notified when tasks are assigned to you or approaching deadlines.
-                    </p>
-                  </div>
-                  <Switch
-                    id="taskAlerts"
-                    checked={notificationForm.taskAlerts}
-                    onCheckedChange={(checked) =>
-                      setNotificationForm({ ...notificationForm, taskAlerts: checked })
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <Label htmlFor="workflowAlerts">Workflow Alerts</Label>
-                    <p className="font-mono text-xs text-text-secondary">
-                      Get notified when workflows require your attention.
-                    </p>
-                  </div>
-                  <Switch
-                    id="workflowAlerts"
-                    checked={notificationForm.workflowAlerts}
-                    onCheckedChange={(checked) =>
-                      setNotificationForm({ ...notificationForm, workflowAlerts: checked })
-                    }
-                  />
-                </div>
-
-                <div className="flex justify-end">
-                  <Button
-                    onClick={handleSaveNotifications}
-                    disabled={updateNotificationsMutation.isPending}
-                  >
-                    {updateNotificationsMutation.isPending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-4 h-4 mr-2" />
-                        Save notifications
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                {updateNotificationsMutation.isError && (
-                  <p className="font-mono text-xs text-destructive text-right">Failed to save changes. Try again.</p>
-                )}
-                {updateNotificationsMutation.isSuccess && (
-                  <p className="font-mono text-xs text-success text-right">Notification preferences updated.</p>
-                )}
-              </div>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="autonomy">
-            <Card className="p-8">
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="autonomyLevel">Autonomy Level</Label>
-                  <p className="font-mono text-xs text-text-secondary mb-4">
-                    Higher autonomy lets the scoped Role Agent execute more steps without asking. Start low and increase only with evidence.
-                  </p>
-                  <Select
-                    defaultValue={autonomyForm.autonomyLevel}
-                    onValueChange={(value: "observe" | "recommend" | "assist" | "execute") =>
-                      setAutonomyForm({ autonomyLevel: value })
-                    }
-                  >
-                    <SelectTrigger id="autonomyLevel">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="observe">Observe (lowest autonomy)</SelectItem>
-                      <SelectItem value="recommend">Recommend</SelectItem>
-                      <SelectItem value="assist">Assist</SelectItem>
-                      <SelectItem value="execute">Execute (highest autonomy)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="bg-surface-subtle rounded-lg p-4 space-y-2">
-                  <p className="font-mono text-xs uppercase tracking-wide text-text-tertiary">Current Level Details</p>
-                  {autonomyForm.autonomyLevel === "observe" && (
-                    <p className="font-mono text-sm text-text">
-                      The Role Agent watches but never acts. You review all recommendations manually.
-                    </p>
-                  )}
-                  {autonomyForm.autonomyLevel === "recommend" && (
-                    <p className="font-mono text-sm text-text">
-                      The Role Agent suggests actions. You approve before execution.
-                    </p>
-                  )}
-                  {autonomyForm.autonomyLevel === "assist" && (
-                    <p className="font-mono text-sm text-text">
-                      The Role Agent executes bounded simple tasks. You review complex decisions.
-                    </p>
-                  )}
-                  {autonomyForm.autonomyLevel === "execute" && (
-                    <p className="font-mono text-sm text-text">
-                      The Role Agent executes authorized workflows independently. You receive outcomes and evidence.
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex justify-end">
-                  <Button
-                    onClick={handleSaveAutonomy}
-                    disabled={updateAutonomyMutation.isPending}
-                  >
-                    {updateAutonomyMutation.isPending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-4 h-4 mr-2" />
-                        Save autonomy
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                {updateAutonomyMutation.isError && (
-                  <p className="font-mono text-xs text-destructive text-right">Failed to save changes. Try again.</p>
-                )}
-                {updateAutonomyMutation.isSuccess && (
-                  <p className="font-mono text-xs text-success text-right">Autonomy level updated.</p>
-                )}
-              </div>
-            </Card>
+            {!selectedCompanyId ? <CompanyRequired hasCompanies={companies.length > 0} /> : <SettingsCard>
+              <div className="mb-6 flex items-start gap-3"><Building2 className="mt-0.5 h-5 w-5 text-primary" /><div><h2 className="text-xl font-semibold">{selectedCompanySummary?.name}</h2><p className="mt-1 text-sm text-muted-foreground">Only this selected company will be changed.</p></div></div>
+              {companySettings.isLoading ? <div className="h-48 animate-pulse rounded-xl bg-muted" /> : <div className="space-y-5">
+                <div className="space-y-2"><Label htmlFor="companyName">Company name</Label><Input id="companyName" value={companyForm.name ?? ""} onChange={(event) => setCompanyForm((current) => ({ ...current, name: event.target.value }))} /></div>
+                <div className="space-y-2"><Label htmlFor="stage">Stage</Label><Select value={companyForm.stage || undefined} onValueChange={(stage) => setCompanyForm((current) => ({ ...current, stage }))}><SelectTrigger id="stage"><SelectValue placeholder="Select stage" /></SelectTrigger><SelectContent>{companyForm.stage && !canonicalCompanyStages.includes(companyForm.stage) && <SelectItem value={companyForm.stage}>{titleCase(companyForm.stage)} (current)</SelectItem>}<SelectItem value="idea">Idea</SelectItem><SelectItem value="pre-revenue">Pre-revenue</SelectItem><SelectItem value="revenue">Revenue</SelectItem><SelectItem value="scaling">Scaling</SelectItem><SelectItem value="mature">Mature</SelectItem></SelectContent></Select></div>
+                <div className="space-y-2"><Label htmlFor="goals">Goals</Label><Textarea id="goals" className="min-h-[120px]" value={companyForm.goals ?? ""} onChange={(event) => setCompanyForm((current) => ({ ...current, goals: event.target.value }))} /></div>
+                <div className="flex justify-end"><Button onClick={() => updateCompany.mutate()} disabled={updateCompany.isPending}>{updateCompany.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}Save company</Button></div>
+                {updateCompany.isSuccess && <p className="text-right text-sm text-emerald-700">Company settings updated.</p>}{updateCompany.isError && <p className="text-right text-sm text-destructive">Company changes could not be saved.</p>}
+              </div>}
+            </SettingsCard>}
           </TabsContent>
 
           <TabsContent value="privacy">
-            <Card className="p-8">
-              <div className="space-y-6">
-                <div>
-                  <h2 className="text-lg font-semibold">Export your account data</h2>
-                  <p className="mt-2 text-sm text-text-secondary">Download the personal profile, owned portfolio and company records, memberships, messages you sent, audit activity, support requests, billing state, and provider metadata associated with your account. Provider secrets are never included.</p>
-                </div>
-                <Button onClick={() => exportAccountMutation.mutate()} disabled={exportAccountMutation.isPending}>
-                  {exportAccountMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                  Download account export
-                </Button>
-                {exportAccountMutation.isError && <p className="text-sm text-destructive">The export could not be prepared. Try again.</p>}
-                <div className="border-t pt-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div><h2 className="text-lg font-semibold">Optional product analytics</h2><p className="mt-2 text-sm text-text-secondary">Allow privacy-scoped usage events that help improve EOS. Content, prompts, provider secrets, and company records are not analytics properties. Choosing no does not reduce product functionality.</p></div>
-                    <Switch aria-label="Allow optional product analytics" checked={analyticsConsent.data?.consent === true} onCheckedChange={(consent) => updateAnalyticsConsent.mutate(consent)} disabled={updateAnalyticsConsent.isPending} />
-                  </div>
-                  <p className="mt-2 text-xs text-text-secondary">Current choice: {analyticsConsent.data?.consent === true ? "Allowed" : analyticsConsent.data?.consent === false ? "Declined" : "Not chosen"}</p>
-                </div>
-                <div className="border-t pt-6">
-                  <h2 className="text-lg font-semibold text-destructive">Delete your account</h2>
-                  {deletionRequest.data?.status === "scheduled" ? (
-                    <div className="mt-3 space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-                      <p>Deletion is scheduled for {new Date(deletionRequest.data.scheduledFor).toLocaleString()}. You can cancel until processing begins.</p>
-                      <Button variant="outline" onClick={() => cancelDeletionMutation.mutate()} disabled={cancelDeletionMutation.isPending}>Cancel deletion</Button>
-                    </div>
-                  ) : (
-                    <div className="mt-3 space-y-4">
-                      <p className="text-sm text-text-secondary">A cooling-off period applies. Identity access and personal working data are removed after the scheduled date. Download an export first. If you own a portfolio or company, transfer ownership before the deletion date; EOS will block execution until that is complete.</p>
-                      <div className="space-y-2"><Label htmlFor="delete-confirmation">Type DELETE MY ENTREPRENEUROS ACCOUNT</Label><Input id="delete-confirmation" value={deletionConfirmation} onChange={(event) => setDeletionConfirmation(event.target.value)} /></div>
-                      <Button variant="destructive" onClick={() => scheduleDeletionMutation.mutate()} disabled={scheduleDeletionMutation.isPending || deletionConfirmation !== "DELETE MY ENTREPRENEUROS ACCOUNT"}>Schedule account deletion</Button>
-                      {scheduleDeletionMutation.isError && <p className="text-sm text-destructive">Deletion could not be scheduled.</p>}
-                    </div>
-                  )}
-                </div>
+            <SettingsCard>
+              <div className="space-y-7">
+                <div><h2 className="text-xl font-semibold">Your data</h2><p className="mt-2 text-sm text-muted-foreground">Export, analytics consent, and deletion are applied to your authenticated account.</p></div>
+                <div className="rounded-2xl bg-muted p-5"><h3 className="font-semibold">Download an account export</h3><p className="mt-2 text-sm text-muted-foreground">Includes your profile, owned organizations, memberships, messages, audit activity, support requests, billing state, and provider metadata. Secrets are excluded.</p><Button className="mt-4" variant="outline" onClick={() => exportAccount.mutate()} disabled={exportAccount.isPending}>{exportAccount.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}Download export</Button></div>
+                <div className="flex items-start justify-between gap-5 border-t pt-6"><div><h3 className="font-semibold">Optional product analytics</h3><p className="mt-2 text-sm text-muted-foreground">Allow privacy-scoped usage events. Content, prompts, secrets, and company records are excluded.</p><p className="mt-2 text-xs text-muted-foreground">Current choice: {analyticsConsent.data?.consent === true ? "Allowed" : analyticsConsent.data?.consent === false ? "Declined" : "Not chosen"}</p></div><Switch aria-label="Allow optional product analytics" checked={analyticsConsent.data?.consent === true} onCheckedChange={(value) => updateAnalyticsConsent.mutate(value)} disabled={updateAnalyticsConsent.isPending} /></div>
+                <div className="border-t pt-6"><h3 className="font-semibold text-destructive">Delete your account</h3>{deletionRequest.data?.status === "scheduled" ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><p>Deletion is scheduled for {new Date(deletionRequest.data.scheduledFor).toLocaleString()}.</p><Button className="mt-3" variant="outline" onClick={() => cancelDeletion.mutate()} disabled={cancelDeletion.isPending}>Cancel deletion</Button></div> : <div className="mt-3 space-y-4"><p className="text-sm text-muted-foreground">A cooling-off period applies. Transfer ownership of portfolios or companies before processing begins.</p><div className="space-y-2"><Label htmlFor="delete-confirmation">Type DELETE MY ENTREPRENEUROS ACCOUNT</Label><Input id="delete-confirmation" value={deletionConfirmation} onChange={(event) => setDeletionConfirmation(event.target.value)} /></div><Button variant="destructive" onClick={() => scheduleDeletion.mutate()} disabled={scheduleDeletion.isPending || deletionConfirmation !== "DELETE MY ENTREPRENEUROS ACCOUNT"}>Schedule deletion</Button></div>}</div>
               </div>
-            </Card>
+            </SettingsCard>
           </TabsContent>
 
           <TabsContent value="cost">
-            <Card className="p-8">
-              <div className="space-y-6">
-                <div><h2 className="flex items-center gap-2 text-lg font-semibold"><DollarSign className="h-5 w-5" />AI spend control</h2><p className="mt-2 text-sm text-text-secondary">EOS reserves the worst-case request cost atomically before calling a model. Concurrent agents cannot exceed this company budget.</p></div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2"><Label htmlFor="monthly-ai-budget">Monthly limit (USD)</Label><Input id="monthly-ai-budget" type="number" min="0.01" max="10000" step="0.01" value={monthlyAiBudget} onChange={(event) => setMonthlyAiBudget(event.target.value)} /></div>
-                  <div className="space-y-2"><Label htmlFor="request-ai-budget">Per-request limit (USD)</Label><Input id="request-ai-budget" type="number" min="0.01" max="1000" step="0.01" value={perRequestAiBudget} onChange={(event) => setPerRequestAiBudget(event.target.value)} /></div>
-                </div>
-                {aiBudget.data?.configured && <div className="rounded-lg bg-surface-subtle p-4 text-sm"><p>Current monthly limit: ${(Number(aiBudget.data.monthlyLimitMicros) / 1_000_000).toFixed(2)}</p><p>Current usage and reservations: ${(aiBudget.data.spentMicros / 1_000_000).toFixed(4)}</p></div>}
-                <Button onClick={() => updateAiBudgetMutation.mutate()} disabled={updateAiBudgetMutation.isPending || Number(perRequestAiBudget) > Number(monthlyAiBudget)}>{updateAiBudgetMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save AI budget</Button>
-                {updateAiBudgetMutation.isError && <p className="text-sm text-destructive">The budget could not be saved. Confirm both limits are positive and the per-request limit is no greater than the monthly limit.</p>}
-              </div>
-            </Card>
+            {!selectedCompanyId ? <CompanyRequired hasCompanies={companies.length > 0} /> : <SettingsCard>
+              <div className="mb-6 flex items-start gap-3"><DollarSign className="mt-0.5 h-5 w-5 text-primary" /><div><h2 className="text-xl font-semibold">AI spend for {selectedCompanySummary?.name}</h2><p className="mt-1 text-sm text-muted-foreground">Hard per-request and monthly limits are enforced before model calls.</p></div></div>
+              {aiBudget.isLoading ? <div className="h-36 animate-pulse rounded-xl bg-muted" /> : <div className="space-y-5">
+                <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="monthly-ai-budget">Monthly limit (USD)</Label><Input id="monthly-ai-budget" type="number" min="0.01" max="10000" step="0.01" value={monthlyAiBudget} onChange={(event) => setMonthlyAiBudget(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="request-ai-budget">Per-request limit (USD)</Label><Input id="request-ai-budget" type="number" min="0.01" max="1000" step="0.01" value={perRequestAiBudget} onChange={(event) => setPerRequestAiBudget(event.target.value)} /></div></div>
+                <div className="rounded-2xl bg-muted p-5 text-sm"><p className="font-medium">Current protected usage</p><p className="mt-2 text-muted-foreground">Spent and reserved this month: ${((aiBudget.data?.spentMicros ?? 0) / 1_000_000).toFixed(4)}</p>{!aiBudget.data?.configured && <p className="mt-2 text-amber-800">The model cost catalog is not configured in this environment; execution remains fail-closed.</p>}</div>
+                <Button onClick={() => updateAiBudget.mutate()} disabled={updateAiBudget.isPending || !Number(monthlyAiBudget) || !Number(perRequestAiBudget) || Number(perRequestAiBudget) > Number(monthlyAiBudget)}>{updateAiBudget.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save AI budget</Button>
+                {updateAiBudget.isSuccess && <p className="text-sm text-emerald-700">AI budget updated for {selectedCompanySummary?.name}.</p>}{updateAiBudget.isError && <p className="text-sm text-destructive">The budget could not be saved. Use positive limits with the per-request limit no greater than the monthly limit.</p>}
+              </div>}
+            </SettingsCard>}
+          </TabsContent>
+
+          <TabsContent value="billing">
+            <SettingsCard>
+              <div className="mb-6 flex items-start gap-3"><CreditCard className="mt-0.5 h-5 w-5 text-primary" /><div><h2 className="text-xl font-semibold">Billing</h2><p className="mt-1 text-sm text-muted-foreground">Subscription status and provider-hosted payment controls.</p></div></div>
+              {billing.isLoading ? <div className="h-36 animate-pulse rounded-xl bg-muted" /> : billing.isError ? <p className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive">Billing status could not be loaded.</p> : !billing.data?.configured ? <div className="rounded-2xl bg-muted p-5"><h3 className="font-semibold">Billing is not available in this environment</h3><p className="mt-2 text-sm text-muted-foreground">No payment will be requested. A verified billing provider and published legal terms are required before checkout can be enabled.</p></div> : billing.data.subscription ? <div className="space-y-5"><div className="rounded-2xl bg-muted p-5"><p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Current plan</p><p className="mt-2 text-xl font-semibold">{titleCase(billing.data.subscription.planKey)}</p><p className="mt-1 text-sm text-muted-foreground">Status: {titleCase(billing.data.subscription.status)}{billing.data.subscription.cancelAtPeriodEnd ? " · Cancels at period end" : ""}</p>{billing.data.subscription.currentPeriodEnd && <p className="mt-1 text-sm text-muted-foreground">Current period ends {new Date(billing.data.subscription.currentPeriodEnd).toLocaleDateString()}.</p>}</div><Button onClick={() => openBillingPortal.mutate()} disabled={openBillingPortal.isPending}>{openBillingPortal.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Manage billing</Button>{openBillingPortal.isError && <p className="text-sm text-destructive">The billing portal could not be opened.</p>}</div> : <div className="space-y-5"><div><Label htmlFor="billing-plan">Plan</Label><Select value={selectedPlan || undefined} onValueChange={setSelectedPlan}><SelectTrigger id="billing-plan" className="mt-2"><SelectValue placeholder="Choose a plan" /></SelectTrigger><SelectContent>{billing.data.availablePlans.map((plan) => <SelectItem key={plan.key} value={plan.key}>{titleCase(plan.key)}</SelectItem>)}</SelectContent></Select></div><div className="flex items-start gap-3 rounded-2xl bg-muted p-5 text-sm text-muted-foreground"><ShieldCheck className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" /><p>Checkout opens on the configured payment provider. EOS never collects raw card details.</p></div><Button onClick={() => startCheckout.mutate()} disabled={!selectedPlan || startCheckout.isPending}>{startCheckout.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Continue to secure checkout</Button>{startCheckout.isError && <p className="text-sm text-destructive">Checkout could not start. Confirm required legal terms are accepted.</p>}</div>}
+            </SettingsCard>
           </TabsContent>
         </Tabs>
-      </div>
+      </main>
     </UniversalLayout>
   );
 }

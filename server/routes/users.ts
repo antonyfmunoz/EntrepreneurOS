@@ -22,13 +22,6 @@ const profileUpdateSchema = z.object({
   fullName: z.string().trim().min(1).max(120).optional(),
 }).strict();
 
-const notificationSchema = z.object({
-  emailNotifications: z.boolean(),
-  pushNotifications: z.boolean(),
-  taskAlerts: z.boolean(),
-  workflowAlerts: z.boolean(),
-});
-
 function publicUser(user: typeof users.$inferSelect) {
   const { password: _password, metadata: _metadata, ...safe } = user;
   let preferences: unknown = {};
@@ -50,16 +43,11 @@ export function registerUserRoutes(app: Express): void {
     }
   });
 
-  app.put("/api/users/me/notifications", async (req, res, next) => {
-    try {
-      const notifications = notificationSchema.parse(req.body);
-      const existing = typeof req.user.preferences === "string" ? JSON.parse(req.user.preferences || "{}") : {};
-      const user = await storage.updateUser(req.user.id, { preferences: { ...existing, notifications } });
-      return res.json({ notifications: (publicUser(user).preferences as Record<string, unknown>).notifications });
-    } catch (error) {
-      if (error instanceof z.ZodError) return res.status(400).json({ code: "invalid_notifications", message: "Check notification preferences." });
-      return next(error);
-    }
+  app.put("/api/users/me/notifications", (_req, res) => {
+    return res.status(410).json({
+      code: "notification_delivery_not_configurable",
+      message: "Delivery preferences are unavailable until EOS has an enforced outbound notification service. In-app notifications remain available from the header.",
+    });
   });
 
   app.get("/api/users/me/analytics-consent", async (req, res, next) => {

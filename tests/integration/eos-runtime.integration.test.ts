@@ -225,7 +225,10 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const profile = await api.get("/api/users/me").expect(200);
     expect(profile.body.password).toBeUndefined();
     await api.put("/api/users/me").send({ fullName: "EOS Qualified Owner" }).expect(200);
-    await api.put("/api/users/me/notifications").send({ emailNotifications: true, pushNotifications: false, taskAlerts: true, workflowAlerts: true }).expect(200);
+    const notificationDelivery = await api.put("/api/users/me/notifications").send({ emailNotifications: true, pushNotifications: false, taskAlerts: true, workflowAlerts: true }).expect(410);
+    expect(notificationDelivery.body.code).toBe("notification_delivery_not_configurable");
+    const autonomy = await api.put(`/api/companies/${companyId}/autonomy`).send({ autonomyLevel: "execute" }).expect(410);
+    expect(autonomy.body.code).toBe("autonomy_not_runtime_enforced");
     const initialConsent = await api.get("/api/users/me/analytics-consent").expect(200);
     expect(initialConsent.body.consent).toBe(null);
     await api.put("/api/users/me/analytics-consent").send({ consent: false }).expect(200);
