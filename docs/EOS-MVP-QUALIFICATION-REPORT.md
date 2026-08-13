@@ -21,6 +21,8 @@ The required overlay MVP is the governed EntrepreneurOS runtime, not the eventua
 
 The current usability increment also replaces the static Portfolio Map with a selectable, visibility-filtered accountability tool. It exposes reporting context, visible direct reports, active seat work, human-agent mode, and real organization, work-room, and assistant actions without expanding the active principal's authority.
 
+Work Room is independently executable for lower seats: visible assigned work can move through start, evidence capture, review, and completion without requiring access to Operations. A disconnected provider does not disable local work and routes the user only to an authorized Systems control or supervisor handoff.
+
 | Gate | Result | Evidence |
 |---|---|---|
 | Static type safety | Pass | `npm run check` |

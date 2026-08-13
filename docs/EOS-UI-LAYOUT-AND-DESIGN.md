@@ -1,7 +1,7 @@
 # EOS UI Layout and Design Contract
 
 **Status:** Canonical implementation contract
-**Version:** 1.6
+**Version:** 1.7
 **Reconciled:** 2026-08-13
 
 ## Source authority
@@ -66,6 +66,8 @@ Action compilation follows the same boundary. A seat with Operations authority m
 Unavailable or dormant surfaces remain visible only when their state is clearly labeled. UI presence must never imply authority, provider connectivity, native ownership, or release maturity.
 
 Portfolio Map is an operating surface, not a decorative org chart. It renders only seats already filtered into the active principal's visibility scope. Selecting a seat reveals its mandate, reporting parent, visible direct reports, current human-agent operating mode, and visible active-work count. Follow-up actions may open the authorized organization or work surface, or ask the active communication agent for a scoped accountability brief; the map never grants cross-seat authority or exposes hidden identities.
+
+Work Room is the primary execution surface for every seat, including roles that cannot create work in Operations. A visible assigned Work Packet can be selected, started or resumed, supplied with its exact required evidence, submitted for review, and completed only after proof exists. Provider actions remain secondary and approval-gated. When a provider is unavailable, the user keeps a complete local work path and receives either an authorized Systems action or a supervisor-handoff action instead of being directed to a hidden surface.
 
 ## Context law
 

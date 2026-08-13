@@ -178,6 +178,16 @@ export default function EosOverlayPage() {
   const selectedMapPackets = selectedMapSeat
     ? activePackets.filter((packet) => packet.accountableSeatId === selectedMapSeat.id)
     : [];
+  const selectedWorkPacket = activePackets.find((packet) => packet.id === providerPacketId) || activePackets[0];
+  const selectedWorkPacketEvidence = selectedWorkPacket
+    ? evidence.filter((item) => item.workPacketId === selectedWorkPacket.id)
+    : [];
+  const selectedWorkRequirements = selectedWorkPacket && Array.isArray(selectedWorkPacket.evidenceRequirements) && selectedWorkPacket.evidenceRequirements.length
+    ? selectedWorkPacket.evidenceRequirements.map(String)
+    : ["A reviewable artifact or observed outcome"];
+  const selectedWorkRecordedTitles = new Set(selectedWorkPacketEvidence.map((item) => String(item.title).trim().toLowerCase()));
+  const selectedWorkMissingRequirements = selectedWorkRequirements.filter((requirement: string) => !selectedWorkRecordedTitles.has(requirement.trim().toLowerCase()));
+  const selectedWorkNextRequirement = selectedWorkMissingRequirements[0];
   const manifestModuleIds = new Set<number>(manifest?.manifest?.enabledModules || eosActiveModules.map((module) => module.id));
   const moduleState = (module: EosActiveModule) => manifestModuleIds.has(module.id) ? `overlay_${module.activation === "active" ? "ready" : "partial"}` : "not_enabled";
   const practiceAction = rolePracticeActionFor(principalContext?.role || "external", activePackets.length > 0);
@@ -212,6 +222,15 @@ export default function EosOverlayPage() {
     if (visibleSeats.some((seat: JsonRecord) => seat.id === selectedMapSeatId)) return;
     setSelectedMapSeatId(organizationQuery.data?.activeSeatId || visibleSeats[0].id);
   }, [organizationQuery.data?.activeSeatId, organizationQuery.data?.seats, selectedMapSeatId]);
+
+  useEffect(() => {
+    if (!activePackets.length) {
+      setProviderPacketId("");
+      return;
+    }
+    if (activePackets.some((packet) => packet.id === providerPacketId)) return;
+    setProviderPacketId(activePackets[0].id);
+  }, [packetsQuery.data, providerPacketId]);
 
   const compilerMutation = useMutation({
     mutationFn: async () => requestJson<JsonRecord>("POST", `${root}/compiler/drafts`, {
@@ -744,7 +763,15 @@ export default function EosOverlayPage() {
 
           <TabsContent value="work-room" className="space-y-6">
             <Card><CardHeader><CardTitle>Active Work Room</CardTitle><CardDescription>Work, provider actions, artifacts, evidence, and blockers stay attached to the governed Work Packet.</CardDescription></CardHeader><CardContent className="space-y-3">{activePackets.map((packet) => <button key={packet.id} type="button" onClick={() => setProviderPacketId(packet.id)} className={`w-full rounded-xl p-4 text-left ${providerPacketId === packet.id ? "bg-primary/10 ring-1 ring-primary/20" : "bg-muted"}`}><div className="flex items-center justify-between gap-3"><span className="font-medium">{packet.title}</span><StateBadge state={packet.status} /></div><p className="mt-1 text-sm text-muted-foreground">{packet.objective}</p></button>)}{!activePackets.length && <p className="text-sm text-muted-foreground">No active Work Packet is available to this seat.</p>}</CardContent></Card>
-            <Card><CardHeader><CardTitle>Approved Gmail delivery</CardTitle><CardDescription>Create a provider effect attached to the selected Work Packet. Delivery occurs only after the assigned supervisor or owner approves it.</CardDescription></CardHeader><CardContent className="grid gap-3"><Input value={emailTo} onChange={(event) => setEmailTo(event.target.value)} type="email" placeholder="Recipient email" /><Input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} placeholder="Subject" /><Textarea value={emailBody} onChange={(event) => setEmailBody(event.target.value)} placeholder="Approved message body" /><Button className="w-fit" disabled={!providerPacketId || !emailTo || !emailSubject || !emailBody || providerExecutionMutation.isPending || !googleConnected} onClick={() => providerExecutionMutation.mutate()}><ExternalLink className="mr-2 h-4 w-4" />Request Gmail execution</Button>{!googleConnected && <p className="text-sm text-muted-foreground">Connect Google Workspace in Systems before requesting delivery.</p>}</CardContent></Card>
+            {selectedWorkPacket && <Card>
+              <CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Selected work</p><CardTitle className="mt-2">{selectedWorkPacket.title}</CardTitle><CardDescription>{selectedWorkPacket.objective}</CardDescription></div><StateBadge state={selectedWorkPacket.status} /></div></CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid gap-3 sm:grid-cols-3"><Fact label="Required proof" value={`${selectedWorkRequirements.length - selectedWorkMissingRequirements.length}/${selectedWorkRequirements.length} recorded`} /><Fact label="Priority" value={selectedWorkPacket.priority} /><Fact label="Authority" value={selectedWorkPacket.requiresApproval ? "Supervisor approval required" : "Delegated to this seat"} /></div>
+                {selectedWorkNextRequirement ? <div className="rounded-xl bg-muted/60 p-4"><p className="eos-label">Required next</p><p className="mt-1 text-sm font-medium">{selectedWorkNextRequirement}</p><div className="mt-3 flex flex-col gap-2 sm:flex-row"><Input aria-label={`Work Room evidence for ${selectedWorkPacket.title}`} value={evidenceDetails[selectedWorkPacket.id] || ""} onChange={(event) => setEvidenceDetails((current) => ({ ...current, [selectedWorkPacket.id]: event.target.value }))} placeholder="Add a proof note or HTTPS link" /><Button variant="secondary" disabled={!evidenceDetails[selectedWorkPacket.id]?.trim() || evidenceMutation.isPending} onClick={() => evidenceMutation.mutate({ packetId: selectedWorkPacket.id, requirement: selectedWorkNextRequirement, details: evidenceDetails[selectedWorkPacket.id] })}>{evidenceMutation.isPending ? "Recording…" : "Record required evidence"}</Button></div></div> : <div className="flex items-center gap-2 rounded-xl bg-primary/10 p-4 text-sm font-medium text-primary"><BadgeCheck className="h-4 w-4" />All required evidence is recorded. Submit or complete the work when ready.</div>}
+                <div className="flex flex-wrap gap-2">{nextTransition(selectedWorkPacket.status) && <Button disabled={transitionMutation.isPending || (nextTransition(selectedWorkPacket.status) === "completed" && selectedWorkMissingRequirements.length > 0)} onClick={() => transitionMutation.mutate({ id: selectedWorkPacket.id, status: nextTransition(selectedWorkPacket.status)! })}>{nextTransition(selectedWorkPacket.status) === "in_progress" ? "Start / resume work" : nextTransition(selectedWorkPacket.status) === "in_review" ? "Submit work for review" : "Complete work"}</Button>}<Button variant="outline" onClick={() => sendEaMessage(`Help me advance the ${selectedWorkPacket.title} Work Packet. Identify the next action and evidence inside my authority and reporting path.`)}><MessagesSquare className="mr-2 h-4 w-4" />Ask {assistantName} about this work</Button></div>
+              </CardContent>
+            </Card>}
+            {selectedWorkPacket && <Card><CardHeader><CardTitle>Approved Gmail delivery</CardTitle><CardDescription>Create a provider effect attached to {selectedWorkPacket.title}. Delivery occurs only after the assigned supervisor or owner approves it.</CardDescription></CardHeader><CardContent className="grid gap-3"><Input value={emailTo} onChange={(event) => setEmailTo(event.target.value)} type="email" placeholder="Recipient email" disabled={!googleConnected} /><Input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} placeholder="Subject" disabled={!googleConnected} /><Textarea value={emailBody} onChange={(event) => setEmailBody(event.target.value)} placeholder="Approved message body" disabled={!googleConnected} /><Button className="w-fit" disabled={!emailTo || !emailSubject || !emailBody || providerExecutionMutation.isPending || !googleConnected} onClick={() => providerExecutionMutation.mutate()}><ExternalLink className="mr-2 h-4 w-4" />Request Gmail execution</Button>{!googleConnected && <div className="flex flex-col items-start gap-3 rounded-xl bg-muted p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">Google Workspace is not connected for this user. Local work and evidence remain available.</p>{allowedSurfaces.has("systems") ? <Button size="sm" variant="outline" onClick={() => goToSurface("systems")}><Plug className="mr-2 h-4 w-4" />Open Systems</Button> : <Button size="sm" variant="outline" onClick={() => sendEaMessage("Ask my supervisor or system owner to connect Google Workspace, and give me a local handoff I can use meanwhile.")}><MessagesSquare className="mr-2 h-4 w-4" />Request a supervisor handoff</Button>}</div>}</CardContent></Card>}
             {googleContextQuery.data && <div className="grid gap-4 lg:grid-cols-2"><ListCard title="Upcoming Calendar context" empty="No upcoming events returned." items={(googleContextQuery.data.calendar || []).map((item: JsonRecord) => ({ ...item, title: item.summary, objective: item.start || "Date unavailable", status: "provider" }))} /><ListCard title="Recent Drive context" empty="No recent files returned." items={(googleContextQuery.data.drive || []).map((item: JsonRecord) => ({ ...item, title: item.name, objective: item.modifiedTime || "Timestamp unavailable", status: "provider" }))} /></div>}
           </TabsContent>
 
