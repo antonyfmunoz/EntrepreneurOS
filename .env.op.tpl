@@ -22,7 +22,9 @@ GOOGLE_CLIENT_ID=op://UMH-Production/Google-Workspace-OAuth/client_id
 GOOGLE_CLIENT_SECRET=op://UMH-Production/Google-Workspace-OAuth/client_secret
 GOOGLE_WORKSPACE_REFRESH_TOKEN=op://UMH-Production/Google-Workspace-OAuth/refresh_token
 GOOGLE_REDIRECT_URI=https://entrepreneuros.net/api/auth/google/callback
-NOTION_API_KEY=op://UMH-Production/Notion-Integration/api_key
+NOTION_CLIENT_ID=op://EntrepreneurOS/Development/NOTION_CLIENT_ID
+NOTION_CLIENT_SECRET=op://EntrepreneurOS/Development/NOTION_CLIENT_SECRET
+NOTION_REDIRECT_URI=https://entrepreneuros.net/api/auth/notion/callback
 # Projection-owned UMH federation. Leave UMH_FEDERATION_ENABLED false until a
 # local installation row and the corresponding UMH public signing key exist.
 UMH_FEDERATION_ENABLED=false

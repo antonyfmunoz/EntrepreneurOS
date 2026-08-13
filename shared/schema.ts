@@ -604,9 +604,12 @@ export const oauthTokens = pgTable("oauth_tokens", {
   tokenType: text("token_type"),
   expiresAt: timestamp("expires_at"),
   scope: text("scope"),
+  metadata: jsonb("metadata").notNull().default({}),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  userProvider: uniqueIndex("oauth_tokens_user_provider_idx").on(table.userId, table.provider),
+}));
 
 export const insertOauthTokenSchema = z.object({
   userId: z.string(),
@@ -616,6 +619,7 @@ export const insertOauthTokenSchema = z.object({
   tokenType: z.string().optional(),
   expiresAt: z.date().optional(),
   scope: z.string().optional(),
+  metadata: z.record(z.unknown()).optional(),
 });
 
 export type InsertOauthToken = z.infer<typeof insertOauthTokenSchema>;

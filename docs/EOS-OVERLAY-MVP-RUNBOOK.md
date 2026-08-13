@@ -45,7 +45,7 @@ Required for normal hosted operation:
 
 `GET /api/ready` returns 200 only when the database is reachable and hosted required configuration is present. `GET /api/health` is a liveness check and does not establish release readiness.
 
-Optional Gmail:
+Public Google Workspace OAuth:
 
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
@@ -53,9 +53,14 @@ Optional Gmail:
 
 The Google authorization request includes Gmail send, Calendar read-only, and Drive metadata read-only. Existing grants must reconnect after a scope expansion; a configured refresh token is not proof that all three services are authorized.
 
-Optional Notion:
+Public Notion OAuth:
 
-- `NOTION_API_TOKEN`
+- `NOTION_CLIENT_ID`
+- `NOTION_CLIENT_SECRET`
+- `NOTION_REDIRECT_URI`
+
+Notion credentials are stored per EOS user after authorization. A shared
+deployment API token must not be used for tenant workspace access.
 
 Optional intelligence and product analytics:
 

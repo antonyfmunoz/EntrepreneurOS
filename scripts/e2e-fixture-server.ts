@@ -8,14 +8,42 @@
  */
 import express from "express";
 import { eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { registerRoutes } from "../server/routes";
 import { client, db } from "../server/db";
-import { companies, portfolios, users } from "../shared/schema";
+import { companies, oauthTokens, portfolios, users } from "../shared/schema";
 import { resetInMemoryRateLimitsForFixture } from "../server/middleware/rate-limit";
+import { encryptCredential } from "../server/security/credential-encryption";
 
 if (process.env.NODE_ENV !== "test" || process.env.EOS_E2E_FIXTURE !== "true") {
   throw new Error("The EOS browser fixture only runs with NODE_ENV=test and EOS_E2E_FIXTURE=true.");
 }
+
+process.env.SESSION_SECRET = "browser-fixture-session-secret-at-least-thirty-two-characters";
+process.env.EOS_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 23).toString("base64");
+process.env.NOTION_CLIENT_ID = "browser-fixture-notion-client";
+process.env.NOTION_CLIENT_SECRET = "browser-fixture-notion-secret";
+process.env.NOTION_REDIRECT_URI = "https://entrepreneuros.net/api/auth/notion/callback";
+
+const networkFetch = globalThis.fetch.bind(globalThis);
+globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+  const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+  if (url === "https://api.notion.com/v1/users/me") {
+    return new Response(JSON.stringify({ object: "user", id: "browser-fixture-notion-bot", type: "bot", name: "EntrepreneurOS" }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  if (url === "https://api.notion.com/v1/search") {
+    const body = typeof init?.body === "string" ? JSON.parse(init.body) as { query?: string } : {};
+    const query = body.query?.trim() || "Latest";
+    return new Response(JSON.stringify({ results: [{
+      id: `browser-notion-${query.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      object: "page",
+      properties: { title: { title: [{ plain_text: `${query} operating plan` }] } },
+      url: "https://www.notion.so/browser-fixture-operating-plan",
+      last_edited_time: "2026-08-13T12:00:00.000Z",
+    }] }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  return networkFetch(input, init);
+};
 
 const ownerId = "eos_browser_acceptance_owner";
 await db.insert(users).values({
@@ -25,6 +53,24 @@ await db.insert(users).values({
   email: "browser-owner@example.test",
   fullName: "EOS Browser Owner",
 }).onConflictDoNothing();
+
+await db.insert(oauthTokens).values({
+  id: randomUUID(),
+  userId: ownerId,
+  provider: "notion",
+  accessToken: encryptCredential("browser-fixture-notion-access"),
+  refreshToken: encryptCredential("browser-fixture-notion-refresh"),
+  tokenType: "bearer",
+  metadata: { workspaceId: "browser-fixture-workspace", workspaceName: "EOS Acceptance Workspace" },
+}).onConflictDoUpdate({
+  target: [oauthTokens.userId, oauthTokens.provider],
+  set: {
+    accessToken: encryptCredential("browser-fixture-notion-access"),
+    refreshToken: encryptCredential("browser-fixture-notion-refresh"),
+    metadata: { workspaceId: "browser-fixture-workspace", workspaceName: "EOS Acceptance Workspace" },
+    updatedAt: new Date(),
+  },
+});
 
 let portfolio = await db.query.portfolios.findFirst({ where: eq(portfolios.ownerId, ownerId) });
 if (!portfolio) {

@@ -102,6 +102,8 @@ export default function EosOverlayPage() {
   const [monthlyAiBudget, setMonthlyAiBudget] = useState("25");
   const [perRequestAiBudget, setPerRequestAiBudget] = useState("1");
   const [aiBudgetEnabled, setAiBudgetEnabled] = useState(true);
+  const [notionSearchDraft, setNotionSearchDraft] = useState("");
+  const [notionSearch, setNotionSearch] = useState("");
   useEffect(() => {
     const syncHash = () => {
       const requested = window.location.hash.slice(1);
@@ -136,7 +138,7 @@ export default function EosOverlayPage() {
   const googleConnected = Boolean(integrationsQuery.data?.find((item) => item.id === "google_workspace")?.connected);
   const notionConnected = Boolean(integrationsQuery.data?.find((item) => item.id === "notion")?.connected);
   const googleContextQuery = useQuery<JsonRecord>({ queryKey: [root, "google-context"], queryFn: () => requestJson("GET", `${root}/integrations/google/context`), enabled: Boolean(companyId && googleConnected && ["home", "work-room", "systems"].includes(activeTab)) });
-  const notionContextQuery = useQuery<JsonRecord>({ queryKey: [root, "notion-context"], queryFn: () => requestJson("GET", `${root}/integrations/notion/context`), enabled: Boolean(companyId && notionConnected && (contextQuery.data?.principalContext?.allowedSurfaces || []).includes("systems") && ["home", "organization", "academy", "systems"].includes(activeTab)) });
+  const notionContextQuery = useQuery<JsonRecord>({ queryKey: [root, "notion-context", notionSearch], queryFn: () => requestJson("GET", `${root}/integrations/notion/context?q=${encodeURIComponent(notionSearch)}`), enabled: Boolean(companyId && notionConnected && (contextQuery.data?.principalContext?.allowedSurfaces || []).includes("systems") && ["home", "organization", "academy", "systems"].includes(activeTab)) });
 
   const refresh = async () => {
     setIsRefreshing(true);
@@ -342,33 +344,45 @@ export default function EosOverlayPage() {
     onError: (error) => showMutationError("Evidence recording", error),
   });
 
-  const googleConnectMutation = useMutation({
-    mutationFn: () => requestJson<{ authUrl: string }>("GET", `/api/integrations/gmail/auth?returnTo=${encodeURIComponent(`/company/${companyId}#systems`)}`),
+  const connectIntegrationMutation = useMutation({
+    mutationFn: (integration: JsonRecord) => {
+      const provider = integration.id === "google_workspace" ? "gmail" : integration.id;
+      return requestJson<{ authUrl: string }>("GET", `/api/integrations/${provider}/auth?returnTo=${encodeURIComponent(`/company/${companyId}#systems`)}`);
+    },
     onSuccess: ({ authUrl }) => window.location.assign(authUrl),
-    onError: (error) => showMutationError("Google Workspace connection", error),
+    onError: (error, integration) => showMutationError(`${integration.name} connection`, error),
   });
 
-  const googleDisconnectMutation = useMutation({
-    mutationFn: () => requestJson("POST", "/api/integrations/gmail/disconnect", {}),
-    onSuccess: async () => {
-      await integrationsQuery.refetch();
-      toast({ title: "Google Workspace disconnected", description: "The encrypted OAuth credential was removed from EntrepreneurOS." });
+  const disconnectIntegrationMutation = useMutation({
+    mutationFn: (integration: JsonRecord) => {
+      const provider = integration.id === "google_workspace" ? "gmail" : integration.id;
+      return requestJson<{ providerRevoked?: boolean }>("POST", `/api/integrations/${provider}/disconnect`, {});
     },
-    onError: (error) => showMutationError("Google Workspace disconnection", error),
+    onSuccess: async (result, integration) => {
+      await integrationsQuery.refetch();
+      toast({
+        title: `${integration.name} disconnected`,
+        description: result.providerRevoked === false
+          ? "The local encrypted credential was removed. Provider revocation could not be confirmed; revoke EntrepreneurOS in the provider security settings."
+          : "The provider authorization and local encrypted credential were removed.",
+      });
+    },
+    onError: (error, integration) => showMutationError(`${integration.name} disconnection`, error),
   });
 
   const verifyIntegrationMutation = useMutation({
-    mutationFn: async (name: string) => {
-      const result = await integrationsQuery.refetch();
-      const integration = result.data?.find((item) => item.name === name);
-      if (!integration?.connected) throw new Error(`${name} did not pass its provider health check.`);
+    mutationFn: async (integration: JsonRecord) => {
+      const provider = integration.id === "google_workspace" ? "gmail" : integration.id;
+      const status = await requestJson<JsonRecord>("GET", `/api/integrations/${provider}/status?verify=true`);
+      if (!status.connected || !status.healthy) throw new Error(`${integration.name} did not pass its provider health check.`);
+      await integrationsQuery.refetch();
       return integration;
     },
     onSuccess: (integration) => toast({
       title: `${integration.name} verified`,
       description: "EntrepreneurOS reached the external provider using its configured adapter.",
     }),
-    onError: (error, name) => showMutationError(`${name} verification`, error),
+    onError: (error, integration) => showMutationError(`${integration.name} verification`, error),
   });
 
   const eaMessageMutation = useMutation({
@@ -792,7 +806,7 @@ export default function EosOverlayPage() {
 
           <TabsContent value="academy" className="space-y-6">
             <Card><CardHeader><CardTitle>Seat Academy</CardTitle><CardDescription>Practice inside real work, then prove advancement with reviewed evidence.</CardDescription></CardHeader><CardContent className="space-y-5"><Fact label="Current learning objective" value={`Operate the ${principalContext?.seat || "active seat"} within its authority ceiling`} /><Fact label="Practical exercise" value={activePackets[0]?.title || (practiceAction === "prepare_work" ? "Create the first evidence-bearing Work Packet" : "Request a supervisor-approved practice assignment")} /><Fact label="Advancement proof" value="Reviewed output, named evidence, and supervisor acceptance" /><div className="flex flex-wrap gap-2"><Button onClick={startRolePractice} disabled={requestScopedWorkMutation.isPending}><BookOpen className="mr-2 h-4 w-4" />{practiceAction === "prepare_work" ? "Start practical exercise" : practiceAction === "open_assigned_work" ? "Open practical work" : requestScopedWorkMutation.isPending ? "Requesting…" : "Request practice assignment"}</Button><Button variant="outline" onClick={() => sendEaMessage(`Coach me on the next practical skill for the ${principalContext?.seat || "active role"}. Ground it in current work and define the evidence required.`)}><MessagesSquare className="mr-2 h-4 w-4" />Ask role coach</Button></div></CardContent></Card>
-            {notionContextQuery.data && <ListCard title="Canonical Notion references" empty="No shared Notion pages were returned." items={(notionContextQuery.data.results || []).map((item: JsonRecord) => ({ ...item, title: item.title, objective: item.lastEditedTime ? `Updated ${new Date(item.lastEditedTime).toLocaleString()}` : "Reference", status: "reference" }))} />}
+            {notionContextQuery.data && <ListCard title="Canonical Notion references" empty="No shared Notion pages were returned." actionLabel="Open in Notion" onSelect={(item) => item.url && window.open(item.url, "_blank", "noopener,noreferrer")} items={(notionContextQuery.data.results || []).map((item: JsonRecord) => ({ ...item, title: item.title, objective: item.lastEditedTime ? `Updated ${new Date(item.lastEditedTime).toLocaleString()}` : "Reference", status: "reference" }))} />}
           </TabsContent>
 
           <TabsContent value="portfolio-map" className="space-y-6">
@@ -851,12 +865,28 @@ export default function EosOverlayPage() {
               <IntegrationControlCard
                 key={integration.id}
                 integration={integration}
-                pending={googleConnectMutation.isPending || googleDisconnectMutation.isPending || verifyIntegrationMutation.isPending}
-                onConnect={() => googleConnectMutation.mutate()}
-                onDisconnect={() => googleDisconnectMutation.mutate()}
-                onVerify={() => verifyIntegrationMutation.mutate(integration.name)}
+                pending={connectIntegrationMutation.isPending || disconnectIntegrationMutation.isPending || verifyIntegrationMutation.isPending}
+                onConnect={() => connectIntegrationMutation.mutate(integration)}
+                onDisconnect={() => disconnectIntegrationMutation.mutate(integration)}
+                onVerify={() => verifyIntegrationMutation.mutate(integration)}
               />
             ))}
+            {notionConnected && <Card>
+              <CardHeader><CardTitle>Search connected Notion</CardTitle><CardDescription>Find operating context in pages explicitly shared with the workspace connection.</CardDescription></CardHeader>
+              <CardContent className="space-y-4">
+                <form className="flex flex-col gap-2 sm:flex-row" onSubmit={(event) => {
+                  event.preventDefault();
+                  const next = notionSearchDraft.trim();
+                  if (next === notionSearch) void notionContextQuery.refetch();
+                  else setNotionSearch(next);
+                }}>
+                  <Input value={notionSearchDraft} onChange={(event) => setNotionSearchDraft(event.target.value)} maxLength={200} placeholder="Search shared pages and data sources" aria-label="Search connected Notion workspace" />
+                  <Button type="submit" variant="secondary" disabled={notionContextQuery.isFetching}><RefreshCw className={`mr-2 h-4 w-4 ${notionContextQuery.isFetching ? "animate-spin" : ""}`} />{notionSearch ? "Search again" : "Load workspace"}</Button>
+                </form>
+                {notionContextQuery.isError && <Alert variant="destructive"><AlertTitle>Notion search unavailable</AlertTitle><AlertDescription>Verify the connection or open Notion directly. No cached result is represented as current.</AlertDescription></Alert>}
+                {notionContextQuery.data && <ListCard title={notionSearch ? `Results for “${notionSearch}”` : "Recently updated Notion references"} empty="No shared Notion pages matched." actionLabel="Open in Notion" onSelect={(item) => item.url && window.open(item.url, "_blank", "noopener,noreferrer")} items={(notionContextQuery.data.results || []).map((item: JsonRecord) => ({ ...item, title: item.title, objective: item.lastEditedTime ? `Updated ${new Date(item.lastEditedTime).toLocaleString()}` : "Reference", status: "reference" }))} />}
+              </CardContent>
+            </Card>}
             {!integrationsQuery.isLoading && !integrationsQuery.data?.length && <EmptyState icon={Blocks} title="Integration state unavailable" description="Refresh the workspace to reload provider configuration and health." />}
             {isFounder && <Card><CardHeader><CardTitle>AI spend controls</CardTitle><CardDescription>Set enforceable limits for advisor, EA, and role-agent model usage.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><label htmlFor="monthly-ai-budget" className="eos-label">Monthly limit (USD)</label><Input id="monthly-ai-budget" type="number" min="1" max="10000" step="1" value={monthlyAiBudget} onChange={(event) => setMonthlyAiBudget(event.target.value)} className="mt-2" /></div><div><label htmlFor="request-ai-budget" className="eos-label">Per-request limit (USD)</label><Input id="request-ai-budget" type="number" min="0.01" max="1000" step="0.01" value={perRequestAiBudget} onChange={(event) => setPerRequestAiBudget(event.target.value)} className="mt-2" /></div></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={aiBudgetEnabled} onChange={(event) => setAiBudgetEnabled(event.target.checked)} />Enforce AI spend controls</label><div className="flex flex-wrap items-center gap-3"><Button disabled={aiBudgetMutation.isPending || !Number(monthlyAiBudget) || !Number(perRequestAiBudget) || Number(perRequestAiBudget) > Number(monthlyAiBudget)} onClick={() => aiBudgetMutation.mutate()}>{aiBudgetMutation.isPending ? "Saving…" : "Save spend controls"}</Button>{aiBudgetQuery.data && <span className="text-sm text-muted-foreground">Spent this month: ${((aiBudgetQuery.data.spentMicros || 0) / 1_000_000).toFixed(2)}</span>}</div></CardContent></Card>}
             <Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Standalone-safe operation</AlertTitle><AlertDescription>EOS keeps manifests, work, approvals, audit, and evidence available when Universal Meta Harness or providers are offline.</AlertDescription></Alert>
@@ -939,6 +969,7 @@ function IntegrationControlCard({
         </div>
 
         {integration.serviceHealth && <div><p className="eos-label mb-2">Live service health</p><div className="flex flex-wrap gap-2">{Object.entries(integration.serviceHealth).map(([service, healthy]) => <Badge key={service} variant={healthy ? "default" : "outline"}>{service}: {healthy ? "reachable" : "unavailable"}</Badge>)}</div></div>}
+        {integration.workspace?.workspaceName && <div className="rounded-xl border border-border/70 p-4"><p className="eos-label">Authorized workspace</p><p className="mt-1 font-medium">{integration.workspace.workspaceName}</p><p className="mt-1 text-xs text-muted-foreground">Only content shared with this Notion connection is visible to EOS.</p></div>}
 
         <details className="rounded-xl border border-border/70 bg-muted/25 p-4">
           <summary className="cursor-pointer font-medium">Capabilities and required access</summary>
@@ -951,7 +982,7 @@ function IntegrationControlCard({
         <div className="rounded-xl bg-muted p-4 text-sm"><span className="font-medium">Manual fallback:</span> <span className="text-muted-foreground">{integration.manualFallback}</span></div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-          {(actions.has("connect") || actions.has("reconnect")) && <Button onClick={onConnect} disabled={pending}><Plug className="mr-2 h-4 w-4" />{actions.has("reconnect") ? "Reconnect Google" : "Connect Google"}</Button>}
+          {(actions.has("connect") || actions.has("reconnect")) && <Button onClick={onConnect} disabled={pending}><Plug className="mr-2 h-4 w-4" />{actions.has("reconnect") ? `Reconnect ${integration.name}` : `Connect ${integration.name}`}</Button>}
           {actions.has("verify") && <Button variant="outline" onClick={onVerify} disabled={pending}><RefreshCw className={`mr-2 h-4 w-4 ${pending ? "animate-spin" : ""}`} />Verify connection</Button>}
           {actions.has("disconnect") && <Button variant="outline" onClick={onDisconnect} disabled={pending}><Unplug className="mr-2 h-4 w-4" />Disconnect</Button>}
           {actions.has("view_manifest") && <Button asChild variant="outline"><a href={integration.capabilityManifest} target="_blank" rel="noreferrer"><ExternalLink className="mr-2 h-4 w-4" />View capability manifest</a></Button>}

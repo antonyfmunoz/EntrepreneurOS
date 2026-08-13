@@ -61,6 +61,8 @@ export function productionRuntimeConfiguration(env: ReleaseEnvironment = process
     clerkSecretProduction: Boolean(env.CLERK_SECRET_KEY?.startsWith("sk_live_")),
     sessionSecretStrong: Boolean(env.SESSION_SECRET && env.SESSION_SECRET.length >= 32),
     credentialEncryptionConfigured: isEncryptionKey(env.EOS_CREDENTIAL_ENCRYPTION_KEY),
+    googleOAuthConfigured: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && isHttpsWebhook(env.GOOGLE_REDIRECT_URI)),
+    notionOAuthConfigured: Boolean(env.NOTION_CLIENT_ID && env.NOTION_CLIENT_SECRET && isHttpsWebhook(env.NOTION_REDIRECT_URI)),
     publicOriginHttps: isHttpsOrigin(env.EOS_PUBLIC_ORIGIN),
     operationalAlertsConfigured: isHttpsWebhook(env.EOS_ALERT_WEBHOOK_URL) && Boolean(env.EOS_ALERT_WEBHOOK_SECRET && env.EOS_ALERT_WEBHOOK_SECRET.length >= 32),
     accountDeletionEnabled: env.EOS_ACCOUNT_DELETION_ENABLED === "true",
