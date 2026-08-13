@@ -59,13 +59,15 @@ export default function PortfolioDetailPage() {
       <section className="space-y-8 pb-12">
         <div>
           <Link href="/portfolios"><a className="inline-flex items-center text-sm font-medium text-primary hover:text-[#5a2dc0]"><ArrowLeft className="mr-1.5 h-4 w-4" />All portfolios</a></Link>
-          <div className="mt-6 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-            <div className="max-w-2xl">
-              <p className="eos-label flex items-center gap-2"><LayoutGrid className="h-4 w-4 text-primary" />Portfolio context</p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">{portfolio.name}</h1>
-              <p className="mt-3 text-sm text-muted-foreground sm:text-base">{portfolio.description || "Select an organization to enter its EntrepreneurOS operating workspace."}</p>
+          <div className="mt-6">
+            <p className="eos-label flex items-center gap-2"><LayoutGrid className="h-4 w-4 text-primary" />Portfolio context</p>
+            <div className="mt-3 flex items-start justify-between gap-4">
+              <div className="min-w-0 max-w-2xl">
+                <h1 className="text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">{portfolio.name}</h1>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground sm:text-base">{portfolio.description || "Open an organization or add the next one."}</p>
+              </div>
+              <Button asChild size="icon" className="h-11 w-11 flex-shrink-0 rounded-xl"><Link href={`/company-setup?portfolioId=${portfolio.id}`} aria-label="Add organization" title="Add organization"><Plus className="h-4 w-4" /></Link></Button>
             </div>
-            <Link href={`/company-setup?portfolioId=${portfolio.id}`}><a><Button className="w-full sm:w-auto"><Plus className="mr-2 h-4 w-4" />Add organization</Button></a></Link>
           </div>
         </div>
 

@@ -48,15 +48,17 @@ export default function PortfolioListPage() {
   return (
     <UniversalLayout title="Portfolio" floatingPanel={false}>
       <section className="space-y-8 pb-12">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div className="max-w-2xl">
-            <p className="eos-label flex items-center gap-2"><LayoutGrid className="h-4 w-4 text-primary" />Founder workspace</p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">Your portfolio</h1>
-            <p className="mt-3 text-sm text-muted-foreground sm:text-base">Choose an organization context or create the portfolio that will contain your first company.</p>
+        <div>
+          <p className="eos-label flex items-center gap-2"><LayoutGrid className="h-4 w-4 text-primary" />Founder workspace</p>
+          <div className="mt-3 flex items-start justify-between gap-4">
+            <div className="min-w-0 max-w-2xl">
+              <h1 className="text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">Your portfolio</h1>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground sm:text-base">Choose a portfolio or create the next one.</p>
+            </div>
+            <Button size="icon" className="h-11 w-11 flex-shrink-0 rounded-xl" onClick={() => setIsCreateOpen(true)} aria-label="Create portfolio" title="Create portfolio">
+              <Plus className="h-4 w-4" />
+            </Button>
           </div>
-          <Button className="w-full sm:w-auto" onClick={() => setIsCreateOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />Create portfolio
-          </Button>
         </div>
 
         {portfolios.length === 0 ? (
