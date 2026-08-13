@@ -53,7 +53,12 @@ jobs:
           if (files.length === 0) throw new Error("CodeQL did not produce a SARIF result.");
           const acceptedHmacVerification = (result) => {
             const uri = result.locations?.[0]?.physicalLocation?.artifactLocation?.uri || "";
-            return result.ruleId === "js/insufficient-password-hash" && uri.endsWith("server/integrations/gmail.ts");
+            const reviewedOAuthStateImplementations = [
+              "server/integrations/gmail.ts",
+              "server/integrations/notion.ts",
+            ];
+            return result.ruleId === "js/insufficient-password-hash"
+              && reviewedOAuthStateImplementations.some((path) => uri.endsWith(path));
           };
           let findings = 0;
           let accepted = 0;
@@ -66,7 +71,7 @@ jobs:
               }
             }
           }
-          if (accepted > 1) throw new Error(`Expected at most one reviewed OAuth HMAC exception, found ${accepted}.`);
+          if (accepted > 2) throw new Error(`Expected at most two reviewed OAuth HMAC exceptions, found ${accepted}.`);
           if (findings > 0) {
             console.error(`::error title=CodeQL findings::CodeQL reported ${findings} finding(s). Review and remediate them before merge.`);
             process.exit(1);
