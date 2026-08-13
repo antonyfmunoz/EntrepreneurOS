@@ -187,6 +187,20 @@ export const supportTickets = pgTable("support_tickets", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const supportTicketMessages = pgTable("support_ticket_messages", {
+  id: text("id").primaryKey(),
+  ticketId: text("ticket_id").notNull().references(() => supportTickets.id, { onDelete: "cascade" }),
+  authorUserId: text("author_user_id").references(() => users.id, { onDelete: "set null" }),
+  authorKind: text("author_kind").notNull(),
+  body: text("body").notNull(),
+  requestId: text("request_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("support_ticket_messages_ticket_created_idx").on(table.ticketId, table.createdAt),
+  check("support_ticket_messages_author_kind_check", sql`${table.authorKind} IN ('customer', 'support')`),
+  check("support_ticket_messages_body_length_check", sql`char_length(${table.body}) BETWEEN 1 AND 10000`),
+]);
+
 export const createSupportTicketSchema = z.object({
   category: z.enum(["account", "technical", "integration", "feedback", "security", "other"]),
   subject: z.string().trim().min(3).max(160),
@@ -194,6 +208,7 @@ export const createSupportTicketSchema = z.object({
 });
 
 export type SupportTicket = typeof supportTickets.$inferSelect;
+export type SupportTicketMessage = typeof supportTicketMessages.$inferSelect;
 export type CreateSupportTicket = z.infer<typeof createSupportTicketSchema>;
 
 export const billingSubscriptions = pgTable("billing_subscriptions", {

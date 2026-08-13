@@ -9,6 +9,7 @@ import {
   eosMemberships,
   oauthTokens,
   portfolios,
+  supportTicketMessages,
   supportTickets,
   users,
 } from "@shared/schema";
@@ -79,20 +80,21 @@ export function registerUserRoutes(app: Express): void {
   app.get("/api/users/me/export", async (req, res, next) => {
     try {
       const userId = req.user.id;
-      const [ownedPortfolios, ownedCompanies, memberships, sentMessages, audit, tickets, subscription, providers] = await Promise.all([
+      const [ownedPortfolios, ownedCompanies, memberships, sentMessages, audit, tickets, supportConversation, subscription, providers] = await Promise.all([
         db.select().from(portfolios).where(eq(portfolios.ownerId, userId)),
         db.select().from(companies).where(eq(companies.ownerUserId, userId)),
         db.select().from(eosMemberships).where(eq(eosMemberships.userId, userId)),
         db.select().from(eosCommunicationMessages).where(eq(eosCommunicationMessages.senderUserId, userId)).orderBy(desc(eosCommunicationMessages.createdAt)),
         db.select().from(eosAuditRecords).where(eq(eosAuditRecords.actorUserId, userId)).orderBy(desc(eosAuditRecords.createdAt)),
         db.select().from(supportTickets).where(eq(supportTickets.userId, userId)).orderBy(desc(supportTickets.createdAt)),
+        db.select({ id: supportTicketMessages.id, ticketId: supportTicketMessages.ticketId, authorKind: supportTicketMessages.authorKind, body: supportTicketMessages.body, createdAt: supportTicketMessages.createdAt }).from(supportTicketMessages).innerJoin(supportTickets, eq(supportTickets.id, supportTicketMessages.ticketId)).where(eq(supportTickets.userId, userId)).orderBy(desc(supportTicketMessages.createdAt)),
         db.select({ planKey: billingSubscriptions.planKey, status: billingSubscriptions.status, entitlements: billingSubscriptions.entitlements, currentPeriodEnd: billingSubscriptions.currentPeriodEnd }).from(billingSubscriptions).where(eq(billingSubscriptions.userId, userId)).limit(1),
         db.select({ provider: oauthTokens.provider, scope: oauthTokens.scope, expiresAt: oauthTokens.expiresAt, createdAt: oauthTokens.createdAt, updatedAt: oauthTokens.updatedAt }).from(oauthTokens).where(eq(oauthTokens.userId, userId)),
       ]);
       const exportedAt = new Date().toISOString();
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       res.setHeader("Content-Disposition", `attachment; filename="entrepreneuros-account-export-${exportedAt.slice(0, 10)}.json"`);
-      return res.json({ format: "entrepreneuros.account-export.v1", exportedAt, account: publicUser(req.user), ownedPortfolios, ownedCompanies, memberships, sentMessages, auditRecords: audit, supportTickets: tickets, billing: subscription[0] || null, connectedProviders: providers });
+      return res.json({ format: "entrepreneuros.account-export.v1", exportedAt, account: publicUser(req.user), ownedPortfolios, ownedCompanies, memberships, sentMessages, auditRecords: audit, supportTickets: tickets, supportConversation, billing: subscription[0] || null, connectedProviders: providers });
     } catch (error) { return next(error); }
   });
 
