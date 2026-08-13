@@ -1475,25 +1475,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertOauthToken(token: InsertOauthToken): Promise<OauthToken> {
-    const existing = await this.getOauthToken(token.userId, token.provider);
-    if (existing) {
-      const [updated] = await db.update(oauthTokensTable)
-        .set({
-          accessToken: token.accessToken,
-          refreshToken: token.refreshToken || existing.refreshToken,
-          tokenType: token.tokenType || existing.tokenType,
-          expiresAt: token.expiresAt || existing.expiresAt,
-          scope: token.scope || existing.scope,
-          updatedAt: new Date(),
-        })
-        .where(eq(oauthTokensTable.id, existing.id))
-        .returning();
-      return updated;
-    }
-    const id = `oauth_${Date.now()}`;
-    const [newToken] = await db.insert(oauthTokensTable)
+    const [storedToken] = await db.insert(oauthTokensTable)
       .values({
-        id,
+        id: randomUUID(),
         userId: token.userId,
         provider: token.provider,
         accessToken: token.accessToken,
@@ -1501,11 +1485,24 @@ export class DatabaseStorage implements IStorage {
         tokenType: token.tokenType || "Bearer",
         expiresAt: token.expiresAt || null,
         scope: token.scope || null,
+        metadata: token.metadata || {},
         createdAt: new Date(),
         updatedAt: new Date(),
       })
+      .onConflictDoUpdate({
+        target: [oauthTokensTable.userId, oauthTokensTable.provider],
+        set: {
+          accessToken: token.accessToken,
+          refreshToken: token.refreshToken ?? undefined,
+          tokenType: token.tokenType || "Bearer",
+          expiresAt: token.expiresAt ?? null,
+          scope: token.scope ?? null,
+          metadata: token.metadata || {},
+          updatedAt: new Date(),
+        },
+      })
       .returning();
-    return newToken;
+    return storedToken;
   }
 
   async deleteOauthToken(userId: string, provider: string): Promise<void> {

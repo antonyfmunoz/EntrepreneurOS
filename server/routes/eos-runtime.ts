@@ -866,7 +866,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
     await ownedCompany(req);
     const [googleWorkspace, notionConnection] = await Promise.all([
       gmail.verifyConnection(req.user.id),
-      notion.verifyConnection(),
+      notion.verifyConnection(req.user.id),
     ]);
     const umhConfigured = federationConfigured();
     return { body: [
@@ -894,19 +894,21 @@ export function registerEosRuntimeRoutes(app: Express): void {
         id: "notion",
         name: "Notion",
         description: "Current product intent and canonical operating context.",
-        state: notionConnection.connected ? "connected" : notionConnection.configured ? "degraded" : "not_configured",
-        health: notionConnection.healthy ? "healthy" : notionConnection.configured ? "unhealthy" : "not_configured",
+        state: notionConnection.connected ? "connected" : notionConnection.configured ? "available" : "not_configured",
+        health: notionConnection.healthy ? "healthy" : notionConnection.connected ? "degraded" : "not_connected",
         configured: notionConnection.configured,
         connected: notionConnection.connected,
-        providerType: "server_managed_api",
+        providerType: "oauth",
         authority: "external_reference_provider",
         risk: "read_only",
         services: ["Workspace context"],
+        serviceHealth: { "Workspace context": notionConnection.healthy },
         operations: notion.NOTION_TOOLS,
         requiredScopes: ["Read content shared with the EntrepreneurOS integration"],
+        workspace: notionConnection.workspace,
         executionAdapter: "EOS-owned Notion API adapter",
         manualFallback: "Open the canonical Notion workspace directly.",
-        actions: notionConnection.configured ? ["verify"] : [],
+        actions: notionConnection.connected ? ["verify", "reconnect", "disconnect"] : notionConnection.configured ? ["connect"] : [],
       },
       {
         id: "umh",
@@ -939,9 +941,10 @@ export function registerEosRuntimeRoutes(app: Express): void {
   app.get("/api/eos/companies/:companyId/integrations/notion/context", route(async (req) => {
     const access = await companyAccess(req);
     if (!allowedSurfacesFor(access.role).includes("systems")) throw new EosRouteError(403, "notion_scope_denied", "Direct canonical workspace search is outside this seat's visibility scope.");
+    if (!(await notion.connectionSummary(req.user.id)).connected) throw new EosRouteError(409, "notion_not_connected", "Connect Notion before searching shared workspace context.");
     const query = typeof req.query.q === "string" ? req.query.q.slice(0, 200) : "";
     try {
-      return { body: { generatedAt: new Date().toISOString(), results: await notion.searchWorkspace(query, 20) } };
+      return { body: { generatedAt: new Date().toISOString(), results: await notion.searchWorkspace(req.user.id, query, 20) } };
     } catch (error: any) {
       throw new EosRouteError(502, "notion_context_unavailable", String(error?.message || "Notion context could not be loaded."));
     }

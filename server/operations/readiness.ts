@@ -26,7 +26,7 @@ export async function productionReadiness() {
     "Clerk",
     ...(process.env.ANTHROPIC_API_KEY ? ["Anthropic"] : []),
     ...(process.env.GOOGLE_CLIENT_ID ? ["Google Workspace"] : []),
-    ...(process.env.NOTION_API_KEY || process.env.NOTION_API_TOKEN ? ["Notion"] : []),
+    ...(process.env.NOTION_CLIENT_ID && process.env.NOTION_CLIENT_SECRET ? ["Notion"] : []),
     ...(billingConfigured() ? ["Stripe"] : []),
     ...(process.env.POSTHOG_API_KEY ? ["PostHog"] : []),
   ];

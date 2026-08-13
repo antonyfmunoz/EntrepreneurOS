@@ -1,15 +1,24 @@
 import { scopeCoverage } from "../server/integrations/gmail";
 
 async function main() {
-  const notion = await fetch("https://api.notion.com/v1/users/me", {
+  const notionAccessToken = process.env.NOTION_QUALIFICATION_ACCESS_TOKEN || "";
+  const notionBasic = Buffer.from(`${process.env.NOTION_CLIENT_ID || ""}:${process.env.NOTION_CLIENT_SECRET || ""}`, "utf8").toString("base64");
+  const notionIntrospection = await fetch("https://api.notion.com/v1/oauth/introspect", {
+    method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.NOTION_API_KEY || ""}`,
-      "Notion-Version": "2022-06-28",
+      Authorization: `Basic ${notionBasic}`,
+      "Notion-Version": "2026-03-11",
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify({ token: notionAccessToken }),
+  });
+  const notionIntrospectionBody = notionIntrospection.ok ? await notionIntrospection.json() as { active?: boolean } : {};
+  const notion = await fetch("https://api.notion.com/v1/users/me", {
+    headers: { Authorization: `Bearer ${notionAccessToken}`, "Notion-Version": "2026-03-11" },
   });
   const notionSearch = await fetch("https://api.notion.com/v1/search", {
     method: "POST",
-    headers: { Authorization: `Bearer ${process.env.NOTION_API_KEY || ""}`, "Notion-Version": "2022-06-28", "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${notionAccessToken}`, "Notion-Version": "2026-03-11", "Content-Type": "application/json" },
     body: JSON.stringify({ page_size: 5, sort: { direction: "descending", timestamp: "last_edited_time" } }),
   });
 
@@ -51,11 +60,11 @@ async function main() {
   }
 
   console.log(JSON.stringify({
-    notion: { healthy: notion.ok, status: notion.status, search: notionSearch.ok, searchStatus: notionSearch.status },
+    notion: { active: notionIntrospectionBody.active === true, introspectionStatus: notionIntrospection.status, healthy: notion.ok, status: notion.status, search: notionSearch.ok, searchStatus: notionSearch.status },
     google,
   }));
   const services = google.services as ReturnType<typeof scopeCoverage> | undefined;
-  if (!notion.ok || !notionSearch.ok || !tokenResponse.ok || !services || !Object.values(services).every(Boolean)) process.exitCode = 1;
+  if (notionIntrospectionBody.active !== true || !notion.ok || !notionSearch.ok || !tokenResponse.ok || !services || !Object.values(services).every(Boolean)) process.exitCode = 1;
 }
 
 main().catch(() => {

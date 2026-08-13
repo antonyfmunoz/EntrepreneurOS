@@ -6,7 +6,7 @@ const report = {
   posthogProductionConfigured: Boolean(process.env.VITE_POSTHOG_API_KEY?.startsWith("phc_") && !process.env.VITE_POSTHOG_API_KEY.toLowerCase().includes("placeholder")),
   anthropicConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
   googleWorkspaceConfigured: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI?.startsWith("https://")),
-  notionConfigured: Boolean(process.env.NOTION_API_KEY || process.env.NOTION_API_TOKEN),
+  notionConfigured: Boolean(process.env.NOTION_CLIENT_ID && process.env.NOTION_CLIENT_SECRET && process.env.NOTION_REDIRECT_URI?.startsWith("https://")),
 };
 
 console.log(JSON.stringify(report));
