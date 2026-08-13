@@ -3,6 +3,7 @@ import { operationalControls, serviceOwnership, vendorRegistry } from "@shared/s
 import { db } from "../db";
 import { billingConfigured } from "../billing/stripe";
 import { CONTROL_LAYERS, controlEvidenceIsCurrent } from "./control-definitions";
+import { serviceOwnershipIssues } from "./ownership";
 
 export type ReadinessResult = { layer: number; name: string; status: "pass" | "fail"; evidence: string[]; missing: string[] };
 
@@ -36,10 +37,11 @@ export async function productionReadiness() {
     layer.missing.push(...missingVendors.map((name) => `approved_vendor:${name}`));
   }
   const [ownership] = await db.select().from(serviceOwnership).where(eq(serviceOwnership.serviceKey, "entrepreneuros")).limit(1);
-  if (!ownership) {
+  const ownershipMissing = serviceOwnershipIssues(ownership, now);
+  if (ownershipMissing.length) {
     const layer = layers.find((item) => item.layer === 20)!;
     layer.status = "fail";
-    layer.missing.push("service_owner_and_on_call");
+    layer.missing.push(...ownershipMissing);
   }
   const configurationMissing = [
     ...(process.env.NODE_ENV === "production" && !process.env.CLERK_SECRET_KEY?.startsWith("sk_live_") ? ["production_clerk_secret"] : []),
