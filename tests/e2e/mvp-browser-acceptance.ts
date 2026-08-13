@@ -141,6 +141,12 @@ try {
     await desktop.getByRole("link", { name: surface, exact: true }).click();
     await desktop.getByRole("heading", { name: surface, exact: true }).waitFor();
     if (surface === "Academy") await desktop.getByRole("button", { name: "Start practical exercise", exact: true }).waitFor();
+    if (surface === "Portfolio Map") {
+      await desktop.getByRole("button", { name: "Open organization", exact: true }).waitFor();
+      await desktop.getByText(seatTitle, { exact: true }).locator("xpath=ancestor::button[1]").click();
+      await desktop.getByRole("heading", { name: seatTitle, exact: true }).waitFor();
+      await desktop.getByRole("button", { name: "Ask Assistant about this seat", exact: true }).waitFor();
+    }
   }
   await desktop.getByLabel("Monthly limit (USD)").fill("30");
   await desktop.getByLabel("Per-request limit (USD)").fill("2");

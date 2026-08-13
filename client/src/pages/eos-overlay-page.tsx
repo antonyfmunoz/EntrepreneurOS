@@ -96,6 +96,7 @@ export default function EosOverlayPage() {
   const [seatKind, setSeatKind] = useState("individual_contributor");
   const [seatAgentName, setSeatAgentName] = useState("");
   const [seatSupervisorId, setSeatSupervisorId] = useState("");
+  const [selectedMapSeatId, setSelectedMapSeatId] = useState("");
   const [membershipEmail, setMembershipEmail] = useState("");
   const [membershipSeatId, setMembershipSeatId] = useState("");
   const [monthlyAiBudget, setMonthlyAiBudget] = useState("25");
@@ -164,6 +165,19 @@ export default function EosOverlayPage() {
   const allowedSurfaces = new Set<string>(principalContext?.allowedSurfaces || []);
   const visibleModules = eosActiveModules.filter((module) => allowedSurfaces.has(module.operatingSurface));
   const selectedModule = visibleModules.find((module) => module.id === selectedModuleId) || visibleModules[0];
+  const visibleSeats = organizationQuery.data?.seats || [];
+  const selectedMapSeat = visibleSeats.find((seat: JsonRecord) => seat.id === selectedMapSeatId)
+    || visibleSeats.find((seat: JsonRecord) => seat.id === organizationQuery.data?.activeSeatId)
+    || visibleSeats[0];
+  const selectedMapSupervisor = selectedMapSeat?.supervisorSeatId
+    ? visibleSeats.find((seat: JsonRecord) => seat.id === selectedMapSeat.supervisorSeatId)
+    : undefined;
+  const selectedMapReports = selectedMapSeat
+    ? visibleSeats.filter((seat: JsonRecord) => seat.supervisorSeatId === selectedMapSeat.id)
+    : [];
+  const selectedMapPackets = selectedMapSeat
+    ? activePackets.filter((packet) => packet.accountableSeatId === selectedMapSeat.id)
+    : [];
   const manifestModuleIds = new Set<number>(manifest?.manifest?.enabledModules || eosActiveModules.map((module) => module.id));
   const moduleState = (module: EosActiveModule) => manifestModuleIds.has(module.id) ? `overlay_${module.activation === "active" ? "ready" : "partial"}` : "not_enabled";
   const practiceAction = rolePracticeActionFor(principalContext?.role || "external", activePackets.length > 0);
@@ -189,6 +203,15 @@ export default function EosOverlayPage() {
     setPerRequestAiBudget(String((aiBudgetQuery.data.perRequestLimitMicros || 0) / 1_000_000));
     setAiBudgetEnabled(Boolean(aiBudgetQuery.data.enabled));
   }, [aiBudgetQuery.data]);
+
+  useEffect(() => {
+    if (!visibleSeats.length) {
+      setSelectedMapSeatId("");
+      return;
+    }
+    if (visibleSeats.some((seat: JsonRecord) => seat.id === selectedMapSeatId)) return;
+    setSelectedMapSeatId(organizationQuery.data?.activeSeatId || visibleSeats[0].id);
+  }, [organizationQuery.data?.activeSeatId, organizationQuery.data?.seats, selectedMapSeatId]);
 
   const compilerMutation = useMutation({
     mutationFn: async () => requestJson<JsonRecord>("POST", `${root}/compiler/drafts`, {
@@ -737,7 +760,35 @@ export default function EosOverlayPage() {
           </TabsContent>
 
           <TabsContent value="portfolio-map" className="space-y-6">
-            <Card><CardHeader><CardTitle>{contextQuery.data?.portfolio?.name || "Independent portfolio"}</CardTitle><CardDescription>Authorized organizational nodes and the reporting structure visible from the active seat.</CardDescription></CardHeader><CardContent className="space-y-3"><div className="rounded-xl bg-primary/10 p-4"><div className="font-medium">{company.name}</div><p className="text-sm text-muted-foreground">{company.stage || "Stage not set"} · {organizationQuery.data?.seats?.length || 0} visible seats</p></div>{(organizationQuery.data?.seats || []).map((seat: JsonRecord) => <div key={seat.id} className="ml-5 rounded-xl bg-muted p-3 text-sm"><span className="font-medium">{seat.title}</span><span className="text-muted-foreground"> · reports through {seat.supervisorSeatId ? "organizational parent" : "portfolio principal"}</span></div>)}</CardContent></Card>
+            <Card>
+              <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div><CardTitle>{contextQuery.data?.portfolio?.name || "Independent portfolio"}</CardTitle><CardDescription>Select a visible seat to inspect accountability and take the next authorized action.</CardDescription></div>
+                {allowedSurfaces.has("organization") && <Button variant="outline" onClick={() => goToSurface("organization")}><Network className="mr-2 h-4 w-4" />Open organization</Button>}
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="rounded-2xl bg-primary/10 p-4 sm:p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Organization</p><p className="mt-1 text-lg font-semibold">{company.name}</p><p className="mt-1 text-sm text-muted-foreground">{company.stage || "Stage not set"} · {visibleSeats.length} visible seat{visibleSeats.length === 1 ? "" : "s"}</p></div><Badge variant="outline">{principalContext?.visibility?.scope || "authorized"} view</Badge></div></div>
+                {visibleSeats.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{visibleSeats.map((seat: JsonRecord) => {
+                  const supervisor = seat.supervisorSeatId ? visibleSeats.find((item: JsonRecord) => item.id === seat.supervisorSeatId) : undefined;
+                  const selected = seat.id === selectedMapSeat?.id;
+                  return <button key={seat.id} type="button" aria-pressed={selected} onClick={() => setSelectedMapSeatId(seat.id)} className={`rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${selected ? "border-primary/30 bg-primary/10" : "border-border bg-muted/60 hover:border-primary/20 hover:bg-primary/5"}`}>
+                    <div className="flex items-start justify-between gap-3"><span className="font-semibold">{seat.title}</span><StateBadge state={seat.agentMode} /></div>
+                    <p className="mt-2 text-xs text-muted-foreground">Reports to {supervisor?.title || (seat.supervisorSeatId ? "an authorized parent outside this view" : "the portfolio principal")}</p>
+                  </button>;
+                })}</div> : <EmptyState icon={Network} title="No seats are visible" description="This authority scope does not currently include an organizational seat." />}
+              </CardContent>
+            </Card>
+            {selectedMapSeat && <Card>
+              <CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Selected accountability</p><CardTitle className="mt-2">{selectedMapSeat.title}</CardTitle><CardDescription>{selectedMapSeat.kind.replaceAll("_", " ")} · {selectedMapSeat.agentName}</CardDescription></div><StateBadge state={selectedMapSeat.agentMode} /></div></CardHeader>
+              <CardContent className="space-y-5">
+                <p className="text-sm leading-relaxed text-muted-foreground">{selectedMapSeat.mandate || "This seat's mandate has not been defined yet."}</p>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Fact label="Reports to" value={selectedMapSupervisor?.title || (selectedMapSeat.supervisorSeatId ? "Authorized parent outside this view" : "Portfolio principal")} /><Fact label="Visible reports" value={String(selectedMapReports.length)} /><Fact label="Active work" value={String(selectedMapPackets.length)} /><Fact label="Human + agent" value={selectedMapSeat.occupantUserId ? `${selectedMapSeat.agentName} assists the seat holder` : `${selectedMapSeat.agentName} operates the role`} /></div>
+                {selectedMapReports.length > 0 && <div><p className="eos-label mb-2">Visible direct reports</p><div className="flex flex-wrap gap-2">{selectedMapReports.map((seat: JsonRecord) => <button key={seat.id} type="button" onClick={() => setSelectedMapSeatId(seat.id)} className="rounded-full border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:border-primary/30 hover:bg-primary/5">{seat.title}</button>)}</div></div>}
+                <div className="flex flex-wrap gap-2">
+                  {selectedMapPackets.length > 0 && allowedSurfaces.has("work-room") && <Button onClick={() => { setProviderPacketId(selectedMapPackets[0].id); goToSurface("work-room"); }}><BriefcaseBusiness className="mr-2 h-4 w-4" />Open seat work</Button>}
+                  <Button variant={selectedMapPackets.length > 0 ? "outline" : "default"} onClick={() => sendEaMessage(`Explain the accountability, current work, reporting dependencies, and next authorized action for the ${selectedMapSeat.title} seat. Keep the answer inside my visibility and communication path.`)}><MessagesSquare className="mr-2 h-4 w-4" />Ask {assistantName} about this seat</Button>
+                </div>
+              </CardContent>
+            </Card>}
           </TabsContent>
 
           <TabsContent value="capital" className="space-y-6">
