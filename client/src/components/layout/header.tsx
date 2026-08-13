@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth, useUser } from "@clerk/clerk-react";
-import { Bell, CheckCheck, ChevronDown, Loader2, Menu, Search, User, X } from "lucide-react";
+import { Bell, Building2, CheckCheck, ChevronDown, LayoutGrid, Loader2, Menu, Search, User, X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -137,7 +137,7 @@ export default function Header({
 
             {activePanel === "notifications" && <div className="space-y-3">{notifications.isLoading && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading notifications</div>}{notifications.isError && <p className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive">Notifications could not be loaded.</p>}{notifications.data?.map((notification) => <button key={notification.id} type="button" onClick={() => !notification.read && markRead.mutate(notification.id)} className="block w-full rounded-xl bg-white p-4 text-left transition-colors hover:bg-muted"><div className="flex items-start justify-between gap-3"><span className="font-medium">{notification.title}</span>{!notification.read && <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-primary" />}</div><p className="mt-1 text-sm text-muted-foreground">{notification.content}</p></button>)}{notifications.data && notifications.data.length === 0 && <p className="rounded-xl bg-muted p-4 text-sm text-muted-foreground">You have no notifications.</p>}{(notifications.data?.some((item) => !item.read)) && <Button variant="secondary" className="w-full" onClick={() => markAllRead.mutate()} disabled={markAllRead.isPending}><CheckCheck className="mr-2 h-4 w-4" />Mark all read</Button>}</div>}
 
-            {activePanel === "account" && <div className="space-y-4"><div className="rounded-xl bg-white p-4"><div className="font-medium">{user?.fullName || "EntrepreneurOS owner"}</div><div className="mt-1 truncate text-sm text-muted-foreground">{user?.primaryEmailAddress?.emailAddress}</div></div><a href="/portfolios" onClick={() => setActivePanel(null)} className="block rounded-xl bg-muted px-4 py-3 text-sm font-medium hover:bg-[#e5e7e9]">Portfolio home</a><Button variant="outline" className="w-full" onClick={() => void signOut({ redirectUrl: "/login" })}>Sign out</Button></div>}
+            {activePanel === "account" && <div className="space-y-4"><div className="rounded-xl bg-white p-4"><div className="font-medium">{user?.fullName || "EntrepreneurOS owner"}</div><div className="mt-1 truncate text-sm text-muted-foreground">{user?.primaryEmailAddress?.emailAddress}</div></div><nav className="space-y-2" aria-label="Portfolio and organization switching"><a href="/portfolios" onClick={() => setActivePanel(null)} className="flex items-center gap-3 rounded-xl bg-muted px-4 py-3 text-sm font-medium hover:bg-[#e5e7e9]"><LayoutGrid className="h-4 w-4 text-primary" />Portfolios</a><a href={portfolioHref || "/portfolios"} onClick={() => setActivePanel(null)} className="flex items-center gap-3 rounded-xl bg-muted px-4 py-3 text-sm font-medium hover:bg-[#e5e7e9]"><Building2 className="h-4 w-4 text-primary" />Organizations</a></nav><Button variant="outline" className="w-full" onClick={() => void signOut({ redirectUrl: "/login" })}>Sign out</Button></div>}
           </section>
         </>
       )}

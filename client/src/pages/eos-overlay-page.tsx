@@ -7,7 +7,6 @@ import {
   Blocks,
   Bot,
   BriefcaseBusiness,
-  Building2,
   ClipboardCheck,
   Check,
   Command,
@@ -16,7 +15,6 @@ import {
   Gauge,
   Home,
   Landmark,
-  LayoutGrid,
   BookOpen,
   Map,
   MessagesSquare,
@@ -201,7 +199,7 @@ export default function EosOverlayPage() {
       assumptions: [],
       unknowns: [],
       packageSelections: [{ id: "eos-overlay-core", version: "1.0", rationale: "Required operating foundation" }],
-      provisioningChecklist: [{ id: "owner-context", label: "Owner identity and organization context verified", required: true, complete: true }],
+      provisioningChecklist: [{ id: "owner-context", label: "Owner identity and organization verified", required: true, complete: true }],
       verificationChecks: [{ id: "runtime-ready", label: "EOS runtime readiness", status: "passed", evidence: "/api/ready" }],
     }),
     onSuccess: async (draft) => {
@@ -394,8 +392,6 @@ export default function EosOverlayPage() {
   const nextManifestStatus = (status?: string): string | undefined => ({ draft: "diagnostic", diagnostic: "proposed", proposed: "review", review: "approved", approved: "provisioning", provisioning: "verifying" } as Record<string, string>)[status || ""];
   const nav = useMemo(() => [
     { icon: Home, label: "Home", href: `#home`, active: activeTab === "home" },
-    { icon: LayoutGrid, label: "Portfolio", href: "/portfolios" },
-    { icon: Building2, label: "Organizations", href: contextQuery.data?.portfolio?.id ? `/portfolios/${contextQuery.data.portfolio.id}` : "/portfolios" },
     { icon: Command, label: "Command", href: `#command`, active: activeTab === "command" },
     { icon: Network, label: "Organization", href: `#organization`, active: activeTab === "organization" },
     { icon: UserRound, label: "My Role", href: `#my-role`, active: activeTab === "my-role" },
@@ -408,10 +404,10 @@ export default function EosOverlayPage() {
     { icon: Landmark, label: "Capital & Finance", href: `#capital`, active: activeTab === "capital", status: "dormant" },
     { icon: Bot, label: "Intelligence", href: `#intelligence`, active: activeTab === "intelligence" },
     { icon: Blocks, label: "Systems", href: `#systems`, active: activeTab === "systems" },
-  ].filter((item) => ["Portfolio", "Organizations"].includes(item.label) || allowedSurfaces.has(item.href.slice(1))), [activeTab, contextQuery.data?.portfolio?.id, principalContext?.role]);
+  ].filter((item) => allowedSurfaces.has(item.href.slice(1))), [activeTab, principalContext?.role]);
 
   if (contextQuery.isLoading) return <div className="min-h-screen grid place-items-center text-muted-foreground">Loading EOS context…</div>;
-  if (contextQuery.error || !company) return <main className="min-h-screen bg-[#f5f6f7] px-4 py-10 sm:px-8"><div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-xl items-center"><Card className="w-full border-0 p-7 shadow-[0_8px_32px_rgba(106,55,212,0.08)] sm:p-10"><p className="eos-label">Organization context</p><h1 className="mt-3 text-2xl font-semibold">This workspace is unavailable</h1><p className="mt-3 text-sm text-muted-foreground">The organization may have moved from a legacy account, may no longer exist, or may be outside your verified authority scope.</p><div className="mt-7 flex flex-col gap-3 sm:flex-row"><Button onClick={() => contextQuery.refetch()}><RefreshCw className="mr-2 h-4 w-4" />Retry</Button><Button asChild variant="secondary"><Link href="/portfolios">Choose an organization</Link></Button></div></Card></div></main>;
+  if (contextQuery.error || !company) return <main className="min-h-screen bg-[#f5f6f7] px-4 py-10 sm:px-8"><div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-xl items-center"><Card className="w-full border-0 p-7 shadow-[0_8px_32px_rgba(106,55,212,0.08)] sm:p-10"><p className="eos-label">Organization</p><h1 className="mt-3 text-2xl font-semibold">This workspace is unavailable</h1><p className="mt-3 text-sm text-muted-foreground">The organization may have moved from a legacy account, may no longer exist, or may be outside your verified authority scope.</p><div className="mt-7 flex flex-col gap-3 sm:flex-row"><Button onClick={() => contextQuery.refetch()}><RefreshCw className="mr-2 h-4 w-4" />Retry</Button><Button asChild variant="secondary"><Link href="/portfolios">Choose an organization</Link></Button></div></Card></div></main>;
 
   const intelligenceRail = (
     <div className="flex h-full min-h-0 flex-col bg-white/45">

@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { Blocks, Bot, BriefcaseBusiness, Building2, Command, Home, Landmark, LayoutGrid, Network, Workflow } from "lucide-react";
+import { Blocks, Bot, BriefcaseBusiness, Command, Home, Landmark, Network, Workflow } from "lucide-react";
 
 interface LeftRailProps {
   collapsed?: boolean;
@@ -11,8 +11,6 @@ export default function LeftRail({ collapsed = false }: LeftRailProps) {
   const companyRoot = companyId ? `/company/${companyId}` : "/portfolios";
   const items = [
     { label: "Home", href: `${companyRoot}#home`, icon: Home },
-    { label: "Portfolio", href: "/portfolios", icon: LayoutGrid },
-    { label: "Organizations", href: "/portfolios", icon: Building2 },
     { label: "Command", href: `${companyRoot}#command`, icon: Command },
     { label: "Organization", href: companyId ? `${companyRoot}/org` : "/portfolios", icon: Network },
     { label: "Stakeholder / Commercial", href: `${companyRoot}#commercial`, icon: BriefcaseBusiness },

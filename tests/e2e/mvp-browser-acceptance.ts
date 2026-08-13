@@ -24,6 +24,14 @@ try {
     await desktop.screenshot({ path: ".tmp/e2e-failure.png", fullPage: true });
     throw new Error(`Home did not render. URL=${desktop.url()} body=${(await desktop.locator("body").innerText()).slice(0, 1200)} browserErrors=${browserErrors.join(" | ")}`, { cause: error });
   }
+  const primaryNavigation = desktop.getByRole("navigation", { name: "EOS primary navigation" });
+  if (await primaryNavigation.getByRole("link", { name: "Portfolio", exact: true }).count()) throw new Error("Portfolio switching is still present in the EOS operating navigation.");
+  if (await primaryNavigation.getByRole("link", { name: "Organizations", exact: true }).count()) throw new Error("Organization switching is still present in the EOS operating navigation.");
+  await desktop.getByRole("button", { name: "Account menu" }).click();
+  const accountPanel = desktop.getByRole("region", { name: "account panel" });
+  await accountPanel.getByRole("link", { name: "Portfolios", exact: true }).waitFor();
+  await accountPanel.getByRole("link", { name: "Organizations", exact: true }).waitFor();
+  await accountPanel.getByRole("button", { name: "Close account panel" }).click();
   await desktop.getByRole("button", { name: "Create mission" }).click();
   await desktop.getByRole("heading", { name: "Operations", exact: true }).waitFor();
   const missionTitle = `Interactive MVP ${Date.now()}`;
@@ -79,10 +87,13 @@ try {
     if (!headingBox || actionBox.x <= headingBox.x) throw new Error(`${label} is not positioned to the right of the page title.`);
   };
   await mobile.goto(`${origin}/portfolios`, { waitUntil: "domcontentloaded" });
-  await mobile.getByRole("heading", { name: "Your portfolio", exact: true }).waitFor();
-  await assertCompactHeaderAction("Create portfolio", "Your portfolio");
+  await mobile.getByRole("heading", { name: "Your Portfolios", exact: true }).waitFor();
+  await mobile.getByText("Create a new portfolio or enter an existing organization.", { exact: true }).waitFor();
+  await assertCompactHeaderAction("Create portfolio", "Your Portfolios");
   await mobile.goto(`${origin}/portfolios/${portfolioId}`, { waitUntil: "domcontentloaded" });
   await mobile.getByRole("heading", { name: portfolioName, exact: true }).waitFor();
+  await mobile.getByText("Organizations", { exact: true }).first().waitFor();
+  if (await mobile.getByText("Operating contexts", { exact: true }).count()) throw new Error("The obsolete operating-context metric is still shown beside Organizations.");
   await assertCompactHeaderAction("Add organization", portfolioName);
   await mobile.goto(`${origin}/company/${companyId}#my-role`, { waitUntil: "domcontentloaded" });
   await mobile.getByRole("heading", { name: "My Role", exact: true }).waitFor();
@@ -109,7 +120,7 @@ try {
   await mobile.getByRole("button", { name: /Open .* conversation/ }).click();
   await mobile.locator("#mobile-communication-drawer aside").waitFor();
   if (browserErrors.length) throw new Error(`Browser errors: ${browserErrors.join(" | ")}`);
-  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 7, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
+  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 7, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
 } finally {
   await browser.close();
 }
