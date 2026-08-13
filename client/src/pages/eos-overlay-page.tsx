@@ -34,6 +34,7 @@ import { AgentChatStub, type ChatMessage } from "@/components/agent-chat-stub";
 import UniversalLayout from "@/components/layout/universal-layout";
 import FloatingAIPanel from "@/components/layout/floating-ai-panel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,6 +79,8 @@ export default function EosOverlayPage() {
   const [packetObjective, setPacketObjective] = useState("");
   const [packetApproval, setPacketApproval] = useState(true);
   const [evidenceDetails, setEvidenceDetails] = useState<Record<string, string>>({});
+  const [decisionDraft, setDecisionDraft] = useState<{ id: string; summary: string; decision: "approved" | "rejected" } | null>(null);
+  const [decisionReason, setDecisionReason] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [eaMessages, setEaMessages] = useState<ChatMessage[]>([]);
   const [isEditingAssistantName, setIsEditingAssistantName] = useState(false);
@@ -239,8 +242,13 @@ export default function EosOverlayPage() {
   });
 
   const approvalMutation = useMutation({
-    mutationFn: ({ id, decision }: { id: string; decision: "approved" | "rejected" }) => requestJson("POST", `${root}/approvals/${id}/decide`, { decision }),
-    onSuccess: async (_, variables) => { await refresh(); toast({ title: variables.decision === "approved" ? "Work approved" : "Work rejected" }); },
+    mutationFn: ({ id, decision, reason }: { id: string; decision: "approved" | "rejected"; reason?: string }) => requestJson("POST", `${root}/approvals/${id}/decide`, { decision, ...(reason ? { reason } : {}) }),
+    onSuccess: async (_, variables) => {
+      setDecisionDraft(null);
+      setDecisionReason("");
+      await refresh();
+      toast({ title: variables.decision === "approved" ? "Work approved" : "Work rejected", description: variables.reason || "The decision and resulting state change were recorded." });
+    },
     onError: (error) => showMutationError("Approval decision", error),
   });
 
@@ -385,6 +393,11 @@ export default function EosOverlayPage() {
   };
 
   const openCommunication = () => window.dispatchEvent(new Event("eos:open-communication"));
+
+  const requestApprovalDecision = (approval: JsonRecord, decision: "approved" | "rejected") => {
+    setDecisionReason("");
+    setDecisionDraft({ id: approval.id, summary: approval.summary, decision });
+  };
 
   const prepareWorkPacket = (title: string, objective: string) => {
     setPacketTitle(title.slice(0, 200));
@@ -616,7 +629,7 @@ export default function EosOverlayPage() {
               </CardContent></Card>;
             })}{!packets.length && <EmptyState icon={Workflow} title="No Work Packets" description="Create the first evidence-bearing mission above." />}</div>
 
-            <section className="space-y-3"><div><p className="eos-label">Authority queue</p><h2 className="mt-1 text-xl font-semibold">Approvals</h2></div>{approvals.map((approval) => <Card key={approval.id}><CardContent className="flex flex-col gap-4 pt-8 md:flex-row md:items-center md:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{approval.summary}</h3><StateBadge state={approval.status} /></div><p className="mt-1 text-xs text-muted-foreground">Requested {new Date(approval.createdAt).toLocaleString()}</p></div>{approval.status === "pending" && <div className="flex gap-2"><Button variant="outline" disabled={approvalMutation.isPending} onClick={() => approvalMutation.mutate({ id: approval.id, decision: "rejected" })}>Reject</Button><Button disabled={approvalMutation.isPending} onClick={() => approvalMutation.mutate({ id: approval.id, decision: "approved" })}>{approvalMutation.isPending ? "Saving…" : "Approve"}</Button></div>}</CardContent></Card>)}{!approvals.length && <EmptyState icon={ClipboardCheck} title="No approval requests" description="Approval-gated missions will appear here." />}</section>
+            <section className="space-y-3"><div><p className="eos-label">Authority queue</p><h2 className="mt-1 text-xl font-semibold">Approvals</h2></div>{approvals.map((approval) => <Card key={approval.id}><CardContent className="flex flex-col gap-4 pt-8 md:flex-row md:items-center md:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{approval.summary}</h3><StateBadge state={approval.status} /></div><p className="mt-1 text-xs text-muted-foreground">Requested {new Date(approval.createdAt).toLocaleString()}</p></div>{approval.status === "pending" && <div className="flex gap-2"><Button variant="outline" disabled={approvalMutation.isPending} onClick={() => requestApprovalDecision(approval, "rejected")}>Reject</Button><Button disabled={approvalMutation.isPending} onClick={() => requestApprovalDecision(approval, "approved")}>Approve</Button></div>}</CardContent></Card>)}{!approvals.length && <EmptyState icon={ClipboardCheck} title="No approval requests" description="Approval-gated missions will appear here." />}</section>
 
             <section className="space-y-3"><div><p className="eos-label">Proof and provenance</p><h2 className="mt-1 text-xl font-semibold">Evidence</h2></div>{evidence.map((item) => <Card key={item.id}><CardContent className="flex items-start gap-3 pt-8"><FileCheck2 className="h-5 w-5 text-primary" /><div><div className="font-medium">{item.title}</div><div className="text-sm text-muted-foreground">{item.evidenceType.replaceAll("_", " ")} · {new Date(item.createdAt).toLocaleString()}</div></div></CardContent></Card>)}{!evidence.length && <EmptyState icon={FileCheck2} title="No evidence recorded" description="Work cannot be marked complete until evidence exists." />}</section>
           </TabsContent>
@@ -628,7 +641,7 @@ export default function EosOverlayPage() {
           </TabsContent>
 
           <TabsContent value="review" className="space-y-6">
-            <section className="space-y-3"><div><p className="eos-label">Assigned authority queue</p><h2 className="mt-1 text-xl font-semibold">Decisions requiring this seat</h2></div>{approvals.map((approval) => <Card key={approval.id}><CardContent className="flex flex-col gap-4 pt-8 md:flex-row md:items-center md:justify-between"><div><h3 className="font-semibold">{approval.summary}</h3><StateBadge state={approval.status} /></div>{approval.status === "pending" && <div className="flex gap-2"><Button variant="outline" onClick={() => approvalMutation.mutate({ id: approval.id, decision: "rejected" })}>Reject</Button><Button onClick={() => approvalMutation.mutate({ id: approval.id, decision: "approved" })}>Approve</Button></div>}</CardContent></Card>)}{!approvals.length && <EmptyState icon={ClipboardCheck} title="No assigned decisions" description="Only approvals assigned to this principal appear here." />}</section>
+            <section className="space-y-3"><div><p className="eos-label">Assigned authority queue</p><h2 className="mt-1 text-xl font-semibold">Decisions requiring this seat</h2></div>{approvals.map((approval) => <Card key={approval.id}><CardContent className="flex flex-col gap-4 pt-8 md:flex-row md:items-center md:justify-between"><div><h3 className="font-semibold">{approval.summary}</h3><StateBadge state={approval.status} /></div>{approval.status === "pending" && <div className="flex gap-2"><Button variant="outline" disabled={approvalMutation.isPending} onClick={() => requestApprovalDecision(approval, "rejected")}>Reject</Button><Button disabled={approvalMutation.isPending} onClick={() => requestApprovalDecision(approval, "approved")}>Approve</Button></div>}</CardContent></Card>)}{!approvals.length && <EmptyState icon={ClipboardCheck} title="No assigned decisions" description="Only approvals assigned to this principal appear here." />}</section>
             <Card><CardHeader><CardTitle>Provider reconciliation</CardTitle><CardDescription>External effects remain explicit through request, approval, receipt, and reconciliation.</CardDescription></CardHeader><CardContent className="space-y-3">{(providerExecutionsQuery.data || []).map((execution) => <div key={execution.id} className="rounded-xl bg-muted p-4"><div className="flex items-center justify-between gap-3"><span className="font-medium">{execution.operation}</span><StateBadge state={execution.status} /></div><p className="mt-1 text-sm text-muted-foreground">{execution.reconciliationStatus.replaceAll("_", " ")} · trace {execution.traceId.slice(0, 8)}</p></div>)}{!providerExecutionsQuery.data?.length && <p className="text-sm text-muted-foreground">No provider executions in this visibility scope.</p>}</CardContent></Card>
             {auditVisible && <Card><CardHeader><CardTitle>Recent control receipts</CardTitle><CardDescription>Persisted audit evidence for actions within this seat's visibility.</CardDescription></CardHeader><CardContent className="space-y-3">{(auditQuery.data || []).slice(0, 12).map((record) => <div key={record.id} className="flex flex-col gap-2 rounded-xl bg-muted p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">{String(record.action).replaceAll("_", " ")}</p><p className="mt-1 text-xs text-muted-foreground">{record.targetType} · {new Date(record.createdAt).toLocaleString()}</p></div><div className="flex items-center gap-2"><StateBadge state={record.result || "recorded"} /><code className="text-[10px] text-muted-foreground">{String(record.traceId || "").slice(0, 8)}</code></div></div>)}{auditQuery.isLoading && <p className="text-sm text-muted-foreground">Loading signed control history…</p>}{!auditQuery.isLoading && !auditQuery.data?.length && <p className="text-sm text-muted-foreground">No audit receipts are visible yet.</p>}</CardContent></Card>}
           </TabsContent>
@@ -678,6 +691,33 @@ export default function EosOverlayPage() {
           </TabsContent>
         </Tabs>
       </div>
+      <AlertDialog open={Boolean(decisionDraft)} onOpenChange={(open) => { if (!open && !approvalMutation.isPending) { setDecisionDraft(null); setDecisionReason(""); } }}>
+        <AlertDialogContent className="max-w-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{decisionDraft?.decision === "approved" ? "Confirm approval" : "Confirm rejection"}</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <span className="block font-medium text-foreground">{decisionDraft?.summary}</span>
+              <span className="block">{decisionDraft?.decision === "approved"
+                ? /gmail|delivery|provider/i.test(decisionDraft?.summary || "")
+                  ? "Approval will execute the queued provider effect immediately. EOS will retain the provider receipt and reconciliation state."
+                  : "Approval will move this Work Packet into ready work and preserve the decision in the audit trail."
+                : "Rejection will cancel the associated Work Packet. Add a reason so the requester knows what must change."}</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div>
+            <label htmlFor="decision-reason" className="eos-label">{decisionDraft?.decision === "rejected" ? "Rejection reason" : "Decision note (optional)"}</label>
+            <Textarea id="decision-reason" className="mt-2" value={decisionReason} onChange={(event) => setDecisionReason(event.target.value)} placeholder={decisionDraft?.decision === "rejected" ? "Explain what must change before this can be approved" : "Add context for the audit trail"} maxLength={1000} />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={approvalMutation.isPending}>Keep pending</AlertDialogCancel>
+            <Button
+              variant={decisionDraft?.decision === "rejected" ? "destructive" : "default"}
+              disabled={!decisionDraft || approvalMutation.isPending || (decisionDraft.decision === "rejected" && decisionReason.trim().length < 3)}
+              onClick={() => decisionDraft && approvalMutation.mutate({ ...decisionDraft, reason: decisionReason.trim() || undefined })}
+            >{approvalMutation.isPending ? "Recording decision…" : decisionDraft?.decision === "approved" ? "Confirm approval" : "Confirm rejection"}</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </UniversalLayout>
   );
 }
