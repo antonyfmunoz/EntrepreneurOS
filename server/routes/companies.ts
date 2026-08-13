@@ -49,7 +49,8 @@ export function registerCompanyRoutes(app: Express): void {
     }
   });
 
-  // GET /api/companies/:id/tasks — tasks scoped to company (placeholder: returns [])
+  // Legacy company-task projection. EOS work is governed by role-visible Work
+  // Packets; returning an empty array here made a broken screen look healthy.
   app.get("/api/companies/:id/tasks", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -59,8 +60,11 @@ export function registerCompanyRoutes(app: Express): void {
       if (!Number.isInteger(companyId) || !(await ownsCompany(companyId, req.user.id))) {
         return res.status(404).json({ message: "Company not found" });
       }
-      // Tasks table has no companyId column — return empty until schema is extended
-      return res.json([]);
+      return res.status(410).json({
+        code: "company_tasks_replaced_by_work_packets",
+        message: "Company tasks have moved to the governed EOS Work Room.",
+        replacement: `/api/eos/companies/${companyId}/work-packets`,
+      });
     } catch (error) {
       console.error("Error fetching company tasks:", error);
       return res.status(500).json({ message: "Failed to fetch tasks" });

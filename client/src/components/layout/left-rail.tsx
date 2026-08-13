@@ -12,12 +12,12 @@ export default function LeftRail({ collapsed = false }: LeftRailProps) {
   const items = [
     { label: "Home", href: `${companyRoot}#home`, icon: Home },
     { label: "Command", href: `${companyRoot}#command`, icon: Command },
-    { label: "Organization", href: companyId ? `${companyRoot}/org` : "/portfolios", icon: Network },
+    { label: "Organization", href: companyId ? `${companyRoot}#organization` : "/portfolios", icon: Network },
     { label: "Stakeholder / Commercial", href: `${companyRoot}#commercial`, icon: BriefcaseBusiness },
     { label: "Operations", href: `${companyRoot}#operations`, icon: Workflow },
     { label: "Capital & Finance", href: `${companyRoot}#capital`, icon: Landmark, status: "dormant" },
-    { label: "Intelligence", href: companyId ? `${companyRoot}/chat` : "/portfolios", icon: Bot },
-    { label: "Systems", href: "/settings", icon: Blocks },
+    { label: "Intelligence", href: companyId ? `${companyRoot}#intelligence` : "/portfolios", icon: Bot },
+    { label: "Systems", href: companyId ? `${companyRoot}#systems` : "/settings", icon: Blocks },
   ];
 
   return (

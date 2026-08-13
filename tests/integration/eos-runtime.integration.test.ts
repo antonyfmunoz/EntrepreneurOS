@@ -94,6 +94,11 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     await api.get(`/api/eos/companies/${otherCompanyId}/context`).expect(404);
     const legacy = await api.get("/api/tasks").expect(410);
     expect(legacy.body.code).toBe("legacy_unscoped_route_disabled");
+    const companyTasks = await api.get(`/api/companies/${companyId}/tasks`).expect(410);
+    expect(companyTasks.body).toMatchObject({
+      code: "company_tasks_replaced_by_work_packets",
+      replacement: `/api/eos/companies/${companyId}/work-packets`,
+    });
     expect(legacy.headers["ratelimit-limit"]).toBe("600");
     expect(legacy.headers["ratelimit-remaining"]).toBeDefined();
   });
