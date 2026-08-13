@@ -47,13 +47,16 @@ export const workPacketCreateSchema = z.object({
   classification: z.enum(["public", "internal", "confidential", "restricted"]).default("internal"),
 });
 
-export const membershipCreateSchema = z.object({
-  userId: z.string().min(1).optional(),
-  email: z.string().email().optional(),
+export const membershipInvitationCreateSchema = z.object({
+  email: z.string().trim().email().max(320),
   seatId: z.string().uuid(),
   purpose: z.string().min(1).max(100).default("operate"),
   classificationCeiling: z.enum(["public", "internal", "confidential", "restricted"]).default("internal"),
-}).refine((input) => Boolean(input.userId || input.email), { message: "A user id or verified account email is required." });
+});
+
+export const membershipInvitationTokenSchema = z.object({
+  token: z.string().min(32).max(512),
+});
 
 export const seatCreateSchema = z.object({
   title: z.string().min(1).max(120),

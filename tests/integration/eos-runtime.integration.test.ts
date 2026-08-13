@@ -30,6 +30,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
   let otherCompanyId: number;
   let api: ReturnType<typeof supertest>;
   let currentUserId = ownerId;
+  let verifiedEmailOverride: string | undefined;
   const agentId = "test_eos_agent";
   const internalInstallationId = "test_eos_installation_row";
   const sql = postgres(databaseUrl || "postgresql://invalid", { max: 1 });
@@ -62,6 +63,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         fullName: owner ? "EOS Owner" : "EOS Manager", avatar: null, company: null, role: null, clerkUserId: null,
         preferences: null, metadata: null, createdAt: new Date(), updatedAt: new Date(),
       };
+      (req as any).verifiedEmail = verifiedEmailOverride || (owner ? "owner@example.test" : "other@example.test");
       next();
     });
     const { registerRoutes } = await import("../../server/routes");
@@ -417,9 +419,22 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       title: "Operations Manager", kind: "manager", agentName: "Atlas", mandate: "Own delivery operations",
       authority: { approveDownline: true }, toolEntitlements: ["gmail.send_with_local_approval"],
     }).expect(201);
-    await api.post(`/api/eos/companies/${companyId}/memberships`).send({ email: "other@example.test", seatId: managerSeat.body.id, classificationCeiling: "confidential" }).expect(201);
+    const retiredDirectAssignment = await api.post(`/api/eos/companies/${companyId}/memberships`).send({ email: "other@example.test", seatId: managerSeat.body.id }).expect(410);
+    expect(retiredDirectAssignment.body.code).toBe("membership_assignment_replaced_by_invitation");
+    const invitation = await api.post(`/api/eos/companies/${companyId}/invitations`).send({ email: "other@example.test", seatId: managerSeat.body.id, classificationCeiling: "confidential" }).expect(201);
+    expect(invitation.body).toMatchObject({ status: "pending", email: "other@example.test", seatId: managerSeat.body.id });
+    expect(invitation.body.tokenHash).toBeUndefined();
+    const token = new URL(invitation.body.acceptancePath, "https://eos.example.test").searchParams.get("token");
+    expect(token).toBeTruthy();
+
+    await api.post("/api/eos/invitations/preview").send({ token }).expect(403);
 
     currentUserId = otherId;
+    const preview = await api.post("/api/eos/invitations/preview").send({ token }).expect(200);
+    expect(preview.body).toMatchObject({ company: { id: companyId, name: "EOS Field Test" }, seat: { id: managerSeat.body.id, title: "Operations Manager" } });
+    await api.post("/api/eos/invitations/accept").send({ token }).expect(201);
+    const replay = await api.post("/api/eos/invitations/accept").send({ token }).expect(409);
+    expect(replay.body.code).toBe("invitation_already_used");
     const context = await api.get(`/api/eos/companies/${companyId}/context`).expect(200);
     expect(context.body.principalContext.role).toBe("manager");
     expect(context.body.principalContext.communicationAgent).toBe("Atlas");
@@ -449,8 +464,41 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(history.body.messages.length).toBeGreaterThanOrEqual(2);
 
     currentUserId = ownerId;
+    const occupied = await api.post(`/api/eos/companies/${companyId}/invitations`).send({ email: "someone@example.test", seatId: managerSeat.body.id }).expect(409);
+    expect(occupied.body.code).toBe("seat_already_occupied");
+    const pending = await api.get(`/api/eos/companies/${companyId}/organization-runtime`).expect(200);
+    expect(JSON.stringify(pending.body)).not.toContain("tokenHash");
     const ownerApprovals = await api.get(`/api/eos/companies/${companyId}/approvals`).expect(200);
     expect(ownerApprovals.body.some((item: any) => item.id === packet.body.approvalId)).toBe(true);
+  });
+
+  it("revokes and expires membership invitations without granting seat access", async () => {
+    currentUserId = ownerId;
+    const revokedSeat = await api.post(`/api/eos/companies/${companyId}/seats`).send({
+      title: "Revoked Invite Seat", kind: "individual_contributor", agentName: "Nova", mandate: "Test revocation", authority: {}, toolEntitlements: [],
+    }).expect(201);
+    const revokedInvitation = await api.post(`/api/eos/companies/${companyId}/invitations`).send({ email: "future@example.test", seatId: revokedSeat.body.id }).expect(201);
+    const revokedToken = new URL(revokedInvitation.body.acceptancePath, "https://eos.example.test").searchParams.get("token");
+    await api.post(`/api/eos/companies/${companyId}/invitations/${revokedInvitation.body.id}/revoke`).expect(200);
+    currentUserId = otherId;
+    verifiedEmailOverride = "future@example.test";
+    await api.post("/api/eos/invitations/preview").send({ token: revokedToken }).expect(410);
+
+    currentUserId = ownerId;
+    verifiedEmailOverride = undefined;
+    const expiredSeat = await api.post(`/api/eos/companies/${companyId}/seats`).send({
+      title: "Expired Invite Seat", kind: "individual_contributor", agentName: "Sol", mandate: "Test expiry", authority: {}, toolEntitlements: [],
+    }).expect(201);
+    const expiredInvitation = await api.post(`/api/eos/companies/${companyId}/invitations`).send({ email: "expired@example.test", seatId: expiredSeat.body.id }).expect(201);
+    const expiredToken = new URL(expiredInvitation.body.acceptancePath, "https://eos.example.test").searchParams.get("token");
+    await sql`UPDATE eos_membership_invitations SET expires_at = now() - interval '1 minute' WHERE id = ${expiredInvitation.body.id}`;
+    currentUserId = otherId;
+    verifiedEmailOverride = "expired@example.test";
+    await api.post("/api/eos/invitations/preview").send({ token: expiredToken }).expect(410);
+    const [expiredRecord] = await sql<Array<{ status: string; invited_email: string | null }>>`SELECT status, invited_email FROM eos_membership_invitations WHERE id = ${expiredInvitation.body.id}`;
+    expect(expiredRecord).toEqual({ status: "expired", invited_email: null });
+    verifiedEmailOverride = undefined;
+    currentUserId = ownerId;
   });
 
   it("executes a Gmail customer-value effect only after upward approval and records a reconciled receipt", async () => {

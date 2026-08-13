@@ -4,7 +4,7 @@ import { randomBytes } from "crypto";
 import { storage } from "./storage";
 import { clerkClient } from "./clerkAdmin";
 import { posthogClient } from "./posthog";
-import { verifiedEmailForLegacyClaim } from "./security/legacy-principal-reconciliation";
+import { primaryVerifiedEmail, verifiedEmailForLegacyClaim } from "./security/legacy-principal-reconciliation";
 import type { User as SelectUser } from "@shared/schema";
 import { PRODUCT_ANALYTICS_POLICY_VERSION, productEvents } from "@shared/product-analytics";
 
@@ -22,6 +22,7 @@ declare global {
       user: User;
       isAuthenticated: () => boolean;
       clerkOrg?: string | null;
+      verifiedEmail?: string;
     }
   }
 }
@@ -58,6 +59,7 @@ async function attachClerkUser(req: Request, res: Response, next: NextFunction) 
   // Pre-populated user (test harness / upstream mock): install polyfill and pass.
   if ((req as any).user) {
     req.isAuthenticated = () => true;
+    if (process.env.NODE_ENV === "test" && req.user.email) req.verifiedEmail = req.user.email.trim().toLowerCase();
     return next();
   }
 
@@ -76,55 +78,52 @@ async function attachClerkUser(req: Request, res: Response, next: NextFunction) 
 
   try {
     let user = await storage.getUserByClerkId(clerkUserId);
+    if (!clerkClient) {
+      req.isAuthenticated = () => false;
+      return next();
+    }
+    const clerkIdentity = await clerkClient.users.getUser(clerkUserId);
+    const verifiedEmail = primaryVerifiedEmail(clerkIdentity.primaryEmailAddressId, clerkIdentity.emailAddresses);
+    if (!verifiedEmail) {
+      console.warn(`attachClerkUser: Clerk user ${clerkUserId} has no verified email`);
+      req.isAuthenticated = () => false;
+      return next();
+    }
 
     if (!user) {
-      if (!clerkClient) {
-        console.warn("attachClerkUser: CLERK_SECRET_KEY not set, cannot sync user");
-        req.isAuthenticated = () => false;
-        return next();
-      }
-
-      const clerkUser = await clerkClient.users.getUser(clerkUserId);
-      const email = clerkUser.emailAddresses[0]?.emailAddress;
-      if (!email) {
-        console.warn(`attachClerkUser: Clerk user ${clerkUserId} has no email`);
-        req.isAuthenticated = () => false;
-        return next();
-      }
-
-      const fullName = [clerkUser.firstName, clerkUser.lastName]
+      const fullName = [clerkIdentity.firstName, clerkIdentity.lastName]
         .filter(Boolean)
         .join(" ");
       const username =
-        clerkUser.username ||
-        `${email.split("@")[0]}_${Math.floor(Math.random() * 10000)}`;
+        clerkIdentity.username ||
+        `${verifiedEmail.split("@")[0]}_${Math.floor(Math.random() * 10000)}`;
 
       user = await storage.createUser({
         username,
-        email,
+        email: verifiedEmail,
         password: randomBytes(32).toString("hex"),
         fullName: fullName || undefined,
-        avatar: clerkUser.imageUrl || undefined,
+        avatar: clerkIdentity.imageUrl || undefined,
         clerkUserId,
       });
+    } else if (user.email.trim().toLowerCase() !== verifiedEmail) {
+      user = await storage.updateUser(user.id, { email: verifiedEmail });
     }
 
     // Older EOS builds created local password principals before Clerk became
     // authoritative. Claim only business records whose unbound legacy
     // principal has the same *verified* Clerk email. This is an idempotent
     // ownership migration; it never broadens access by company id alone.
-    const clerkIdentity = await clerkClient?.users.getUser(clerkUserId);
-    const verifiedEmail = clerkIdentity
-      ? verifiedEmailForLegacyClaim(user.email, clerkIdentity.emailAddresses)
-      : undefined;
-    if (verifiedEmail) {
-      const claimed = await storage.claimLegacyBusinessOwnership(user.id, verifiedEmail);
+    const verifiedLegacyEmail = verifiedEmailForLegacyClaim(user.email, clerkIdentity.emailAddresses);
+    if (verifiedLegacyEmail) {
+      const claimed = await storage.claimLegacyBusinessOwnership(user.id, verifiedLegacyEmail);
       if (claimed.companies || claimed.portfolios) {
         console.info("attachClerkUser: reconciled verified legacy business ownership", claimed);
       }
     }
 
     (req as any).user = user;
+    req.verifiedEmail = verifiedEmail;
     req.isAuthenticated = () => true;
     return next();
   } catch (error) {

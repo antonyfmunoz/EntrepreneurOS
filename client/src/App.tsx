@@ -26,6 +26,7 @@ const SettingsPage = lazy(() => import("@/pages/settings-page"));
 const CompanySetupPage = lazy(() => import("@/pages/company-setup-page"));
 const SupportPage = lazy(() => import("@/pages/support-page"));
 const LegalAcceptancePage = lazy(() => import("@/pages/legal-acceptance-page"));
+const InvitationAcceptancePage = lazy(() => import("@/pages/invitation-acceptance-page"));
 const PortfolioList = lazy(() => import("@/pages/portfolio-list-page"));
 const PortfolioDetail = lazy(() => import("@/pages/portfolio-detail-page"));
 const EosOverlayPage = lazy(() => import("@/pages/eos-overlay-page"));
@@ -91,6 +92,7 @@ function Router() {
       <ProtectedRoute path="/company-setup" component={CompanySetupPage} />
       <ProtectedRoute path="/support" component={SupportPage} />
       <ProtectedRoute path="/legal/accept" component={LegalAcceptancePage} />
+      <ProtectedRoute path="/invitations/accept" component={InvitationAcceptancePage} />
 
       <ProtectedRoute path="/settings" component={SettingsPage} />
 

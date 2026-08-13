@@ -1,7 +1,9 @@
 import { SignUp } from '@clerk/clerk-react'
 import { eosClerkAppearance } from '@/lib/clerk-appearance'
+import { safeInternalReturnPath } from '@/lib/safe-return'
 
 export default function SignupPage() {
+  const returnTo = safeInternalReturnPath(new URLSearchParams(window.location.search).get('returnTo'), '/company-setup')
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-5 bg-[#f5f6f7] px-4">
       <div className="text-center">
@@ -11,8 +13,9 @@ export default function SignupPage() {
       </div>
       <SignUp
         routing="hash"
-        fallbackRedirectUrl="/company-setup"
-        signInUrl="/login"
+        fallbackRedirectUrl={returnTo}
+        forceRedirectUrl={returnTo}
+        signInUrl={`/login?returnTo=${encodeURIComponent(returnTo)}`}
         appearance={eosClerkAppearance}
       />
     </div>

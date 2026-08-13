@@ -3,14 +3,15 @@ import { Route, Redirect } from "wouter";
 import { ComponentType, ReactNode } from "react";
 import { FullPageStatus } from "@/components/full-page-status";
 import { useQuery } from "@tanstack/react-query";
+import { browserReturnPath } from "@/lib/safe-return";
 
 type LegalStatus = { enforcement: boolean; configurationReady: boolean; missing: unknown[] };
 
 function LegalGate({ path, children }: { path: string; children: ReactNode }) {
   const status = useQuery<LegalStatus>({ queryKey: ["/api/legal/status"] });
-  if (path === "/legal/accept") return <>{children}</>;
+  if (path === "/legal/accept" || path === "/invitations/accept") return <>{children}</>;
   if (status.isLoading) return <FullPageStatus title="Checking current agreements" description="Confirming the legal versions attached to your account." />;
-  if (status.data?.enforcement && (!status.data.configurationReady || status.data.missing.length > 0)) return <Redirect to="/legal/accept" />;
+  if (status.data?.enforcement && (!status.data.configurationReady || status.data.missing.length > 0)) return <Redirect to={`/legal/accept?returnTo=${encodeURIComponent(browserReturnPath())}`} />;
   return <>{children}</>;
 }
 
@@ -36,7 +37,7 @@ export function ProtectedRoute(props: ProtectedRouteProps) {
   if (!isSignedIn) {
     return (
       <Route path={path}>
-        <Redirect to="/login" />
+        <Redirect to={`/login?returnTo=${encodeURIComponent(browserReturnPath())}`} />
       </Route>
     );
   }

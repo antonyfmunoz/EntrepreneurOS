@@ -4,12 +4,14 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { safeInternalReturnPath } from "@/lib/safe-return";
 
 type LegalDocument = { id: string; documentType: string; title: string; version: string; url: string; effectiveAt: string };
 type LegalStatus = { enforcement: boolean; configurationReady: boolean; missingConfiguration: string[]; documents: LegalDocument[]; missing: LegalDocument[] };
 
 export default function LegalAcceptancePage() {
   const [, navigate] = useLocation();
+  const returnTo = safeInternalReturnPath(new URLSearchParams(window.location.search).get("returnTo"));
   const status = useQuery<LegalStatus>({ queryKey: ["/api/legal/status"] });
   const accept = useMutation({
     mutationFn: async (documentId: string) => {
@@ -37,7 +39,7 @@ export default function LegalAcceptancePage() {
               <Button className="mt-4 w-full" onClick={() => accept.mutate(document.id)} disabled={accept.isPending}>I have read and accept this version</Button>
             </div>
           ))}
-          {status.data?.configurationReady && missing.length === 0 && <div className="space-y-4 text-center"><p className="text-sm">All current required documents have been accepted.</p><Button onClick={() => navigate("/portfolios")}>Continue to EntrepreneurOS</Button></div>}
+          {status.data?.configurationReady && missing.length === 0 && <div className="space-y-4 text-center"><p className="text-sm">All current required documents have been accepted.</p><Button onClick={() => navigate(returnTo)}>Continue to EntrepreneurOS</Button></div>}
           {accept.isError && <p className="text-sm text-destructive">Acceptance could not be recorded. Try again.</p>}
         </CardContent>
       </Card>

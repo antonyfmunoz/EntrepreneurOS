@@ -16,6 +16,7 @@ import {
   eosConversations,
   eosEvidence,
   eosManifestVersions,
+  eosMembershipInvitations,
   eosMemberships,
   eosProviderExecutions,
   eosSeats,
@@ -36,7 +37,8 @@ import {
   canTransitionWorkPacket,
   evidenceCreateSchema,
   manifestInputSchema,
-  membershipCreateSchema,
+  membershipInvitationCreateSchema,
+  membershipInvitationTokenSchema,
   providerExecutionCreateSchema,
   selectAdvisorSeats,
   seatCreateSchema,
@@ -46,6 +48,18 @@ import {
   workPacketTransitionSchema,
 } from "@shared/eos-runtime";
 import { FEDERATION_PROTOCOL_VERSION, type CommandOutcome } from "../umh/contracts";
+import { fixedWindowRateLimit } from "../middleware/rate-limit";
+import {
+  createInvitationSecret,
+  deliverMembershipInvitation,
+  expireMembershipInvitations,
+  invitationAcceptancePath,
+  invitationDigest,
+  MEMBERSHIP_INVITATION_TTL_DAYS,
+  newMembershipInvitationId,
+  normalizeInvitationEmail,
+  revokeDeliveredMembershipInvitation,
+} from "../membership-invitations";
 
 function companyIdFrom(req: Request): number {
   const value = Number(req.params.companyId);
@@ -167,6 +181,31 @@ function route(handler: (req: Request) => Promise<{ status?: number; body?: unkn
   };
 }
 
+const membershipInvitationRateLimit = fixedWindowRateLimit({
+  limit: 20,
+  windowMs: 60 * 60 * 1000,
+  namespace: "membership-invitation",
+  key: (req) => `${req.user?.id || "unknown"}:${req.params.companyId || "unscoped"}`,
+});
+
+function publicInvitation(invitation: typeof eosMembershipInvitations.$inferSelect) {
+  return {
+    id: invitation.id,
+    companyId: invitation.companyId,
+    seatId: invitation.seatId,
+    email: invitation.invitedEmail,
+    status: invitation.status,
+    purpose: invitation.purpose,
+    classificationCeiling: invitation.classificationCeiling,
+    expiresAt: invitation.expiresAt,
+    createdAt: invitation.createdAt,
+  };
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "23505");
+}
+
 export function registerEosRuntimeRoutes(app: Express): void {
   app.get("/api/eos/companies/:companyId/context", route(async (req) => {
     const access = await companyAccess(req);
@@ -234,12 +273,16 @@ export function registerEosRuntimeRoutes(app: Express): void {
 
   app.get("/api/eos/companies/:companyId/organization-runtime", route(async (req) => {
     const access = await companyAccess(req);
+    if (mayManageOrganization(access.role)) await expireMembershipInvitations();
     const seats = await db.select().from(eosSeats).where(and(eq(eosSeats.companyId, access.company.id), eq(eosSeats.status, "active"))).orderBy(eosSeats.createdAt);
     const visible = await visibleSeatIds(access.company.id, access.seat.id, access.role);
     const memberships = mayManageOrganization(access.role)
       ? await db.select().from(eosMemberships).where(and(eq(eosMemberships.companyId, access.company.id), eq(eosMemberships.status, "active")))
       : [];
-    return { body: { seats: seats.filter((seat) => visible.has(seat.id)), memberships, activeSeatId: access.seat.id } };
+    const invitations = mayManageOrganization(access.role)
+      ? await db.select().from(eosMembershipInvitations).where(eq(eosMembershipInvitations.companyId, access.company.id)).orderBy(desc(eosMembershipInvitations.createdAt)).limit(100)
+      : [];
+    return { body: { seats: seats.filter((seat) => visible.has(seat.id)), memberships, invitations: invitations.map(publicInvitation), activeSeatId: access.seat.id } };
   }));
 
   app.post("/api/eos/companies/:companyId/seats", route(async (req) => {
@@ -259,22 +302,122 @@ export function registerEosRuntimeRoutes(app: Express): void {
     return { status: 201, body: seat };
   }));
 
-  app.post("/api/eos/companies/:companyId/memberships", route(async (req) => {
+  app.post("/api/eos/companies/:companyId/memberships", route(async (_req) => {
+    throw new EosRouteError(410, "membership_assignment_replaced_by_invitation", "Direct seat assignment has been replaced by the verified invitation flow.");
+  }));
+
+  app.post("/api/eos/companies/:companyId/invitations", membershipInvitationRateLimit, route(async (req) => {
     const access = await companyAccess(req);
-    if (!mayManageOrganization(access.role)) throw new EosRouteError(403, "membership_manage_denied", "Only the founder or Company CEO may assign people to seats.");
-    const input = membershipCreateSchema.parse(req.body);
-    const user = input.userId
-      ? await db.query.users.findFirst({ where: eq(users.id, input.userId) })
-      : await db.query.users.findFirst({ where: eq(users.email, input.email!.trim().toLowerCase()) });
-    if (!user) throw new EosRouteError(404, "user_not_found", "The person must create and verify an EOS account before assignment to a seat.");
+    if (!mayManageOrganization(access.role)) throw new EosRouteError(403, "membership_manage_denied", "Only the founder or Company CEO may invite people to seats.");
+    const input = membershipInvitationCreateSchema.parse(req.body);
+    const email = normalizeInvitationEmail(input.email);
+    const emailHash = invitationDigest(email);
     const seat = await db.query.eosSeats.findFirst({ where: and(eq(eosSeats.id, input.seatId), eq(eosSeats.companyId, access.company.id), eq(eosSeats.status, "active")) });
-    if (!seat) throw new EosRouteError(400, "invalid_seat", "Membership must reference an active seat in this company.");
-    const existing = await db.query.eosMemberships.findFirst({ where: and(eq(eosMemberships.companyId, access.company.id), eq(eosMemberships.userId, user.id)) });
-    const [membership] = existing
-      ? await db.update(eosMemberships).set({ seatId: seat.id, role: seat.kind, status: "active", purpose: input.purpose, classificationCeiling: input.classificationCeiling, updatedAt: new Date() }).where(eq(eosMemberships.id, existing.id)).returning()
-      : await db.insert(eosMemberships).values({ id: randomUUID(), companyId: access.company.id, userId: user.id, seatId: seat.id, role: seat.kind, purpose: input.purpose, classificationCeiling: input.classificationCeiling }).returning();
-    await db.update(eosSeats).set({ occupantUserId: user.id, agentMode: "assistant", updatedAt: new Date() }).where(eq(eosSeats.id, seat.id));
-    return { status: existing ? 200 : 201, body: membership };
+    if (!seat) throw new EosRouteError(400, "invalid_seat", "Invitation must reference an active seat in this company.");
+    if (seat.occupantUserId) throw new EosRouteError(409, "seat_already_occupied", "Choose an unoccupied seat before inviting a person.");
+    const existingPrincipal = await db.query.users.findFirst({ where: sql`lower(${users.email}) = ${email}` });
+    if (existingPrincipal) {
+      if (existingPrincipal.id === access.company.ownerUserId) throw new EosRouteError(409, "already_company_owner", "The company owner already has founder access.");
+      const existingMembership = await db.query.eosMemberships.findFirst({ where: and(eq(eosMemberships.companyId, access.company.id), eq(eosMemberships.userId, existingPrincipal.id), eq(eosMemberships.status, "active")) });
+      if (existingMembership) throw new EosRouteError(409, "already_company_member", "This person already has an active seat in the company.");
+    }
+    const now = new Date();
+    const invitationId = newMembershipInvitationId();
+    const token = createInvitationSecret();
+    const expiresAt = new Date(now.getTime() + MEMBERSHIP_INVITATION_TTL_DAYS * 86_400_000);
+    let invitation: typeof eosMembershipInvitations.$inferSelect;
+    try {
+      [invitation] = await db.insert(eosMembershipInvitations).values({
+        id: invitationId,
+        companyId: access.company.id,
+        seatId: seat.id,
+        invitedEmail: email,
+        emailHash,
+        tokenHash: invitationDigest(token),
+        invitedByUserId: req.user.id,
+        purpose: input.purpose,
+        classificationCeiling: input.classificationCeiling,
+        expiresAt,
+        createdAt: now,
+        updatedAt: now,
+      }).returning();
+    } catch (error) {
+      if (isUniqueViolation(error)) throw new EosRouteError(409, "invitation_already_pending", "This seat or email already has a pending invitation.");
+      throw error;
+    }
+    const trace = tracePair();
+    try {
+      const delivered = await deliverMembershipInvitation({ invitationId, email, token });
+      [invitation] = await db.update(eosMembershipInvitations).set({ status: "pending", providerInvitationId: delivered.providerInvitationId, updatedAt: new Date() }).where(eq(eosMembershipInvitations.id, invitationId)).returning();
+      await db.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "membership_invitation.created", targetType: "membership_invitation", targetId: invitationId, traceId: trace.traceId, correlationId: trace.correlationId, result: "pending", details: { seatId: seat.id, expiresAt, emailHash } });
+    } catch {
+      await db.update(eosMembershipInvitations).set({ status: "delivery_failed", invitedEmail: null, updatedAt: new Date() }).where(eq(eosMembershipInvitations.id, invitationId));
+      await db.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "membership_invitation.delivery_failed", targetType: "membership_invitation", targetId: invitationId, traceId: trace.traceId, correlationId: trace.correlationId, result: "failed", details: { seatId: seat.id, emailHash } });
+      throw new EosRouteError(503, "invitation_delivery_unavailable", "The invitation could not be delivered. No seat access was granted.");
+    }
+    return { status: 201, body: { ...publicInvitation(invitation), ...(process.env.NODE_ENV === "test" ? { acceptancePath: invitationAcceptancePath(token) } : {}) } };
+  }));
+
+  app.post("/api/eos/companies/:companyId/invitations/:invitationId/revoke", route(async (req) => {
+    const access = await companyAccess(req);
+    if (!mayManageOrganization(access.role)) throw new EosRouteError(403, "membership_manage_denied", "Only the founder or Company CEO may revoke invitations.");
+    const invitation = await db.query.eosMembershipInvitations.findFirst({ where: and(eq(eosMembershipInvitations.id, req.params.invitationId), eq(eosMembershipInvitations.companyId, access.company.id)) });
+    if (!invitation) throw new EosRouteError(404, "invitation_not_found", "Invitation not found in this company.");
+    if (!["pending_delivery", "pending"].includes(invitation.status)) throw new EosRouteError(409, "invitation_not_pending", "Only a pending invitation can be revoked.");
+    const now = new Date();
+    await db.update(eosMembershipInvitations).set({ status: "revoked", invitedEmail: null, revokedAt: now, updatedAt: now }).where(eq(eosMembershipInvitations.id, invitation.id));
+    let providerRevocation = "succeeded";
+    try { await revokeDeliveredMembershipInvitation(invitation.providerInvitationId); } catch { providerRevocation = "failed"; }
+    const trace = tracePair();
+    await db.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "membership_invitation.revoked", targetType: "membership_invitation", targetId: invitation.id, traceId: trace.traceId, correlationId: trace.correlationId, result: "revoked", details: { seatId: invitation.seatId, providerRevocation } });
+    return { body: { ...publicInvitation({ ...invitation, status: "revoked", invitedEmail: null, revokedAt: now, updatedAt: now }) } };
+  }));
+
+  app.post("/api/eos/invitations/preview", route(async (req) => {
+    const { token } = membershipInvitationTokenSchema.parse(req.body);
+    await expireMembershipInvitations();
+    const invitation = await db.query.eosMembershipInvitations.findFirst({ where: eq(eosMembershipInvitations.tokenHash, invitationDigest(token)) });
+    if (!invitation) throw new EosRouteError(404, "invitation_not_found", "This invitation is invalid or no longer available.");
+    if (invitation.status === "accepted") throw new EosRouteError(409, "invitation_already_used", "This invitation has already been accepted.");
+    if (invitation.status !== "pending") throw new EosRouteError(410, "invitation_inactive", "This invitation is no longer active.");
+    if (!req.verifiedEmail || invitationDigest(req.verifiedEmail) !== invitation.emailHash) throw new EosRouteError(403, "invitation_email_mismatch", "Sign in with the verified email address that received this invitation.");
+    const [company, seat] = await Promise.all([
+      db.query.companies.findFirst({ where: eq(companies.id, invitation.companyId) }),
+      db.query.eosSeats.findFirst({ where: eq(eosSeats.id, invitation.seatId) }),
+    ]);
+    if (!company || !seat) throw new EosRouteError(410, "invitation_target_unavailable", "The invited organization seat is no longer available.");
+    return { body: { invitationId: invitation.id, company: { id: company.id, name: company.name }, seat: { id: seat.id, title: seat.title, kind: seat.kind }, expiresAt: invitation.expiresAt } };
+  }));
+
+  app.post("/api/eos/invitations/accept", route(async (req) => {
+    const { token } = membershipInvitationTokenSchema.parse(req.body);
+    if (!req.verifiedEmail) throw new EosRouteError(403, "verified_email_required", "A verified email address is required to accept an invitation.");
+    await expireMembershipInvitations();
+    const tokenHash = invitationDigest(token);
+    const emailHash = invitationDigest(req.verifiedEmail);
+    const outcome = await db.transaction(async (tx) => {
+      const [candidate] = await tx.select().from(eosMembershipInvitations).where(eq(eosMembershipInvitations.tokenHash, tokenHash)).limit(1);
+      if (!candidate) throw new EosRouteError(404, "invitation_not_found", "This invitation is invalid or no longer available.");
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${candidate.companyId}, 24702)`);
+      const [invitation] = await tx.select().from(eosMembershipInvitations).where(eq(eosMembershipInvitations.id, candidate.id)).limit(1);
+      if (invitation.status === "accepted") throw new EosRouteError(409, "invitation_already_used", "This invitation has already been accepted.");
+      if (invitation.status !== "pending") throw new EosRouteError(410, "invitation_inactive", "This invitation is no longer active.");
+      if (invitation.emailHash !== emailHash) throw new EosRouteError(403, "invitation_email_mismatch", "Sign in with the verified email address that received this invitation.");
+      const [seat] = await tx.select().from(eosSeats).where(eq(eosSeats.id, invitation.seatId)).limit(1);
+      if (!seat || seat.status !== "active" || seat.companyId !== invitation.companyId) throw new EosRouteError(410, "invitation_target_unavailable", "The invited organization seat is no longer available.");
+      if (seat.occupantUserId) throw new EosRouteError(409, "seat_already_occupied", "This organizational seat is already occupied.");
+      const [existingMembership] = await tx.select({ id: eosMemberships.id }).from(eosMemberships).where(and(eq(eosMemberships.companyId, invitation.companyId), eq(eosMemberships.userId, req.user.id), eq(eosMemberships.status, "active"))).limit(1);
+      if (existingMembership) throw new EosRouteError(409, "already_company_member", "Your account already has an active seat in this company.");
+      const membershipId = randomUUID();
+      const now = new Date();
+      await tx.insert(eosMemberships).values({ id: membershipId, companyId: invitation.companyId, userId: req.user.id, seatId: seat.id, role: seat.kind, purpose: invitation.purpose, classificationCeiling: invitation.classificationCeiling, createdAt: now, updatedAt: now });
+      await tx.update(eosSeats).set({ occupantUserId: req.user.id, agentMode: "assistant", updatedAt: now }).where(eq(eosSeats.id, seat.id));
+      await tx.update(eosMembershipInvitations).set({ status: "accepted", invitedEmail: null, acceptedByUserId: req.user.id, acceptedAt: now, updatedAt: now }).where(eq(eosMembershipInvitations.id, invitation.id));
+      const trace = tracePair();
+      await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: invitation.companyId, actorUserId: req.user.id, action: "membership_invitation.accepted", targetType: "membership", targetId: membershipId, traceId: trace.traceId, correlationId: trace.correlationId, result: "active", details: { invitationId: invitation.id, seatId: seat.id } });
+      return { membershipId, companyId: invitation.companyId, seatId: seat.id };
+    });
+    return { status: 201, body: outcome };
   }));
 
   async function communicationContext(req: Request) {

@@ -116,6 +116,15 @@ try {
   await desktop.getByPlaceholder("Role Agent name").fill("Quinn");
   await desktop.getByRole("button", { name: "Create accountable seat" }).click();
   await desktop.getByText(seatTitle, { exact: true }).first().waitFor();
+  const inviteEmail = `browser-invite-${Date.now()}@example.test`;
+  await desktop.getByPlaceholder("Work email address").fill(inviteEmail);
+  await desktop.getByLabel("Seat for invitation").selectOption({ label: seatTitle });
+  await desktop.getByRole("button", { name: "Send secure invitation", exact: true }).click();
+  await desktop.getByText("Invitation sent", { exact: true }).waitFor();
+  await desktop.getByText(inviteEmail, { exact: true }).waitFor();
+  await desktop.getByRole("button", { name: `Revoke invitation for ${inviteEmail}`, exact: true }).click();
+  await desktop.getByText("Invitation revoked", { exact: true }).waitFor();
+  await desktop.getByText(inviteEmail, { exact: true }).waitFor({ state: "detached" });
   const modulesLink = desktop.getByRole("link", { name: "Modules", exact: true });
   if (!await modulesLink.count()) {
     const debugContext = await desktop.evaluate(async (id) => fetch(`/api/eos/companies/${id}/context`).then((response) => response.json()), companyId);
@@ -252,7 +261,7 @@ try {
   await mobile.getByRole("button", { name: /Open .* conversation/ }).click();
   await mobile.locator("#mobile-communication-drawer aside").waitFor();
   if (browserErrors.length) throw new Error(`Browser errors: ${browserErrors.join(" | ")}`);
-  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 8, activeModules: 14, usableModuleControlCenter: true, roleSafeNextActions: true, hierarchyBuilder: true, interactiveWorkApprovalLoop: true, assignedWorkLifecycleInWorkRoom: true, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, reachableAccountControls: ["profile", "explicit company context", "privacy", "AI spend", "billing", "support"], quarantinedFalseControls: ["notification delivery preferences", "company-wide AI autonomy"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
+  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 8, activeModules: 14, usableModuleControlCenter: true, roleSafeNextActions: true, hierarchyBuilder: true, teamInvitationLifecycle: { create: true, visible: true, revoke: true }, interactiveWorkApprovalLoop: true, assignedWorkLifecycleInWorkRoom: true, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, reachableAccountControls: ["profile", "explicit company context", "privacy", "AI spend", "billing", "support"], quarantinedFalseControls: ["notification delivery preferences", "company-wide AI autonomy"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
 } finally {
   await browser.close();
 }
