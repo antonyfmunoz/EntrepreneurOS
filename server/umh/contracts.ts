@@ -64,6 +64,6 @@ export function capabilityManifest(enabled: boolean) {
         actionTypes: ["create_task", "create_document"],
       },
     ],
-    eventTypes: ["eos.action.proposed.v1", "eos.approval.decided.v1", "eos.action.completed.v1", "eos.action.failed.v1", "eos.command.outcome.v1"],
+    eventTypes: ["eos.work_packet.proposed.v1", "eos.approval.decided.v1", "eos.command.outcome.v1"],
   };
 }

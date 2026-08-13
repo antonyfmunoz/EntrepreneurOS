@@ -1,4 +1,5 @@
-import { pgTable, text, serial, integer, boolean, timestamp, json, jsonb, decimal, varchar } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { check, index, pgTable, primaryKey, text, serial, integer, boolean, timestamp, json, jsonb, decimal, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -745,6 +746,21 @@ export const eosSchemaMigrations = pgTable("eos_schema_migrations", {
   appliedAt: timestamp("applied_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// This production protection table must be represented in the Drizzle schema
+// as well as migrations. Otherwise a later `db:push` can erase the table while
+// the checksum ledger still records its migration as applied.
+export const eosRateLimitWindows = pgTable("eos_rate_limit_windows", {
+  namespace: text("namespace").notNull(),
+  identityHash: text("identity_hash").notNull(),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+  count: integer("count").notNull().default(0),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.namespace, table.identityHash, table.windowStart] }),
+  index("eos_rate_limit_windows_expires_at_idx").on(table.expiresAt),
+  check("eos_rate_limit_windows_count_check", sql`${table.count} >= 0`),
+]);
+
 export const umhIdentityBindings = pgTable("umh_identity_bindings", {
   id: text("id").primaryKey(),
   installationId: text("installation_id").notNull().references(() => umhInstallations.id, { onDelete: "cascade" }),
@@ -768,6 +784,8 @@ export const umhCommands = pgTable("umh_commands", {
   correlationId: text("correlation_id").notNull(),
   actorUserId: text("actor_user_id").notNull().references(() => users.id),
   companyId: integer("company_id").notNull().references(() => companies.id),
+  workPacketId: text("work_packet_id").references(() => eosWorkPackets.id, { onDelete: "set null" }),
+  approvalId: text("approval_id").references(() => eosApprovalRequests.id, { onDelete: "set null" }),
   status: text("status").notNull(),
   outcome: jsonb("outcome").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -910,7 +928,11 @@ export const eosSeats = pgTable("eos_seats", {
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("eos_seats_one_active_founder_per_company_idx")
+    .on(table.companyId)
+    .where(sql`${table.kind} = 'founder' AND ${table.status} = 'active'`),
+]);
 
 export const eosConversations = pgTable("eos_conversations", {
   id: text("id").primaryKey(),

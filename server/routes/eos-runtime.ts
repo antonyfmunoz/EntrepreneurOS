@@ -21,6 +21,9 @@ import {
   eosSeats,
   eosWorkPackets,
   portfolios,
+  umhAuditRecords,
+  umhCommands,
+  umhEventOutbox,
   users,
   aiBudgets,
   aiUsageLedger,
@@ -42,6 +45,7 @@ import {
   workPacketCreateSchema,
   workPacketTransitionSchema,
 } from "@shared/eos-runtime";
+import { FEDERATION_PROTOCOL_VERSION, type CommandOutcome } from "../umh/contracts";
 
 function companyIdFrom(req: Request): number {
   const value = Number(req.params.companyId);
@@ -611,6 +615,9 @@ export function registerEosRuntimeRoutes(app: Express): void {
     const approval = await db.query.eosApprovalRequests.findFirst({ where: and(eq(eosApprovalRequests.id, req.params.approvalId), eq(eosApprovalRequests.companyId, company.id), eq(eosApprovalRequests.assignedToUserId, req.user.id)) });
     if (!approval) throw new EosRouteError(404, "approval_not_found", "Approval not found in this authority scope.");
     if (approval.status !== "pending") throw new EosRouteError(409, "approval_already_decided", "Approval has already been decided.");
+    const federatedCommand = await db.query.umhCommands.findFirst({
+      where: and(eq(umhCommands.companyId, company.id), eq(umhCommands.approvalId, approval.id)),
+    });
     const now = new Date();
     const nextStatus = input.decision === "approved" ? "ready" : "cancelled";
     const { traceId, correlationId } = tracePair();
@@ -626,6 +633,39 @@ export function registerEosRuntimeRoutes(app: Express): void {
         action: "approval.decided", targetType: "approval", targetId: approval.id,
         traceId, correlationId, result: input.decision, details: { workPacketId: approval.workPacketId, reason: input.reason || null }, createdAt: now,
       });
+      if (federatedCommand) {
+        const federationOutcome = {
+          protocolVersion: FEDERATION_PROTOCOL_VERSION,
+          commandId: federatedCommand.id,
+          status: input.decision === "approved" ? "completed" : "rejected",
+          outcomeCode: input.decision === "approved" ? "proposal_approved" : "approval_rejected",
+          traceId: federatedCommand.traceId,
+          correlationId: federatedCommand.correlationId,
+          result: { workPacketId: approval.workPacketId, approvalId: approval.id, decision: input.decision },
+          occurredAt: now.toISOString(),
+        } satisfies CommandOutcome;
+        const eventPayload = {
+          commandId: federatedCommand.id,
+          workPacketId: approval.workPacketId,
+          approvalId: approval.id,
+          decision: input.decision,
+          reason: input.reason || null,
+          traceId: federatedCommand.traceId,
+          correlationId: federatedCommand.correlationId,
+        };
+        await tx.insert(umhAuditRecords).values({
+          id: randomUUID(), installationId: federatedCommand.installationId, commandId: federatedCommand.id,
+          eventType: "eos.approval.decided.v1", traceId: federatedCommand.traceId, correlationId: federatedCommand.correlationId,
+          actorUserId: req.user.id, details: eventPayload, createdAt: now,
+        });
+        await tx.insert(umhEventOutbox).values([
+          { id: randomUUID(), installationId: federatedCommand.installationId, eventType: "eos.approval.decided.v1", payload: eventPayload, createdAt: now },
+          { id: randomUUID(), installationId: federatedCommand.installationId, eventType: "eos.command.outcome.v1", payload: federationOutcome, createdAt: now },
+        ]);
+        await tx.update(umhCommands).set({
+          status: federationOutcome.status, outcome: federationOutcome, completedAt: now,
+        }).where(and(eq(umhCommands.id, federatedCommand.id), eq(umhCommands.status, "accepted")));
+      }
     });
     const providerExecution = await db.query.eosProviderExecutions.findFirst({ where: and(eq(eosProviderExecutions.companyId, company.id), eq(eosProviderExecutions.approvalId, approval.id)) });
     if (!providerExecution) return { body: decided };

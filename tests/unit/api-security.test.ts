@@ -9,10 +9,7 @@ function response() {
   return res;
 }
 
-afterEach(() => {
-  delete process.env.EOS_ENABLE_LEGACY_UNSCOPED_ROUTES;
-  process.env.NODE_ENV = "test";
-});
+afterEach(() => { process.env.NODE_ENV = "test"; });
 
 describe("EOS API security boundary", () => {
   it("rejects API requests without a resolved local principal", () => {
@@ -72,6 +69,10 @@ describe("EOS API security boundary", () => {
     expect(res.status).toHaveBeenCalledWith(410);
     blockLegacyUnscopedApis({ path: "/llm/chat" } as any, res, next);
     expect(res.status).toHaveBeenCalledWith(410);
+    for (const path of ["/actions/pending", "/crm/contacts", "/folders", "/documents", "/ai-assistant/messages", "/stats", "/analytics", "/ai/stats"]) {
+      blockLegacyUnscopedApis({ path } as any, res, next);
+      expect(res.status).toHaveBeenLastCalledWith(410);
+    }
   });
 
   it("does not block company-scoped EOS runtime routes", () => {

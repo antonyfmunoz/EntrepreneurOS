@@ -21,7 +21,7 @@ Included:
 - a 15-seat portfolio advisor council with persisted consultations and Executive Assistant synthesis;
 - Google Calendar, Google Drive, and Notion operating context when the connected account grants the required scopes;
 - optional, fail-closed UMH federation for one proposal capability;
-- quarantined legacy global task, agent, and workflow routes;
+- permanently quarantined legacy global task, agent, workflow, conversation, action, CRM, folder, document, assistant, and analytics routes;
 - overlay UI for Brief, Organization, Missions, Approvals, Evidence, Systems, and role-compiled assistant context.
 
 Deferred:

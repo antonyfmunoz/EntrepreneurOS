@@ -2,10 +2,12 @@ import { randomUUID } from "crypto";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db";
 import {
-  type AgentAction,
-  agentActions,
   agents,
   companies,
+  eosApprovalRequests,
+  eosAuditRecords,
+  eosSeats,
+  eosWorkPackets,
   umhAuditRecords,
   umhCommands,
   umhEventOutbox,
@@ -38,6 +40,17 @@ function outcome(command: CommandEnvelope, status: CommandOutcome["status"], out
 
 function invalid(message: string): never {
   throw new FederationError(400, "invalid_command", message);
+}
+
+function proposalTitle(command: CommandEnvelope): string {
+  const supplied = command.payload.parameters.title;
+  if (typeof supplied === "string" && supplied.trim()) return supplied.trim().slice(0, 180);
+  return command.payload.actionType === "create_task" ? "Review proposed task" : "Review proposed document";
+}
+
+function proposalObjective(command: CommandEnvelope): string {
+  if (command.payload.description?.trim()) return command.payload.description.trim();
+  return `Review the UMH-proposed ${command.payload.actionType.replace("_", " ")} request. Execute it only through canonical EOS work after local approval.`;
 }
 
 export async function acceptFederatedCommand(raw: unknown, signature: string | undefined): Promise<CommandOutcome> {
@@ -103,29 +116,71 @@ export async function acceptFederatedCommand(raw: unknown, signature: string | u
   });
   if (!agent) throw new FederationError(403, "agent_not_in_scope", "The target agent is not authorized for the requested company.");
 
-  const actionId = `action_${randomUUID()}`;
+  let founderSeat = await db.query.eosSeats.findFirst({
+    where: and(eq(eosSeats.companyId, company.id), eq(eosSeats.kind, "founder"), eq(eosSeats.status, "active")),
+  });
+  if (!founderSeat) {
+    await db.insert(eosSeats).values({
+      id: randomUUID(), companyId: company.id, title: "Founder / Portfolio Principal", kind: "founder",
+      occupantUserId: command.actor.localUserId, agentName: company.assistantName || "Assistant", agentMode: "assistant",
+      mandate: "Own portfolio direction and final local authority.", authority: { level: "owner" }, toolEntitlements: [],
+    }).onConflictDoNothing();
+    founderSeat = await db.query.eosSeats.findFirst({
+      where: and(eq(eosSeats.companyId, company.id), eq(eosSeats.kind, "founder"), eq(eosSeats.status, "active")),
+    });
+  }
+  if (!founderSeat) throw new FederationError(500, "founder_seat_unavailable", "The company approval authority could not be resolved.");
+
+  const workPacketId = randomUUID();
+  const approvalId = randomUUID();
   const commandId = command.commandId;
   const now = new Date();
 
-  const persistedOutcome = outcome(command, "accepted", "action_proposed", { actionId, approvalRequired: true });
+  const persistedOutcome = outcome(command, "accepted", "work_packet_proposed", {
+    actionId: workPacketId,
+    workPacketId,
+    approvalId,
+    approvalRequired: true,
+  });
   try {
     await db.transaction(async (tx) => {
-    await tx.insert(agentActions).values({
-      id: actionId,
-      agentId: command.payload.agentId,
-      userId: command.actor.localUserId,
+    await tx.insert(eosWorkPackets).values({
+      id: workPacketId,
       companyId: command.scope.companyId,
-      actionType: command.payload.actionType,
-      actionName: command.payload.actionType,
-      description: command.payload.description || null,
-      parameters: command.payload.parameters,
-      status: "pending",
-      // This first bridge slice creates a local proposal only. It never executes side effects.
+      createdByUserId: command.actor.localUserId,
+      accountableUserId: command.actor.localUserId,
+      accountableSeatId: founderSeat.id,
+      title: proposalTitle(command),
+      objective: proposalObjective(command),
+      status: "awaiting_approval",
+      priority: command.payload.priority === "urgent" ? "critical" : command.payload.priority || "medium",
+      source: "umh_federation",
+      visibility: "company",
+      classification: "internal",
       requiresApproval: true,
-      priority: command.payload.priority || "medium",
-      metadata: { umhCommandId: commandId, delegationId: command.actor.delegationId },
+      toolPack: [{
+        kind: "federation_proposal",
+        capability: command.commandType,
+        actionType: command.payload.actionType,
+        targetAgentId: command.payload.agentId,
+        parameters: command.payload.parameters,
+      }],
+      evidenceRequirements: command.payload.actionType === "create_document" ? ["Approved document"] : ["Task completion evidence"],
+      traceId: command.trace.traceId,
+      correlationId: command.trace.correlationId,
       createdAt: now,
       updatedAt: now,
+    });
+    await tx.insert(eosApprovalRequests).values({
+      id: approvalId,
+      companyId: command.scope.companyId,
+      workPacketId,
+      requestedByUserId: command.actor.localUserId,
+      assignedToUserId: command.actor.localUserId,
+      assignedToSeatId: founderSeat.id,
+      summary: `Review UMH proposal: ${proposalTitle(command)}`,
+      status: "pending",
+      createdAt: now,
     });
     await tx.insert(umhCommands).values({
       id: commandId,
@@ -138,6 +193,8 @@ export async function acceptFederatedCommand(raw: unknown, signature: string | u
       correlationId: command.trace.correlationId,
       actorUserId: command.actor.localUserId,
       companyId: command.scope.companyId,
+      workPacketId,
+      approvalId,
       status: "accepted",
       outcome: persistedOutcome,
       createdAt: now,
@@ -146,17 +203,23 @@ export async function acceptFederatedCommand(raw: unknown, signature: string | u
       id: randomUUID(),
       installationId: installation.id,
       commandId,
-      eventType: "eos.command.accepted.v1",
+      eventType: "eos.work_packet.proposed.v1",
       traceId: command.trace.traceId,
       correlationId: command.trace.correlationId,
       actorUserId: command.actor.localUserId,
-      details: { commandType: command.commandType, actionId, requestHash },
+      details: { commandType: command.commandType, workPacketId, approvalId, requestHash },
       createdAt: now,
+    });
+    await tx.insert(eosAuditRecords).values({
+      id: randomUUID(), companyId: command.scope.companyId, actorUserId: command.actor.localUserId,
+      action: "federation.proposal.accepted", targetType: "work_packet", targetId: workPacketId,
+      traceId: command.trace.traceId, correlationId: command.trace.correlationId, result: "awaiting_approval",
+      details: { commandId, installationId: installation.id, approvalId, actionType: command.payload.actionType }, createdAt: now,
     });
     await tx.insert(umhEventOutbox).values([
       {
-        id: randomUUID(), installationId: installation.id, eventType: "eos.action.proposed.v1",
-        payload: { actionId, commandId, companyId: command.scope.companyId, trace: command.trace }, createdAt: now,
+        id: randomUUID(), installationId: installation.id, eventType: "eos.work_packet.proposed.v1",
+        payload: { workPacketId, approvalId, commandId, companyId: command.scope.companyId, trace: command.trace }, createdAt: now,
       },
       {
         id: randomUUID(), installationId: installation.id, eventType: "eos.command.outcome.v1",
@@ -181,54 +244,4 @@ export async function acceptFederatedCommand(raw: unknown, signature: string | u
 export async function getFederatedOutcome(commandId: string): Promise<CommandOutcome | undefined> {
   const record = await db.query.umhCommands.findFirst({ where: eq(umhCommands.id, commandId) });
   return record?.outcome as CommandOutcome | undefined;
-}
-
-/** Append federation evidence for a locally decided/executed action. No caller
- * can mutate command history or deliver directly to UMH; the outbox owns it. */
-export async function recordFederatedActionEvent(
-  action: AgentAction,
-  eventType: "eos.approval.decided.v1" | "eos.action.completed.v1" | "eos.action.failed.v1",
-  details: Record<string, unknown>,
-): Promise<void> {
-  const commandId = (action.metadata as Record<string, unknown> | null)?.umhCommandId;
-  if (typeof commandId !== "string") return;
-  const command = await db.query.umhCommands.findFirst({ where: eq(umhCommands.id, commandId) });
-  if (!command) return;
-  const now = new Date();
-  const terminalStatus: CommandOutcome["status"] | undefined = eventType === "eos.action.completed.v1"
-    ? "completed"
-    : eventType === "eos.action.failed.v1"
-      ? "failed"
-      : eventType === "eos.approval.decided.v1" && details.decision === "rejected"
-        ? "rejected"
-        : undefined;
-  const terminalOutcome = terminalStatus ? {
-    protocolVersion: FEDERATION_PROTOCOL_VERSION,
-    commandId,
-    status: terminalStatus,
-    outcomeCode: terminalStatus === "completed" ? "action_completed" : terminalStatus === "failed" ? "action_failed" : "approval_rejected",
-    traceId: command.traceId,
-    correlationId: command.correlationId,
-    result: { actionId: action.id },
-    occurredAt: now.toISOString(),
-  } satisfies CommandOutcome : undefined;
-  await db.transaction(async (tx) => {
-    await tx.insert(umhAuditRecords).values({
-      id: randomUUID(), installationId: command.installationId, commandId,
-      eventType, traceId: command.traceId, correlationId: command.correlationId,
-      actorUserId: action.userId, details, createdAt: now,
-    });
-    await tx.insert(umhEventOutbox).values({
-      id: randomUUID(), installationId: command.installationId, eventType,
-      payload: { commandId, actionId: action.id, status: action.status, details, traceId: command.traceId, correlationId: command.correlationId },
-      createdAt: now,
-    });
-    if (terminalOutcome) {
-      await tx.update(umhCommands).set({ status: terminalOutcome.status, outcome: terminalOutcome, completedAt: now }).where(eq(umhCommands.id, commandId));
-      await tx.insert(umhEventOutbox).values({
-        id: randomUUID(), installationId: command.installationId, eventType: "eos.command.outcome.v1",
-        payload: terminalOutcome, createdAt: now,
-      });
-    }
-  });
 }
