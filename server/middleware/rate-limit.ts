@@ -30,6 +30,11 @@ class MemoryRateLimitStore implements RateLimitStore {
     bucket.count += 1;
     return bucket;
   }
+
+  clear(): void {
+    this.buckets.clear();
+    this.lastSweepAt = 0;
+  }
 }
 
 class PostgresRateLimitStore implements RateLimitStore {
@@ -53,6 +58,13 @@ class PostgresRateLimitStore implements RateLimitStore {
 
 const memoryStore = new MemoryRateLimitStore();
 const postgresStore = new PostgresRateLimitStore();
+
+export function resetInMemoryRateLimitsForFixture(): void {
+  if (process.env.NODE_ENV !== "test" || process.env.EOS_E2E_FIXTURE !== "true") {
+    throw new Error("In-memory rate limits can only be reset by the loopback browser fixture.");
+  }
+  memoryStore.clear();
+}
 
 export function fixedWindowRateLimit(options: { limit: number; windowMs: number; namespace: string; key?: (req: Request) => string; store?: RateLimitStore }) {
   return async (req: Request, res: Response, next: NextFunction) => {

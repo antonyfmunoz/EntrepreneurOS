@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fixedWindowRateLimit } from "../../server/middleware/rate-limit";
+import { fixedWindowRateLimit, resetInMemoryRateLimitsForFixture } from "../../server/middleware/rate-limit";
 
 describe("API rate limiting", () => {
   it("allows the configured window and then rejects excess requests", async () => {
@@ -24,5 +24,13 @@ describe("API rate limiting", () => {
     await limiter(req, res, next);
     expect(res.status).toHaveBeenCalledWith(503);
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it("allows rate-limit reset only inside the explicit browser fixture", () => {
+    delete process.env.EOS_E2E_FIXTURE;
+    expect(() => resetInMemoryRateLimitsForFixture()).toThrow("only be reset by the loopback browser fixture");
+    process.env.EOS_E2E_FIXTURE = "true";
+    expect(() => resetInMemoryRateLimitsForFixture()).not.toThrow();
+    delete process.env.EOS_E2E_FIXTURE;
   });
 });

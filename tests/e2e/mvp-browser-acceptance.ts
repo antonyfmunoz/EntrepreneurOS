@@ -43,6 +43,9 @@ try {
   if (await settingsLink.getAttribute("href") !== `/settings?companyId=${companyId}`) throw new Error("Company settings did not preserve the active company context.");
   await settingsLink.click();
   await desktop.getByRole("heading", { name: "Settings", exact: true }).waitFor();
+  if (await desktop.getByLabel("Executive decision control HUD").count()) throw new Error("Account settings still renders a company operating HUD without company authority context.");
+  if (await desktop.getByRole("navigation", { name: "EOS primary navigation" }).count()) throw new Error("Account settings still renders company operating navigation.");
+  if (await desktop.getByRole("button", { name: "Open navigation", exact: true }).count()) throw new Error("Account settings still exposes an empty operating-navigation drawer.");
   await desktop.getByLabel("Company context").waitFor();
   if (await desktop.getByLabel("Company context").textContent() !== "EOS Browser Acceptance") throw new Error("Settings did not resolve the explicitly selected company.");
   if (await desktop.getByRole("tab", { name: "AI Autonomy", exact: true }).count()) throw new Error("The non-enforced AI autonomy control is still exposed.");
@@ -54,6 +57,11 @@ try {
   if (process.env.EOS_CAPTURE_VISUALS === "true") await desktop.screenshot({ path: ".tmp/eos-settings-desktop.png", fullPage: true });
   await desktop.getByRole("tab", { name: "Billing", exact: true }).click();
   await desktop.getByText("Billing is not available in this environment", { exact: true }).waitFor();
+  await desktop.goto(`${origin}/support`, { waitUntil: "domcontentloaded" });
+  await desktop.getByRole("heading", { name: "Support", exact: true }).waitFor();
+  await desktop.getByRole("button", { name: "Submit support request", exact: true }).waitFor();
+  if (await desktop.getByLabel("Executive decision control HUD").count()) throw new Error("Account support still renders a company operating HUD.");
+  if (await desktop.getByRole("navigation", { name: "EOS primary navigation" }).count()) throw new Error("Account support still renders company operating navigation.");
   await desktop.goto(`${origin}/company/${companyId}#home`, { waitUntil: "domcontentloaded" });
   await desktop.getByRole("heading", { name: "Home", exact: true }).waitFor();
   await desktop.getByRole("button", { name: "Create mission" }).click();
@@ -204,6 +212,11 @@ try {
   await mobile.getByRole("heading", { name: "Settings", exact: true }).waitFor();
   await mobile.getByRole("tab", { name: "Billing", exact: true }).click();
   await mobile.getByText("Billing is not available in this environment", { exact: true }).waitFor();
+  if (await mobile.getByRole("tab", { name: "Billing", exact: true }).getAttribute("data-state") !== "active") throw new Error("Mobile Billing tab did not become active.");
+  if (await mobile.getByRole("tab", { name: "Profile", exact: true }).getAttribute("data-state") !== "inactive") throw new Error("Mobile Profile tab remained active after selecting Billing.");
+  const profileTabBackground = await mobile.getByRole("tab", { name: "Profile", exact: true }).evaluate((element) => getComputedStyle(element).backgroundColor);
+  const billingTabBackground = await mobile.getByRole("tab", { name: "Billing", exact: true }).evaluate((element) => getComputedStyle(element).backgroundColor);
+  if (profileTabBackground === billingTabBackground) throw new Error("Mobile inactive Profile tab still looks active after selecting Billing.");
   if (process.env.EOS_CAPTURE_VISUALS === "true") await mobile.screenshot({ path: ".tmp/eos-settings-mobile.png", fullPage: true });
   if (await mobile.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)) throw new Error("Mobile settings has horizontal overflow.");
   await mobile.goto(`${origin}/company/${companyId}#my-role`, { waitUntil: "domcontentloaded" });

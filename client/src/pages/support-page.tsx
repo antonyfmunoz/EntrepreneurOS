@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, LifeBuoy, Loader2, ShieldCheck } from "lucide-react";
-import { Link } from "wouter";
-import { Header } from "@/components/header";
+import { CheckCircle2, LifeBuoy, Loader2, ShieldCheck } from "lucide-react";
+import { UniversalLayout } from "@/components/layout/universal-layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,13 +57,13 @@ export default function SupportPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <Header title="Support">
-        <Button variant="ghost" size="sm" asChild className="mr-4" aria-label="Return to workspace">
-          <Link href="/"><ArrowLeft className="h-5 w-5" /></Link>
-        </Button>
-      </Header>
-      <main className="flex-1 overflow-auto p-4 md:p-6">
+    <UniversalLayout title="Support" leftRailItems={[]} floatingPanel={false}>
+      <main className="p-1 sm:p-3">
+        <div className="mx-auto mb-7 max-w-5xl">
+          <p className="eos-label">Account support</p>
+          <h1 className="mt-2 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">Support</h1>
+          <p className="mt-3 max-w-2xl text-base text-muted-foreground">Record a problem, retain its reference, and track the requests visible to your account.</p>
+        </div>
         <div className="mx-auto grid max-w-5xl gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.8fr)]">
           <Card>
             <CardHeader>
@@ -136,6 +135,6 @@ export default function SupportPage() {
           </div>
         </div>
       </main>
-    </div>
+    </UniversalLayout>
   );
 }

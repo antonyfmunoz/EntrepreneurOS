@@ -77,7 +77,7 @@ Principal
 
 The user must never infer which organization, authority context, provider record, or evidence requirement an action affects.
 
-Account settings follow the same law. With one owned company EOS may select it automatically. With multiple owned companies, company and AI-spend controls remain inactive until the user selects an exact company. That selection is visible, URL-addressable, and carried from an active company workspace. A settings control must change an enforced runtime state or explicitly state that the capability is unavailable; storing an unused preference is not a functional control.
+Account settings follow the same law. Settings and Support use a clean account shell: the account header remains, but no company navigation or Executive HUD is rendered without an active company authority context. With one owned company EOS may select it automatically. With multiple owned companies, company and AI-spend controls remain inactive until the user selects an exact company. That selection is visible, URL-addressable, and carried from an active company workspace. A settings control must change an enforced runtime state or explicitly state that the capability is unavailable; storing an unused preference is not a functional control.
 
 ## Visual system
 
