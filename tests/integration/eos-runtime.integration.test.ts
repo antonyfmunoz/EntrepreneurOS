@@ -36,6 +36,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
 
   beforeAll(async () => {
     process.env.DATABASE_URL = databaseUrl;
+    await sql`DELETE FROM notifications WHERE id IN ('owner_private_notification', 'other_private_notification')`;
     await sql`DELETE FROM account_deletion_requests WHERE user_id IN (${ownerId}, ${otherId})`;
     await sql`DELETE FROM legal_acceptances WHERE user_id IN (${ownerId}, ${otherId})`;
     await sql`DELETE FROM legal_documents WHERE id LIKE 'legal_test_%'`;
@@ -69,6 +70,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
   }, 90_000);
 
   afterAll(async () => {
+    await sql`DELETE FROM notifications WHERE id IN ('owner_private_notification', 'other_private_notification')`;
     await sql`DELETE FROM account_deletion_requests WHERE user_id IN (${ownerId}, ${otherId})`;
     await sql`DELETE FROM legal_acceptances WHERE user_id IN (${ownerId}, ${otherId})`;
     await sql`DELETE FROM legal_documents WHERE id LIKE 'legal_test_%'`;
@@ -101,6 +103,33 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     });
     expect(legacy.headers["ratelimit-limit"]).toBe("600");
     expect(legacy.headers["ratelimit-remaining"]).toBeDefined();
+    await api.get("/api/actions/pending").expect(410);
+    await api.get("/api/analytics").expect(410);
+    await api.get("/api/ai/stats").expect(410);
+  });
+
+  it("keeps notification reads and deletes inside the authenticated principal", async () => {
+    await sql`DELETE FROM notifications WHERE id IN ('owner_private_notification', 'other_private_notification')`;
+    await sql`INSERT INTO notifications (id, user_id, title, content, type, read) VALUES
+      ('owner_private_notification', ${ownerId}, 'Owner private', 'Owner-only content', 'test', false),
+      ('other_private_notification', ${otherId}, 'Other private', 'Other-only content', 'test', false)`;
+
+    currentUserId = otherId;
+    await api.post("/api/notifications/owner_private_notification/read").expect(404);
+    await api.delete("/api/notifications/owner_private_notification").expect(404);
+    const [ownerRecord] = await sql<Array<{ read: boolean }>>`SELECT read FROM notifications WHERE id = 'owner_private_notification'`;
+    expect(ownerRecord.read).toBe(false);
+
+    await api.post("/api/notifications/other_private_notification/read").expect(200);
+    await api.delete("/api/notifications/other_private_notification").expect(200);
+    const [remaining] = await sql<Array<{ owner_count: number; other_count: number }>>`
+      SELECT
+        count(*) FILTER (WHERE id = 'owner_private_notification')::int AS owner_count,
+        count(*) FILTER (WHERE id = 'other_private_notification')::int AS other_count
+      FROM notifications`;
+    expect(remaining).toEqual({ owner_count: 1, other_count: 0 });
+    await sql`DELETE FROM notifications WHERE id = 'owner_private_notification'`;
+    currentUserId = ownerId;
   });
 
   it("resolves exactly one founder seat under concurrent workspace loads", async () => {
@@ -473,6 +502,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     await sql`INSERT INTO umh_identity_bindings (id, installation_id, external_actor_id, local_user_id, delegation_id, company_id, enabled) VALUES ('test_eos_binding', ${internalInstallationId}, 'umh_actor_owner', ${ownerId}, 'delegation_owner', ${companyId}, true)`;
 
     const now = Date.now();
+    const proposalTitle = `Federated draft ${randomUUID()}`;
     const command: any = {
       protocolVersion: "umh.federation.v1",
       commandId: "d61f2233-992e-4da7-a072-3d19afc5ff71",
@@ -486,15 +516,17 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       actor: { externalActorId: "umh_actor_owner", localUserId: ownerId, delegationId: "delegation_owner" },
       scope: { companyId, capabilities: ["eos.action.propose.v1"] },
       trace: { traceId: "18d6c54a-1b35-4c45-9832-9a7bd7cf1dc2", correlationId: "a1f0f94f-266b-4477-943e-d14846223c99" },
-      payload: { actionType: "create_document", agentId, parameters: { title: "Federated draft", content: "Internal draft content" } },
+      payload: { actionType: "create_document", agentId, parameters: { title: proposalTitle, content: "Internal draft content" } },
     };
     const { canonicalCommandBytes } = await import("../../server/umh/crypto");
     const signature = sign(null, canonicalCommandBytes(command), umhPrivateKey).toString("base64url");
     const accepted = await api.post("/api/umh/v1/commands").set("x-umh-signature", signature).send(command).expect(202);
     expect(accepted.body.status).toBe("accepted");
-    const actionId = accepted.body.result.actionId;
+    const workPacketId = accepted.body.result.workPacketId;
+    const approvalId = accepted.body.result.approvalId;
+    expect(accepted.body.result.actionId).toBe(workPacketId);
     const duplicate = await api.post("/api/umh/v1/commands").set("x-umh-signature", signature).send(command).expect(202);
-    expect(duplicate.body.result.actionId).toBe(actionId);
+    expect(duplicate.body.result.workPacketId).toBe(workPacketId);
     await api.post("/api/umh/v1/commands").set("x-umh-signature", "invalid").send(command).expect(401);
 
     const replay = { ...command, commandId: "18a75bf3-80e4-426f-907b-80993ce97364", idempotencyKey: "idem-replay-1234567890" };
@@ -506,16 +538,27 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const wrongSignature = sign(null, canonicalCommandBytes(wrongScope), umhPrivateKey).toString("base64url");
     await api.post("/api/umh/v1/commands").set("x-umh-signature", wrongSignature).send(wrongScope).expect(403);
 
-    const [actionCount] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM agent_actions WHERE id = ${actionId}`;
-    expect(actionCount.count).toBe(1);
-    const approval = await api.post(`/api/actions/${actionId}/approve`).send({}).expect(200);
-    expect(approval.body.success).toBe(true);
-    await api.post(`/api/actions/${actionId}/approve`).send({}).expect(409);
+    const [canonicalState] = await sql<Array<{ packet_count: number; approval_count: number; legacy_actions: number; legacy_documents: number; legacy_tasks: number }>>`
+      SELECT
+        (SELECT count(*)::int FROM eos_work_packets WHERE id = ${workPacketId} AND company_id = ${companyId} AND source = 'umh_federation' AND status = 'awaiting_approval') AS packet_count,
+        (SELECT count(*)::int FROM eos_approval_requests WHERE id = ${approvalId} AND work_packet_id = ${workPacketId} AND status = 'pending') AS approval_count,
+        (SELECT count(*)::int FROM agent_actions WHERE company_id = ${companyId} AND metadata->>'umhCommandId' = ${command.commandId}) AS legacy_actions,
+        (SELECT count(*)::int FROM documents WHERE user_id = ${ownerId} AND title = ${proposalTitle}) AS legacy_documents,
+        (SELECT count(*)::int FROM tasks WHERE title = ${proposalTitle}) AS legacy_tasks`;
+    expect(canonicalState).toEqual({ packet_count: 1, approval_count: 1, legacy_actions: 0, legacy_documents: 0, legacy_tasks: 0 });
+
+    const approval = await api.post(`/api/eos/companies/${companyId}/approvals/${approvalId}/decide`).send({ decision: "approved" }).expect(200);
+    expect(approval.body.status).toBe("approved");
+    await api.post(`/api/eos/companies/${companyId}/approvals/${approvalId}/decide`).send({ decision: "approved" }).expect(409);
+    const [approvedPacket] = await sql<Array<{ status: string }>>`SELECT status FROM eos_work_packets WHERE id = ${workPacketId}`;
+    expect(approvedPacket.status).toBe("ready");
 
     const lookup = { protocolVersion: "umh.federation.v1", commandId: command.commandId, installationId: "test-eos-installation", issuer: "https://umh.example.test" };
     const lookupSignature = sign(null, canonicalCommandBytes(lookup), umhPrivateKey).toString("base64url");
     const outcome = await api.get(`/api/umh/v1/outcomes/${command.commandId}`).set("x-umh-installation-id", "test-eos-installation").set("x-umh-signature", lookupSignature).expect(200);
     expect(outcome.body.status).toBe("completed");
+    expect(outcome.body.outcomeCode).toBe("proposal_approved");
+    expect(outcome.body.result).toMatchObject({ workPacketId, approvalId, decision: "approved" });
 
     const { deliverFederationOutboxOnce } = await import("../../server/umh/outbox");
     expect(await deliverFederationOutboxOnce()).toBe(0);

@@ -68,14 +68,15 @@ export function requireLocalApiAuth(req: Request, res: Response, next: NextFunct
 }
 
 export function blockLegacyUnscopedApis(req: Request, res: Response, next: NextFunction) {
-  const legacyUnscoped = /^\/(tasks|agents|workflows|conversations)(\/|$)/.test(req.path)
+  const legacyUnscoped = /^\/(tasks|agents|workflows|conversations|actions|crm|folders|documents|ai-assistant)(\/|$)/.test(req.path)
+    || ["/stats", "/analytics", "/ai/stats"].includes(req.path)
     || req.path === "/integrations"
     || req.path === "/integrations/connect"
     || ["/keys/save", "/ai/generate", "/ai/multi-agent", "/llm/chat"].includes(req.path);
-  if (legacyUnscoped && process.env.EOS_ENABLE_LEGACY_UNSCOPED_ROUTES !== "true") {
+  if (legacyUnscoped) {
     return res.status(410).json({
       code: "legacy_unscoped_route_disabled",
-      message: "This legacy route is disabled because it cannot enforce company scope. Use the EOS company runtime.",
+      message: "This legacy route is permanently disabled because it cannot enforce EOS company, seat, and authority scope. Use the company-scoped EOS runtime.",
     });
   }
   return next();

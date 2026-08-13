@@ -73,7 +73,8 @@ export function registerNotificationRoutes(app: Express): void {
         return res.status(401).json({ message: "Not authenticated" });
       }
 
-      const notification = await storage.markNotificationAsRead(req.params.id);
+      const notification = await storage.markNotificationAsRead(req.params.id, req.user.id);
+      if (!notification) return res.status(404).json({ code: "notification_not_found", message: "Notification not found." });
       res.json(notification);
     } catch (error) {
       console.error("Error marking notification as read:", error);
@@ -119,8 +120,8 @@ export function registerNotificationRoutes(app: Express): void {
       }
 
       // Delete the notification
-      await storage.deleteNotification(notificationId);
-      console.log(`Successfully deleted notification: ${notificationId}`);
+      const deleted = await storage.deleteNotification(notificationId, req.user.id);
+      if (!deleted) return res.status(404).json({ code: "notification_not_found", message: "Notification not found." });
 
       // Check if this was the user's last notification
       const remainingNotifications = await storage.getNotifications(req.user.id);

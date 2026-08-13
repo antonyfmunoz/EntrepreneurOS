@@ -50,6 +50,7 @@ import {
 } from "@shared/schema";
 import { db, client } from './db';
 import { eq, and, desc, asc, sql, inArray, isNull, ne } from 'drizzle-orm';
+import { randomUUID } from "node:crypto";
 
 export interface IStorage {
   // User operations
@@ -103,9 +104,9 @@ export interface IStorage {
   getNotifications(userId: string): Promise<Notification[]>;
   getUnreadNotificationsCount(userId: string): Promise<number>;
   createNotification(notification: InsertNotification): Promise<Notification>;
-  markNotificationAsRead(id: string): Promise<Notification | undefined>;
+  markNotificationAsRead(id: string, userId: string): Promise<Notification | undefined>;
   markAllNotificationsAsRead(userId: string): Promise<void>;
-  deleteNotification(id: string): Promise<void>;
+  deleteNotification(id: string, userId: string): Promise<boolean>;
   
   // AI Assistant operations
   getAiMessages(userId: string): Promise<AiMessage[]>;
@@ -990,7 +991,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createNotification(notification: InsertNotification): Promise<Notification> {
-    const id = `notification_${Date.now()}`;
+    const id = `notification_${randomUUID()}`;
     
     const [newNotification] = await db.insert(notificationsTable)
       .values({
@@ -1010,10 +1011,10 @@ export class DatabaseStorage implements IStorage {
     return newNotification;
   }
 
-  async markNotificationAsRead(id: string): Promise<Notification | undefined> {
+  async markNotificationAsRead(id: string, userId: string): Promise<Notification | undefined> {
     const [notification] = await db.update(notificationsTable)
       .set({ read: true })
-      .where(eq(notificationsTable.id, id))
+      .where(and(eq(notificationsTable.id, id), eq(notificationsTable.userId, userId)))
       .returning();
     
     return notification;
@@ -1025,29 +1026,11 @@ export class DatabaseStorage implements IStorage {
       .where(eq(notificationsTable.userId, userId));
   }
 
-  async deleteNotification(id: string): Promise<void> {
-    console.log(`Server deleting notification with ID: ${id}`);
-    try {
-      // First check if the notification exists
-      const existingNotification = await db.select()
-        .from(notificationsTable)
-        .where(eq(notificationsTable.id, id))
-        .limit(1);
-        
-      if (existingNotification.length === 0) {
-        console.log(`Notification with ID ${id} not found, nothing to delete`);
-        return;
-      }
-      
-      // Delete the notification
-      await db.delete(notificationsTable)
-        .where(eq(notificationsTable.id, id));
-        
-      console.log(`Successfully deleted notification with ID: ${id}`);
-    } catch (error) {
-      console.error("Error deleting notification %s:", id, error);
-      throw error;
-    }
+  async deleteNotification(id: string, userId: string): Promise<boolean> {
+    const deleted = await db.delete(notificationsTable)
+      .where(and(eq(notificationsTable.id, id), eq(notificationsTable.userId, userId)))
+      .returning({ id: notificationsTable.id });
+    return deleted.length === 1;
   }
 
   // AI Assistant operations
