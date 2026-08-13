@@ -310,6 +310,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(exported.body.format).toBe("entrepreneuros.account-export.v1");
     expect(exported.body.account.password).toBeUndefined();
     expect(exported.body.supportConversation).toEqual(expect.any(Array));
+    expect(exported.body.aiUsageLedger).toEqual(expect.any(Array));
     expect(JSON.stringify(exported.body)).not.toContain("accessToken");
     expect(JSON.stringify(exported.body)).not.toContain("refreshToken");
   });
@@ -415,8 +416,9 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
   });
 
   it("enforces owner-scoped AI budget configuration", async () => {
-    const configured = await api.put(`/api/eos/companies/${companyId}/ai-budget`).send({ monthlyLimitDollars: 25, perRequestLimitDollars: 1, enabled: true }).expect(200);
+    const configured = await api.put(`/api/eos/companies/${companyId}/ai-budget`).send({ monthlyLimitDollars: 25, perRequestLimitDollars: 1, alertThresholdPercent: 1, enabled: true }).expect(200);
     expect(configured.body.monthlyLimitMicros).toBe(25_000_000);
+    expect(configured.body.alertThresholdPercent).toBe(1);
     const audit = await api.get(`/api/eos/companies/${companyId}/audit`).expect(200);
     expect(audit.body[0].action).toBe("ai_budget.updated");
     const status = await api.get(`/api/eos/companies/${companyId}/ai-budget`).expect(200);
@@ -424,9 +426,29 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(status.body.spentMicros).toBe(0);
     const { reserveAiSpend, completeAiSpend } = await import("../../server/ai/cost-control");
     const reservation = await reserveAiSpend({ companyId, userId: ownerId, context: "integration-cost-control", model: "test-model", estimatedCostMicros: 500_000 });
+    const thresholdNotifications = await api.get("/api/notifications").expect(200);
+    expect(thresholdNotifications.body).toEqual(expect.arrayContaining([expect.objectContaining({ type: "ai-budget-threshold", relatedId: String(companyId) })]));
     await completeAiSpend(reservation.id, { actualCostMicros: 100_000, inputTokens: 100, outputTokens: 50 });
+    const [thresholdAlertCount] = await sql<Array<{ count: number }>>`SELECT count(*)::int AS count FROM ai_budget_alerts WHERE company_id = ${companyId} AND threshold_percent = 1`;
+    expect(thresholdAlertCount.count).toBe(1);
     const afterUsage = await api.get(`/api/eos/companies/${companyId}/ai-budget`).expect(200);
     expect(afterUsage.body.spentMicros).toBe(100_000);
+    expect(afterUsage.body.completedMicros).toBe(100_000);
+    expect(afterUsage.body.reservedMicros).toBe(0);
+    expect(afterUsage.body.thresholdAlert).toEqual(expect.objectContaining({ usageMicros: 500_000, limitMicros: 25_000_000 }));
+    expect(afterUsage.body.entries).toEqual(expect.arrayContaining([expect.objectContaining({ id: reservation.id, status: "completed", context: "integration-cost-control" })]));
+    const unresolved = await reserveAiSpend({ companyId, userId: ownerId, context: "reconciliation-required", model: "test-model", estimatedCostMicros: 250_000 });
+    const withReservation = await api.get(`/api/eos/companies/${companyId}/ai-budget`).expect(200);
+    expect(withReservation.body.reservedMicros).toBe(250_000);
+    currentUserId = otherId;
+    await api.post(`/api/eos/companies/${companyId}/ai-usage/${unresolved.id}/reconcile`).send({ status: "completed", actualCostDollars: 0.12, evidenceUri: "https://evidence.example.test/ai-provider-receipt" }).expect(404);
+    currentUserId = ownerId;
+    await api.post(`/api/eos/companies/${companyId}/ai-usage/${unresolved.id}/reconcile`).send({ status: "completed", actualCostDollars: 0.12, evidenceUri: "https://evidence.example.test/ai-provider-receipt?token=secret" }).expect(400);
+    const reconciled = await api.post(`/api/eos/companies/${companyId}/ai-usage/${unresolved.id}/reconcile`).send({ status: "completed", actualCostDollars: 0.12, inputTokens: 120, outputTokens: 60, evidenceUri: "https://evidence.example.test/ai-provider-receipt" }).expect(200);
+    expect(reconciled.body).toEqual(expect.objectContaining({ status: "completed", actualCostMicros: 120_000, reconciliationEvidenceUri: "https://evidence.example.test/ai-provider-receipt" }));
+    await api.post(`/api/eos/companies/${companyId}/ai-usage/${unresolved.id}/reconcile`).send({ status: "failed", actualCostDollars: 0, evidenceUri: "https://evidence.example.test/duplicate" }).expect(409);
+    const reconciliationAudit = await api.get(`/api/eos/companies/${companyId}/audit`).expect(200);
+    expect(reconciliationAudit.body.some((record: { action: string; targetId: string }) => record.action === "ai_usage.reconciled" && record.targetId === unresolved.id)).toBe(true);
     await expect(reserveAiSpend({ companyId, userId: ownerId, context: "over-request-limit", model: "test-model", estimatedCostMicros: 2_000_000 })).rejects.toMatchObject({ code: "ai_request_limit_exceeded" });
   });
 

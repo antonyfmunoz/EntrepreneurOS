@@ -11,7 +11,7 @@ import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { registerRoutes } from "../server/routes";
 import { client, db } from "../server/db";
-import { companies, oauthTokens, portfolios, users } from "../shared/schema";
+import { aiBudgets, aiUsageLedger, companies, oauthTokens, portfolios, users } from "../shared/schema";
 import { resetInMemoryRateLimitsForFixture } from "../server/middleware/rate-limit";
 import { encryptCredential } from "../server/security/credential-encryption";
 
@@ -100,6 +100,10 @@ if (!company) {
     assistantName: "Assistant",
   }).returning();
 }
+
+await db.insert(aiBudgets).values({ companyId: company.id, monthlyLimitMicros: 30_000_000, perRequestLimitMicros: 2_000_000, alertThresholdPercent: 80, enabled: true, updatedByUserId: ownerId }).onConflictDoUpdate({ target: aiBudgets.companyId, set: { monthlyLimitMicros: 30_000_000, perRequestLimitMicros: 2_000_000, alertThresholdPercent: 80, enabled: true, updatedByUserId: ownerId, updatedAt: new Date() } });
+await db.delete(aiUsageLedger).where(eq(aiUsageLedger.id, "browser_ai_usage_reservation"));
+await db.insert(aiUsageLedger).values({ id: "browser_ai_usage_reservation", companyId: company.id, userId: ownerId, context: "browser reconciliation acceptance", model: "fixture-model", status: "reserved", reservedCostMicros: 250_000 });
 
 const fixtureUser = {
   id: ownerId,

@@ -273,6 +273,7 @@ export const aiBudgets = pgTable("ai_budgets", {
   companyId: integer("company_id").primaryKey().references(() => companies.id, { onDelete: "cascade" }),
   monthlyLimitMicros: integer("monthly_limit_micros").notNull(),
   perRequestLimitMicros: integer("per_request_limit_micros").notNull(),
+  alertThresholdPercent: integer("alert_threshold_percent").notNull().default(80),
   enabled: boolean("enabled").notNull().default(true),
   updatedByUserId: text("updated_by_user_id").notNull().references(() => users.id),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -289,9 +290,24 @@ export const aiUsageLedger = pgTable("ai_usage_ledger", {
   actualCostMicros: integer("actual_cost_micros"),
   inputTokens: integer("input_tokens"),
   outputTokens: integer("output_tokens"),
+  reconciliationEvidenceUri: text("reconciliation_evidence_uri"),
+  reconciledByUserId: text("reconciled_by_user_id").references(() => users.id),
+  reconciledAt: timestamp("reconciled_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
 });
+
+export const aiBudgetAlerts = pgTable("ai_budget_alerts", {
+  id: text("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  monthStart: timestamp("month_start", { withTimezone: true }).notNull(),
+  thresholdPercent: integer("threshold_percent").notNull(),
+  usageMicros: integer("usage_micros").notNull(),
+  limitMicros: integer("limit_micros").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("ai_budget_alerts_company_month_threshold_uidx").on(table.companyId, table.monthStart, table.thresholdPercent),
+]);
 
 export const operationalControls = pgTable("operational_controls", {
   controlKey: text("control_key").primaryKey(),

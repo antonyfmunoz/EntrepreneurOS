@@ -4,6 +4,7 @@ import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
 import { callAI } from "../ai/gateway";
+import { AiBudgetError, evaluateAiBudgetThreshold, reconcileAiSpend } from "../ai/cost-control";
 import * as gmail from "../integrations/gmail";
 import * as notion from "../integrations/notion";
 import { federationConfigured } from "../umh/config";
@@ -26,6 +27,7 @@ import {
   umhCommands,
   umhEventOutbox,
   users,
+  aiBudgetAlerts,
   aiBudgets,
   aiUsageLedger,
 } from "@shared/schema";
@@ -962,19 +964,49 @@ export function registerEosRuntimeRoutes(app: Express): void {
     const now = new Date();
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     const [budget] = await db.select().from(aiBudgets).where(eq(aiBudgets.companyId, access.company.id)).limit(1);
-    const [usage] = await db.select({ spentMicros: sql<number>`coalesce(sum(case when ${aiUsageLedger.status} = 'completed' then ${aiUsageLedger.actualCostMicros} else ${aiUsageLedger.reservedCostMicros} end), 0)` }).from(aiUsageLedger).where(and(eq(aiUsageLedger.companyId, access.company.id), gte(aiUsageLedger.createdAt, monthStart)));
-    return { body: { configured: Boolean(budget), enabled: budget?.enabled || false, monthlyLimitMicros: budget?.monthlyLimitMicros || null, perRequestLimitMicros: budget?.perRequestLimitMicros || null, spentMicros: Number(usage?.spentMicros || 0), monthStart } };
+    const [usage] = await db.select({
+      completedMicros: sql<number>`coalesce(sum(case when ${aiUsageLedger.status} = 'completed' then ${aiUsageLedger.actualCostMicros} else 0 end), 0)`,
+      reservedMicros: sql<number>`coalesce(sum(case when ${aiUsageLedger.status} = 'reserved' then ${aiUsageLedger.reservedCostMicros} else 0 end), 0)`,
+      failedCount: sql<number>`count(*) filter (where ${aiUsageLedger.status} = 'failed')`,
+    }).from(aiUsageLedger).where(and(eq(aiUsageLedger.companyId, access.company.id), gte(aiUsageLedger.createdAt, monthStart)));
+    const entries = await db.select().from(aiUsageLedger).where(and(eq(aiUsageLedger.companyId, access.company.id), gte(aiUsageLedger.createdAt, monthStart))).orderBy(desc(aiUsageLedger.createdAt)).limit(50);
+    const [thresholdAlert] = budget ? await db.select().from(aiBudgetAlerts).where(and(eq(aiBudgetAlerts.companyId, access.company.id), eq(aiBudgetAlerts.monthStart, monthStart), eq(aiBudgetAlerts.thresholdPercent, budget.alertThresholdPercent))).limit(1) : [];
+    const completedMicros = Number(usage?.completedMicros || 0);
+    const reservedMicros = Number(usage?.reservedMicros || 0);
+    return { body: { configured: Boolean(budget), enabled: budget?.enabled || false, monthlyLimitMicros: budget?.monthlyLimitMicros || null, perRequestLimitMicros: budget?.perRequestLimitMicros || null, alertThresholdPercent: budget?.alertThresholdPercent || 80, thresholdAlert: thresholdAlert ? { createdAt: thresholdAlert.createdAt, usageMicros: thresholdAlert.usageMicros, limitMicros: thresholdAlert.limitMicros } : null, spentMicros: completedMicros + reservedMicros, completedMicros, reservedMicros, failedCount: Number(usage?.failedCount || 0), monthStart, entries } };
   }));
 
   app.put("/api/eos/companies/:companyId/ai-budget", route(async (req) => {
     const access = await companyAccess(req);
     if (!access.isOwner) throw new EosRouteError(403, "ai_budget_scope_denied", "Only the company owner can change AI spend controls.");
-    const input = z.object({ monthlyLimitDollars: z.number().positive().max(10_000), perRequestLimitDollars: z.number().positive().max(1_000), enabled: z.boolean() }).refine((value) => value.perRequestLimitDollars <= value.monthlyLimitDollars, "Per-request limit must not exceed the monthly limit.").parse(req.body);
+    const input = z.object({ monthlyLimitDollars: z.number().positive().max(10_000), perRequestLimitDollars: z.number().positive().max(1_000), alertThresholdPercent: z.number().int().min(1).max(100).default(80), enabled: z.boolean() }).refine((value) => value.perRequestLimitDollars <= value.monthlyLimitDollars, "Per-request limit must not exceed the monthly limit.").parse(req.body);
     const monthlyLimitMicros = Math.round(input.monthlyLimitDollars * 1_000_000);
     const perRequestLimitMicros = Math.round(input.perRequestLimitDollars * 1_000_000);
-    const [budget] = await db.insert(aiBudgets).values({ companyId: access.company.id, monthlyLimitMicros, perRequestLimitMicros, enabled: input.enabled, updatedByUserId: req.user.id }).onConflictDoUpdate({ target: aiBudgets.companyId, set: { monthlyLimitMicros, perRequestLimitMicros, enabled: input.enabled, updatedByUserId: req.user.id, updatedAt: new Date() } }).returning();
+    const [budget] = await db.insert(aiBudgets).values({ companyId: access.company.id, monthlyLimitMicros, perRequestLimitMicros, alertThresholdPercent: input.alertThresholdPercent, enabled: input.enabled, updatedByUserId: req.user.id }).onConflictDoUpdate({ target: aiBudgets.companyId, set: { monthlyLimitMicros, perRequestLimitMicros, alertThresholdPercent: input.alertThresholdPercent, enabled: input.enabled, updatedByUserId: req.user.id, updatedAt: new Date() } }).returning();
+    if (input.enabled) await evaluateAiBudgetThreshold(access.company.id);
     const trace = tracePair();
-    await db.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "ai_budget.updated", targetType: "ai_budget", targetId: String(access.company.id), traceId: trace.traceId, correlationId: trace.correlationId, result: "configured", details: { monthlyLimitMicros, perRequestLimitMicros, enabled: input.enabled }, createdAt: new Date() });
+    await db.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "ai_budget.updated", targetType: "ai_budget", targetId: String(access.company.id), traceId: trace.traceId, correlationId: trace.correlationId, result: "configured", details: { monthlyLimitMicros, perRequestLimitMicros, alertThresholdPercent: input.alertThresholdPercent, enabled: input.enabled }, createdAt: new Date() });
     return { body: budget };
+  }));
+
+  app.post("/api/eos/companies/:companyId/ai-usage/:usageId/reconcile", route(async (req) => {
+    const access = await companyAccess(req);
+    if (!access.isOwner) throw new EosRouteError(403, "ai_budget_scope_denied", "Only the company owner can reconcile AI usage.");
+    const input = z.object({
+      status: z.enum(["completed", "failed"]),
+      actualCostDollars: z.number().min(0).max(10_000).default(0),
+      inputTokens: z.number().int().min(0).max(1_000_000_000).optional(),
+      outputTokens: z.number().int().min(0).max(1_000_000_000).optional(),
+      evidenceUri: z.string().url().refine((value) => { const url = new URL(value); return url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash; }, "Secret-free HTTPS evidence URL required"),
+    }).superRefine((value, context) => { if (value.status === "completed" && value.actualCostDollars <= 0) context.addIssue({ code: "custom", path: ["actualCostDollars"], message: "Completed usage requires a positive actual cost." }); }).parse(req.body);
+    try {
+      const usage = await reconcileAiSpend({ id: req.params.usageId, companyId: access.company.id, userId: req.user.id, status: input.status, actualCostMicros: Math.round(input.actualCostDollars * 1_000_000), inputTokens: input.inputTokens, outputTokens: input.outputTokens, evidenceUri: input.evidenceUri });
+      const trace = tracePair();
+      await db.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "ai_usage.reconciled", targetType: "ai_usage", targetId: usage.id, traceId: trace.traceId, correlationId: trace.correlationId, result: input.status, details: { actualCostMicros: usage.actualCostMicros, evidenceUri: input.evidenceUri }, createdAt: new Date() });
+      return { body: usage };
+    } catch (error) {
+      if (error instanceof AiBudgetError) throw new EosRouteError(409, error.code, error.message);
+      throw error;
+    }
   }));
 }
