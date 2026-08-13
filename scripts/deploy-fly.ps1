@@ -1,5 +1,13 @@
 $ErrorActionPreference = "Stop"
 
+function Get-FlyMachines([string]$App) {
+  $raw = flyctl machines list --app $App --json
+  if ($LASTEXITCODE -ne 0) { throw "Could not inspect Fly machines for $App." }
+  $items = @($raw | ConvertFrom-Json | ForEach-Object { $_ })
+  if (-not $items.Count) { throw "Fly returned no machines for $App." }
+  return $items
+}
+
 $required = @(
   "ANTHROPIC_API_KEY",
   "VITE_CLERK_PUBLISHABLE_KEY",
@@ -63,8 +71,7 @@ $env:EOS_RELEASE_SUBJECT = "git:$releaseCommit"
 $imageLabel = "eos-$releaseCommit"
 $imageReference = "registry.fly.io/${app}:$imageLabel"
 
-$machines = @(flyctl machines list --app $app --json | ConvertFrom-Json)
-if ($LASTEXITCODE -ne 0 -or -not $machines.Count) { throw "Could not determine the currently deployed rollback image." }
+$machines = @(Get-FlyMachines -App $app)
 $rollbackImages = @($machines | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
 if ($rollbackImages.Count -ne 1 -or $rollbackImages[0] -notmatch '^registry\.fly\.io/[a-z0-9-]+@sha256:[a-f0-9]{64}$') { throw "Production machines do not share one immutable rollback image." }
 $rollbackImage = $rollbackImages[0]
@@ -121,8 +128,7 @@ try {
       --env "EOS_PRODUCTION_ENVIRONMENT_SUBJECT=$env:EOS_PRODUCTION_ENVIRONMENT_SUBJECT" --yes
     if ($LASTEXITCODE -ne 0) { throw "Fly promotion did not complete successfully." }
 
-    $promotedMachines = @(flyctl machines list --app $app --json | ConvertFrom-Json)
-    if ($LASTEXITCODE -ne 0 -or -not $promotedMachines.Count) { throw "Could not inspect the promoted production machines." }
+    $promotedMachines = @(Get-FlyMachines -App $app)
     $promotedImages = @($promotedMachines | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
     $promotedSubjects = @($promotedMachines | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Select-Object -Unique)
     if ($promotedImages.Count -ne 1 -or $promotedImages[0] -notmatch '^registry\.fly\.io/[a-z0-9-]+@sha256:[a-f0-9]{64}$') { throw "Promoted machines do not share one immutable image digest." }
@@ -142,10 +148,10 @@ try {
       --env "EOS_RELEASE_SUBJECT=$rollbackSubject" `
       --env "EOS_PRODUCTION_ENVIRONMENT_SUBJECT=$env:EOS_PRODUCTION_ENVIRONMENT_SUBJECT" --yes
     if ($LASTEXITCODE -ne 0) { throw "Promotion failed and automatic rollback also failed. Escalate immediately." }
-    $restoredMachines = @(flyctl machines list --app $app --json | ConvertFrom-Json)
+    $restoredMachines = @(Get-FlyMachines -App $app)
     $restoredImages = @($restoredMachines | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
     $restoredSubjects = @($restoredMachines | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Select-Object -Unique)
-    if ($LASTEXITCODE -ne 0 -or $restoredImages.Count -ne 1 -or $restoredImages[0] -ne $rollbackImage -or $restoredSubjects.Count -ne 1 -or $restoredSubjects[0] -ne $rollbackSubject) { throw "Promotion failed and rollback returned without proving the prior immutable image and subject. Escalate immediately." }
+    if ($restoredImages.Count -ne 1 -or $restoredImages[0] -ne $rollbackImage -or $restoredSubjects.Count -ne 1 -or $restoredSubjects[0] -ne $rollbackSubject) { throw "Promotion failed and rollback returned without proving the prior immutable image and subject. Escalate immediately." }
     throw "Promotion failed: $promotionError The prior immutable image was restored; inspect evidence before retrying."
   }
 

@@ -1,5 +1,13 @@
 $ErrorActionPreference = "Stop"
 
+function Get-FlyMachines([string]$App) {
+  $raw = flyctl machines list --app $App --json
+  if ($LASTEXITCODE -ne 0) { throw "Could not inspect Fly machines for $App." }
+  $items = @($raw | ConvertFrom-Json | ForEach-Object { $_ })
+  if (-not $items.Count) { throw "Fly returned no machines for $App." }
+  return $items
+}
+
 $app = if ($env:EOS_FLY_APP) { $env:EOS_FLY_APP } else { "eos-app" }
 $image = $env:EOS_ROLLBACK_IMAGE
 $subject = $env:EOS_ROLLBACK_RELEASE_SUBJECT
@@ -15,10 +23,10 @@ flyctl deploy --app $app --image $image --strategy rolling `
   --env "EOS_PRODUCTION_ENVIRONMENT_SUBJECT=$environmentSubject" --yes
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-$machines = @(flyctl machines list --app $app --json | ConvertFrom-Json)
+$machines = @(Get-FlyMachines -App $app)
 $images = @($machines | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
 $subjects = @($machines | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Select-Object -Unique)
-if ($LASTEXITCODE -ne 0 -or $images.Count -ne 1 -or $images[0] -ne $image -or $subjects.Count -ne 1 -or $subjects[0] -ne $subject) { throw "Rollback returned without proving the requested immutable image and release subject." }
+if ($images.Count -ne 1 -or $images[0] -ne $image -or $subjects.Count -ne 1 -or $subjects[0] -ne $subject) { throw "Rollback returned without proving the requested immutable image and release subject." }
 
 $origin = if ($env:EOS_PRODUCTION_ORIGIN) { $env:EOS_PRODUCTION_ORIGIN } elseif ($env:EOS_PUBLIC_ORIGIN) { $env:EOS_PUBLIC_ORIGIN } else { "https://entrepreneuros.net" }
 $health = Invoke-WebRequest -UseBasicParsing -Uri "$origin/api/health" -TimeoutSec 30
