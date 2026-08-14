@@ -97,6 +97,9 @@ export default function EosOverlayPage() {
   const [seatAgentName, setSeatAgentName] = useState("");
   const [seatSupervisorId, setSeatSupervisorId] = useState("");
   const [selectedMapSeatId, setSelectedMapSeatId] = useState("");
+  const [mapSeatSearch, setMapSeatSearch] = useState("");
+  const [showAllMapSeats, setShowAllMapSeats] = useState(false);
+  const [showAllMapReports, setShowAllMapReports] = useState(false);
   const [membershipEmail, setMembershipEmail] = useState("");
   const [membershipSeatId, setMembershipSeatId] = useState("");
   const [monthlyAiBudget, setMonthlyAiBudget] = useState("25");
@@ -104,6 +107,9 @@ export default function EosOverlayPage() {
   const [aiBudgetEnabled, setAiBudgetEnabled] = useState(true);
   const [notionSearchDraft, setNotionSearchDraft] = useState("");
   const [notionSearch, setNotionSearch] = useState("");
+  const [showClosedWork, setShowClosedWork] = useState(false);
+  const [showDecisionHistory, setShowDecisionHistory] = useState(false);
+  const [showAllEvidence, setShowAllEvidence] = useState(false);
   useEffect(() => {
     const syncHash = () => {
       const requested = window.location.hash.slice(1);
@@ -161,6 +167,11 @@ export default function EosOverlayPage() {
   const approvals = approvalsQuery.data || [];
   const evidence = evidenceQuery.data || [];
   const activePackets = packets.filter((packet) => !["completed", "cancelled"].includes(packet.status));
+  const closedPackets = packets.filter((packet) => ["completed", "cancelled"].includes(packet.status));
+  const operationsPackets = showClosedWork ? packets : activePackets;
+  const pendingApprovals = approvals.filter((approval) => approval.status === "pending");
+  const visibleApprovals = showDecisionHistory ? approvals : pendingApprovals;
+  const visibleEvidence = showAllEvidence ? evidence : evidence.slice(0, 10);
   const principalContext = contextQuery.data?.principalContext;
   const assistantName = principalContext?.communicationAgent || company?.assistantName || "Assistant";
   const isFounder = principalContext?.role === "founder";
@@ -168,6 +179,11 @@ export default function EosOverlayPage() {
   const visibleModules = eosActiveModules.filter((module) => allowedSurfaces.has(module.operatingSurface));
   const selectedModule = visibleModules.find((module) => module.id === selectedModuleId) || visibleModules[0];
   const visibleSeats = organizationQuery.data?.seats || [];
+  const matchingMapSeats = visibleSeats.filter((seat: JsonRecord) => {
+    const query = mapSeatSearch.trim().toLowerCase();
+    return !query || [seat.title, seat.agentName, seat.kind].some((value) => String(value || "").toLowerCase().includes(query));
+  });
+  const displayedMapSeats = showAllMapSeats || mapSeatSearch.trim() ? matchingMapSeats : matchingMapSeats.slice(0, 12);
   const selectedMapSeat = visibleSeats.find((seat: JsonRecord) => seat.id === selectedMapSeatId)
     || visibleSeats.find((seat: JsonRecord) => seat.id === organizationQuery.data?.activeSeatId)
     || visibleSeats[0];
@@ -177,6 +193,7 @@ export default function EosOverlayPage() {
   const selectedMapReports = selectedMapSeat
     ? visibleSeats.filter((seat: JsonRecord) => seat.supervisorSeatId === selectedMapSeat.id)
     : [];
+  const displayedMapReports = showAllMapReports ? selectedMapReports : selectedMapReports.slice(0, 8);
   const selectedMapPackets = selectedMapSeat
     ? activePackets.filter((packet) => packet.accountableSeatId === selectedMapSeat.id)
     : [];
@@ -442,7 +459,13 @@ export default function EosOverlayPage() {
   const assistantNameMutation = useMutation({
     mutationFn: async (name: string) => requestJson<JsonRecord>("PATCH", `/api/company/${companyId}`, { assistantName: name.trim() }),
     onSuccess: async (updatedCompany) => {
-      queryClient.setQueryData<JsonRecord>([root, "context"], (current) => current ? { ...current, company: updatedCompany } : current);
+      queryClient.setQueryData<JsonRecord>([root, "context"], (current) => current ? {
+        ...current,
+        company: updatedCompany,
+        principalContext: current.principalContext
+          ? { ...current.principalContext, communicationAgent: updatedCompany.assistantName || "Assistant" }
+          : current.principalContext,
+      } : current);
       setAssistantNameDraft(updatedCompany.assistantName || "Assistant");
       setIsEditingAssistantName(false);
       toast({ title: "Executive Assistant renamed", description: `Your communication agent is now ${updatedCompany.assistantName}.` });
@@ -601,7 +624,7 @@ export default function EosOverlayPage() {
     intelligence: `Work with ${assistantName} to turn context into clear decisions.`,
     systems: "Connect providers and control how EOS operates.",
   };
-  const pendingApprovalCount = approvals.filter((approval) => approval.status === "pending").length;
+  const pendingApprovalCount = pendingApprovals.length;
   const operatingStateReady = manifest?.status !== "active" || (packetsQuery.isSuccess && approvalsQuery.isSuccess);
   const operatingStateFailed = manifest?.status === "active" && (packetsQuery.isError || approvalsQuery.isError);
   const nextActionReason: EosNextActionReason = manifest?.status !== "active"
@@ -749,7 +772,7 @@ export default function EosOverlayPage() {
 
           <TabsContent value="operations" className="space-y-8">
             <Card><CardHeader><CardTitle>Create Work Packet</CardTitle><CardDescription>A mission is a governed unit of work with objective, authority, lifecycle, and evidence.</CardDescription></CardHeader><CardContent className="grid gap-3"><Input value={packetTitle} onChange={(event) => setPacketTitle(event.target.value)} placeholder="Mission title" /><Textarea value={packetObjective} onChange={(event) => setPacketObjective(event.target.value)} placeholder="Objective and intended outcome" /><div className="rounded-xl bg-muted p-3"><p className="eos-label">Required proof</p><p className="mt-1 text-sm">{packetEvidenceRequirements[0]}</p></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={packetApproval} onChange={(event) => setPacketApproval(event.target.checked)} /> Require local approval before work begins</label><Button className="w-fit" disabled={packetTitle.trim().length < 3 || packetObjective.trim().length < 3 || packetMutation.isPending} onClick={() => packetMutation.mutate()}><Plus className="mr-2 h-4 w-4" />{packetMutation.isPending ? "Creating…" : "Create Work Packet"}</Button></CardContent></Card>
-            <div className="space-y-3">{packets.map((packet) => {
+            <section className="space-y-3"><div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="eos-label">Work queue</p><h2 className="mt-1 text-xl font-semibold">Work Packets</h2><p className="mt-1 text-sm text-muted-foreground">Active work stays in view. Closed work remains available when you need its history.</p></div>{closedPackets.length > 0 && <Button variant="outline" onClick={() => setShowClosedWork((current) => !current)}>{showClosedWork ? "Hide closed work" : `Show closed work (${closedPackets.length})`}</Button>}</div><div className="space-y-3">{operationsPackets.map((packet) => {
               const next = nextTransition(packet.status);
               const packetEvidence = evidence.filter((item) => item.workPacketId === packet.id);
               const requirements = Array.isArray(packet.evidenceRequirements) && packet.evidenceRequirements.length
@@ -777,11 +800,11 @@ export default function EosOverlayPage() {
                 </div>}
                 {!["completed", "cancelled"].includes(packet.status) && !nextRequirement && <div className="mt-5 flex items-center gap-2 rounded-xl bg-primary/10 p-4 text-sm font-medium text-primary"><BadgeCheck className="h-4 w-4" />All required evidence is recorded. This Work Packet can complete after review.</div>}
               </CardContent></Card>;
-            })}{!packets.length && <EmptyState icon={Workflow} title="No Work Packets" description="Create the first evidence-bearing mission above." />}</div>
+            })}{!operationsPackets.length && <EmptyState icon={Workflow} title={packets.length ? "No active Work Packets" : "No Work Packets"} description={packets.length ? "Closed work is preserved in history. Create a mission when new work is ready." : "Create the first evidence-bearing mission above."} />}</div></section>
 
-            <section className="space-y-3"><div><p className="eos-label">Authority queue</p><h2 className="mt-1 text-xl font-semibold">Approvals</h2></div>{approvals.map((approval) => <Card key={approval.id}><CardContent className="flex flex-col gap-4 pt-8 md:flex-row md:items-center md:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{approval.summary}</h3><StateBadge state={approval.status} /></div><p className="mt-1 text-xs text-muted-foreground">Requested {new Date(approval.createdAt).toLocaleString()}</p></div>{approval.status === "pending" && <div className="flex gap-2"><Button variant="outline" disabled={approvalMutation.isPending} onClick={() => requestApprovalDecision(approval, "rejected")}>Reject</Button><Button disabled={approvalMutation.isPending} onClick={() => requestApprovalDecision(approval, "approved")}>Approve</Button></div>}</CardContent></Card>)}{!approvals.length && <EmptyState icon={ClipboardCheck} title="No approval requests" description="Approval-gated missions will appear here." />}</section>
+            <section className="space-y-3"><div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="eos-label">Authority queue</p><h2 className="mt-1 text-xl font-semibold">Approvals</h2><p className="mt-1 text-sm text-muted-foreground">Pending decisions stay prominent; resolved decisions remain available for review.</p></div>{approvals.length > pendingApprovals.length && <Button variant="outline" onClick={() => setShowDecisionHistory((current) => !current)}>{showDecisionHistory ? "Hide decision history" : `Show decision history (${approvals.length - pendingApprovals.length})`}</Button>}</div>{visibleApprovals.map((approval) => <Card key={approval.id}><CardContent className="flex flex-col gap-4 pt-8 md:flex-row md:items-center md:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{approval.summary}</h3><StateBadge state={approval.status} /></div><p className="mt-1 text-xs text-muted-foreground">Requested {new Date(approval.createdAt).toLocaleString()}</p></div>{approval.status === "pending" && <div className="flex gap-2"><Button variant="outline" disabled={approvalMutation.isPending} onClick={() => requestApprovalDecision(approval, "rejected")}>Reject</Button><Button disabled={approvalMutation.isPending} onClick={() => requestApprovalDecision(approval, "approved")}>Approve</Button></div>}</CardContent></Card>)}{!visibleApprovals.length && <EmptyState icon={ClipboardCheck} title="No pending approvals" description={approvals.length ? "Resolved decisions are preserved in decision history." : "Approval-gated missions will appear here."} />}</section>
 
-            <section className="space-y-3"><div><p className="eos-label">Proof and provenance</p><h2 className="mt-1 text-xl font-semibold">Evidence</h2></div>{evidence.map((item) => <Card key={item.id}><CardContent className="flex items-start gap-3 pt-8"><FileCheck2 className="h-5 w-5 text-primary" /><div><div className="font-medium">{item.title}</div><div className="text-sm text-muted-foreground">{item.evidenceType.replaceAll("_", " ")} · {new Date(item.createdAt).toLocaleString()}</div></div></CardContent></Card>)}{!evidence.length && <EmptyState icon={FileCheck2} title="No evidence recorded" description="Work cannot be marked complete until evidence exists." />}</section>
+            <section className="space-y-3"><div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="eos-label">Proof and provenance</p><h2 className="mt-1 text-xl font-semibold">Evidence</h2><p className="mt-1 text-sm text-muted-foreground">The ten most recent records are shown first.</p></div>{evidence.length > 10 && <Button variant="outline" onClick={() => setShowAllEvidence((current) => !current)}>{showAllEvidence ? "Show recent evidence" : `Show all evidence (${evidence.length})`}</Button>}</div>{visibleEvidence.map((item) => <Card key={item.id}><CardContent className="flex items-start gap-3 pt-8"><FileCheck2 className="h-5 w-5 text-primary" /><div><div className="font-medium">{item.title}</div><div className="text-sm text-muted-foreground">{item.evidenceType.replaceAll("_", " ")} · {new Date(item.createdAt).toLocaleString()}</div></div></CardContent></Card>)}{!evidence.length && <EmptyState icon={FileCheck2} title="No evidence recorded" description="Work cannot be marked complete until evidence exists." />}</section>
           </TabsContent>
 
           <TabsContent value="work-room" className="space-y-6">
@@ -799,7 +822,7 @@ export default function EosOverlayPage() {
           </TabsContent>
 
           <TabsContent value="review" className="space-y-6">
-            <section className="space-y-3"><div><p className="eos-label">Assigned authority queue</p><h2 className="mt-1 text-xl font-semibold">Decisions requiring this seat</h2></div>{approvals.map((approval) => <Card key={approval.id}><CardContent className="flex flex-col gap-4 pt-8 md:flex-row md:items-center md:justify-between"><div><h3 className="font-semibold">{approval.summary}</h3><StateBadge state={approval.status} /></div>{approval.status === "pending" && <div className="flex gap-2"><Button variant="outline" disabled={approvalMutation.isPending} onClick={() => requestApprovalDecision(approval, "rejected")}>Reject</Button><Button disabled={approvalMutation.isPending} onClick={() => requestApprovalDecision(approval, "approved")}>Approve</Button></div>}</CardContent></Card>)}{!approvals.length && <EmptyState icon={ClipboardCheck} title="No assigned decisions" description="Only approvals assigned to this principal appear here." />}</section>
+            <section className="space-y-3"><div><p className="eos-label">Assigned authority queue</p><h2 className="mt-1 text-xl font-semibold">Decisions requiring this seat</h2></div>{pendingApprovals.map((approval) => <Card key={approval.id}><CardContent className="flex flex-col gap-4 pt-8 md:flex-row md:items-center md:justify-between"><div><h3 className="font-semibold">{approval.summary}</h3><StateBadge state={approval.status} /></div><div className="flex gap-2"><Button variant="outline" disabled={approvalMutation.isPending} onClick={() => requestApprovalDecision(approval, "rejected")}>Reject</Button><Button disabled={approvalMutation.isPending} onClick={() => requestApprovalDecision(approval, "approved")}>Approve</Button></div></CardContent></Card>)}{!pendingApprovals.length && <EmptyState icon={ClipboardCheck} title="No assigned decisions" description="Only pending approvals assigned to this principal appear here. Resolved decisions remain in the control receipts below." />}</section>
             <Card><CardHeader><CardTitle>Provider reconciliation</CardTitle><CardDescription>External effects remain explicit through request, approval, receipt, and reconciliation.</CardDescription></CardHeader><CardContent className="space-y-3">{(providerExecutionsQuery.data || []).map((execution) => <div key={execution.id} className="rounded-xl bg-muted p-4"><div className="flex items-center justify-between gap-3"><span className="font-medium">{execution.operation}</span><StateBadge state={execution.status} /></div><p className="mt-1 text-sm text-muted-foreground">{execution.reconciliationStatus.replaceAll("_", " ")} · trace {execution.traceId.slice(0, 8)}</p></div>)}{!providerExecutionsQuery.data?.length && <p className="text-sm text-muted-foreground">No provider executions in this visibility scope.</p>}</CardContent></Card>
             {auditVisible && <Card><CardHeader><CardTitle>Recent control receipts</CardTitle><CardDescription>Persisted audit evidence for actions within this seat's visibility.</CardDescription></CardHeader><CardContent className="space-y-3">{(auditQuery.data || []).slice(0, 12).map((record) => <div key={record.id} className="flex flex-col gap-2 rounded-xl bg-muted p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">{String(record.action).replaceAll("_", " ")}</p><p className="mt-1 text-xs text-muted-foreground">{record.targetType} · {new Date(record.createdAt).toLocaleString()}</p></div><div className="flex items-center gap-2"><StateBadge state={record.result || "recorded"} /><code className="text-[10px] text-muted-foreground">{String(record.traceId || "").slice(0, 8)}</code></div></div>)}{auditQuery.isLoading && <p className="text-sm text-muted-foreground">Loading signed control history…</p>}{!auditQuery.isLoading && !auditQuery.data?.length && <p className="text-sm text-muted-foreground">No audit receipts are visible yet.</p>}</CardContent></Card>}
           </TabsContent>
@@ -817,14 +840,15 @@ export default function EosOverlayPage() {
               </CardHeader>
               <CardContent className="space-y-5">
                 <div className="rounded-2xl bg-primary/10 p-4 sm:p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Organization</p><p className="mt-1 text-lg font-semibold">{company.name}</p><p className="mt-1 text-sm text-muted-foreground">{company.stage || "Stage not set"} · {visibleSeats.length} visible seat{visibleSeats.length === 1 ? "" : "s"}</p></div><Badge variant="outline">{principalContext?.visibility?.scope || "authorized"} view</Badge></div></div>
-                {visibleSeats.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{visibleSeats.map((seat: JsonRecord) => {
+                {visibleSeats.length > 0 && <div className="flex flex-col gap-3 sm:flex-row sm:items-center"><Input aria-label="Search visible seats" value={mapSeatSearch} onChange={(event) => setMapSeatSearch(event.target.value)} placeholder="Search by seat, agent, or role" className="sm:max-w-sm" />{visibleSeats.length > 12 && !mapSeatSearch.trim() && <Button variant="outline" onClick={() => setShowAllMapSeats((current) => !current)}>{showAllMapSeats ? "Show fewer seats" : `Show all seats (${visibleSeats.length})`}</Button>}</div>}
+                {displayedMapSeats.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{displayedMapSeats.map((seat: JsonRecord) => {
                   const supervisor = seat.supervisorSeatId ? visibleSeats.find((item: JsonRecord) => item.id === seat.supervisorSeatId) : undefined;
                   const selected = seat.id === selectedMapSeat?.id;
-                  return <button key={seat.id} type="button" aria-pressed={selected} onClick={() => setSelectedMapSeatId(seat.id)} className={`rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${selected ? "border-primary/30 bg-primary/10" : "border-border bg-muted/60 hover:border-primary/20 hover:bg-primary/5"}`}>
+                  return <button key={seat.id} type="button" aria-pressed={selected} onClick={() => { setSelectedMapSeatId(seat.id); setShowAllMapReports(false); }} className={`rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${selected ? "border-primary/30 bg-primary/10" : "border-border bg-muted/60 hover:border-primary/20 hover:bg-primary/5"}`}>
                     <div className="flex items-start justify-between gap-3"><span className="font-semibold">{seat.title}</span><StateBadge state={seat.agentMode} /></div>
                     <p className="mt-2 text-xs text-muted-foreground">Reports to {supervisor?.title || (seat.supervisorSeatId ? "an authorized parent outside this view" : "the portfolio principal")}</p>
                   </button>;
-                })}</div> : <EmptyState icon={Network} title="No seats are visible" description="This authority scope does not currently include an organizational seat." />}
+                })}</div> : <EmptyState icon={Network} title={visibleSeats.length ? "No seats match your search" : "No seats are visible"} description={visibleSeats.length ? "Try a seat title, agent name, or role." : "This authority scope does not currently include an organizational seat."} />}
               </CardContent>
             </Card>
             {selectedMapSeat && <Card>
@@ -832,7 +856,7 @@ export default function EosOverlayPage() {
               <CardContent className="space-y-5">
                 <p className="text-sm leading-relaxed text-muted-foreground">{selectedMapSeat.mandate || "This seat's mandate has not been defined yet."}</p>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Fact label="Reports to" value={selectedMapSupervisor?.title || (selectedMapSeat.supervisorSeatId ? "Authorized parent outside this view" : "Portfolio principal")} /><Fact label="Visible reports" value={String(selectedMapReports.length)} /><Fact label="Active work" value={String(selectedMapPackets.length)} /><Fact label="Human + agent" value={selectedMapSeat.occupantUserId ? `${selectedMapSeat.agentName} assists the seat holder` : `${selectedMapSeat.agentName} operates the role`} /></div>
-                {selectedMapReports.length > 0 && <div><p className="eos-label mb-2">Visible direct reports</p><div className="flex flex-wrap gap-2">{selectedMapReports.map((seat: JsonRecord) => <button key={seat.id} type="button" onClick={() => setSelectedMapSeatId(seat.id)} className="rounded-full border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:border-primary/30 hover:bg-primary/5">{seat.title}</button>)}</div></div>}
+                {selectedMapReports.length > 0 && <div><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><p className="eos-label">Visible direct reports</p>{selectedMapReports.length > 8 && <Button size="sm" variant="ghost" onClick={() => setShowAllMapReports((current) => !current)}>{showAllMapReports ? "Show fewer reports" : `Show all reports (${selectedMapReports.length})`}</Button>}</div><div className="flex flex-wrap gap-2">{displayedMapReports.map((seat: JsonRecord) => <button key={seat.id} type="button" onClick={() => { setSelectedMapSeatId(seat.id); setShowAllMapReports(false); }} className="rounded-full border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:border-primary/30 hover:bg-primary/5">{seat.title}</button>)}</div></div>}
                 <div className="flex flex-wrap gap-2">
                   {selectedMapPackets.length > 0 && allowedSurfaces.has("work-room") && <Button onClick={() => { setProviderPacketId(selectedMapPackets[0].id); goToSurface("work-room"); }}><BriefcaseBusiness className="mr-2 h-4 w-4" />Open seat work</Button>}
                   <Button variant={selectedMapPackets.length > 0 ? "outline" : "default"} onClick={() => sendEaMessage(`Explain the accountability, current work, reporting dependencies, and next authorized action for the ${selectedMapSeat.title} seat. Keep the answer inside my visibility and communication path.`)}><MessagesSquare className="mr-2 h-4 w-4" />Ask {assistantName} about this seat</Button>
@@ -843,6 +867,7 @@ export default function EosOverlayPage() {
 
           <TabsContent value="capital" className="space-y-6">
             <EmptyState icon={Landmark} title="Capital & Investor Relations is dormant" description="The surface is architecturally mapped but intentionally inactive until a real legal-entity, account, instrument, investor, authority, and approval boundary is configured." />
+            <Card><CardHeader><CardTitle>Prepare the authority boundary</CardTitle><CardDescription>Document what would need to be verified before this surface can activate. This creates governed internal work only; it does not solicit investors, move funds, or represent financial truth.</CardDescription></CardHeader><CardContent className="flex flex-wrap gap-2"><Button onClick={() => prepareWorkPacket("Define capital readiness boundary", `Identify the legal entity, accounts, instruments, investor data, professional review, approval authority, and evidence ${company.name} would need before Capital & Investor Relations can activate.`)}><BriefcaseBusiness className="mr-2 h-4 w-4" />Prepare readiness mission</Button><Button variant="outline" onClick={() => sendEaMessage(`Explain why Capital & Investor Relations is dormant for ${company.name}, identify the missing authority and evidence, and recommend only safe internal preparation.`)}><MessagesSquare className="mr-2 h-4 w-4" />Ask {assistantName} about readiness</Button></CardContent></Card>
             <Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>No implied ledger authority</AlertTitle><AlertDescription>Models, forecasts, and Notion references are not represented as settled financial truth.</AlertDescription></Alert>
           </TabsContent>
 

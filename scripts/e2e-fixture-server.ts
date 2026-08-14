@@ -99,6 +99,8 @@ if (!company) {
     goals: "Complete one evidence-bearing operating loop",
     assistantName: "Assistant",
   }).returning();
+} else {
+  [company] = await db.update(companies).set({ assistantName: "Assistant", updatedAt: new Date() }).where(eq(companies.id, company.id)).returning();
 }
 
 await db.insert(aiBudgets).values({ companyId: company.id, monthlyLimitMicros: 30_000_000, perRequestLimitMicros: 2_000_000, alertThresholdPercent: 80, enabled: true, updatedByUserId: ownerId }).onConflictDoUpdate({ target: aiBudgets.companyId, set: { monthlyLimitMicros: 30_000_000, perRequestLimitMicros: 2_000_000, alertThresholdPercent: 80, enabled: true, updatedByUserId: ownerId, updatedAt: new Date() } });

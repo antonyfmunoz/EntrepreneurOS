@@ -24,6 +24,14 @@ try {
     await desktop.screenshot({ path: ".tmp/e2e-failure.png", fullPage: true });
     throw new Error(`Home did not render. URL=${desktop.url()} body=${(await desktop.locator("body").innerText()).slice(0, 1200)} browserErrors=${browserErrors.join(" | ")}`, { cause: error });
   }
+  await desktop.getByRole("button", { name: "Rename Assistant", exact: true }).click();
+  await desktop.getByLabel("Executive Assistant name", { exact: true }).fill("Avery");
+  await desktop.getByRole("button", { name: "Save Executive Assistant name", exact: true }).click();
+  await desktop.getByRole("button", { name: "Rename Avery", exact: true }).waitFor();
+  await desktop.getByRole("button", { name: "Rename Avery", exact: true }).click();
+  await desktop.getByLabel("Executive Assistant name", { exact: true }).fill("Assistant");
+  await desktop.getByRole("button", { name: "Save Executive Assistant name", exact: true }).click();
+  await desktop.getByRole("button", { name: "Rename Assistant", exact: true }).waitFor();
   const decisionHud = desktop.getByLabel("Executive decision control HUD");
   await decisionHud.getByRole("button", { name: /Next: Advance the organization manifest/ }).click();
   await decisionHud.getByRole("button", { name: "Continue organization setup", exact: true }).click();
@@ -48,6 +56,9 @@ try {
   if (await desktop.getByRole("button", { name: "Open navigation", exact: true }).count()) throw new Error("Account settings still exposes an empty operating-navigation drawer.");
   await desktop.getByLabel("Company context").waitFor();
   if (await desktop.getByLabel("Company context").textContent() !== "EOS Browser Acceptance") throw new Error("Settings did not resolve the explicitly selected company.");
+  await desktop.getByRole("button", { name: "Open in-app notifications", exact: true }).click();
+  await desktop.getByRole("region", { name: "notifications panel", exact: true }).waitFor();
+  await desktop.getByRole("button", { name: "Close notifications panel", exact: true }).click();
   if (await desktop.getByRole("tab", { name: "AI Autonomy", exact: true }).count()) throw new Error("The non-enforced AI autonomy control is still exposed.");
   if (await desktop.getByRole("tab", { name: "Notifications", exact: true }).count()) throw new Error("The non-enforced outbound notification controls are still exposed.");
   await desktop.getByRole("tab", { name: "Company", exact: true }).click();
@@ -98,6 +109,11 @@ try {
   await desktop.getByLabel("Reply to customer").fill("EOS Support reproduced the issue and recorded the next action for the customer.");
   await desktop.getByRole("button", { name: "Send reply", exact: true }).click();
   await desktop.getByText("Reply delivered in EOS and the customer was notified.", { exact: true }).waitFor();
+  await desktop.getByRole("button", { name: "Notifications", exact: true }).click();
+  await desktop.getByRole("button", { name: `Support replied There is an update on ${supportSubject}.`, exact: true }).click();
+  await desktop.waitForURL(/\/support\?ticket=/);
+  await desktop.getByRole("heading", { name: "Support conversation", exact: true }).waitFor();
+  await desktop.getByText(supportSubject, { exact: true }).first().waitFor();
   if (await desktop.getByLabel("Executive decision control HUD").count()) throw new Error("Account support still renders a company operating HUD.");
   if (await desktop.getByRole("navigation", { name: "EOS primary navigation" }).count()) throw new Error("Account support still renders company operating navigation.");
   await desktop.goto(`${origin}/this-route-does-not-exist`, { waitUntil: "domcontentloaded" });
@@ -139,6 +155,7 @@ try {
   await desktop.getByRole("button", { name: "Complete work", exact: true }).click();
   await selectedWorkHeading.waitFor({ state: "detached" });
   await desktop.getByRole("link", { name: "Operations", exact: true }).click();
+  await desktop.getByRole("button", { name: /Show closed work/ }).click();
   await desktop.getByText(missionTitle, { exact: true }).locator("xpath=ancestor::*[.//*[normalize-space()='completed']][1]").waitFor();
   const rejectedMissionTitle = `Rejected MVP ${Date.now()}`;
   await desktop.getByPlaceholder("Mission title").fill(rejectedMissionTitle);
@@ -199,6 +216,7 @@ try {
     if (surface === "Academy") await desktop.getByRole("button", { name: "Start practical exercise", exact: true }).waitFor();
     if (surface === "Portfolio Map") {
       await desktop.getByRole("button", { name: "Open organization", exact: true }).waitFor();
+      await desktop.getByLabel("Search visible seats", { exact: true }).fill(seatTitle);
       await desktop.getByText(seatTitle, { exact: true }).locator("xpath=ancestor::button[1]").click();
       await desktop.getByRole("heading", { name: seatTitle, exact: true }).waitFor();
       await desktop.getByRole("button", { name: "Ask Assistant about this seat", exact: true }).waitFor();
@@ -233,6 +251,11 @@ try {
     await desktop.getByRole("heading", { name: legacy.heading, exact: true }).waitFor();
     if (new URL(desktop.url()).hash !== `#${legacy.hash}`) throw new Error(`Legacy ${legacy.path} did not converge on the ${legacy.hash} EOS surface.`);
   }
+  await desktop.goto(`${origin}/company/${companyId}#capital`, { waitUntil: "domcontentloaded" });
+  await desktop.getByRole("heading", { name: "Capital & Investor Relations", exact: true }).waitFor();
+  await desktop.getByRole("button", { name: "Prepare readiness mission", exact: true }).click();
+  await desktop.getByRole("heading", { name: "Operations", exact: true }).waitFor();
+  if (await desktop.getByPlaceholder("Mission title").inputValue() !== "Define capital readiness boundary") throw new Error("Dormant capital preparation did not create a bounded internal Work Packet draft.");
   const desktopOverflow = await desktop.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   if (desktopOverflow) throw new Error("Desktop workspace has horizontal overflow.");
   // Radix Toast injects two aria-hidden focus guards with tabindex=0 to keep
@@ -315,7 +338,7 @@ try {
   await mobile.getByRole("button", { name: /Open .* conversation/ }).click();
   await mobile.locator("#mobile-communication-drawer aside").waitFor();
   if (browserErrors.length) throw new Error(`Browser errors: ${browserErrors.join(" | ")}`);
-  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 8, activeModules: 14, usableModuleControlCenter: true, roleSafeNextActions: true, hierarchyBuilder: true, teamInvitationLifecycle: { create: true, visible: true, revoke: true }, interactiveWorkApprovalLoop: true, assignedWorkLifecycleInWorkRoom: true, twoWaySupportOperations: { customerThread: true, administratorQueue: true, inProductReply: true, customerNotification: true }, aiCostOperations: { enforcedLimits: true, threshold: true, ledger: true, evidenceReconciliation: true }, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, notFoundRecovery: true, platformReadinessControls: { adminOnly: true, layers: 24, evidenceRecording: true }, reachableAccountControls: ["profile", "explicit company context", "privacy", "AI spend", "billing", "support", "production readiness"], configurableProviderIntegration: { notion: { perUser: true, verify: true, search: true, sourceAction: true, disconnect: true } }, quarantinedFalseControls: ["notification delivery preferences", "company-wide AI autonomy"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
+  console.log(JSON.stringify({ browserAcceptance: true, companyId, surfaces: 8, activeModules: 14, usableModuleControlCenter: true, roleSafeNextActions: true, hierarchyBuilder: true, hierarchySearch: true, scalableOperatingQueues: true, assistantRenaming: true, dormantSurfacePreparation: true, teamInvitationLifecycle: { create: true, visible: true, revoke: true }, interactiveWorkApprovalLoop: true, assignedWorkLifecycleInWorkRoom: true, twoWaySupportOperations: { customerThread: true, administratorQueue: true, inProductReply: true, customerNotification: true, actionableNotification: true }, aiCostOperations: { enforcedLimits: true, threshold: true, ledger: true, evidenceReconciliation: true }, confirmedDecisions: { approvalPreview: true, rejectionReasonRequired: true }, guidedEvidenceCompletion: true, actionableCommandMetrics: true, guidedCompanySetup: true, notFoundRecovery: true, platformReadinessControls: { adminOnly: true, layers: 24, evidenceRecording: true }, reachableAccountControls: ["profile", "explicit company context", "privacy", "AI spend", "billing", "support", "production readiness", "in-app notifications"], configurableProviderIntegration: { notion: { perUser: true, verify: true, search: true, sourceAction: true, disconnect: true } }, quarantinedFalseControls: ["notification delivery preferences", "company-wide AI autonomy"], aiSpendControls: true, auditReceipts: true, compactSquarePageActions: ["create portfolio", "add organization", "refresh workspace"], portfolioSwitching: "account panel only", desktop: "1440x1000", mobile: "390x844", movableCommunicationFab: true, fullWidthCommunicationDrawer: true, contextualCommunicationLaunch: true, accessibility: { seriousOrCritical: 0 }, navigationTiming }));
 } finally {
   await browser.close();
 }

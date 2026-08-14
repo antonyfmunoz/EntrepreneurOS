@@ -86,7 +86,7 @@ export function AgentChatStub({
                       : "bg-[#f5f6f7] text-[#2c2f30]"
                   )}
                 >
-                  {compact && <div className={clsx("mb-1 flex items-center gap-2 text-[9px] font-medium uppercase tracking-wide", message.role === "user" ? "text-white/70" : "text-muted-foreground")}><span>{message.role === "user" ? "You" : assistantName}</span><span className="ml-auto normal-case tracking-normal">{message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div>}
+                  {compact && <div className={clsx("mb-1 flex items-center gap-2 text-[9px] font-medium uppercase tracking-wide", message.role === "user" ? "text-white" : "text-muted-foreground")}><span>{message.role === "user" ? "You" : assistantName}</span><span className="ml-auto normal-case tracking-normal">{message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div>}
                   {message.content}
                 </div>
                 {onPromoteMessage && message.role === "assistant" && index === messages.length - 1 && (
