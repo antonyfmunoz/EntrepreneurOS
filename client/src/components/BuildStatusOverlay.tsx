@@ -45,7 +45,7 @@ export function BuildStatusOverlay() {
       borderRadius: 12,
       padding: 20,
       boxShadow: "0 8px 32px rgba(106,55,212,0.12)",
-      fontFamily: "Inter, sans-serif",
+      fontFamily: "system-ui, sans-serif",
       fontSize: 13,
       color: "#2c2f30",
       zIndex: 99999,

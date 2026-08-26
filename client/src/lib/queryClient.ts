@@ -22,6 +22,21 @@ async function authHeaders(extra?: Record<string, string>): Promise<Record<strin
   return headers;
 }
 
+export async function apiBinaryRequest<T = unknown>(
+  url: string,
+  body: Blob,
+  headers: Record<string, string> = {},
+): Promise<T> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: await authHeaders(headers),
+    body,
+    credentials: "include",
+  });
+  await throwIfResNotOk(response);
+  return await response.json() as T;
+}
+
 // New code uses apiRequest(method, url, data) and consumes the Response. A
 // handful of generated screens use the older apiRequest(url, options) or
 // apiRequest<T>(url, method, data) convention. Keeping the compatibility

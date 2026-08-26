@@ -5,12 +5,12 @@ import { billingSubscriptions, billingWebhookEvents } from "@shared/schema";
 import { db } from "../db";
 import { writeLog } from "../observability/logger";
 
-type PlanConfig = Record<string, { priceId: string; entitlements: string[] }>;
+type PlanConfig = Record<string, { priceId: string; entitlements: string[]; seatLimit: number }>;
 
 function planConfig(): PlanConfig {
   try {
     const parsed = JSON.parse(process.env.EOS_STRIPE_PLANS || "{}") as PlanConfig;
-    return Object.fromEntries(Object.entries(parsed).filter(([, value]) => value?.priceId?.startsWith("price_") && Array.isArray(value.entitlements)));
+    return Object.fromEntries(Object.entries(parsed).filter(([, value]) => value?.priceId?.startsWith("price_") && Array.isArray(value.entitlements) && Number.isInteger(value.seatLimit) && value.seatLimit >= 1 && value.seatLimit <= 10_000));
   } catch {
     return {};
   }
@@ -22,6 +22,18 @@ export function billingConfigured(): boolean {
 
 export function availableBillingPlans(): Array<{ key: string }> {
   return Object.keys(planConfig()).sort().map((key) => ({ key }));
+}
+
+export function defaultTeamSeatLimit(): number {
+  const parsed = Number(process.env.EOS_DEFAULT_TEAM_SEAT_LIMIT || "10");
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 10_000 ? parsed : 10;
+}
+
+export async function teamSeatLimitForOwner(userId: string): Promise<{ limit: number; enforced: boolean; source: "subscription" | "workspace_default" }> {
+  if (process.env.EOS_BILLING_ENFORCEMENT !== "true") return { limit: defaultTeamSeatLimit(), enforced: true, source: "workspace_default" };
+  const subscription = await subscriptionForUser(userId);
+  if (!subscription || !["active", "trialing"].includes(subscription.status)) return { limit: 1, enforced: true, source: "subscription" };
+  return { limit: subscription.seatLimit, enforced: true, source: "subscription" };
 }
 
 function stripeClient(): Stripe {
@@ -91,11 +103,12 @@ async function applySubscription(subscription: Stripe.Subscription): Promise<voi
     planKey,
     status: subscription.status,
     entitlements: plan.entitlements,
+    seatLimit: plan.seatLimit,
     cancelAtPeriodEnd: subscription.cancel_at_period_end,
     currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
   }).onConflictDoUpdate({
     target: billingSubscriptions.providerSubscriptionId,
-    set: { status: subscription.status, planKey, entitlements: plan.entitlements, cancelAtPeriodEnd: subscription.cancel_at_period_end, currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null, updatedAt: new Date() },
+    set: { status: subscription.status, planKey, entitlements: plan.entitlements, seatLimit: plan.seatLimit, cancelAtPeriodEnd: subscription.cancel_at_period_end, currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null, updatedAt: new Date() },
   });
 }
 

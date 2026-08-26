@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
+  "engines": {
+    "node": ">=22.13.0 <25"
+  },
   "scripts": {
     "dev": "tsx server/index.ts",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --external:./vite --bundle --format=esm --outfile=dist/index.js && esbuild scripts/run-migration.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/run-migration.js && esbuild scripts/import-google-workspace-token.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/import-google-workspace-token.js",
@@ -29,6 +32,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",
+    "@aws-sdk/client-s3": "^3.1117.0",
     "@clerk/clerk-react": "^5.61.4",
     "@clerk/express": "^2.1.0",
     "@google/generative-ai": "^0.24.0",
@@ -88,6 +92,8 @@
     "openai": "^4.96.2",
     "p-limit": "^7.3.0",
     "p-retry": "^7.1.1",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.2.108",
     "postgres": "^3.4.5",
     "posthog-js": "^1.392.0",
     "posthog-node": "^5.38.2",

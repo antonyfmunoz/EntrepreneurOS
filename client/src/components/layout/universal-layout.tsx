@@ -25,6 +25,9 @@ export interface UniversalLayoutProps {
   companyName?: string;
   companyHref?: string;
   roleName?: string;
+  allowedSurfaces?: readonly string[];
+  canBrowsePortfolio?: boolean;
+  canManageCompanySettings?: boolean;
 }
 
 export function UniversalLayout({
@@ -38,6 +41,9 @@ export function UniversalLayout({
   companyName,
   companyHref,
   roleName,
+  allowedSurfaces,
+  canBrowsePortfolio,
+  canManageCompanySettings,
 }: UniversalLayoutProps) {
   const left = useRailCollapse("ui.leftRail.collapsed");
   const right = useRailCollapse("ui.rightRail.collapsed");
@@ -70,6 +76,9 @@ export function UniversalLayout({
         companyName={companyName}
         companyHref={companyHref}
         roleName={roleName}
+        allowedSurfaces={allowedSurfaces}
+        canBrowsePortfolio={canBrowsePortfolio}
+        canManageCompanySettings={canManageCompanySettings}
         onLeftMenuClick={hasLeft ? () => setMobileLeftOpen(true) : undefined}
       />
 

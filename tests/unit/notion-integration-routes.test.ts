@@ -21,7 +21,6 @@ const gmailAdapter = vi.hoisted(() => ({
   disconnect: vi.fn(async () => ({ success: true, providerRevoked: true })),
 }));
 const storageAdapter = vi.hoisted(() => ({
-  getIntegrations: vi.fn(async () => []),
   upsertOauthToken: vi.fn(),
   deleteOauthToken: vi.fn(),
 }));
@@ -71,6 +70,14 @@ describe("Notion integration HTTP controls", () => {
   it("routes Google disconnect through provider revocation for the signed-in user", async () => {
     await api.post("/api/integrations/gmail/disconnect").send({}).expect(200, { success: true, providerRevoked: true });
     expect(gmailAdapter.disconnect).toHaveBeenCalledWith(userId);
+  });
+
+  it("retires the legacy unscoped integration catalog and mutation surface", async () => {
+    const expected = {
+      message: "The unscoped integration catalog has been retired. Use the authenticated provider status and authorization endpoints.",
+    };
+    await api.get("/api/integrations").expect(410, expected);
+    await api.post("/api/integrations/connect").send({ type: "gmail" }).expect(410, expected);
   });
 
   it("stores callback credentials encrypted and returns to the initiating company", async () => {

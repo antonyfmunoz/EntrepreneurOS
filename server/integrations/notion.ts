@@ -8,6 +8,7 @@ const NOTION_API = "https://api.notion.com/v1";
 export const NOTION_TOOLS = [
   "notion.workspace.verify",
   "notion.workspace.search",
+  "notion.page.read_snapshot",
 ] as const;
 
 interface OAuthStatePayload {
@@ -260,6 +261,90 @@ export async function searchWorkspace(userId: string, query = "", pageSize = 20)
       lastEditedTime: item.last_edited_time || null,
     };
   });
+}
+
+type NotionRichText = { plain_text?: string };
+type NotionBlock = {
+  id?: string;
+  type?: string;
+  has_children?: boolean;
+  [key: string]: unknown;
+};
+
+function richTextValue(value: unknown): string {
+  if (!Array.isArray(value)) return "";
+  return value
+    .map((part) => part && typeof part === "object" && typeof (part as NotionRichText).plain_text === "string"
+      ? (part as NotionRichText).plain_text
+      : "")
+    .join("");
+}
+
+function blockText(block: NotionBlock): string {
+  const body = block.type && block[block.type];
+  if (!body || typeof body !== "object" || Array.isArray(body)) return "";
+  const value = body as Record<string, unknown>;
+  return richTextValue(value.rich_text || value.caption || value.title);
+}
+
+async function readBlockTree(
+  userId: string,
+  blockId: string,
+  remaining: { value: number },
+  depth = 0,
+): Promise<{ lines: string[]; truncated: boolean }> {
+  const lines: string[] = [];
+  let cursor: string | undefined;
+  let truncated = false;
+  do {
+    const pageSize = Math.min(100, remaining.value);
+    if (pageSize < 1) return { lines, truncated: true };
+    const query = new URLSearchParams({ page_size: String(pageSize) });
+    if (cursor) query.set("start_cursor", cursor);
+    const response = await requestWithToken(userId, `/blocks/${encodeURIComponent(blockId)}/children?${query}`);
+    if (!response.ok) throw new Error(`Notion page content read failed with ${response.status}.`);
+    const data = await response.json() as { results?: NotionBlock[]; has_more?: boolean; next_cursor?: string | null };
+    for (const block of data.results || []) {
+      remaining.value -= 1;
+      const value = blockText(block).trim();
+      if (value) lines.push(value);
+      if (block.has_children && block.id && depth < 2 && remaining.value > 0) {
+        const child = await readBlockTree(userId, block.id, remaining, depth + 1);
+        lines.push(...child.lines);
+        truncated ||= child.truncated;
+      } else if (block.has_children) truncated = true;
+    }
+    cursor = data.has_more && data.next_cursor ? data.next_cursor : undefined;
+    if (cursor && remaining.value <= 0) truncated = true;
+  } while (cursor && remaining.value > 0);
+  return { lines, truncated };
+}
+
+export async function readPageSnapshot(
+  userId: string,
+  pageId: string,
+  maxBlocks = 200,
+): Promise<{ pageId: string; url: string; title: string; lastEditedTime: string; boundedText: string; truncated: boolean }> {
+  if (!isConfigured()) throw new Error("Notion OAuth is not configured.");
+  const normalizedMax = Math.min(500, Math.max(1, Math.trunc(maxBlocks)));
+  const response = await requestWithToken(userId, `/pages/${encodeURIComponent(pageId)}`);
+  if (!response.ok) throw new Error(`Notion page read failed with ${response.status}.`);
+  const page = await response.json() as any;
+  const titleProperty = Object.values(page.properties || {}).find((property: any) => property?.type === "title") as any;
+  const title = richTextValue(titleProperty?.title) || "Untitled";
+  if (!page.id || !page.url || !page.last_edited_time)
+    throw new Error("Notion page response is missing canonical identity or revision metadata.");
+  const content = await readBlockTree(userId, page.id, { value: normalizedMax });
+  const joined = content.lines.join("\n");
+  const boundedText = joined.slice(0, 50_000);
+  return {
+    pageId: page.id,
+    url: page.url,
+    title,
+    lastEditedTime: page.last_edited_time,
+    boundedText,
+    truncated: content.truncated || joined.length > boundedText.length,
+  };
 }
 
 export async function revokeAuthorization(userId: string): Promise<{ providerRevoked: boolean }> {

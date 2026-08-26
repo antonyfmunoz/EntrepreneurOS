@@ -58,10 +58,12 @@ type AiBudget = {
 type BillingStatus = {
   configured: boolean;
   availablePlans: Array<{ key: string }>;
+  teamSeats: { used: number; limit: number; remaining: number; source: string };
   subscription: null | {
     planKey: string;
     status: string;
     entitlements: string[];
+    seatLimit: number;
     cancelAtPeriodEnd: boolean;
     currentPeriodEnd: string | null;
   };
@@ -126,6 +128,7 @@ export default function SettingsPage() {
     queryFn: async () => (await apiRequest<Response>("GET", "/api/companies")).json(),
   });
   const companies = companiesQuery.data?.companies ?? [];
+  const hasOwnedCompanies = companies.length > 0;
   const selectedCompanyId = resolveSettingsCompanyId(requestedCompanyId, companies);
   const selectedCompanySummary = companies.find((company) => company.id === selectedCompanyId) ?? null;
 
@@ -181,6 +184,9 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!platformCapabilities.isLoading && !platformCapabilities.data?.operationalReadiness && activeTab === "readiness") setActiveTab("profile");
   }, [activeTab, platformCapabilities.data?.operationalReadiness, platformCapabilities.isLoading]);
+  useEffect(() => {
+    if (!companiesQuery.isLoading && !hasOwnedCompanies && ["company", "cost"].includes(activeTab)) setActiveTab("profile");
+  }, [activeTab, companiesQuery.isLoading, hasOwnedCompanies]);
 
   const selectCompany = (value: string) => {
     setRequestedCompanyId(value);
@@ -285,9 +291,9 @@ export default function SettingsPage() {
           <div>
             <p className="eos-label">Account control</p>
             <h1 className="mt-2 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">Settings</h1>
-            <p className="mt-3 max-w-2xl text-base text-muted-foreground">Control your identity, exact company, privacy, spend, subscription, and authorized platform operations from one place.</p>
+            <p className="mt-3 max-w-2xl text-base text-muted-foreground">{hasOwnedCompanies ? "Control your identity, exact company, privacy, spend, subscription, and authorized platform operations from one place." : "Control your identity, privacy, subscription, notifications, and account lifecycle from one place."}</p>
           </div>
-          <div className="w-full sm:w-[280px]">
+          {(companiesQuery.isLoading || hasOwnedCompanies) && <div className="w-full sm:w-[280px]">
             <Label htmlFor="settings-company" className="mb-2 block text-xs uppercase tracking-[0.12em] text-muted-foreground">Company context</Label>
             {companiesQuery.isLoading ? <div className="h-10 animate-pulse rounded-xl bg-muted" /> : companies.length ? (
               <Select value={selectedCompanyId ? String(selectedCompanyId) : undefined} onValueChange={selectCompany}>
@@ -295,15 +301,15 @@ export default function SettingsPage() {
                 <SelectContent>{companies.map((company) => <SelectItem key={company.id} value={String(company.id)}>{company.name}</SelectItem>)}</SelectContent>
               </Select>
             ) : <Button asChild variant="outline" className="w-full"><a href="/portfolios">Create an organization</a></Button>}
-          </div>
+          </div>}
         </div>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as SettingsTab)}>
           <TabsList className="mb-6 grid h-auto w-full grid-cols-2 justify-start gap-1 rounded-2xl bg-muted p-1.5 sm:inline-flex sm:w-auto">
             <TabsTrigger className={tabClass("profile")} value="profile">Profile</TabsTrigger>
-            <TabsTrigger className={tabClass("company")} value="company">Company</TabsTrigger>
+            {hasOwnedCompanies && <TabsTrigger className={tabClass("company")} value="company">Company</TabsTrigger>}
             <TabsTrigger className={tabClass("privacy")} value="privacy">Privacy</TabsTrigger>
-            <TabsTrigger className={tabClass("cost")} value="cost">AI spend</TabsTrigger>
+            {hasOwnedCompanies && <TabsTrigger className={tabClass("cost")} value="cost">AI spend</TabsTrigger>}
             <TabsTrigger className={tabClass("billing")} value="billing">Billing</TabsTrigger>
             {platformCapabilities.data?.operationalReadiness && <TabsTrigger className={tabClass("readiness")} value="readiness"><Gauge className="mr-1.5 h-4 w-4" />Readiness</TabsTrigger>}
           </TabsList>
@@ -323,7 +329,7 @@ export default function SettingsPage() {
             </SettingsCard>
           </TabsContent>
 
-          <TabsContent value="company">
+          {hasOwnedCompanies && <TabsContent value="company">
             {!selectedCompanyId ? <CompanyRequired hasCompanies={companies.length > 0} /> : <SettingsCard>
               <div className="mb-6 flex items-start gap-3"><Building2 className="mt-0.5 h-5 w-5 text-primary" /><div><h2 className="text-xl font-semibold">{selectedCompanySummary?.name}</h2><p className="mt-1 text-sm text-muted-foreground">Only this selected company will be changed.</p></div></div>
               {companySettings.isLoading ? <div className="h-48 animate-pulse rounded-xl bg-muted" /> : <div className="space-y-5">
@@ -334,7 +340,7 @@ export default function SettingsPage() {
                 {updateCompany.isSuccess && <p className="text-right text-sm text-emerald-700">Company settings updated.</p>}{updateCompany.isError && <p className="text-right text-sm text-destructive">Company changes could not be saved.</p>}
               </div>}
             </SettingsCard>}
-          </TabsContent>
+          </TabsContent>}
 
           <TabsContent value="privacy">
             <SettingsCard>
@@ -347,7 +353,7 @@ export default function SettingsPage() {
             </SettingsCard>
           </TabsContent>
 
-          <TabsContent value="cost">
+          {hasOwnedCompanies && <TabsContent value="cost">
             {!selectedCompanyId ? <CompanyRequired hasCompanies={companies.length > 0} /> : <SettingsCard>
               <div className="mb-6 flex items-start gap-3"><DollarSign className="mt-0.5 h-5 w-5 text-primary" /><div><h2 className="text-xl font-semibold">AI spend for {selectedCompanySummary?.name}</h2><p className="mt-1 text-sm text-muted-foreground">Hard per-request and monthly limits are enforced before model calls.</p></div></div>
               {aiBudget.isLoading ? <div className="h-36 animate-pulse rounded-xl bg-muted" /> : <div className="space-y-5">
@@ -361,11 +367,12 @@ export default function SettingsPage() {
                 {reconcileAiUsage.isSuccess && <p className="text-sm text-emerald-700">Reservation reconciled and the ledger has been recalculated.</p>}
               </div>}
             </SettingsCard>}
-          </TabsContent>
+          </TabsContent>}
 
           <TabsContent value="billing">
             <SettingsCard>
               <div className="mb-6 flex items-start gap-3"><CreditCard className="mt-0.5 h-5 w-5 text-primary" /><div><h2 className="text-xl font-semibold">Billing</h2><p className="mt-1 text-sm text-muted-foreground">Subscription status and provider-hosted payment controls.</p></div></div>
+              {billing.data?.teamSeats && <div className="mb-5 grid gap-3 sm:grid-cols-3"><div className="rounded-2xl bg-muted p-4"><p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">Human identities</p><p className="mt-2 text-lg font-semibold">{billing.data.teamSeats.used}</p></div><div className="rounded-2xl bg-muted p-4"><p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">Seat allowance</p><p className="mt-2 text-lg font-semibold">{billing.data.teamSeats.limit}</p></div><div className="rounded-2xl bg-muted p-4"><p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">Available</p><p className="mt-2 text-lg font-semibold">{billing.data.teamSeats.remaining}</p></div></div>}
               {billing.isLoading ? <div className="h-36 animate-pulse rounded-xl bg-muted" /> : billing.isError ? <p className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive">Billing status could not be loaded.</p> : !billing.data?.configured ? <div className="rounded-2xl bg-muted p-5"><h3 className="font-semibold">Billing is not available in this environment</h3><p className="mt-2 text-sm text-muted-foreground">No payment will be requested. A verified billing provider and published legal terms are required before checkout can be enabled.</p></div> : billing.data.subscription ? <div className="space-y-5"><div className="rounded-2xl bg-muted p-5"><p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Current plan</p><p className="mt-2 text-xl font-semibold">{titleCase(billing.data.subscription.planKey)}</p><p className="mt-1 text-sm text-muted-foreground">Status: {titleCase(billing.data.subscription.status)}{billing.data.subscription.cancelAtPeriodEnd ? " · Cancels at period end" : ""}</p>{billing.data.subscription.currentPeriodEnd && <p className="mt-1 text-sm text-muted-foreground">Current period ends {new Date(billing.data.subscription.currentPeriodEnd).toLocaleDateString()}.</p>}</div><Button onClick={() => openBillingPortal.mutate()} disabled={openBillingPortal.isPending}>{openBillingPortal.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Manage billing</Button>{openBillingPortal.isError && <p className="text-sm text-destructive">The billing portal could not be opened.</p>}</div> : <div className="space-y-5"><div><Label htmlFor="billing-plan">Plan</Label><Select value={selectedPlan || undefined} onValueChange={setSelectedPlan}><SelectTrigger id="billing-plan" className="mt-2"><SelectValue placeholder="Choose a plan" /></SelectTrigger><SelectContent>{billing.data.availablePlans.map((plan) => <SelectItem key={plan.key} value={plan.key}>{titleCase(plan.key)}</SelectItem>)}</SelectContent></Select></div><div className="flex items-start gap-3 rounded-2xl bg-muted p-5 text-sm text-muted-foreground"><ShieldCheck className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" /><p>Checkout opens on the configured payment provider. EOS never collects raw card details.</p></div><Button onClick={() => startCheckout.mutate()} disabled={!selectedPlan || startCheckout.isPending}>{startCheckout.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Continue to secure checkout</Button>{startCheckout.isError && <p className="text-sm text-destructive">Checkout could not start. Confirm required legal terms are accepted.</p>}</div>}
             </SettingsCard>
           </TabsContent>

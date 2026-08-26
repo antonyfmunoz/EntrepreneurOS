@@ -1,11 +1,11 @@
 import { Request, Response, NextFunction } from "express";
-import { writeLog } from "../observability/logger";
+import { redactedRequestPath, writeLog } from "../observability/logger";
 
 export function errorHandler(err: Error, req: Request, res: Response, _next: NextFunction) {
   writeLog("error", "unhandled_request_error", {
     requestId: req.requestId,
     method: req.method,
-    path: req.path,
+    path: redactedRequestPath(req.path),
     userId: req.user?.id,
     error: err,
   });

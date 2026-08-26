@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { z } from "zod";
 import { availableBillingPlans, billingConfigured, createCheckout, createPortal, processStripeWebhook, subscriptionForUser } from "../billing/stripe";
+import { teamSeatSummaryForOwner } from "../billing/team-seats";
 import { legalStatusForUser } from "../legal/service";
 
 export function registerBillingWebhook(app: Express): void {
@@ -19,9 +20,9 @@ export function registerBillingWebhook(app: Express): void {
 export function registerBillingRoutes(app: Express): void {
   app.get("/api/billing/status", async (req, res, next) => {
     try {
-      const subscription = await subscriptionForUser(req.user.id);
+      const [subscription, teamSeats] = await Promise.all([subscriptionForUser(req.user.id), teamSeatSummaryForOwner(req.user.id)]);
       const configured = billingConfigured();
-      return res.json({ configured, availablePlans: configured ? availableBillingPlans() : [], subscription: subscription ? { planKey: subscription.planKey, status: subscription.status, entitlements: subscription.entitlements, cancelAtPeriodEnd: subscription.cancelAtPeriodEnd, currentPeriodEnd: subscription.currentPeriodEnd } : null });
+      return res.json({ configured, availablePlans: configured ? availableBillingPlans() : [], teamSeats, subscription: subscription ? { planKey: subscription.planKey, status: subscription.status, entitlements: subscription.entitlements, seatLimit: subscription.seatLimit, cancelAtPeriodEnd: subscription.cancelAtPeriodEnd, currentPeriodEnd: subscription.currentPeriodEnd } : null });
     } catch (error) { return next(error); }
   });
   app.post("/api/billing/checkout", async (req, res, next) => {
