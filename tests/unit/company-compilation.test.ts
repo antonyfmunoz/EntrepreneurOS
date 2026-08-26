@@ -1,11 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { validateCompanyPackage } from "../../shared/company-compilation";
 import { companyMatchesPackage } from "../../server/company-compilation/catalog";
+import { createNotionSourceBinding } from "../../server/company-compilation/notion-source-adapter";
 import { EMPYREAN_COMPANY_PACKAGE } from "../../server/reference-instances/empyrean-studios";
 import { AFM_COMPANY_PACKAGE, AFM_RUNTIME_BINDINGS, AFM_SOURCE_BINDINGS } from "../../server/reference-instances/afm";
 import { companySourceContentHash, validateCompanySourceSnapshot } from "../../shared/company-source-adapter";
 
 describe("EOS company compilation contracts", () => {
+  it("accepts only exact Notion domains or true subdomains for canonical sources", () => {
+    const { expectedPageId: _expectedPageId, ...binding } = AFM_SOURCE_BINDINGS[0];
+    expect(createNotionSourceBinding(binding).expectedPageId).toBeTruthy();
+
+    for (const hostname of ["evilnotion.com", "notion.com.evil.example", "evilnotion.site"]) {
+      const hostile = new URL(binding.sourceRef);
+      hostile.hostname = hostname;
+      expect(() => createNotionSourceBinding({ ...binding, sourceRef: hostile.toString() })).toThrow("Notion page");
+    }
+  });
+
   it("accepts the complete Empyrean package and preserves active versus dormant capability state", () => {
     const result = validateCompanyPackage(EMPYREAN_COMPANY_PACKAGE);
     expect(result.findings).toEqual([]);

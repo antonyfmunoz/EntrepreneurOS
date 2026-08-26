@@ -20,7 +20,11 @@ export function createNotionSourceBinding(input: Omit<CompanySourceBinding, "exp
   if (!pageId)
     throw new CompanySourceAdapterError("source_page_id_invalid", "The source binding does not contain an exact Notion page identity.");
   const source = new URL(input.sourceRef);
-  if (!source.hostname.endsWith("notion.com") && !source.hostname.endsWith("notion.site"))
+  const hostname = source.hostname.toLowerCase().replace(/\.$/, "");
+  const isNotionHost = ["notion.com", "notion.site"].some(
+    (domain) => hostname === domain || hostname.endsWith(`.${domain}`),
+  );
+  if (!isNotionHost)
     throw new CompanySourceAdapterError("source_provider_invalid", "The source binding must resolve to a Notion page.");
   return companySourceBindingSchema.parse({ ...input, expectedPageId: pageId });
 }
