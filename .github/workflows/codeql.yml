@@ -51,14 +51,15 @@ jobs:
           if (!directory) throw new Error("CodeQL did not return a SARIF directory.");
           const files = (await readdir(directory)).filter((file) => file.endsWith(".sarif"));
           if (files.length === 0) throw new Error("CodeQL did not produce a SARIF result.");
-          const acceptedHmacVerification = (result) => {
+          const acceptedReviewedProtocolCryptography = (result) => {
             const uri = result.locations?.[0]?.physicalLocation?.artifactLocation?.uri || "";
-            const reviewedOAuthStateImplementations = [
-              "server/integrations/gmail.ts",
-              "server/integrations/notion.ts",
-            ];
+            const reviewedProtocolImplementations = new Map([
+              ["server/integrations/gmail.ts", "HMAC-SHA256 OAuth state integrity"],
+              ["server/integrations/notion.ts", "HMAC-SHA256 OAuth state integrity"],
+              ["server/integrations/recovery-commercial.ts", "RS256 DocuSign JWT client assertion"],
+            ]);
             return result.ruleId === "js/insufficient-password-hash"
-              && reviewedOAuthStateImplementations.some((path) => uri.endsWith(path));
+              && [...reviewedProtocolImplementations.keys()].some((path) => uri.endsWith(path));
           };
           let findings = 0;
           let accepted = 0;
@@ -66,7 +67,7 @@ jobs:
             const sarif = JSON.parse(await readFile(join(directory, file), "utf8"));
             for (const run of sarif.runs || []) {
               for (const result of run.results || []) {
-              if (acceptedHmacVerification(result)) accepted += 1;
+              if (acceptedReviewedProtocolCryptography(result)) accepted += 1;
               else {
                 findings += 1;
                 const uri = result.locations?.[0]?.physicalLocation?.artifactLocation?.uri || "unknown";
@@ -76,10 +77,10 @@ jobs:
               }
             }
           }
-          if (accepted > 2) throw new Error(`Expected at most two reviewed OAuth HMAC exceptions, found ${accepted}.`);
+          if (accepted > 3) throw new Error(`Expected at most three reviewed protocol-cryptography exceptions, found ${accepted}.`);
           if (findings > 0) {
             console.error(`::error title=CodeQL findings::CodeQL reported ${findings} finding(s). Review and remediate them before merge.`);
             process.exit(1);
           }
-          console.log(`CodeQL reported zero unreviewed findings; accepted ${accepted} OAuth HMAC verification false positive.`);
+          console.log(`CodeQL reported zero unreviewed findings; accepted ${accepted} reviewed protocol-cryptography false positive(s).`);
           NODE

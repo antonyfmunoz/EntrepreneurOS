@@ -281,6 +281,18 @@ describe("EOS native e-sign foundation", () => {
     expect(() => validateNativeEsignPdf(Buffer.from("not a pdf"))).toThrow("native_esign_document_content_invalid");
   });
 
+  it("rejects non-binary values at every native e-sign artifact boundary", async () => {
+    expect(() => validateNativeEsignPdf("%PDF-1.7" as unknown))
+      .toThrow("native_esign_artifact_body_invalid");
+    await expect(inspectNativeEsignPdf([0x25, 0x50, 0x44, 0x46] as unknown))
+      .rejects.toThrow("native_esign_artifact_body_invalid");
+    await expect(storeNativeEsignArtifact(
+      nativeEsignSourceStorageKey(7, "8e8e3df4-9686-426a-9a2e-5ed1bd88ee2f"),
+      { bytes: [0x25, 0x50, 0x44, 0x46] } as unknown,
+      { NODE_ENV: "test" } as NodeJS.ProcessEnv,
+    )).rejects.toThrow("native_esign_artifact_body_invalid");
+  });
+
   it("inspects real PDF page geometry before immutable registration", async () => {
     const source = await PDFDocument.create();
     source.addPage([612, 792]);
