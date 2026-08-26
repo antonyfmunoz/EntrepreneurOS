@@ -52,6 +52,15 @@ The production helper refuses a dirty worktree, a commit that is not the remote 
 
 Credential cutover is a distinct production change. Fly exposes secret names, deployment status, and opaque digests—not the previous plaintext values—so an image rollback cannot restore credentials changed by the release. Before approving `CUTOVER`, prove that the credential vault retains the complete prior secret set, identify the provider-side rollback/revocation steps, and assign the operator who can restore it. If secret staging fails partially, stop: the next release will reject the pending state until an operator deliberately completes or restores that cutover. Never treat successful image rollback smoke as proof that credential rollback is complete.
 
+The production vault item must also contain separate least-privilege access-key
+pairs for the primary and backup S3 planes, their distinct bucket/region/KMS
+identities, and the malware-scanner endpoint and bearer secret. The release
+helper stages this entire custody contract together; it rejects a missing or
+partial plane credential pair. EOS never writes those credentials into storage
+identity hashes, readiness evidence, or deployment receipts. Candidate
+transcription remains disabled unless its kill switch is explicitly enabled;
+only then is an OpenAI credential required and staged.
+
 Promotion smoke deliberately does not declare the release complete. Record the release-bound deployment and release-owner evidence only after the new image is running, then execute `npm run test:e2e:production:readiness`. That final probe requires all 24 layers, vendor reviews, configuration controls, correct subjects, and unexpired evidence to pass.
 
 For a safe local load rehearsal, `npm run test:e2e` starts the fixture runtime and issues 300 requests with concurrency 20. Direct `npm run test:load` use requires `EOS_LOAD_TEST_TARGET`. External targets additionally require HTTPS, `EOS_LOAD_TEST_APPROVED=true`, an exact `EOS_LOAD_TEST_ALLOWED_HOST`, and one of the allowlisted read-only probe paths. This protects a third-party or production service from an accidental load run.
