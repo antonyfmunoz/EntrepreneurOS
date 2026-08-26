@@ -233,6 +233,16 @@ operation, operator handoff, a second company, native cutovers, optional UMH,
 or institutional-scale operation. Preserve separate attributable evidence for
 those gates.
 
+Platform administrators use **Settings → Readiness → Production closure queue**
+to turn every currently failing registered control, runtime configuration,
+vendor review, and ownership predicate into accountable work. Select **Refresh
+blockers** to initialize new rows, then assign a configured platform
+administrator, a due date, and an exact dependency note. The queue retains
+optimistic-versioned immutable history and continues to show resolved predicates
+as history. It has no completed/pass action state: recording a plan, setting it
+in progress, or waiting on a provider never satisfies the underlying 24-layer
+predicate.
+
 Before promotion, copy
 `docs/examples/eos-production-promotion-evidence.example.json` to the ignored
 `.tmp/eos-production-promotion-evidence.json` path and replace every example

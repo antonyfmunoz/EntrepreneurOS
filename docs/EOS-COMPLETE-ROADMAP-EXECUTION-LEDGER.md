@@ -41,7 +41,7 @@ Supporting Drive source:
 |---|---|---|
 | Canonical scope | Current Notion requirements and compatible Drive requirements are classified with no silent omission | Locked to the five named Notion sources, compatible Drive master, source hierarchy, 25-instrument matrix, 24-layer matrix, and evidence-class contract below |
 | Repository implementation | Software-controlled requirements exist with migrations, APIs, interactive UI, tests, and traceability | Locally qualified in the current working tree |
-| Reviewed release candidate | One reviewed commit and immutable image pass protected remote qualification | Commit `50039d40f4dfad7f696460d503c78fcbb8c652ec` passed protected CodeQL `33019815145` and production qualification `33019815187`; deployment image digest remains open |
+| Reviewed release candidate | One reviewed commit and immutable image pass protected remote qualification | Merge `038c61894e6e6c57ee11a5a97493a1690c621369` passed post-merge CodeQL `33021728101` and production qualification `33021728141`; the production-readiness action queue is the current locally qualified candidate and still requires protected review, while the deployment image digest remains open |
 | Public SaaS MVP | All 24 production layers have current evidence for the exact deployed release | Open |
 | Empyrean Client Zero | Empyrean completes real customer-value and recovery cycles through EOS with authoritative Evidence | Open |
 | Operatorized product | A qualified operator sustains repeated cycles with materially reduced founder dependence | Open |
@@ -55,20 +55,25 @@ The current local qualification reports:
 
 - all 25 Required Instrument Manifest families implemented through the canonical
   company-scoped instrument kernel;
-- 111 migrations applied on fresh PostgreSQL 16;
-- 63 test files and 422 tests, including all 61 PostgreSQL-gated journeys;
-- TypeScript, production build, local production image, dependency audit, and
-  source-integrity checks passed;
+- 112 migrations applied on fresh PostgreSQL 16;
+- 65 test files and 428 tests, including all 61 PostgreSQL-gated journeys;
+- TypeScript and production build passed for the current candidate; its protected
+  base also passed local production image, dependency audit, and source-integrity
+  checks;
 - all seven roles, all 14 modules, the 22-class artifact closure system, and the
   canonical instrument workspace rendered on desktop/mobile;
+- a platform-admin production closure queue persists every current control,
+  configuration, vendor, and ownership blocker with accountable operator, due
+  date, optimistic version, and immutable action history, while deliberately
+  withholding any narrative complete/pass state;
 - zero serious or critical accessibility findings; and
-- 300/300 load responses at concurrency 20, 115.59 ms p95 and 120.23 ms p99.
+- 300/300 load responses at concurrency 20, 70.93 ms p95 and 76.05 ms p99.
 
 The protected base of this baseline is reviewed commit
-`50039d40f4dfad7f696460d503c78fcbb8c652ec`; the additional external-inventory
-tests are qualified in the current candidate and still require protected remote
-CI. Neither evidence class satisfies deployment, provider, professional, or
-field gates.
+`038c61894e6e6c57ee11a5a97493a1690c621369`; the additional readiness-action
+queue, migration, API, UI, and tests are qualified in the current candidate and
+still require protected remote CI. Neither evidence class satisfies deployment,
+provider, professional, or field gates.
 
 ## Execution sequence
 
@@ -90,7 +95,7 @@ class.
 
 - [x] Review the complete dirty working tree as one coherent release candidate.
 - [x] Exclude local-only state and secret-shaped material.
-- [x] Review all migrations through `0109` for fresh and incremental behavior.
+- [x] Review all migrations through `0110` for fresh and incremental behavior.
 - [x] Repeat the full qualification on a fresh disposable database.
 - [x] Commit the intentionally reviewed candidate.
 - [x] Push the exact candidate to the correct protected branch.

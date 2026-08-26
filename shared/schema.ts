@@ -339,6 +339,42 @@ export const operationalControlEvidenceHistory = pgTable("operational_control_ev
   recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const operationalReadinessActions = pgTable("operational_readiness_actions", {
+  blockerKey: text("blocker_key").primaryKey(),
+  blockerType: text("blocker_type").notNull(),
+  layer: integer("layer").notNull(),
+  title: text("title").notNull(),
+  evidenceClass: text("evidence_class").notNull(),
+  nextAction: text("next_action").notNull(),
+  operatorState: text("operator_state").notNull().default("unassigned"),
+  ownerUserId: text("owner_user_id").references(() => users.id),
+  dueAt: timestamp("due_at", { withTimezone: true }),
+  notes: text("notes").notNull().default(""),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("operational_readiness_actions_layer_state_idx").on(table.layer, table.operatorState, table.dueAt),
+  index("operational_readiness_actions_owner_idx").on(table.ownerUserId, table.operatorState),
+]);
+
+export const operationalReadinessActionEvents = pgTable("operational_readiness_action_events", {
+  id: text("id").primaryKey(),
+  blockerKey: text("blocker_key").notNull().references(() => operationalReadinessActions.blockerKey),
+  eventType: text("event_type").notNull(),
+  fromState: text("from_state"),
+  toState: text("to_state").notNull(),
+  ownerUserId: text("owner_user_id").references(() => users.id),
+  dueAt: timestamp("due_at", { withTimezone: true }),
+  notes: text("notes").notNull().default(""),
+  actionVersion: integer("action_version").notNull(),
+  actorUserId: text("actor_user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("operational_readiness_action_events_version_uidx").on(table.blockerKey, table.actionVersion),
+  index("operational_readiness_action_events_time_idx").on(table.blockerKey, table.createdAt),
+]);
+
 export const vendorRegistry = pgTable("vendor_registry", {
   id: text("id").primaryKey(),
   name: text("name").notNull().unique(),

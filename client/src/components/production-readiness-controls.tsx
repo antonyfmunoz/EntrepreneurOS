@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest } from "@/lib/queryClient";
 import { ProductionGovernanceControls } from "@/components/production-governance-controls";
+import { ProductionReadinessActionQueue } from "@/components/production-readiness-action-queue";
 
 type ReadinessRequirement = {
   key: string;
@@ -168,6 +169,8 @@ export function ProductionReadinessControls() {
         </div>
         {(readiness.data.configurationMissing.length > 0 || readiness.data.missingVendors.length > 0) && <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">Non-evidence blockers</p>{readiness.data.configurationMissing.length > 0 && <p className="mt-2">Configuration: {readiness.data.configurationMissing.map(titleCase).join(", ")}</p>}{readiness.data.missingVendors.length > 0 && <p className="mt-1">Vendor records: {readiness.data.missingVendors.join(", ")}</p>}</div>}
       </Card>
+
+      <ProductionReadinessActionQueue onReadinessChanged={() => readiness.refetch()} />
 
       <div className="grid gap-3 md:grid-cols-2">
         {readiness.data.layers.map((layer) => <Card key={layer.layer} className="rounded-2xl border-white/70 bg-white p-5 shadow-sm"><div className="flex items-start justify-between gap-3"><div><p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Layer {layer.layer}</p><h3 className="mt-1 font-semibold">{layer.name}</h3></div><Badge variant={layer.status === "pass" ? "secondary" : "outline"} className={layer.status === "pass" ? "bg-emerald-100 text-emerald-800" : "border-amber-300 text-amber-900"}>{layer.status === "pass" ? <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> : <CircleAlert className="mr-1 h-3.5 w-3.5" />}{layer.status}</Badge></div>{layer.missing.length > 0 ? <div className="mt-4 flex flex-wrap gap-2">{layer.missing.map((item) => <span key={item} className="rounded-full bg-amber-50 px-2.5 py-1 text-xs text-amber-950">{titleCase(item)}</span>)}</div> : <p className="mt-4 text-sm text-emerald-700">All required evidence is current.</p>}</Card>)}
