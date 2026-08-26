@@ -1498,6 +1498,8 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       .get("/api/platform/capabilities")
       .expect(200, { operationalReadiness: false });
     await api.get("/api/platform/readiness").expect(403);
+    await api.get("/api/platform/readiness/actions").expect(403);
+    await api.post("/api/platform/readiness/actions/refresh").send({}).expect(403);
     process.env.EOS_PLATFORM_ADMIN_USER_IDS = `${ownerId},${otherId}`;
     process.env.EOS_RELEASE_SUBJECT = `git:${"a".repeat(40)}`;
     process.env.EOS_PRODUCTION_ENVIRONMENT_SUBJECT = "environment:entrepreneuros-production";
@@ -1527,6 +1529,74 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
           satisfied: expect.any(Boolean),
         }),
       ]);
+      const refreshedActions = await api
+        .post("/api/platform/readiness/actions/refresh")
+        .send({})
+        .expect(200);
+      expect(refreshedActions.body.standard).toBe(
+        "eos.production-readiness-actions.v1",
+      );
+      expect(refreshedActions.body.uninitializedBlockerCount).toBe(0);
+      const frontendAction = refreshedActions.body.actions.find(
+        (action: { blockerKey: string }) =>
+          action.blockerKey === "control:frontend_acceptance",
+      );
+      expect(frontendAction).toEqual(
+        expect.objectContaining({
+          currentBlocker: true,
+          operatorState: "unassigned",
+          layer: 1,
+          version: 1,
+        }),
+      );
+      const actionDueAt = new Date(Date.now() + 7 * 86_400_000);
+      const assignedAction = await api
+        .put(
+          `/api/platform/readiness/actions/${encodeURIComponent(frontendAction.blockerKey)}`,
+        )
+        .send({
+          expectedVersion: frontendAction.version,
+          operatorState: "in_progress",
+          ownerUserId: otherId,
+          dueAt: actionDueAt,
+          notes:
+            "Own the exact release acceptance receipt; narrative state cannot pass the control.",
+        })
+        .expect(200);
+      expect(assignedAction.body).toEqual(
+        expect.objectContaining({
+          operatorState: "in_progress",
+          ownerUserId: otherId,
+          version: 2,
+        }),
+      );
+      await api
+        .put(
+          `/api/platform/readiness/actions/${encodeURIComponent(frontendAction.blockerKey)}`,
+        )
+        .send({
+          expectedVersion: frontendAction.version,
+          operatorState: "planned",
+          ownerUserId: ownerId,
+          dueAt: actionDueAt,
+          notes: "A stale operator edit must not replace the accepted plan.",
+        })
+        .expect(409);
+      const actionEvents = await api
+        .get(
+          `/api/platform/readiness/actions/${encodeURIComponent(frontendAction.blockerKey)}/events`,
+        )
+        .expect(200);
+      expect(actionEvents.body).toHaveLength(2);
+      expect(actionEvents.body).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ eventType: "initialized", actionVersion: 1 }),
+          expect.objectContaining({ eventType: "updated", actionVersion: 2 }),
+        ]),
+      );
+      await expect(
+        sql`UPDATE operational_readiness_action_events SET notes = 'tampered' WHERE id = ${actionEvents.body[0].id}`,
+      ).rejects.toThrow(/immutable/);
       const reviewedAt = new Date();
       const expiresAt = new Date(reviewedAt.getTime() + 7 * 86_400_000);
       const localStorageReceipt = createHash("sha256").update(`local-storage-drill:${companyId}:${randomUUID()}`).digest("hex");
@@ -1580,6 +1650,15 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         (item: { notes?: string }) => item.notes === marker,
       );
       expect(recorded).toHaveLength(2);
+      const actionsAfterEvidence = await api
+        .get("/api/platform/readiness/actions")
+        .expect(200);
+      expect(
+        actionsAfterEvidence.body.actions.find(
+          (action: { blockerKey: string }) =>
+            action.blockerKey === "control:frontend_acceptance",
+        ),
+      ).toEqual(expect.objectContaining({ currentBlocker: false }));
       await expect(
         sql`UPDATE operational_control_evidence_history SET notes = 'tampered' WHERE id = ${recorded[0].id}`,
       ).rejects.toThrow(/immutable/);
@@ -1649,6 +1728,11 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         ]),
       );
     } finally {
+      await sql.begin(async (tx) => {
+        await tx`SELECT set_config('eos.allow_readiness_action_maintenance', 'true', true)`;
+        await tx`DELETE FROM operational_readiness_action_events`;
+        await tx`DELETE FROM operational_readiness_actions`;
+      });
       await sql`DELETE FROM service_ownership WHERE service_key = ${serviceKey}`;
       await sql`DELETE FROM vendor_registry WHERE id = ${vendorId}`;
       await sql.begin(async (tx) => {
