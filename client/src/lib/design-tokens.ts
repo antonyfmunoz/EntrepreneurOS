@@ -36,7 +36,7 @@ export const spacing = {
 } as const;
 
 export const typography = {
-  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   fontSize: {
     xs: '12px',
     sm: '14px',

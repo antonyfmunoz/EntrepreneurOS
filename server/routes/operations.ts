@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto";
 import type { Express } from "express";
 import { asc, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { operationalControlEvidenceHistory, operationalControls, serviceOwnership, users, vendorRegistry } from "@shared/schema";
+import { eosEsignStorageDrills, operationalControlEvidenceHistory, operationalControls, serviceOwnership, users, vendorRegistry } from "@shared/schema";
 import { db } from "../db";
 import { productionReadiness } from "../operations/readiness";
 import { platformAdminIds, requirePlatformAdmin } from "../security/platform-admin";
 import { dispatchOperationalAlert, operationalAlertsConfigured } from "../observability/alerts";
 import { CONTROL_DEFINITIONS, controlEvidenceIsCurrent } from "../operations/control-definitions";
 import { serviceOwnershipIssues } from "../operations/ownership";
+import { nativeEsignStorageDrillQualifiesForProduction } from "../esign/storage-drill";
 
 const httpsUrl = z.string().url().refine((value) => {
   const url = new URL(value);
@@ -82,6 +83,15 @@ export function registerOperationalRoutes(app: Express): void {
       if (!definition) return res.status(400).json({ code: "unknown_operational_control", message: "The control key is not part of the current production standard." });
       const input = z.object({ status: z.enum(["pass", "fail"]), evidenceUri: httpsUrl, evidenceHash: z.string().regex(/^[a-f0-9]{64}$/), evidenceScope: z.enum(["repository", "staging", "production", "professional"]), subject: z.string().min(3).max(300), notes: z.string().max(2000).optional(), reviewedAt: z.coerce.date(), expiresAt: z.coerce.date() }).parse(req.body);
       if (!controlEvidenceIsCurrent({ definition, evidenceScope: input.evidenceScope, subject: input.subject, reviewedAt: input.reviewedAt, expiresAt: input.expiresAt, expectedReleaseSubject: process.env.EOS_RELEASE_SUBJECT, expectedEnvironmentSubject: process.env.EOS_PRODUCTION_ENVIRONMENT_SUBJECT })) return res.status(400).json({ code: "invalid_operational_evidence_scope_subject_or_age", message: "Evidence scope, subject, review time, or expiry does not satisfy this control definition." });
+      if (controlKey === "native_esign_storage_recovery_drill" && input.status === "pass") {
+        const [drill] = await db.select().from(eosEsignStorageDrills)
+          .where(eq(eosEsignStorageDrills.receiptSha256, input.evidenceHash)).limit(1);
+        if (!nativeEsignStorageDrillQualifiesForProduction(drill, input.reviewedAt))
+          return res.status(400).json({
+            code: "native_esign_storage_drill_not_production_qualified",
+            message: "A passing production control requires a current immutable receipt from distinct reachable S3 planes with KMS, default encryption, versioning, default object retention, lifecycle policy, verified loss simulation, restore, and cleanup.",
+          });
+      }
       const control = await db.transaction(async (tx) => {
         const [current] = await tx.insert(operationalControls).values({ controlKey, ...input, ownerUserId: req.user.id }).onConflictDoUpdate({ target: operationalControls.controlKey, set: { ...input, ownerUserId: req.user.id, updatedAt: new Date() } }).returning();
         await tx.insert(operationalControlEvidenceHistory).values({ id: randomUUID(), controlKey, ...input, ownerUserId: req.user.id });

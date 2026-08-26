@@ -23,8 +23,6 @@ import {
   type UpdateTask,
   type Message,
   type InsertMessage,
-  type Integration,
-  type InsertIntegration,
   type User,
   type InsertUser,
   type Notification,
@@ -96,10 +94,6 @@ export interface IStorage {
   assignTaskToAgent(taskId: string, agentId: string, assignedById: string): Promise<Task>; // Assign task to a different agent
   createSubtask(parentTaskId: string, subtask: InsertTask): Promise<Task>; // Create a subtask linked to parent
 
-  // Integration operations
-  getIntegrations(): Promise<Integration[]>;
-  connectIntegration(type: string): Promise<Integration>;
-  
   // Notification operations
   getNotifications(userId: string): Promise<Notification[]>;
   getUnreadNotificationsCount(userId: string): Promise<number>;
@@ -893,83 +887,6 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return newMessage;
-  }
-
-  // Integration operations
-  async getIntegrations(): Promise<Integration[]> {
-    return await db.select().from(integrationsTable);
-  }
-
-  async connectIntegration(type: string): Promise<Integration> {
-    // In a real app, this would connect to the actual integration
-    // For now, we'll just create a placeholder integration
-    let name, details, icon, status;
-    
-    switch (type) {
-      case "notion":
-        name = "Notion";
-        details = "Connected workspace";
-        icon = "ri-notion-line";
-        status = "connected";
-        break;
-      case "gmail":
-        name = "Gmail";
-        details = "Connected account";
-        icon = "ri-mail-line";
-        status = "connected";
-        break;
-      case "google-sheets":
-        name = "Google Sheets";
-        details = "Connected sheet";
-        icon = "ri-file-list-3-line";
-        status = "connected";
-        break;
-      case "zapier":
-        name = "Zapier";
-        details = "Connected account";
-        icon = "ri-flashlight-line";
-        status = "connected";
-        break;
-      default:
-        name = "New Integration";
-        details = "Connected service";
-        icon = "ri-link";
-        status = "connected";
-    }
-    
-    // Generate a unique ID
-    const id = `integration_${Date.now()}`;
-    
-    const [newIntegration] = await db.insert(integrationsTable)
-      .values({
-        id,
-        name,
-        type: type || "other",
-        status,
-        details,
-        icon,
-      })
-      .returning();
-    
-    return newIntegration;
-  }
-
-  private async createIntegration(integration: InsertIntegration): Promise<Integration> {
-    // Generate a unique ID
-    const id = `integration_${Date.now()}`;
-    
-    const [newIntegration] = await db.insert(integrationsTable)
-      .values({
-        id,
-        name: integration.name,
-        type: integration.type,
-        status: integration.status,
-        details: integration.details || null,
-        icon: integration.icon || null
-      })
-      .returning();
-    
-    return newIntegration;
   }
 
   // Notification operations

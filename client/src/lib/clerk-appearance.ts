@@ -12,8 +12,8 @@ export const eosClerkAppearance = {
     colorRing: "#6a37d4",
     colorShadow: "rgba(106, 55, 212, 0.18)",
     colorBorder: "rgba(171, 173, 174, 0.18)",
-    fontFamily: "Inter, system-ui, sans-serif",
-    fontFamilyButtons: "Inter, system-ui, sans-serif",
+    fontFamily: "system-ui, sans-serif",
+    fontFamilyButtons: "system-ui, sans-serif",
     borderRadius: "0.75rem",
   },
   elements: {

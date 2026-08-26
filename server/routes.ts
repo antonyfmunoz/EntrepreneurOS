@@ -17,6 +17,23 @@ import { registerBillingRoutes, registerBillingWebhook } from "./routes/billing"
 import { registerUserRoutes } from "./routes/users";
 import { registerLegalRoutes, registerPublicLegalRoutes } from "./routes/legal";
 import { registerOperationalRoutes } from "./routes/operations";
+import { registerPublicTalentPortalRoutes } from "./routes/talent-portal";
+import { registerPublicRecoveryCalculatorRoutes, registerRecoveryCalculatorRoutes } from "./routes/recovery-calculator";
+import { registerNativeEsignRoutes, registerPublicNativeEsignRoutes } from "./routes/native-esign";
+import { registerComplianceRoutes } from "./routes/compliance";
+import { registerCustomerSuccessRoutes } from "./routes/customer-success";
+import { registerProductEvolutionRoutes } from "./routes/product-evolution";
+import { registerIntegrationOperationsRoutes } from "./routes/integration-operations";
+import { registerProviderIngressRoutes } from "./routes/provider-ingress";
+import { registerArtifactClosureRoutes } from "./routes/artifact-closure";
+import { registerNativeHandoffRoutes } from "./routes/native-handoff";
+import { registerCompanyPackageLifecycleRoutes } from "./routes/company-package-lifecycle";
+import { registerWorkflowRuntimeRoutes } from "./routes/workflow-runtime";
+import { registerAgentRuntimeRoutes } from "./routes/agent-runtime";
+import { registerAdvisorDeliberationRoutes } from "./routes/advisor-deliberation";
+import { registerInstitutionalIntelligenceRoutes } from "./routes/institutional-intelligence";
+import { registerInstrumentRuntimeRoutes } from "./routes/instrument-runtime";
+import { registerPublicStakeholderPortalRoutes, registerStakeholderPortalRoutes } from "./routes/stakeholder-portal";
 import { errorHandler } from "./middleware/error-handler";
 import { blockLegacyUnscopedApis, requireLocalApiAuth } from "./middleware/api-security";
 import { federationCommandRateLimit, localApiRateLimit } from "./middleware/rate-limit";
@@ -26,6 +43,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
   registerBillingWebhook(app);
   registerPublicLegalRoutes(app);
+  registerPublicTalentPortalRoutes(app);
+  registerPublicRecoveryCalculatorRoutes(app);
+  registerPublicNativeEsignRoutes(app);
+  registerPublicStakeholderPortalRoutes(app);
 
   // Signed federation ingress is authenticated by the projection-owned UMH
   // adapter. Register it before the Clerk gate; every remaining API route
@@ -46,6 +67,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerConversationRoutes(app);
   registerNotificationRoutes(app);
   registerIntegrationRoutes(app);
+  registerRecoveryCalculatorRoutes(app);
+  registerNativeEsignRoutes(app);
+  registerComplianceRoutes(app);
+  registerCustomerSuccessRoutes(app);
+  registerProductEvolutionRoutes(app);
+  registerIntegrationOperationsRoutes(app);
+  registerProviderIngressRoutes(app);
+  registerArtifactClosureRoutes(app);
+  registerNativeHandoffRoutes(app);
+  registerCompanyPackageLifecycleRoutes(app);
+  registerWorkflowRuntimeRoutes(app);
+  registerAgentRuntimeRoutes(app);
+  registerAdvisorDeliberationRoutes(app);
+  registerInstitutionalIntelligenceRoutes(app);
+  registerInstrumentRuntimeRoutes(app);
+  registerStakeholderPortalRoutes(app);
   registerEosRuntimeRoutes(app);
   registerSupportRoutes(app);
   registerBillingRoutes(app);

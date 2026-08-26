@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createOAuthState, readOAuthState, scopeCoverage, verifyOAuthState } from "../../server/integrations/gmail";
+import { calendarWriteScopeCoverage, createOAuthState, readOAuthState, scopeCoverage, sendEmail, verifyOAuthState } from "../../server/integrations/gmail";
 
 describe("Gmail OAuth state binding", () => {
   beforeEach(() => { process.env.SESSION_SECRET = "test-session-secret-that-is-at-least-thirty-two-characters"; });
@@ -32,8 +32,14 @@ describe("Gmail OAuth state binding", () => {
     ])).toEqual({ Gmail: false, Calendar: false, Drive: true });
     expect(scopeCoverage([
       "https://www.googleapis.com/auth/gmail.send",
-      "https://www.googleapis.com/auth/calendar.readonly",
+      "https://www.googleapis.com/auth/calendar.events",
       "https://www.googleapis.com/auth/drive.metadata.readonly",
     ])).toEqual({ Gmail: true, Calendar: true, Drive: true });
+    expect(calendarWriteScopeCoverage(["https://www.googleapis.com/auth/calendar.readonly"])).toBe(false);
+    expect(calendarWriteScopeCoverage(["https://www.googleapis.com/auth/calendar.events"])).toBe(true);
+  });
+
+  it("rejects email header injection before provider access", async () => {
+    await expect(sendEmail("owner-1", { to: "safe@example.test", subject: "Hello\r\nBcc: attacker@example.test", body: "Safe body" })).rejects.toThrow("invalid line break");
   });
 });

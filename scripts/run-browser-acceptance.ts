@@ -4,9 +4,21 @@ import { resolve } from "node:path";
 const node = process.execPath;
 const tsxCli = resolve("node_modules", "tsx", "dist", "cli.mjs");
 const viteCli = resolve("node_modules", "vite", "bin", "vite.js");
+const databaseUrl = process.env.EOS_TEST_DATABASE_URL || process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+  throw new Error(
+    "Browser acceptance requires EOS_TEST_DATABASE_URL or DATABASE_URL; refusing to seed an implicit PostgreSQL target.",
+  );
+}
+
 const environment = {
   ...process.env,
   NODE_ENV: "test",
+  DATABASE_URL: databaseUrl,
+  EOS_TEST_DATABASE_URL: databaseUrl,
+  EOS_ARTIFACT_STORAGE_ROOT: process.env.EOS_ARTIFACT_STORAGE_ROOT || resolve(".tmp", "e2e-native-esign-primary"),
+  EOS_ARTIFACT_BACKUP_STORAGE_ROOT: process.env.EOS_ARTIFACT_BACKUP_STORAGE_ROOT || resolve(".tmp", "e2e-native-esign-backup"),
   EOS_E2E_FIXTURE: "true",
   EOS_E2E_API_ORIGIN: "http://127.0.0.1:5111",
   EOS_E2E_CLIENT_ORIGIN: "http://127.0.0.1:5110",

@@ -13,6 +13,14 @@ import { shutdownPosthog } from "./posthog";
 import { requestTelemetry, writeLog } from "./observability/logger";
 import { startAccountDeletionWorker } from "./lifecycle/account-deletion";
 import { startMembershipInvitationWorker } from "./membership-invitations";
+import { startNativeEsignLifecycleWorker } from "./esign/lifecycle";
+import { startNativeEsignOperationsWorker } from "./esign/operations-worker";
+import { startNativeEsignIntegrityWorker } from "./esign/integrity-worker";
+import { startNativeEsignCustodyWorker } from "./esign/custody-worker";
+import { startNativeEsignReminderWorker } from "./esign/reminder-worker";
+import { startIntegrationDispatchRecoveryWorker } from "./integrations/dispatch-recovery-worker";
+import { startProviderIngressWorker } from "./integrations/provider-ingress-worker";
+import { startAgentScheduleWorker } from "./agents/scheduler";
 import { productionRuntimeConfigurationIssues, runtimeReleaseSubject } from "./security/release-configuration";
 
 const app = express();
@@ -23,7 +31,8 @@ app.use(express.json({
   limit: process.env.EOS_JSON_BODY_LIMIT || "1mb",
   verify(req, _res, buffer) {
     const request = req as express.Request;
-    if (request.originalUrl === "/api/billing/webhook") request.rawBody = Buffer.from(buffer);
+    if (request.originalUrl === "/api/billing/webhook" || request.originalUrl.startsWith("/api/eos/recovery-provider-webhooks/") || request.originalUrl.startsWith("/api/eos/integration-webhooks/") || request.originalUrl.startsWith("/api/eos/provider-ingress/"))
+      request.rawBody = Buffer.from(buffer);
   },
 }));
 app.use(express.urlencoded({ extended: false, limit: process.env.EOS_FORM_BODY_LIMIT || "256kb" }));
@@ -57,6 +66,14 @@ void (async () => {
   const stopOutbox = startFederationOutboxWorker();
   const stopDeletionWorker = startAccountDeletionWorker();
   const stopInvitationWorker = startMembershipInvitationWorker();
+  const stopNativeEsignLifecycleWorker = startNativeEsignLifecycleWorker();
+  const stopNativeEsignOperationsWorker = startNativeEsignOperationsWorker();
+  const stopNativeEsignIntegrityWorker = startNativeEsignIntegrityWorker();
+  const stopNativeEsignCustodyWorker = startNativeEsignCustodyWorker();
+  const stopNativeEsignReminderWorker = startNativeEsignReminderWorker();
+  const stopIntegrationDispatchRecoveryWorker = startIntegrationDispatchRecoveryWorker();
+  const stopProviderIngressWorker = startProviderIngressWorker();
+  const stopAgentScheduleWorker = startAgentScheduleWorker();
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
@@ -84,6 +101,14 @@ void (async () => {
     stopOutbox();
     stopDeletionWorker();
     stopInvitationWorker();
+    stopNativeEsignLifecycleWorker();
+    stopNativeEsignOperationsWorker();
+    stopNativeEsignIntegrityWorker();
+    stopNativeEsignCustodyWorker();
+    stopNativeEsignReminderWorker();
+    stopIntegrationDispatchRecoveryWorker();
+    stopProviderIngressWorker();
+    stopAgentScheduleWorker();
     server.close(() => {
       void Promise.allSettled([client.end({ timeout: 5 }), shutdownPosthog()]).finally(() => process.exit(0));
     });

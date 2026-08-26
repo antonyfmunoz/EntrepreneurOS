@@ -6,6 +6,7 @@ dist
 .claude
 .codex
 .tmp
+tmp
 coverage
 playwright-report
 test-results

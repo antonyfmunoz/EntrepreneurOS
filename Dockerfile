@@ -1,4 +1,4 @@
-FROM node:20-slim AS build
+FROM node:22-slim AS build
 
 WORKDIR /app
 
@@ -10,15 +10,13 @@ COPY . .
 # Vite inlines VITE_* values at build time. A missing Clerk publishable key
 # creates an apparently healthy image whose client can never authenticate, so
 # fail the image build instead of shipping that state.
-ARG VITE_CLERK_PUBLISHABLE_KEY
-ARG VITE_POSTHOG_API_KEY
-RUN test -n "$VITE_CLERK_PUBLISHABLE_KEY"
-ENV VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY
-ENV VITE_POSTHOG_API_KEY=$VITE_POSTHOG_API_KEY
-RUN npm run build
+ARG CLERK_PUBLISHABLE_BUILD_VALUE
+ARG POSTHOG_PUBLIC_BUILD_VALUE
+RUN test -n "$CLERK_PUBLISHABLE_BUILD_VALUE"
+RUN VITE_CLERK_PUBLISHABLE_KEY="$CLERK_PUBLISHABLE_BUILD_VALUE" VITE_POSTHOG_API_KEY="$POSTHOG_PUBLIC_BUILD_VALUE" npm run build
 RUN npm prune --omit=dev --omit=optional && npm cache clean --force
 
-FROM node:20-slim AS runtime
+FROM node:22-slim AS runtime
 
 WORKDIR /app
 ENV NODE_ENV=production

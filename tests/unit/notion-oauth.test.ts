@@ -15,6 +15,7 @@ import {
   disconnect,
   getAuthUrl,
   readOAuthState,
+  readPageSnapshot,
   searchWorkspace,
 } from "../../server/integrations/notion";
 
@@ -81,6 +82,36 @@ describe("Notion public OAuth", () => {
 
     await expect(searchWorkspace("owner-1", "plan", 20)).resolves.toEqual([expect.objectContaining({ id: "page-1", title: "Operating Plan" })]);
     expect(oauthStore.getOauthToken).toHaveBeenCalledWith("owner-1", "notion");
+  });
+
+  it("reads an exact Notion page and returns bounded revisioned text without mutating the provider", async () => {
+    oauthStore.getOauthToken.mockResolvedValue({ accessToken: encryptCredential("user-scoped-access"), refreshToken: null, metadata: {} });
+    const providerFetch = vi.fn(async (url: string, init: RequestInit) => {
+      expect((init.headers as Record<string, string>).Authorization).toBe("Bearer user-scoped-access");
+      expect(init.method || "GET").toBe("GET");
+      if (url.includes("/pages/")) return new Response(JSON.stringify({
+        id: "3c3da8b9-6e4f-81be-ad18-e7ed1f288a82",
+        url: "https://www.notion.so/3c3da8b96e4f81bead18e7ed1f288a82",
+        last_edited_time: "2026-08-21T22:56:10.902Z",
+        properties: { Company: { type: "title", title: [{ plain_text: "AFM" }] } },
+      }), { status: 200 });
+      return new Response(JSON.stringify({
+        results: [
+          { id: "block-1", type: "heading_2", heading_2: { rich_text: [{ plain_text: "Source precedence" }] }, has_children: false },
+          { id: "block-2", type: "paragraph", paragraph: { rich_text: [{ plain_text: "Latest owner decision then current Notion canon." }] }, has_children: false },
+        ],
+        has_more: false,
+      }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", providerFetch);
+
+    await expect(readPageSnapshot("owner-1", "3c3da8b9-6e4f-81be-ad18-e7ed1f288a82", 20)).resolves.toMatchObject({
+      title: "AFM",
+      lastEditedTime: "2026-08-21T22:56:10.902Z",
+      boundedText: "Source precedence\nLatest owner decision then current Notion canon.",
+      truncated: false,
+    });
+    expect(providerFetch).toHaveBeenCalledTimes(2);
   });
 
   it("always removes the local credential even when provider revocation is unavailable", async () => {

@@ -5,9 +5,16 @@ import * as notion from "../integrations/notion";
 import { credentialEncryptionConfigured, encryptCredential } from "../security/credential-encryption";
 
 export function registerIntegrationRoutes(app: Express): void {
-  app.get("/api/integrations", async (_req, res) => {
-    const integrations = await storage.getIntegrations();
-    res.json(integrations);
+  const retiredCatalogResponse = {
+    message: "The unscoped integration catalog has been retired. Use the authenticated provider status and authorization endpoints.",
+  };
+
+  app.get("/api/integrations", (_req, res) => {
+    res.status(410).json(retiredCatalogResponse);
+  });
+
+  app.post("/api/integrations/connect", (_req, res) => {
+    res.status(410).json(retiredCatalogResponse);
   });
 
   // Google Workspace OAuth routes. Provider connection state is derived from

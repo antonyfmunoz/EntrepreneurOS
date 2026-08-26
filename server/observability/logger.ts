@@ -6,6 +6,18 @@ type LogLevel = "debug" | "info" | "warn" | "error";
 type LogFields = Record<string, unknown>;
 
 const secretKeyPattern = /(authorization|cookie|password|secret|token|api[-_]?key|credential)/i;
+const bearerPathPatterns = [
+  /^(\/api\/eos\/native-esign\/public)\/[^/]+/,
+  /^(\/api\/eos\/talent-portal)\/[^/]+/,
+  /^(\/api\/eos\/recovery-calculator)\/[^/]+/,
+];
+
+export function redactedRequestPath(path: string): string {
+  return bearerPathPatterns.reduce(
+    (current, pattern) => current.replace(pattern, "$1/[REDACTED]"),
+    path,
+  );
+}
 
 function safeValue(key: string, value: unknown): unknown {
   if (secretKeyPattern.test(key)) return "[REDACTED]";
@@ -62,7 +74,7 @@ export function requestTelemetry(req: Request, res: Response, next: NextFunction
     writeLog(res.statusCode >= 500 ? "error" : res.statusCode >= 400 ? "warn" : "info", "http_request", {
       requestId,
       method: req.method,
-      path: req.path,
+      path: redactedRequestPath(req.path),
       statusCode: res.statusCode,
       durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
       userId: req.user?.id,

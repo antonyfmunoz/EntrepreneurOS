@@ -29,4 +29,17 @@ describe("production control evidence definitions", () => {
     expect(controlEvidenceIsCurrent({ definition: environment, ...base, subject: "environment:staging", expectedEnvironmentSubject: "environment:entrepreneuros-production" })).toBe(false);
     expect(controlEvidenceIsCurrent({ definition: environment, ...base, subject: "environment:entrepreneuros-production", expectedEnvironmentSubject: "environment:entrepreneuros-production" })).toBe(true);
   });
+
+  it("requires production-environment evidence for native signing storage recovery", () => {
+    const storageRecovery = CONTROL_DEFINITIONS.get("native_esign_storage_recovery_drill")!;
+    expect(storageRecovery).toEqual({
+      key: "native_esign_storage_recovery_drill",
+      allowedScopes: ["production"],
+      maximumAgeDays: 30,
+      subjectKind: "environment",
+    });
+    const evidence = { reviewedAt: now, expiresAt: new Date("2026-09-01T12:00:00Z"), now };
+    expect(controlEvidenceIsCurrent({ definition: storageRecovery, evidenceScope: "repository", subject: "environment:entrepreneuros-production", expectedEnvironmentSubject: "environment:entrepreneuros-production", ...evidence })).toBe(false);
+    expect(controlEvidenceIsCurrent({ definition: storageRecovery, evidenceScope: "production", subject: "environment:staging", expectedEnvironmentSubject: "environment:entrepreneuros-production", ...evidence })).toBe(false);
+  });
 });

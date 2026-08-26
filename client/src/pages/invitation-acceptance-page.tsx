@@ -10,6 +10,7 @@ type InvitationPreview = {
   invitationId: string;
   company: { id: number; name: string };
   seat: { id: string; title: string; kind: string };
+  portfolioScope: boolean;
   expiresAt: string;
 };
 
@@ -54,7 +55,7 @@ export default function InvitationAcceptancePage() {
         <CardHeader>
           <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary"><ShieldCheck className="h-5 w-5" /></div>
           <CardTitle>Join this organization</CardTitle>
-          <CardDescription>Review the exact company and role before accepting. Access is granted only after you confirm.</CardDescription>
+          <CardDescription>Review the exact company, role, and scope before accepting. Access is granted only after you confirm.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           {!token && <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">This invitation link is missing its acceptance token. Ask the sender for a new invitation.</div>}
@@ -64,6 +65,7 @@ export default function InvitationAcceptancePage() {
             <>
               <div className="rounded-xl border bg-muted/40 p-4">
                 <div className="flex items-start gap-3"><Building2 className="mt-0.5 h-5 w-5 text-primary" /><div><p className="font-semibold">{preview.data.company.name}</p><p className="mt-1 text-sm text-muted-foreground">{preview.data.seat.title}</p></div></div>
+                {preview.data.portfolioScope && <div className="mt-4 rounded-lg bg-primary/10 p-3 text-sm"><span className="font-medium">Portfolio-wide assignment</span><p className="mt-1 text-xs text-muted-foreground">Accepting also grants a governed Portfolio Executive seat in the portfolio’s other organizations.</p></div>}
                 <p className="mt-4 text-xs text-muted-foreground">Invitation expires {new Date(preview.data.expiresAt).toLocaleString()}.</p>
               </div>
               <Button className="w-full" onClick={() => accept.mutate()} disabled={accept.isPending}>

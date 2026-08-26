@@ -88,7 +88,13 @@ export function fixedWindowRateLimit(options: { limit: number; windowMs: number;
   };
 }
 
-export const localApiRateLimit = fixedWindowRateLimit({ limit: 600, windowMs: 60_000, namespace: "local-api" });
+export const localApiRateLimit = fixedWindowRateLimit({
+  limit: 1_200,
+  windowMs: 60_000,
+  namespace: "local-api",
+  key: (req) =>
+    req.user?.id || req.ip || req.socket.remoteAddress || "unknown",
+});
 export const federationCommandRateLimit = fixedWindowRateLimit({
   limit: 120,
   windowMs: 60_000,

@@ -41,4 +41,20 @@ EOS_EVENT_PRIVATE_KEY_PEM=
 # STRIPE_RESTRICTED_KEY=op://EntrepreneurOS/Production/STRIPE_RESTRICTED_KEY
 # STRIPE_WEBHOOK_SECRET=op://EntrepreneurOS/Production/STRIPE_WEBHOOK_SECRET
 # EOS_STRIPE_PLANS=op://EntrepreneurOS/Production/EOS_STRIPE_PLANS
+# JSON object keyed by the exact DocuSign/Stripe Integration Binding UUID. Each
+# value is a secret string or rotation array. The referenced 1Password field
+# contains the JSON value; EOS stores neither the provider secrets nor payloads.
+# EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS=op://EntrepreneurOS/Development/EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS
+# Provider issuance/compensation is separately kill-switched. The JSON map is
+# keyed by Integration Binding UUID or its credentialReference. Keep false until
+# counsel authority, exact accounts, callbacks, and recovery drills are qualified.
+EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED=false
+# Generic Systems control-center dispatch remains separately kill-switched.
+# When enabled, EOS still executes only the audited Gmail/Notion allowlist and
+# requires each operator's encrypted OAuth authorization.
+EOS_INTEGRATION_PROVIDER_EFFECTS_ENABLED=false
+EOS_PROVIDER_INGRESS_WORKER_INTERVAL_MS=60000
+EOS_INTEGRATION_DISPATCH_RECOVERY_AFTER_MS=300000
+EOS_INTEGRATION_DISPATCH_RECOVERY_INTERVAL_MS=60000
+# EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS=op://EntrepreneurOS/Development/EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS
 EOS_PUBLIC_ORIGIN=https://entrepreneuros.net

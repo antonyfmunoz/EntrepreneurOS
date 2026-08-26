@@ -166,19 +166,19 @@ Role views may reduce complexity but cannot hide required risks, approvals, obli
 
 | # | EOS module | Overlay MVP treatment | Native end state | Activation |
 |---:|---|---|---|---|
-| 1 | Recruiting & Candidate Portal | Provider/form intake, candidate portal, review queue, assessments, evidence, decisions; separate external/internal boundaries | Native candidate identity, lifecycle, assessment security, interviews, trials, decisions, onboarding handoff | Active; in build |
+| 1 | Recruiting & Candidate Portal | Internal capability-gap, candidate, assessment, versioned human-review packet, governed paid-trial, placement and onboarding controls plus the secure candidate-link portal, bilateral scheduling, approved invitation/Calendar effects, quarantined binary evidence, browser-local TTS, voice capture, consent-gated STT, and opt-in adaptive follow-up questions are native. Adaptive questions branch from minimized candidate answers and multiple plausible-role hypotheses, stop at five, validate against prohibited topics, and fall back deterministically when AI is unavailable; they collect evidence but never decide employment. The internal-only review packet snapshots the current Person → Evidence → Role Hypotheses → Person × Role × Stage × Team Fit → Proof Gaps → Next Assessment graph, requires verified evidence coverage before review, records attributable human recommendation/sign-off, and may materialize only a separately planned assessment. A trial then tests the largest remaining uncertainty through an approval-linked Work Packet and candidate-visible duration/compensation/support/outputs/scorecard/constraints/review/criteria. Candidate submissions cross into canonical Evidence only through an attributable human promotion that records the supported claim, verifier method, source lineage, and Trial Work Packet; Trial outcomes fail closed before that boundary or on cross-packet evidence. Promoted material remains candidate-withdrawable, which expires the canonical Evidence so it cannot support a later decision. Pass/redirect/extend/fail review and predicted-versus-actual learning remain separate attributable human acts. No promotion or trial action executes payment, creates placement, assigns a seat, changes a template silently, or grants access/authority. Shared production object storage, payment execution, and live scanning/transcription/AI-provider qualification remain open | Native canonical-person continuity, governed lifecycle, candidate projection privacy, consent/correction/deletion controls, assessment and trial security, human decisions, assignment-backed activation, durable object storage, and continuously governed evidence processing | Internal control spine, external portal, local file adapter, optional voice/adaptive paths, human-review, promotion-lineage and paid-trial contracts, and provider contracts implemented locally; database execution and live infrastructure/provider evidence pending |
 | 2 | Lead Capture & Marketing Qualification | Ingest consented leads and attribution from connected CRM/forms; qualification, routing, source links | Native lead signal, consent, attribution, qualification, routing, campaign and opportunity creation | Active |
 | 3 | Sales Opportunity & Commercial Decision | Unified opportunity view over CRM, communications, offers, proposals, approvals, forecast | Native opportunity lifecycle, communication timeline, offer configuration, approvals, forecast, audit | Active |
-| 4 | Contracting & Payment Activation | Generate/review agreement and payment requests; provider links/events; no ledger claims | Native obligation graph and commercial activation while e-sign/payment providers remain authoritative rails | Active |
+| 4 | Contracting & Payment Activation | Native tenant-owned counterparties, immutable clause/template versions, governed PDF generation, role-bound envelopes, signing, delivery, integrity, custody, search, explicit Work Packet Evidence promotion, operational obligation reviews, a company contract control center, approval-bound exact notice delivery through Gmail, immutable portfolio template proposals with company-local accept/reject and draft-only adoption, and governed jurisdiction packs with counsel-attributed publication plus company-local applicability gates are implemented locally. Provider payment paths remain separate and no ledger claim is made | Live qualified-counsel collaboration and independent credential verification, continuous human-supervised term extraction, production Gmail authorization/receipt evidence, and commercial activation while external payment rails remain authoritative | Active |
 | 5 | Client Onboarding Portal | Secure intake, checklist, provider links, access requirements, approvals, onboarding Work Packets | Native external identity, scoped portal, intake, access orchestration, onboarding state and evidence | Active |
 | 6 | Fulfillment & Work Delivery | Work Packet coordination around connected project/docs/files systems; deliverable review and change requests | Native workflow/capacity/deliverable/issue/evidence runtime with provider adapters | Active |
-| 7 | Customer Success, Reporting & Renewal | Health summary, evidence-backed reports, issues, renewal reminders, provider communications | Native health model, outcomes, attribution, reporting, renewal workflow and consented proof | Partial |
+| 7 | Customer Success, Reporting & Renewal | Native, role-scoped customer-success control center over canonical Stakeholders and customer Relationships: deterministic Evidence-backed health reviews, immutable outcome definitions with bounded attribution and governed progress, issue ownership and resolution, exact report snapshots, separate proof consent, founder approval, external delivery-receipt reconciliation, renewal-readiness decisions, optimistic concurrency, chained events, audit and tenant/hierarchy/classification boundaries. EOS never treats report preparation as delivery or a renewal-readiness decision as contract execution | Native health, outcomes, attribution, reporting, renewal and consented-proof operations with qualified live CRM/mail/portal adapters, customer identity and consent verification, field outcome evidence, contract/payment reconciliation and real customer acceptance | Partial |
 | 8 | Executive Command & Operating Cadence | Morning brief, objectives, metrics, issues, decisions, commitments, approvals, review packets | Native event-driven command, decision, meeting/cadence, cross-company read models | Active |
 | 9 | Finance Control & Commercial Events | Provider-backed invoice/payment/accounting summaries, budget requests, approvals, reconciliation status | Native financial-event/control projection; accounting/bank/payroll remain authoritative rails unless separately qualified | Partial |
 | 10 | Operations, Administration & Vendor Control | Requests, vendors, assets, access, obligations, recurring work, provider/system links | Native procurement, vendor, asset, access, service and administration workflows with immutable evidence | Active |
-| 11 | Product, Offer & Template Evolution | Offer/template catalog, feedback, experiments, version proposals, release decisions | Native product configuration, compatibility, experiments, rollout, telemetry and governed template learning | Partial |
-| 12 | Technology, Integrations & Automation Control | Integration directory, entitlement, health, sync, incidents, retries, fallbacks and replacement status | Native adapter plane, secret references, capability registry, eventing, observability, rollback and parity qualification | Partial |
-| 13 | Legal Obligations, Rights & Compliance | Obligations/consent/risk/control index and professional review queue; source links to authoritative documents | Native obligation/right/consent/policy lifecycle and retention with qualified specialist integrations | Partial |
+| 11 | Product, Offer & Template Evolution | Native, role-scoped evolution control center rooted in canonical Offers/Programs: immutable Evidence-backed feedback, frozen baseline hashes, allowlisted version proposals, compatibility and migration review across workflows/segments/contracts/templates, bounded experiments, authority-labeled observations, human conclusions, release decisions, receipt-backed internal/pilot/limited/general rollout, rollback, founder-only stale-safe canonical apply, chained events and tenant/hierarchy/classification boundaries. Drafts, asserted telemetry and provider references never become released or provider truth by themselves | Native product configuration with qualified live telemetry/deployment adapters, larger controlled cohorts, continuously governed reusable template learning, production migration, authenticated field use and measured real-world outcomes | Partial |
+| 12 | Technology, Integrations & Automation Control | Native role-scoped adapter operations control center extending the canonical system/binding catalog: configuration-version-bound capability manifests, schema hashes, idempotent run plans, durable pre-effect dispatch claims, deployment-kill-switched execution through audited Gmail send and Notion verify/search/page-snapshot operations, redacted provider-execution projections, automatic authority-labeled receipts and observations, hash-chained attempts, lease-based stale-dispatch detection, automatic recovery escalation without blind retry, operator-visible Evidence-backed reconciliation, automatic incidents, governed retry, recovery-driven active-incident clearing, fallback/paused/provider traffic modes, parity qualification, founder-controlled native cutover and provider rollback, optimistic concurrency, relational projection integrity, audit, and tenant/hierarchy/classification boundaries. Each binding can also own one encrypted HMAC endpoint with copy-once secret provisioning, bounded grace rotation, revocation/reactivation, declared-event allowlisting, replay protection, durable deduplication, immutable event custody, exact dispatch reconciliation, an unmatched review inbox and secret-redacted projections. Notion HMAC and Gmail Pub/Sub native ingress add exact authority scope, rotation, watch renewal, bounded Gmail history reconciliation, exact-OAuth-workspace Notion page reconciliation, bounded content hashing, append-only per-resource snapshot chains, actionable health, registration-specific service objectives, severity-gated signed escalation, immutable bounded delivery attempts, dead-letter custody, current-alert-only Evidence-backed replay, and one immutable tenant/seat-attributed human acknowledgment per exact current alert without treating observations as execution receipts or suppressing unresolved health. EOS never turns a plan, fixture, manual attestation, timeout, unallowlisted operation, unmatched callback, snapshot, acknowledgment, or UI status into a provider-execution claim | Additional qualified providers and operations, resource-status reconciliation beyond Gmail and Notion pages, field parity evidence, production on-call delivery and field acknowledgment, live rotation drills, and independently exercised provider/native failover for each connected adapter | Partial |
+| 13 | Legal Obligations, Rights & Compliance | Native, role-scoped compliance control center with exact versioned source custody, professional-attribution Evidence, company obligation/right/consent/policy/retention/control definitions, dated review ownership, immutable reviews and control tests, optimistic lifecycle state, source supersession, audit, and overdue/ineffective-control attention queues. EOS records claims and preserves lineage without verifying credentials or determining law | Native obligation/right/consent/policy lifecycle and retention with live qualified-specialist collaboration, verified professional identity, authoritative change monitoring, production records, and qualified external-provider integrations | Partial |
 | 14 | Brand, Media & Proof Distribution | Creator/provider asset links, claims/evidence, approvals, distribution status and performance summaries | CreatorOS/UMH media graph with EOS business context, rights, authority, attribution and outcomes | Active |
 | 15 | Capital & Investor Relations | Architecture and dormant navigation only; no active workflows without trigger | Secure data room, investor relations, instruments, diligence, commitments and reporting | Dormant |
 | 16 | M&A Pipeline, Diligence & Integration | Architecture and dormant navigation only | Native acquisition thesis, pipeline, diligence, valuation, decision, agreement, integration and portfolio effects | Dormant |
@@ -528,6 +528,8 @@ Provisional MVP targets, to be ratified before release:
 ### Wave 3 — workforce and management spine
 
 - organization chart, capabilities, position/seat/assignment model, Role Agents, recruiting, onboarding, tool entitlement, operating cadence, scorecards, review, promotion/succession;
+- compile every meaningful seat responsibility into an explicit Assist, Teach, Guard, or Transfer support plan with retained human ownership, proof, review, and a separate governed assignment/Authority Grant path for any real transfer;
+- expose an employee-visible career and mobility path from the current seat to plausible specialist, management, leadership, lateral, or cross-functional roles, while keeping aspiration, capability evidence, business need, seat availability, compensation, assignment, and authority as separate governed dimensions;
 - validate agent-vacant, human-occupied, provider-led, transition, suspension, and exit states.
 
 ### Wave 4 — full non-dormant reference instance
@@ -599,19 +601,189 @@ Replace in this order:
 
 ## 20. Current repository implications
 
-The current React/Vite/Express/Drizzle application is a useful native shell, but it is not yet the desired MVP. Immediate gaps include:
+The gap list originally recorded here has been superseded by the 2026-08-26
+native-runtime closure. The repository now enforces tenant/company scope,
+authentication, ownership, hierarchy and classification across canonical work,
+approval, Evidence, communication, integration, agent, advisor, compiler and
+stakeholder operations. OAuth/provider credentials are encrypted or referenced
+through managed-secret identifiers, and the canonical shell contains the
+role-adaptive module surfaces rather than parallel page families.
 
-- legacy tasks, agents, workflows, messages, and integration records are not consistently tenant/company scoped;
-- several routes lack complete authentication or ownership enforcement;
-- the earlier 12-page PRD understates the current canonical EOS architecture and still contains superseded identity/AI assumptions;
-- most integrations are placeholders; Gmail is the principal real provider path;
-- the UMH projection adapter is an opt-in first slice, not a proven production round trip;
-- current build success coexists with repository-wide type/test failures;
-- workflow execution, audit, policy/authority, evidence, eventing, reconciliation, compiler, role-agent runtime, and native multi-tenant enforcement remain incomplete;
-- plaintext OAuth-token storage must be replaced by managed encrypted secret handling/reference;
-- the existing UI pages should be mapped into the canonical shell and module surfaces rather than expanded as parallel page families.
+The current repository-controlled boundary includes the twenty-part native
+handoff registry, versioned company package lifecycle and credential-free
+replication, durable workflow/skill execution, activation-policy-bound scheduled
+and event Role Agents, the complete fifteen-advisor council, operating-game
+controls, institutional reality/scenario/postmortem/learning memory, dormant-safe
+external stakeholder portals, and the EOS-owned signed/idempotent UMH adapter
+boundary. The exact local qualification is recorded in
+`EOS-NATIVE-END-STATE-AUTONOMOUS-CLOSURE.md`.
 
-The safest next implementation packet is **Wave 0 plus a thin Wave 1 vertical slice**: tenant/context enforcement, canonical command/work/evidence primitives, boxed navigation, organization compiler draft, and one Gmail-backed customer-value action flowing through approval, outbox, provider evidence, and reconciliation.
+What remains is not another unimplemented repository wave. Native completion in
+the sense defined at lines 594-600 still requires production identity and
+providers, independent reviews, named operators, an exact deployed release,
+real Empyrean Client Zero execution, a live UMH round trip if enabled, a
+materially different real second instance, and repeated field Evidence. Those
+outcomes must not be inferred from local architecture or tests.
+
+### Empyrean Studios reference-instance compiler — 2026-08-22
+
+The first explicit company package is now available as an idempotent, founder-authorized compiler for `ORG-EMPYREAN-STUDIOS`. The current operating name is **Empyrean Studios**; historical “Empyrean Creative” naming is normalized during compilation. The package installs the founding accountability chart, persistent Role Agents and human-assistant pairings, 15-advisor council, Recovery System validation spine, AFM cross-company shared-service relationship, command objectives/metrics/risks, capabilities and mapped process, four initial Work Packets, provider-system inventory, selected but unconfigured adapter bindings, a pending founder commercial-canon approval, and an attributable audit receipt.
+
+The compiler deliberately does not choose a disputed Recovery price, invent customers or provider accounts, store credential material, place AFM inside the Empyrean reporting hierarchy, execute external effects, or mark the organization active. Activation remains blocked until the owner stamps one commercial canon; exact GoHighLevel, Stripe, DocuSign, Google Workspace, and Notion accounts and authority are bound; legal/commercial review is recorded; controlled provider fixtures and failure/recovery paths pass; and the first end-to-end Recovery cycle produces verified evidence.
+
+#### Generic company-compilation engine — 2026-08-22
+
+Empyrean now enters the runtime through the first catalog-driven company-compilation engine rather than through a UI-only company-name branch. Shared contracts define all thirteen canonical compiler input classes, required artifact metadata, `DomainPack`, `CompanyPackage`, and `CompiledCompanyInstance`. Validation fails before commit on schema defects, cross-organization artifact scope, package identity/version mismatch, unresolved source authority, ambiguous source precedence, missing external-client authority, invalid reporting parents, or an activation request that exceeds open gates. Provider declarations accept secret-manager references only and the Empyrean package contains no account or credential value.
+
+The founder-only package catalog exposes only packages whose explicit company aliases match the selected organization. The generic compile route requires the package key plus an exact organization-key confirmation, executes inside one transaction, validates the compiled output and provenance graph before commit, remains idempotent, and preserves the previous Empyrean endpoint as a compatibility alias. The Organization Compiler renders packages from the catalog, so later isolated packages do not require another hardcoded company card. Empyrean produces 14 required and three dormant capability declarations, five selected/unbound provider declarations, a source-package graph, output-to-source provenance, and `externalEffectsExecuted: false`.
+
+#### Governed Notion sources and AFM company package — 2026-08-22
+
+The next compiler phase is now repository-implemented. A per-user Notion OAuth adapter can read only an exact package-declared page identity, traverse a bounded block tree, retain the canonical last-edited revision, and return a 50,000-character-maximum reference snapshot with page class, organization scope, classification, capture time, truncation state, and a canonical SHA-256 envelope hash. Bindings are founder-visible, explicitly ordered, freshness-bounded, and `reference_only`. Validation fails closed on organization or page drift, stale revisions, hash mismatch, credential-shaped content, undeclared sources, or provider failure. The adapter performs no Notion writes and cannot activate an organization or overwrite native EOS truth.
+
+`ORG-AFM` is the second isolated company package and the first package using the reusable declarative materializer. It preserves Antony the person, AFM the operating company, `BRAND-AFM`, Empyrean Studios, and Lyfe Institute as distinct objects. The current named Phase-1 accountability chart supersedes its historical minimal lineage: Founder / Chief Executive Officer & Principal Creator, Executive Assistant I, Creator Operations Coordinator I, Content Strategist I, Associate Content Producer, Assistant Video Editor, and Social Media Coordinator I, with the AFM CEO Agent and each persistent Role Agent respecting the internal hierarchy. Empyrean shared services cross through governed company-to-company Work Packets and never create cross-company agent parents.
+
+The package installs eleven evidence-gated capabilities, two artifact-complete/review-state process definitions, five content-lifecycle Work Packets plus one governed Empyrean service-request packet, the active but provider-independent `BRAND-AFM` asset, proof/rights/Brand/data contracts, three defined scorecards with no actual measurements, two assigned failure controls, and the explicit AFM beneficiary/Empyrean provider relationship. Five provider declarations for Notion, Google Drive, CreatorOS, publication channels, and Empyrean shared services remain selected and unconfigured. The content and shared-service Work Packets link to their exact capability and process records; Command, Operations, and Commercial expose the compiled records through their normal role-filtered projections. This materialization does not invent a legal entity, channel account, credential, publication, provider acceptance, audience result, revenue, or field proof. Activation remains blocked until the exact entity and provider authority are bound, one real asset traverses the lifecycle, publication and measurement receipts are captured, and the AFM-to-Empyrean service boundary is controlled-test qualified.
+
+The source boundary now declares seven exact Notion pages. The Brand/channel instrument governs `BRAND-AFM` without treating a Brand asset as proof of a configured channel. The AFM→Empyrean production SOP defines request, independent provider acceptance, execution within Empyrean, evidence return, and explicit AFM acceptance/rejection/bounded rework; it prohibits a cross-company reporting line or direct agent command. Those two contracts are materialized as local EOS operating records, while Notion remains reference-only and no provider effect is executed during compilation.
+
+#### Controlled AFM→Empyrean shared-service runtime — 2026-08-22
+
+The SOP now has a native, append-only engagement lifecycle rather than a descriptive placeholder: awaiting AFM approval → Empyrean review → clarification or independent provider acceptance/rejection → Empyrean-local work → evidence-bearing delivery → AFM acceptance/rejection/bounded rework. Rework returns only the Empyrean-local Work Packet to execution; it does not rewrite scope, hierarchy, provider facts, or AFM authority. Final acceptance or rejection requires AFM review Evidence plus explicit cost/capacity and outcome attribution.
+
+Provider eligibility is exact and fail-closed. Both companies must share a portfolio, each must have a compiled canonical organization key, AFM must hold an active visible stakeholder relationship whose identity is exactly `eos-org:<provider-organization-key>`, and that key must resolve to one—and only one—compiled company in the portfolio. Duplicate organization instances are not presented as candidates and cannot receive a request.
+
+The Commercial workspace renders the complete operator control. AFM can create and approve requests, answer bounded clarification, verify its review Evidence, and decide disposition; Empyrean can clarify, accept/reject, start its own work, verify delivery Evidence, and deliver. Each company sees the other side's Evidence count but never its Evidence identifiers. The event sequence and audit trail remain durable while Seats, Assignments, Authority Grants, provider executions, and `externalEffectsExecuted` remain unchanged. This qualifies the repository-controlled rehearsal path only; real staffing, capacity, transfer pricing, production assets, provider authorization, publication, and outcome evidence remain field gates.
+
+#### Pre-live customer-value cycle — 2026-08-22
+
+Wave 1 now has a native pre-live orchestration record instead of only a descriptive Recovery rehearsal Work Packet. The Customer Value Cycle references the canonical party, relationship, offer, commercial case, Work Packet, approval, and Evidence registries, so it proves continuity without duplicating a customer, offer, commitment, or provider fact. Its first release is deliberately limited to `prelive_fixture` mode and the `TEST-PRELIVE-` namespace; the database enforces the `Synthetic / Non-Production` label, exclusion from real metrics, and zero external effects.
+
+The governed path is commercial approval or rejection → agreement/payment-readiness fixture → onboarding → delivery → reporting → renewal review → renewal or closeout. Agreement/payment readiness is a rehearsal assertion only and never creates an invoice, payment, signature, revenue, or external provider event. Every transition requires verified Evidence from the cycle's own Work Packet. Operators can deliberately inject a failure; the cycle then blocks in `recovery_required` until a separate verified restored-safe-state receipt returns it to the interrupted phase. The append-only event ledger, optimistic version check, role/classification visibility, tenant filters, policy decisions, and audit records make the path inspectable and concurrency-safe.
+
+The Commercial workspace exposes creation, approval guidance, phase-receipt verification, state controls, failure/recovery, renewal/closeout, and the complete event trail. This completes the repository-controlled dry-run spine; live Recovery activation still requires owner-stamped commercial terms, exact provider accounts and scopes, approved legal/agreement authority, controlled provider fixtures, payment and signature reconciliation, real customer consent, field evidence, and an authorized cutover from synthetic to live operation.
+
+#### Provider-specific pre-live contract checkpoints — 2026-08-22
+
+The dry-run spine now compiles five explicit provider checkpoints into each Customer Value Cycle: GoHighLevel for CRM/recovery lifecycle behavior; Stripe for payment success, exception, and reconciliation behavior; DocuSign for send, complete, and expiry behavior; Google Workspace for onboarding, calendar, mail, Drive, and reporting behavior; and Notion for the client-OS reference/scaffolding boundary. Checkpoints resolve to existing tenant-scoped Integration Bindings and cannot be created from missing or cross-organization bindings.
+
+The first checkpoint release is a deterministic contract harness, not a provider emulator and not a live connection test. It exercises eight critical protocol scenarios—normal path, denied action, malformed input, outage/fallback, duplicate/retry, approval/separation of duties, recovery/rollback, and audit reconstruction—without dispatching an external request. Passing generates content-hashed canonical Evidence and an append-only run receipt. The agreement-readiness phase is blocked until every checkpoint is contract-qualified; a retry returns the existing qualified result rather than producing a duplicate receipt.
+
+Contract qualification never changes the Integration Binding's connection, health, parity, authority, credential, or provider-account claims. Every checkpoint permanently records `liveProviderVerified: false` and `externalEffectsExecuted: false` under database constraints, and the UI displays the exact remaining live blocker. The next provider wave must bind exact accounts and administrators, secret references, least-privilege scopes, recovery owners, real operation/event schemas, rate/cost/latency limits, live health, provider sandbox receipts, revocation, and controlled failure/recovery evidence before any checkpoint can support field activation.
+
+#### Governed provider activation packets — 2026-08-22
+
+That repository-controlled provider wave now has its native configuration plane. Integration Binding v2 is the activation packet for each GoHighLevel, Stripe, DocuSign, Google Workspace, and Notion adapter: provider identity; exact account and administrator references; adapter implementation and version; transport; account, permission, credential-reference, authority, operation, and event boundaries; input/output/event schemas; cost, latency, rate-limit, idempotency, retry, timeout, cancellation, and redaction behavior; test and evidence requirements; revocation, recovery, fallback, parity, and replacement state. The packet accepts managed-secret references but rejects credential-shaped material in configuration metadata.
+
+The Systems workspace is now the actual operator control for these records. It shows activation gaps, permits authorized edits, attaches verified Evidence, and exposes immutable history. Every accepted edit and lifecycle transition uses optimistic configuration-version concurrency, appends a complete snapshot and attributable audit receipt in the same database transaction, and cannot mutate or delete an earlier revision. Provider-observed health remains separately derived and cannot be set through the editor. This closes the configurable-record gap; it does not close live activation. The exact accounts, administrators, managed-secret objects, provider grants, behavioral tests, recovery drills, and live health remain external owner/provider gates, and unsupported GoHighLevel, Stripe, and DocuSign health checks still fail closed.
+
+#### Booked Job Recovery diagnostic and Sales Brief — 2026-08-23
+
+Empyrean Gate A now begins with an interactive public diagnostic at `/recovery`. The calculator uses one deterministic, versioned model over business profile, inbound demand and response, estimate economics, past-customer depth, data quality, ownership, capacity and intent. It exposes a useful partial result before contact capture, preserves a conservative low/base/high modeled range for three explicit pools, and never labels the result lost revenue, forecast, guarantee or field proof.
+
+Affirmative contact consent unlocks the full report and atomically writes one native confidential prospect identity and Relationship into the exactly resolved Empyrean tenant. A generated internal Sales Brief is visible in Commercial and includes only the operating inputs needed for discovery, modeled economics, confidence gaps, validation questions, likely objections, fit concerns, route and current-commercial-authority guardrail. Public funnel events are append-only and privacy-minimized. High fit, not-ready, capacity-constrained and insufficient-data paths route differently instead of forcing every visitor into a sales call.
+
+This closes the repository-controlled calculator, report, native writeback and sales-preparation slice. GoHighLevel contact synchronization, the live Recovery diagnostic calendar, provider delivery receipts and actual booking state remain explicit Integration Binding/provider gates.
+
+#### Recovery Call-2 close packet and operative handoff — 2026-08-23
+
+Every consented high-fit diagnostic can now materialize one tenant-bound Call-2 packet over the existing prospect Relationship, Recovery Offer, Commercial Case, Work Packet, approval and audit graph. The packet snapshots the Sales Brief; makes facts, modeled signals, unknowns, buyer authority, changes, thesis, scope, attribution, responsibilities and objections editable; and locks one server-owned standard or founding-proof terms snapshot at readiness. Operators cannot enter a custom price or guarantee. A named exception creates a normal upward approval, remains visible in the decision HUD, and prevents a won disposition until approved.
+
+The close control requires one of four explicit outcomes and maps it to the canonical Commercial Case: won pending agreement/payment, conditional named dependency, nurture/not now, or lost with reason. Won creates only a handoff-ready record with the decision maker, dated action, agreement version to send, authorized payment path and onboarding trigger. It does not create a signature, invoice, settled payment, onboarding fact or provider execution. Optimistic concurrency, database-enforced zero effects, append-only events and immutable disposition history preserve that boundary.
+
+This closes the repository-controlled Call-2 and operative-handoff artifact. The next Gate-A work is exact agreement-template/legal authority plus signature-state reconciliation, authorized payment-link creation and settlement reconciliation, live CRM/calendar writeback, onboarding receipts, provider E2E and field acceptance. None of those external outcomes is inferred from the close packet.
+
+#### Recovery agreement authority and billing control — 2026-08-23
+
+The first part of that next Gate-A work is now native and usable without crossing the provider boundary. A won Call-2 creates a company-level agreement authority, a client-specific agreement instance and a fixed-price billing manifest, each linked to its own Work Packet. The authority starts blocked and requires the founder to record qualified counsel's attributable disposition, verified Evidence and exact output for all 15 canonical agreement issues. Approved and approved-with-changes paths cannot retain unresolved issues. This is a custody and control record, not EOS-authored legal advice.
+
+The agreement instance binds client and provider legal identity, signer, effective agreement version, DocuSign template and exact tenant Integration Binding. The billing manifest snapshots the server-owned commercial package and accepts only Stripe product/price references plus tax, descriptor, payment-method, subscription-start, receipt, cancellation and refund policies. Browser input cannot rewrite amounts. Credential-shaped material is rejected. One evaluation control exposes every counsel, version, configuration, provider identity, connection, health, parity, account and managed-secret blocker without executing an external action.
+
+Signature and payment remain provider-authoritative states. The API has no manual path to mark an agreement signed or a payment settled. Binding-specific public receipt endpoints verify DocuSign Connect HMAC-SHA256 and Stripe's signed raw payload through the official SDK before parsing, reject wrong account/tenant/object/package/price/amount/currency mappings, deduplicate immutable event IDs and reconcile out-of-order agreement, setup-payment, subscription, invoice, refund and dispute state. Under the current payment-first canon, Checkout is issued before the agreement; verified setup payment plus active/trialing subscription make the agreement eligible to issue; only the later verified signature produces active billing and opens onboarding. Terminal conflicts and mismatches enter recovery. The receipt ledger is append-only, retains a minimized projection plus payload hash instead of provider payload/PII, and creates verified canonical Evidence.
+
+Phase 15 adds the separately governed execution adapters without collapsing provider authority into EOS. Checkout issuance, DocuSign send, subscription cancellation, setup refund, and unsigned-envelope void each create a tenant-bound Provider Execution and named approval. The request is minimized and version-bound; after approval EOS revalidates the original principal/seat authority, exact tenant and Work Packet, target version/state, Integration Binding health/parity/account, and the deployment kill switch before calling the provider. Stripe uses stable POST idempotency keys; DocuSign uses the stable execution ID as `transactionId`. Provider acceptance advances only issued/requested state and records observed Evidence; lifecycle webhook receipts remain required for paid, subscribed, signed, cancelled, refunded, and disputed truth. Safe retry reuses the same execution and provider key. Exact production accounts, managed credentials, callbacks, legal authority, recovery drills, integrated rehearsal, and first-field evidence remain external activation gates.
+
+Canonical source precedence for this package is the current company registry and reference-instance/runtime material in Notion:
+
+- [Empyrean Studios canonical company registry](https://app.notion.com/p/3c3da8b96e4f81679d74fac5fc7ed788)
+- [Empyrean Studios company runtime](https://app.notion.com/p/32eda8b96e4f81c78872e5a768ea9faf)
+- [Empyrean plus AFM reference implementation](https://app.notion.com/p/3b0da8b96e4f8194a768d374651f5cc9)
+- [Empyrean pre-live authority packet](https://app.notion.com/p/3b4da8b96e4f814d983ed939336eaa1b)
+- [Current Recovery System commercial authority](https://app.notion.com/p/3a9da8b96e4f8129ba8fefea055ee11b)
+- [Booked Job Recovery Calculator specification](https://app.notion.com/p/3bbda8b96e4f81d3b3e3f006c2a2f014)
+
+#### Google Workspace resource observation — 2026-08-25
+
+The native provider-ingress plane now treats Gmail, Google Drive, and Google
+Calendar as three separately registered signal surfaces under one exact Google
+Workspace Integration Binding. Drive uses the provider changes collection and
+Calendar binds an exact calendar resource. EOS creates and renews token-
+authenticated Google channels, stores encrypted channel tokens and only their
+fingerprints in projections, validates channel/resource/message identity before
+acceptance, and stops replaced or revoked channels on a best-effort basis.
+
+Signals remain observations until the serialized reconciliation worker reads
+the authoritative current cursor under a per-registration database lock. Drive
+records bounded file metadata and Calendar records bounded event metadata; file
+bodies, event descriptions, attendee identities, provider tokens, and raw
+payloads are not copied into the operating projection. Each changed resource
+produces an append-only, hash-chained snapshot, while retries, dead letters,
+operator replay, health, alerts, and acknowledgements reuse the governed Module
+12 control plane. This closes repository-controlled registration, observation,
+reconciliation, cursor-concurrency, and operator-control behavior. It does not
+prove a live Google account, OAuth scope, channel delivery, provider backlog,
+rate-limit behavior, or production failover.
+
+#### Artifact closure and pre-live activation instrument — 2026-08-25
+
+EOS now implements the current Notion Phase-1 closure contract as a native
+control surface rather than a descriptive readiness card. For each tenant,
+active module, and canonical capability key, an authorized operator can
+initialize exactly 22 required artifact classes: capability definition;
+template ancestry; role/seat; position agreement; Role Agent; authority;
+SOP; workflow; Work Packet; KPI; cadence; instrument; intake; operating
+documents; tools/provider bindings; telemetry; Evidence; failure/recovery;
+training; acceptance fixtures; live instance values; and governed template
+learning.
+
+Applicability (`Inherited`, `Instantiated`, `Missing`, `Not Applicable`, or
+`Deferred by Trigger`) remains separate from maturity (`Doctrine`, `Mapped`,
+`Artifact Complete`, `Implemented`, `Pre-Live Qualified`, `Field Qualified`,
+or `Native Qualified`). Missing rows require a named blocker and next action;
+deferred or non-applicable rows require an explicit trigger; qualification
+requires visible verified Evidence and no active blocker. A group cannot earn a
+gate until all 22 classes exist and every applicable row meets it. Updates are
+tenant-, hierarchy-, classification-, seat-, and policy-scoped, use optimistic
+versions plus advisory serialization, and append a content-hashed immutable
+history and audit receipt. The instrument records attributable state; it cannot
+self-certify a live provider, qualified professional review, field outcome, or
+native parity.
+
+Capability instances now carry validated assignments to the 14 active EOS
+modules. Operators choose a primary module when mapping a capability and may add
+or remove additional assignments from the Operations instrument. Compiled
+Empyrean capabilities map the 14 universal functions one-to-one, with the
+specialized Recovery, Provider Operations, and AFM shared-service capabilities
+retaining their multi-module scope. AFM's eleven declared capabilities map to
+their actual command, delivery, customer, product, operations, integration,
+legal, and brand surfaces. From a module workspace, an authorized operator can
+initialize all visible non-dormant mapped capabilities in one idempotent action;
+each still begins with 22 missing, blocked rows and no readiness claim. Module
+cards derive their displayed state from the weakest earned gate across visible
+matrices rather than the old static partial/ready label.
+
+Heavy module controls now load only when opened. The main overlay chunk is
+442.38 kB and every application JavaScript chunk remains below the configured
+500 kB warning threshold; native signing, adapter operations, compliance,
+customer success, product evolution, and artifact closure are separate demand-
+loaded boundaries.
+
+The UMH outbox worker also resolves the configured external installation ID and
+issuer to one enabled local installation before leasing rows. Selection, stale-
+lease recovery, claiming, success, and retry writes all remain bound to that
+installation. A regression fixture proves that 25 older pending events owned by
+another installation cannot crowd out or be signed under the configured
+installation identity.
 
 ## 21. Explicitly deferred from the first overlay release
 
@@ -624,7 +796,350 @@ The safest next implementation packet is **Wave 0 plus a thin Wave 1 vertical sl
 - claims of field proof, operatorization, replication, or native completion;
 - broad provider catalog activation before the common adapter and evidence contract passes with reference integrations.
 
-## 22. Governing references
+### Native contract-operations increment — 2026-08-24
+
+The native signing surface now extends beyond document execution into governed
+contract operations: immutable clone/renewal lineage, signer-initiated change
+requests, append-only negotiation, scheduled and bulk reminders, founder-only
+bulk void with partial-result receipts, and promotion of reviewed executed terms
+into the shared EOS obligation registry. This advances the native end state by
+making contract work controllable inside EOS while preserving the existing Work
+Packet, Evidence, seat, authority, and Risk/Obligation/Control models.
+
+This increment is not contract lifecycle management completion. It does not
+provide external counterparty accounts, certificate signatures, jurisdictional
+legal conclusions, autonomous obligation extraction, provider-independent
+email delivery, or live production recovery evidence. Those remain separately
+gated capabilities.
+
+### Governed contract-revision increment — 2026-08-24
+
+Negotiation is now a bilateral counterparty surface rather than an internal-only
+operator log. The signing page projects a minimized append-only thread, allows
+the signer to reply, refreshes while open, and prevents consent or signature
+until the discussion closes. Internal actor identifiers never enter the public
+projection.
+
+Accepted text changes can now progress through an immutable replacement path.
+EOS registers a new fielded PDF with direct parent and negotiation lineage,
+records source and target hashes plus the operator's reviewed summary and
+declared changes in an immutable comparison receipt, and requires founder
+authority to retire an active issued envelope. Replacement atomically voids the
+source, invalidates its signing path by terminal state, cancels reminders,
+resolves the negotiation, and creates a clean draft carrying recipient identity
+and routing but no consent, signature, token, or delivery state. The operator
+must review and issue the replacement normally.
+
+Uploaded-PDF comparison is evidence of declared change and byte identity, not
+automated semantic redlining, legal review, or proof that no undeclared change
+exists. Native textual diffing for EOS-generated source, optional external
+counsel workflows, counterparty accounts, and production legal acceptance remain
+future gated capabilities.
+
+### Complete multi-signer evidence increment — 2026-08-25
+
+The native authoring boundary now treats recipient-role coverage as executable
+contract structure. Every authored role requires its own visible, required
+signature field at registration and revision, the envelope binder revalidates
+legacy documents, and the field editor identifies uncovered roles before an
+immutable version can be registered. The signer sees the page and source of
+every automatic signature, initials, and UTC-date placement before acting.
+
+The sealed completion PDF now paginates its evidence certificate across the
+entire supported fifty-recipient envelope rather than stopping after one page.
+This closes a repository-controlled multi-party evidence omission; it does not
+add government identity proofing, certificate-backed PDF signatures,
+jurisdictional legal approval, external counterparty accounts, or production
+delivery evidence.
+
+### Evidence-backed contract obligation operations increment — 2026-08-25
+
+An executed contract can now progress beyond one-time obligation promotion into
+a controlled operating lifecycle. Promotion selects an active seat from the
+principal's actual visible hierarchy rather than accepting an opaque UI UUID,
+and the envelope projects the canonical obligation, accountable seat, due
+review, source excerpt, and immutable review history back into native signing.
+Operators can use only the next states allowed by the shared command registry,
+reassign within their visible hierarchy, schedule follow-up, cite verified
+operational Evidence, and open the broader Command workspace without creating a
+parallel contract tracker.
+
+Each review is an append-only hash-chain receipt bound to policy authority and
+optimistically updates the mutable command projection. Active obligations need
+a future review. Breach and satisfaction need separate verified operational
+Evidence; the executed agreement can establish the source term but cannot by
+itself establish performance or failure. Accepted, satisfied, and superseded
+states require decision authority. This advances native contract operations but
+does not provide autonomous term extraction, legal interpretation, counsel
+approval, jurisdictional applicability, or production provider evidence.
+
+### Company contract control-center increment — 2026-08-25
+
+Executed agreements now roll into one role-visible company control center
+instead of remaining isolated envelope records. The surface reports executed
+and unplanned agreements, overdue reviews, approaching notice windows, overdue
+obligations, and integrity/custody exceptions. Operators can record or update a
+versioned lifecycle plan, assign an accountable visible seat, enter explicit
+effective/end/notice/review dates, filter the portfolio to attention items,
+inspect obligation and immutable lifecycle receipts, record an
+Evidence-supported renewal decision, and create the lineage-linked renewal
+draft from an approved renew/renegotiate intent.
+
+The contract plan deliberately has no inferred legal dates: signing-link expiry
+remains transport security metadata and never becomes an agreement term.
+Unplanned agreements are owner- or accountable-Work-Packet-visible; plans are
+filtered by reporting hierarchy and classification. Schedule changes require
+execute authority and optimistic version checks. Renewal, renegotiation,
+termination, and allowed-expiry decisions require decide authority plus
+separate verified operational Evidence; the executed agreement alone is
+rejected as proof of renewal fitness. Plan/decision receipts are append-only and
+hash chained. EOS still does not auto-renew, send legal notice, terminate an
+agreement, interpret terms, or replace qualified counsel.
+
+### Approval-bound contract notice execution increment — 2026-08-25
+
+The control center now advances an approved renewal or other contract action
+into a controlled notice workflow. Operators prepare exact recipient, subject,
+body, type, due time, owner, and classification content without sending it.
+Decision authority then reviews the exact hash with separate verified
+operational Evidence; the executed agreement alone is rejected as notice
+fitness. Approval seals content, Evidence, actor, time, and policy decision.
+
+Delivery is a distinct material execute action. EOS writes a prepared attempt
+before Gmail is called, accepts only a non-empty provider message id as a
+delivered receipt, preserves ambiguous provider outcomes as `uncertain`, and
+retries only the unchanged approved hashes as a new numbered attempt. The
+Contracts interface exposes notice actions, exact content, approval state,
+provider receipts, minimized failures, and a fail-closed reconciliation action
+for attempts still in `sending`. Reconciliation requires decision authority, a
+human evidence note, and a verified provider reference before `delivered` can be
+recorded. This supplies native controlled execution; it
+does not determine legal sufficiency, prove counterparty receipt, calculate
+jurisdictional deadlines, or replace counsel.
+
+### Portfolio contract proposal and local-adoption increment — 2026-08-25
+
+Portfolio contract reuse is now a governed proposal flow rather than a shared
+mutable template library. A portfolio owner with source-company founder
+authority can publish one approved tenant template as a versioned immutable
+snapshot with a jurisdiction label, applicability statement, limitations,
+classification, source and proposal hashes, flattened clause content, verified
+review Evidence, and an explicit `business_review`, `internal_legal`, or
+`qualified_counsel` authority label. The source company does not grant another
+company authority and no proposal silently changes an existing local template.
+
+Every company records its own immutable founder decision with company-local
+verified Evidence. Rejection creates no template. Acceptance creates a new
+tenant-owned draft with no source-company clause identifiers; the existing
+local approval boundary must still approve that exact version before generation.
+Business review never populates a counsel-Evidence claim. A portfolio owner may
+withdraw a proposal without erasing prior decisions or adopted drafts, and a
+later version is a new snapshot rather than mutation.
+
+At this increment boundary, the repository-controlled portfolio-proposal and
+company-adoption gap was closed. It did not yet implement a governed jurisdiction-pack catalog, verify a
+reviewer's professional credentials, supply legal advice, establish legal
+applicability or sufficiency, perform live counsel collaboration, migrate
+production data, or qualify any deployed provider journey.
+
+### Governed jurisdiction-pack and local-applicability increment — 2026-08-25
+
+Portfolio owners can now prepare versioned, immutable jurisdiction packs with
+country/subdivision, governing-law label, scope, applicability criteria,
+exclusions, required reviews, dated review windows, source citations,
+classification, and a content hash. Draft publication requires founder decide
+authority and verified tenant-local Evidence typed as counsel review, legal
+review, or legal opinion. Publication records the named reviewer,
+organization, external credential or engagement reference, limits note, policy
+decision, and audit custody. EOS explicitly records these as attributable
+claims; it does not independently verify a professional license or author law.
+Publication fails when the next-review date has arrived; proposal linkage,
+company applicability, and proposal acceptance also require the exact pack to
+be published, currently effective, and still inside its review window.
+
+Each portfolio company must separately record one immutable, qualified-counsel
+applicability outcome for the exact pack version: `applicable`,
+`not_applicable`, or `needs_revision`. A portfolio contract proposal may cite a
+published pack and snapshots its ID and hash. Acceptance is then fail-closed
+until that company has an `applicable` decision for the exact snapshot. The
+accepted company-local draft carries the local applicability Evidence but
+still requires the existing local template approval before generation.
+Withdrawal never erases prior decisions or proposal lineage, and database
+triggers reject pack, decision, and proposal-lineage mutation.
+
+This closes the repository-controlled jurisdiction-pack custody and local
+applicability gate. It does not prove that a named reviewer is licensed,
+provide legal advice, monitor law changes, establish legal sufficiency, create
+a live counsel workspace, migrate production data, or qualify a deployed legal
+or provider journey.
+
+### Native compliance control-center increment — 2026-08-25
+
+Module 13 now opens a usable company control center instead of routing only to
+a generic Operations description. An authorized operator can preserve an exact
+source version with publisher/system reference, jurisdiction, summary,
+effective window, review freshness, classification, version and SHA-256 hash.
+Verification requires visible tenant-local Evidence whose type matches the
+claimed qualified-counsel, privacy-professional, internal-compliance, or
+business-owner authority. Professional identity and credential references are
+attributable claims; credential material is rejected and EOS does not verify a
+license or engagement.
+
+A current verified source can support separate company-native obligation,
+right, consent, policy, retention-rule, or control definitions. Consent needs a
+bounded purpose. Retention needs a trigger, period and disposition method.
+Every definition binds an accountable visible seat, exact source ID/hash,
+company scope, jurisdiction, review date and immutable definition hash. A new
+version cannot silently replace a still-open requirement.
+
+Applicability, periodic review, control test and closure each create an
+append-only Evidence-backed receipt and atomically advance the optimistic
+command projection. Effective controls monitor; ineffective controls
+remediate; breaches become overdue; closure and non-applicability require
+decision authority. Database triggers reject definition mutation, deletion,
+review mutation, and projection changes that are not backed by the exact newly
+inserted review receipt. Role hierarchy and classification filter every source,
+requirement, Evidence option and review.
+
+This closes the repository-controlled Module-13 custody and control-loop gap.
+It does not monitor government or provider sources, independently determine
+applicability, verify reviewer credentials, execute deletion, establish a legal
+hold, deliver a regulatory filing, migrate production data, or qualify live
+professional collaboration.
+
+### Native customer-success control-center increment — 2026-08-25
+
+Module 7 now opens a native company control center rather than only a health
+summary or generic Operations handoff. An authorized operator creates one
+customer-success account against an existing active canonical Stakeholder and
+customer Relationship. EOS does not duplicate the party, contact, contract,
+Work Packet, or Evidence identity. Account ownership, classification, reporting
+hierarchy, review cadence, renewal date, and an observable success definition
+remain explicit.
+
+Health reviews require visible verified Evidence and use a deterministic score
+over delivery, outcome, adoption, relationship, and inverse risk dimensions.
+Outcomes retain immutable definitions, baseline, target, unit, due date, owner,
+attribution model and attribution limitations; a separate Evidence-backed
+progress receipt advances the actual value and lifecycle. Customer issues keep
+severity, ownership, due date, resolution, and Evidence distinct from the health
+opinion.
+
+Reports freeze the exact current account, latest health receipt, outcomes,
+issues, and Evidence metadata into a SHA-256 snapshot. Customer-approved or
+public proof fails closed without separate consent/proof-release Evidence. A
+decision-authorized operator approves that exact snapshot. Delivery is not a UI
+claim: EOS records it only by reconciling verified provider, delivery, or
+communication receipt Evidence and an external reference. Renewal readiness
+requires a current health review and, for renewal or renegotiation, an
+Evidence-backed tracked or achieved outcome. The decision explicitly does not
+amend, renew, terminate, invoice, or notify under a contract.
+
+Every projection transition uses optimistic versions and a hash-chained event.
+Database triggers keep events and health reviews append-only, make definitions
+and report snapshots immutable, and require the event kind and payload to match
+the exact account, outcome, issue, or report projection change. The remaining
+gates are live customer identity/consent, production field Evidence, qualified
+CRM/mail/portal adapters, external delivery and acceptance, contract/payment
+reconciliation, production migration, and authenticated production use.
+
+### Native product-evolution control-center increment — 2026-08-25
+
+Module 11 now operates on the existing canonical `eos_offer_programs` records
+instead of creating a second product catalog. An authorized operator records an
+immutable feedback signal with its source reference, observation time, verified
+Evidence, classification and content hash. A proposal freezes the exact current
+offer snapshot and hash, accepts only an allowlisted patch to governed offer
+fields, links optional feedback signals, and declares its hypothesis, success
+metric, guardrail and rollback plan.
+
+A separate decision-authorized compatibility review names affected workflows,
+audience segments and contract/template references. Breaking changes fail
+closed without a migration plan. Only compatible or migration-backed breaking
+proposals can open one timeboxed, scoped experiment. Starting/stopping,
+authority-labeled telemetry observations and human conclusion remain separate
+acts; provider-backed observations require an external reference and verified
+Evidence. A `ship` decision additionally requires a concluded experiment whose
+declared success condition was met.
+
+Rollout starts internally and advances exactly one stage through pilot,
+limited, then 100-percent general availability. Every advance requires a
+verified receipt Evidence item and external deployment/provider reference;
+allocation cannot decrease. Rollback remains available until canonical apply.
+Only the company founder/owner can apply a completed rollout, and EOS re-hashes
+the current offer inside the transaction so any intervening canonical edit
+fails closed. This operation changes only the explicit offer patch; it never
+silently edits native contracts or template versions.
+
+Feedback, observations and events are append-only. Proposal and experiment
+definitions are immutable, optimistic projection changes require an exact
+linked event, and all state reads filter by tenant, reporting hierarchy and
+classification. Remaining gates are production migration, authenticated field
+use, qualified live analytics/deployment receipts, sufficiently powered real
+experiments, real customer outcomes and a separately governed portfolio
+template-learning promotion process.
+
+## 22. Provider-native event boundary
+
+The end-state Integration Plane supports three deliberately different evidence
+classes:
+
+1. an EOS-owned signed adapter event may reconcile an exact claimed run;
+2. a provider-native event is a verified source observation that must retain
+   its provider-specific authentication, authority scope and delivery limits;
+3. a later reconciliation receipt may promote an observation into exact
+   operation evidence only when a provider object can be bound to the run
+   without inference.
+
+Notion and Gmail now implement class 2. Notion uses its verification-token HMAC
+and exact workspace/subscription identity; page events then require the current
+OAuth connection to match that workspace before a bounded page read can append
+provider revision, content hash, verified link and per-resource snapshot-chain
+custody. Gmail uses authenticated Pub/Sub and an exact mailbox/history cursor.
+Neither translator fabricates the class-3 receipt. Both paths have immutable
+retry/dead-letter custody, Evidence-backed operator replay, governed
+subscription rotation, derived freshness/failure actions and deduplicated
+terminal-failure notifications; Gmail additionally has serialized automatic
+watch renewal and monotonic history cursors. An authorized operator can append
+one content-hashed human acknowledgment for an exact current alert; the receipt
+captures the acting tenant seat and note while leaving unresolved health open.
+The remaining end-state work is provider breadth, resource reconciliation
+beyond Gmail and Notion pages, and live production qualification of on-call
+delivery, human acknowledgment, rotation, alerting and failover.
+
+## 23. Company-wide closure and pre-live campaign runtime
+
+The canonical artifact contract is no longer a per-row demonstration. An
+authorized operator can initialize every missing 22-class matrix across the
+visible active company capability map in one bounded, idempotent action. The
+runtime carries accountable seats and source/schema ancestry, creates no
+maturity claim, emits one immutable row receipt and one summary audit, and caps
+the operation at 300 capability-module groups.
+
+The pre-live campaign then turns Client Zero activation into a first-class EOS
+object. Its declared module/capability scope and identity cannot be edited after
+creation. Start requires complete Implemented closure with zero blockers.
+Exactly seven scenarios cover normal flow, denial, provider outage,
+failure/recovery, rollback, tenant isolation and audit replay. Scenario pass,
+failure, blocking, repair and rerun are attributable, Evidence-backed actions;
+the campaign retains failures instead of rewriting history.
+
+Campaign qualification and founder release remain separate from the artifact
+ledger. All seven scenarios must pass before qualification. Every artifact must
+then independently reach Pre-Live Qualified before founder release. Neither
+state advances Field or Native qualification. Optimistic versions, hierarchy,
+classification, policy decisions, verified Evidence, immutable hashed events,
+audits and deferred database projection/event guards apply throughout.
+
+This implements the repository-controlled orchestration mechanism required by
+the current Notion completion and pre-live activation standards. The reference
+instances still require exact human owners, commercial/legal authority,
+production provider accounts, a real controlled Empyrean Client Zero run,
+recovery and rollback evidence, field outcomes, production migration and a
+qualified deployed release before their instance can honestly be represented as
+live.
+
+## 24. Governing references
 
 - [EOS MVP — Business-in-a-Box Product Runtime](https://app.notion.com/p/3b0da8b96e4f81a39dd1f7344fb2e1bb)
 - [EOS Universal Organization Template — Non-Instantiated MVP](https://app.notion.com/p/3b0da8b96e4f81e5bb28eee117838b5e)

@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import {
   companies as companiesTable,
   departments as departmentsTable,
+  eosSeats,
   roles as rolesTable,
   workflows as workflowsTable,
 } from "@shared/schema";
@@ -258,11 +259,33 @@ export function registerCompanyRoutes(app: Express): void {
         if (v !== undefined) updateData[k] = v;
       }
 
-      const [updated] = await db
-        .update(companiesTable)
-        .set(updateData)
-        .where(and(eq(companiesTable.id, companyId), eq(companiesTable.ownerUserId, userId)))
-        .returning();
+      const updated = await db.transaction(async (tx) => {
+        const [company] = await tx
+          .update(companiesTable)
+          .set(updateData)
+          .where(
+            and(
+              eq(companiesTable.id, companyId),
+              eq(companiesTable.ownerUserId, userId),
+            ),
+          )
+          .returning();
+        if (Object.hasOwn(update, "assistantName"))
+          await tx
+            .update(eosSeats)
+            .set({
+              agentName: update.assistantName || "Assistant",
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(eosSeats.companyId, companyId),
+                eq(eosSeats.kind, "founder"),
+                eq(eosSeats.status, "active"),
+              ),
+            );
+        return company;
+      });
 
       return res.json(updated);
     } catch (error) {

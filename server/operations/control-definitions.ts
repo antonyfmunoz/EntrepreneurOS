@@ -20,7 +20,7 @@ export const CONTROL_LAYERS: ControlLayerDefinition[] = [
   { layer: 10, name: "Caching and CDN", controls: [production("cache_cdn_review")] },
   { layer: 11, name: "Load balancing and scaling", controls: [production("load_and_scaling_test", 30)] },
   { layer: 12, name: "Error tracking and logs", controls: [production("observability_alert_test", 30)] },
-  { layer: 13, name: "Availability and recovery", controls: [production("production_restore_drill"), production("incident_response_drill")] },
+  { layer: 13, name: "Availability and recovery", controls: [production("production_restore_drill"), production("native_esign_storage_recovery_drill", 30), production("incident_response_drill")] },
   { layer: 14, name: "Payments and billing", controls: [production("billing_live_mode_acceptance", 30)] },
   { layer: 15, name: "Legal and compliance", controls: [professional("legal_approval"), professional("privacy_review"), professional("tax_review")] },
   { layer: 16, name: "Customer support", controls: [production("support_staffing")] },

@@ -6,6 +6,8 @@ vite.config.ts.*
 *.tar.gz
 auth-debug.log
 .tmp/
+tmp/
+.eos-artifacts/
 # Secrets — never commit
 .env
 .env.*

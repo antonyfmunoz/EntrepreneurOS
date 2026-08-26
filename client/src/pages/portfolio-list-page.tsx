@@ -16,6 +16,8 @@ interface Portfolio {
   name: string;
   description?: string | null;
   companyCount?: number;
+  access?: "owner" | "member";
+  defaultCompanyId?: number | null;
   createdAt?: string;
 }
 
@@ -49,7 +51,7 @@ export default function PortfolioListPage() {
     <UniversalLayout title="Portfolios" leftRailItems={[]} floatingPanel={false}>
       <section className="space-y-8 pb-12">
         <div>
-          <p className="eos-label flex items-center gap-2"><LayoutGrid className="h-4 w-4 text-primary" />Founder workspace</p>
+          <p className="eos-label flex items-center gap-2"><LayoutGrid className="h-4 w-4 text-primary" />Workspace access</p>
           <div className="mt-3 flex items-start justify-between gap-4">
             <div className="min-w-0 max-w-2xl">
               <h1 className="text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">Your Portfolios</h1>
@@ -82,7 +84,7 @@ export default function PortfolioListPage() {
                       <h2 className="mt-6 text-xl font-semibold">{portfolio.name}</h2>
                       <p className="mt-2 line-clamp-3 flex-1 text-sm text-muted-foreground">{portfolio.description || "Open this portfolio to manage its organizations."}</p>
                       <div className="mt-6 flex items-center justify-between gap-4">
-                        <span className="eos-label">{typeof portfolio.companyCount === "number" ? `${portfolio.companyCount} ${portfolio.companyCount === 1 ? "organization" : "organizations"}` : "Portfolio"}</span>
+                        <span className="eos-label">{typeof portfolio.companyCount === "number" ? `${portfolio.companyCount} ${portfolio.companyCount === 1 ? "organization" : "organizations"}` : "Portfolio"}{portfolio.access === "member" ? " · member" : ""}</span>
                         <span className="flex items-center text-sm font-medium text-primary">Open <ArrowRight className="ml-1.5 h-4 w-4 transition-transform group-hover:translate-x-0.5" /></span>
                       </div>
                     </CardContent>

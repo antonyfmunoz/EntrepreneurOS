@@ -7,7 +7,6 @@ import { FullPageStatus } from "@/components/full-page-status";
 
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
-import { CompanyGate } from "@/lib/company-guard";
 import { ClerkLoaded, ClerkLoading, useUser, useAuth } from "@clerk/clerk-react";
 
 import { ClerkProviderWrapper, isClerkConfigured } from "@/lib/clerk";
@@ -30,6 +29,10 @@ const InvitationAcceptancePage = lazy(() => import("@/pages/invitation-acceptanc
 const PortfolioList = lazy(() => import("@/pages/portfolio-list-page"));
 const PortfolioDetail = lazy(() => import("@/pages/portfolio-detail-page"));
 const EosOverlayPage = lazy(() => import("@/pages/eos-overlay-page"));
+const CandidatePortalPage = lazy(() => import("@/pages/candidate-portal-page"));
+const RecoveryCalculatorPage = lazy(() => import("@/pages/recovery-calculator-page"));
+const NativeEsignPage = lazy(() => import("@/pages/native-esign-page"));
+const StakeholderPortalPage = lazy(() => import("@/pages/stakeholder-portal-page"));
 const NotFoundPage = lazy(() => import("@/pages/not-found-page"));
 
 type CanonicalCompanySurface = "organization" | "intelligence" | "operations" | "work-room";
@@ -74,6 +77,7 @@ function RootRedirect() {
 function usePageView() {
   const [location] = useLocation();
   useEffect(() => {
+    if (location.startsWith("/talent-portal/")) return;
     captureProductEvent(productEvents.pageViewed, { path: location });
   }, [location]);
 }
@@ -104,51 +108,31 @@ function Router() {
         {() => <PortfolioDetail />}
       </ProtectedRoute>
       <ProtectedRoute path="/company/:companyId">
-        {() => (
-          <CompanyGate>
-            <EosOverlayPage />
-          </CompanyGate>
-        )}
+        {() => <EosOverlayPage />}
       </ProtectedRoute>
       <ProtectedRoute path="/company/:companyId/org">
-        {() => (
-          <CompanyGate>
-            <LegacyCompanySurfaceRedirect surface="organization" />
-          </CompanyGate>
-        )}
+        {() => <LegacyCompanySurfaceRedirect surface="organization" />}
       </ProtectedRoute>
       <ProtectedRoute path="/company/:companyId/org/:rest*">
-        {() => <CompanyGate><LegacyCompanySurfaceRedirect surface="organization" /></CompanyGate>}
+        {() => <LegacyCompanySurfaceRedirect surface="organization" />}
       </ProtectedRoute>
       <ProtectedRoute path="/company/:companyId/chat">
-        {() => (
-          <CompanyGate>
-            <LegacyCompanySurfaceRedirect surface="intelligence" />
-          </CompanyGate>
-        )}
+        {() => <LegacyCompanySurfaceRedirect surface="intelligence" />}
       </ProtectedRoute>
       <ProtectedRoute path="/company/:companyId/chat/:rest*">
-        {() => <CompanyGate><LegacyCompanySurfaceRedirect surface="intelligence" /></CompanyGate>}
+        {() => <LegacyCompanySurfaceRedirect surface="intelligence" />}
       </ProtectedRoute>
       <ProtectedRoute path="/company/:companyId/workflows">
-        {() => (
-          <CompanyGate>
-            <LegacyCompanySurfaceRedirect surface="operations" />
-          </CompanyGate>
-        )}
+        {() => <LegacyCompanySurfaceRedirect surface="operations" />}
       </ProtectedRoute>
       <ProtectedRoute path="/company/:companyId/workflows/:rest*">
-        {() => <CompanyGate><LegacyCompanySurfaceRedirect surface="operations" /></CompanyGate>}
+        {() => <LegacyCompanySurfaceRedirect surface="operations" />}
       </ProtectedRoute>
       <ProtectedRoute path="/company/:companyId/tasks">
-        {() => (
-          <CompanyGate>
-            <LegacyCompanySurfaceRedirect surface="work-room" />
-          </CompanyGate>
-        )}
+        {() => <LegacyCompanySurfaceRedirect surface="work-room" />}
       </ProtectedRoute>
       <ProtectedRoute path="/company/:companyId/tasks/:rest*">
-        {() => <CompanyGate><LegacyCompanySurfaceRedirect surface="work-room" /></CompanyGate>}
+        {() => <LegacyCompanySurfaceRedirect surface="work-room" />}
       </ProtectedRoute>
 
       {/* Catch-all must stay LAST inside the Switch — wouter matches in order. */}
@@ -158,6 +142,50 @@ function Router() {
 }
 
 function App() {
+  if (window.location.pathname === "/recovery" || window.location.pathname === "/recovery-calculator") {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <Suspense fallback={<FullPageStatus title="Preparing your Recovery diagnostic" description="Loading the transparent opportunity model." />}>
+          <RecoveryCalculatorPage />
+        </Suspense>
+        <Toaster />
+      </QueryClientProvider>
+    );
+  }
+
+  if (window.location.pathname.startsWith("/talent-portal/")) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <Suspense fallback={<FullPageStatus title="Opening your candidate workspace" description="Validating the private invitation link." />}>
+          <CandidatePortalPage />
+        </Suspense>
+        <Toaster />
+      </QueryClientProvider>
+    );
+  }
+
+  if (window.location.pathname.startsWith("/sign/")) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <Suspense fallback={<FullPageStatus title="Opening your document" description="Validating the private signing link." />}>
+          <NativeEsignPage />
+        </Suspense>
+        <Toaster />
+      </QueryClientProvider>
+    );
+  }
+
+  if (window.location.pathname.startsWith("/stakeholder/")) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <Suspense fallback={<FullPageStatus title="Opening your stakeholder workspace" description="Validating the private access link." />}>
+          <StakeholderPortalPage />
+        </Suspense>
+        <Toaster />
+      </QueryClientProvider>
+    );
+  }
+
   if (!isClerkConfigured()) {
     return <AuthenticationConfigurationRequired />;
   }
