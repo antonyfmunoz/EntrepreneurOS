@@ -397,6 +397,28 @@ describe("EOS native e-sign foundation", () => {
     }
   });
 
+  it("requires complete explicit S3 credential pairs without hashing secrets into plane identity", () => {
+    const env = {
+      NODE_ENV: "production",
+      EOS_ARTIFACT_STORAGE_PROVIDER: "s3",
+      EOS_ARTIFACT_S3_BUCKET: "eos-primary",
+      EOS_ARTIFACT_S3_REGION: "us-west-2",
+      EOS_ARTIFACT_S3_ACCESS_KEY_ID: "primary-access-key",
+      EOS_ARTIFACT_S3_SECRET_ACCESS_KEY: "primary-secret-key",
+    } as NodeJS.ProcessEnv;
+    const identity = nativeEsignStorageIdentitySha256(env, "primary");
+    expect(identity).toBe(nativeEsignStorageIdentitySha256({
+      ...env,
+      EOS_ARTIFACT_S3_ACCESS_KEY_ID: "rotated-access-key",
+      EOS_ARTIFACT_S3_SECRET_ACCESS_KEY: "rotated-secret-key",
+    }, "primary"));
+    expect(() => nativeEsignStorageIdentitySha256({
+      ...env,
+      EOS_ARTIFACT_S3_SECRET_ACCESS_KEY: "",
+    }, "primary")).toThrow("native_esign_primary_s3_credentials_invalid");
+    expect(JSON.stringify({ identity })).not.toContain("primary-secret-key");
+  });
+
   it("renders signer fields and an EOS evidence page into a completed PDF", async () => {
     const source = await PDFDocument.create();
     source.addPage([612, 792]);

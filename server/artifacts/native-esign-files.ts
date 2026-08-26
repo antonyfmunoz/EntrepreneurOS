@@ -76,7 +76,19 @@ export type NativeEsignStorageCapabilitySnapshot = {
 
 type StorageConfiguration =
   | { provider: "filesystem"; root: string }
-  | { provider: "s3"; bucket: string; region: string; endpoint?: string; prefix: string; forcePathStyle: boolean };
+  | {
+      provider: "s3";
+      bucket: string;
+      region: string;
+      endpoint?: string;
+      prefix: string;
+      forcePathStyle: boolean;
+      credentials?: {
+        accessKeyId: string;
+        secretAccessKey: string;
+        sessionToken?: string;
+      };
+    };
 
 function envKey(plane: NativeEsignStoragePlane, suffix: string): string {
   return plane === "primary" ? `EOS_ARTIFACT_${suffix}` : `EOS_ARTIFACT_BACKUP_${suffix}`;
@@ -115,10 +127,18 @@ function storageConfiguration(env: NodeJS.ProcessEnv, plane: NativeEsignStorageP
   const prefix = (env[envKey(plane, "S3_PREFIX")] || "").trim().replace(/^\/+|\/+$/g, "");
   if (prefix && (!/^[a-z0-9][a-z0-9/_.-]{0,199}$/i.test(prefix) || prefix.includes("..")))
     throw new Error(`native_esign_${plane}_s3_prefix_invalid`);
+  const accessKeyId = env[envKey(plane, "S3_ACCESS_KEY_ID")]?.trim();
+  const secretAccessKey = env[envKey(plane, "S3_SECRET_ACCESS_KEY")]?.trim();
+  if (Boolean(accessKeyId) !== Boolean(secretAccessKey))
+    throw new Error(`native_esign_${plane}_s3_credentials_invalid`);
+  const sessionToken = env[envKey(plane, "S3_SESSION_TOKEN")]?.trim();
   return {
     provider, bucket, region, prefix,
     endpoint: env[envKey(plane, "S3_ENDPOINT")]?.trim() || undefined,
     forcePathStyle: env[envKey(plane, "S3_FORCE_PATH_STYLE")] === "true",
+    credentials: accessKeyId && secretAccessKey
+      ? { accessKeyId, secretAccessKey, sessionToken: sessionToken || undefined }
+      : undefined,
   };
 }
 
@@ -128,7 +148,12 @@ function s3Key(configuration: Extract<StorageConfiguration, { provider: "s3" }>,
 }
 
 function s3Client(configuration: Extract<StorageConfiguration, { provider: "s3" }>): S3Client {
-  return new S3Client({ region: configuration.region, endpoint: configuration.endpoint, forcePathStyle: configuration.forcePathStyle });
+  return new S3Client({
+    region: configuration.region,
+    endpoint: configuration.endpoint,
+    forcePathStyle: configuration.forcePathStyle,
+    credentials: configuration.credentials,
+  });
 }
 
 function sha256(buffer: Buffer): string {

@@ -104,14 +104,20 @@ promotion receipt link back to the envelope; retrying cannot duplicate Evidence.
   `EOS_ARTIFACT_STORAGE_ROOT`;
 - shared primary: `EOS_ARTIFACT_STORAGE_PROVIDER=s3`,
   `EOS_ARTIFACT_S3_BUCKET`, `EOS_ARTIFACT_S3_REGION`,
-  `EOS_ARTIFACT_S3_KMS_KEY_ID`, and optional
+  `EOS_ARTIFACT_S3_KMS_KEY_ID`, and a complete
+  `EOS_ARTIFACT_S3_ACCESS_KEY_ID` / `EOS_ARTIFACT_S3_SECRET_ACCESS_KEY`
+  pair when the runtime has no workload identity; optional
   `EOS_ARTIFACT_S3_ENDPOINT`, `EOS_ARTIFACT_S3_PREFIX`,
   or `EOS_ARTIFACT_S3_FORCE_PATH_STYLE`;
 - independent backup: the corresponding `EOS_ARTIFACT_BACKUP_*` variables,
-  using a different bucket for production readiness.
+  using a different bucket and separately scoped credential pair for
+  production readiness.
 
 AWS role or workload credentials are preferred; no access key is stored in EOS
-metadata. In Systems, activate a reviewed retention period, select **Verify
+metadata or included in the secret-free storage identity hash. On Fly, inject
+the least-privilege plane-specific credential pairs from the approved secret
+vault; never reuse application, administrator, or signing credentials. In
+Systems, activate a reviewed retention period, select **Verify
 custody**, then **Back up and verify**. Restore is visible only for an artifact
 in recovery state with a verified backup. Legal holds and deletion requests are
 reasoned, versioned controls. Never lower retention to force a test deletion;
