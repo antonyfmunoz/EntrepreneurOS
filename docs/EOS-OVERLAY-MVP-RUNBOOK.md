@@ -190,11 +190,17 @@ op run --env-file=.env.op.tpl -- npm run dev
 
 Create production custody only after the live Clerk, Notion OAuth, Stripe,
 alerting, S3/KMS, backup S3/KMS, and malware-scanner resources exist. The
-bootstrap reads reusable Neon, Anthropic, and PostHog values from the existing
+bootstrap reads reusable Anthropic and PostHog values from the existing
 `UMH-Production` vault, accepts every new secret through concealed prompts,
 validates live-key classes, and pipes one JSON template directly to 1Password.
 It never places secret values in command arguments, terminal history, output,
 or a temporary file, and it refuses to overwrite an existing Production item:
+
+The bootstrap deliberately does not copy `UMH-Production/Database-Neon`: that
+credential targets the legacy `neondb` database, while the Fly runtime uses
+`eos_db`. It requires a concealed paste of the exact managed `eos_db`
+application-role URL and rejects localhost, another database name, or malformed
+PostgreSQL authority.
 
 ```powershell
 .\scripts\bootstrap-production-vault.ps1
@@ -205,6 +211,27 @@ in the vault: run promotion interactively and paste a fresh session JWT only
 when the concealed prompt appears. Noninteractive automation may inject a
 fresh token into its current process with `EOS_NONINTERACTIVE_RELEASE=true`,
 but must not persist it.
+
+Before provisioning or promotion, refresh the read-only external inventory:
+
+```powershell
+npm run inventory:production
+```
+
+The inventory observes GitHub protection and security state, Fly release and
+machine state, DNS/TLS, public response headers, 1Password field presence and
+credential classes, granted Google scopes, the current Notion credential
+class, and aggregate runtime-database state. It writes a private ignored JSON
+receipt and SHA-256 sidecar under `.tmp/`, never serializes credential values,
+and exits nonzero while a technical gap remains. It also compares the legacy
+vault database candidate with the database actually reached by the Fly runtime;
+a `neondb`/`eos_db` mismatch is a hard gap, not a migration shortcut.
+
+This is partial technical observation only. It does not prove legal approval,
+support staffing, vendor dispositions, production drills, Client Zero field
+operation, operator handoff, a second company, native cutovers, optional UMH,
+or institutional-scale operation. Preserve separate attributable evidence for
+those gates.
 
 Before promotion, copy
 `docs/examples/eos-production-promotion-evidence.example.json` to the ignored

@@ -15,6 +15,7 @@
     "db:migrate": "tsx scripts/run-migration.ts",
     "legal:publish": "tsx scripts/publish-legal-document.ts",
     "readiness": "tsx scripts/production-readiness.ts",
+    "inventory:production": "tsx scripts/production-external-inventory.ts",
     "release:verify": "tsx scripts/verify-release-env.ts",
     "release:evidence:verify": "tsx scripts/verify-production-promotion-evidence.ts",
     "evidence:create": "tsx scripts/create-qualification-evidence.ts",

@@ -1,0 +1,35 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+
+const script = readFileSync(
+  new URL("../../scripts/production-external-inventory.ts", import.meta.url),
+  "utf8",
+);
+
+describe("production external inventory script contract", () => {
+  it("labels the receipt as partial read-only observation and fails while gaps remain", () => {
+    expect(script).toContain('scope: "read_only_external_observation"');
+    expect(script).toContain('productionEvidence: "partial_observation_only"');
+    expect(script).toContain("if (evidence.gaps.length) process.exitCode = 2");
+  });
+
+  it("writes the receipt and digest with owner-only permissions", () => {
+    expect(script).toMatch(/writeFile\(outputPath,[\s\S]*mode: 0o600/);
+    expect(script).toMatch(/writeFile\(`\$\{outputPath\}\.sha256`[\s\S]*mode: 0o600/);
+  });
+
+  it("records only credential presence or class and never serializes credential values", () => {
+    expect(script).toContain("sourceCredentialClasses");
+    expect(script).toContain("missingRequiredFields");
+    expect(script).not.toMatch(/productionFields:\s*Object\.fromEntries/);
+    expect(script).not.toMatch(/sourcePosthog:\s*Object\.fromEntries/);
+    expect(script).not.toMatch(/sourceAnthropic:\s*Object\.fromEntries/);
+  });
+
+  it("distinguishes the runtime database from the legacy vault candidate", () => {
+    expect(script).toContain("runtimeDatabaseObservation");
+    expect(script).toContain("vaultDatabaseCandidate");
+    expect(script).toContain("vaultCandidateMatchesRuntime");
+    expect(script).toContain("database: { runtime: runtimeDatabase, vaultCandidate: vaultDatabaseCandidate, vaultCandidateMatchesRuntime }");
+  });
+});

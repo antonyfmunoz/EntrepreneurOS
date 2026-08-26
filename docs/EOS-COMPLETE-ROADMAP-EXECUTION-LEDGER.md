@@ -39,9 +39,9 @@ Supporting Drive source:
 
 | Level | Required meaning | Current state |
 |---|---|---|
-| Canonical scope | Current Notion requirements and compatible Drive requirements are classified with no silent omission | Release ledger established; release-candidate reconciliation open |
+| Canonical scope | Current Notion requirements and compatible Drive requirements are classified with no silent omission | Locked to the five named Notion sources, compatible Drive master, source hierarchy, 25-instrument matrix, 24-layer matrix, and evidence-class contract below |
 | Repository implementation | Software-controlled requirements exist with migrations, APIs, interactive UI, tests, and traceability | Locally qualified in the current working tree |
-| Reviewed release candidate | One reviewed commit and immutable image pass protected remote qualification | Commit `e62c40f9079d15687db103083d0100ca71232132` passed protected CodeQL `33017994960` and production qualification `33017994955`; deployment image digest remains open |
+| Reviewed release candidate | One reviewed commit and immutable image pass protected remote qualification | Commit `50039d40f4dfad7f696460d503c78fcbb8c652ec` passed protected CodeQL `33019815145` and production qualification `33019815187`; deployment image digest remains open |
 | Public SaaS MVP | All 24 production layers have current evidence for the exact deployed release | Open |
 | Empyrean Client Zero | Empyrean completes real customer-value and recovery cycles through EOS with authoritative Evidence | Open |
 | Operatorized product | A qualified operator sustains repeated cycles with materially reduced founder dependence | Open |
@@ -56,7 +56,7 @@ The current local qualification reports:
 - all 25 Required Instrument Manifest families implemented through the canonical
   company-scoped instrument kernel;
 - 111 migrations applied on fresh PostgreSQL 16;
-- 59 test files and 407 tests, including 59 PostgreSQL journeys;
+- 63 test files and 422 tests, including all 61 PostgreSQL-gated journeys;
 - TypeScript, production build, local production image, dependency audit, and
   source-integrity checks passed;
 - all seven roles, all 14 modules, the 22-class artifact closure system, and the
@@ -64,10 +64,11 @@ The current local qualification reports:
 - zero serious or critical accessibility findings; and
 - 300/300 load responses at concurrency 20, 115.59 ms p95 and 120.23 ms p99.
 
-This baseline is preserved in reviewed commit
-`e62c40f9079d15687db103083d0100ca71232132` and satisfies repository and remote
-CI evidence only. It does not satisfy deployment, provider, professional, or
-field evidence gates.
+The protected base of this baseline is reviewed commit
+`50039d40f4dfad7f696460d503c78fcbb8c652ec`; the additional external-inventory
+tests are qualified in the current candidate and still require protected remote
+CI. Neither evidence class satisfies deployment, provider, professional, or
+field gates.
 
 ## Execution sequence
 
@@ -76,10 +77,10 @@ field evidence gates.
 - [x] Establish the source hierarchy.
 - [x] Preserve separate completion classes.
 - [x] Record the 25-instrument repository traceability matrix.
-- [ ] Reconcile every current Notion requirement against the release candidate.
-- [ ] Classify compatible Drive additions, superseded conflicts, historical
+- [x] Reconcile every current Notion requirement against the release candidate.
+- [x] Classify compatible Drive additions, superseded conflicts, historical
   material, and intentional deferrals.
-- [ ] Record an owner, evidence subject, and expiry policy for every external
+- [x] Record an owner, evidence subject, and expiry policy for every external
   gate.
 
 Exit: no current requirement is orphaned or represented by the wrong evidence
