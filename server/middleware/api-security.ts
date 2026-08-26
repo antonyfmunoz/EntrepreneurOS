@@ -72,11 +72,21 @@ export function blockLegacyUnscopedApis(req: Request, res: Response, next: NextF
     || ["/stats", "/analytics", "/ai/stats"].includes(req.path)
     || req.path === "/integrations"
     || req.path === "/integrations/connect"
-    || ["/keys/save", "/ai/generate", "/ai/multi-agent", "/llm/chat"].includes(req.path);
+    || ["/keys/save", "/ai/generate", "/ai/multi-agent", "/ai/models", "/ai/provider-status", "/llm/chat"].includes(req.path);
   if (legacyUnscoped) {
+    const replacement = /^\/(agents|ai-assistant)(\/|$)/.test(req.path)
+      || ["/ai/generate", "/ai/multi-agent", "/ai/models", "/ai/provider-status", "/llm/chat"].includes(req.path)
+      ? "/api/eos/companies/:companyId/executive-assistant/messages"
+      : /^\/(tasks|actions)(\/|$)/.test(req.path)
+        ? "/api/eos/companies/:companyId/work-packets"
+        : /^\/workflows(\/|$)/.test(req.path)
+          ? "/api/eos/companies/:companyId/process-definitions"
+          : "/api/eos/companies/:companyId/context";
     return res.status(410).json({
       code: "legacy_unscoped_route_disabled",
       message: "This legacy route is permanently disabled because it cannot enforce EOS company, seat, and authority scope. Use the company-scoped EOS runtime.",
+      replacement,
+      sunset: true,
     });
   }
   return next();
