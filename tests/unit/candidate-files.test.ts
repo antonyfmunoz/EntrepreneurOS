@@ -63,6 +63,24 @@ describe("candidate artifact boundary", () => {
     ).toThrow("candidate_file_content_mismatch");
   });
 
+  it("rejects request-body values that are not actual binary buffers", async () => {
+    expect(() =>
+      validateCandidateFile("%PDF-1.7" as unknown, "application/pdf", "resume.pdf"),
+    ).toThrow("candidate_file_body_invalid");
+    await expect(
+      storeCandidateFile(
+        "candidate-evidence/1/application/evidence",
+        [0x25, 0x50, 0x44, 0x46] as unknown,
+        { NODE_ENV: "test" } as NodeJS.ProcessEnv,
+      ),
+    ).rejects.toThrow("candidate_file_body_invalid");
+    const bytes = Buffer.from("plain evidence", "utf8");
+    const metadata = validateCandidateFile(bytes, "text/plain", "evidence.txt");
+    await expect(
+      scanCandidateFile({ bytes: [...bytes] } as unknown, metadata, {} as NodeJS.ProcessEnv),
+    ).rejects.toThrow("candidate_file_body_invalid");
+  });
+
   it("stores private bytes under a bounded key and rejects traversal", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "eos-candidate-file-"));
     temporaryRoots.push(root);
@@ -95,5 +113,12 @@ describe("candidate artifact boundary", () => {
     expect(safeAttachmentHeader("résumé.pdf")).toContain(
       "filename*=UTF-8''r%C3%A9sum%C3%A9.pdf",
     );
+    await expect(
+      scanCandidateFile(
+        Buffer.from("tampered evidence", "utf8"),
+        metadata,
+        {} as NodeJS.ProcessEnv,
+      ),
+    ).rejects.toThrow("candidate_file_metadata_mismatch");
   });
 });

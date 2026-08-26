@@ -24,23 +24,30 @@ export type NativeEsignPdfMetadata = {
   pageCount?: number;
 };
 
-export function validateNativeEsignPdf(buffer: Buffer): NativeEsignPdfMetadata {
-  if (!buffer.length || buffer.length > NATIVE_ESIGN_MAX_DOCUMENT_BYTES)
+function normalizedNativeEsignBuffer(value: unknown): Buffer {
+  if (!Buffer.isBuffer(value)) throw new Error("native_esign_artifact_body_invalid");
+  return Buffer.from(value);
+}
+
+export function validateNativeEsignPdf(buffer: unknown): NativeEsignPdfMetadata {
+  const bytes = normalizedNativeEsignBuffer(buffer);
+  if (!bytes.length || bytes.length > NATIVE_ESIGN_MAX_DOCUMENT_BYTES)
     throw new Error("native_esign_document_size_invalid");
-  if (buffer.subarray(0, 5).toString("ascii") !== "%PDF-")
+  if (bytes.subarray(0, 5).toString("ascii") !== "%PDF-")
     throw new Error("native_esign_document_content_invalid");
   return {
-    sizeBytes: buffer.length,
-    sha256: createHash("sha256").update(buffer).digest("hex"),
+    sizeBytes: bytes.length,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
     mimeType: "application/pdf",
   };
 }
 
-export async function inspectNativeEsignPdf(buffer: Buffer): Promise<Required<NativeEsignPdfMetadata>> {
-  const metadata = validateNativeEsignPdf(buffer);
+export async function inspectNativeEsignPdf(buffer: unknown): Promise<Required<NativeEsignPdfMetadata>> {
+  const bytes = normalizedNativeEsignBuffer(buffer);
+  const metadata = validateNativeEsignPdf(bytes);
   let pageCount: number;
   try {
-    const document = await PDFDocument.load(buffer, { updateMetadata: false });
+    const document = await PDFDocument.load(bytes, { updateMetadata: false });
     pageCount = document.getPageCount();
   } catch {
     throw new Error("native_esign_document_content_invalid");
@@ -255,17 +262,18 @@ export function nativeEsignSignatureStorageKey(
 
 export async function storeNativeEsignArtifact(
   storageKey: string,
-  buffer: Buffer,
+  buffer: unknown,
   env: NodeJS.ProcessEnv = process.env,
   plane: NativeEsignStoragePlane = "primary",
 ): Promise<void> {
+  const bytes = normalizedNativeEsignBuffer(buffer);
   const configuration = storageConfiguration(env, plane);
   if (configuration.provider === "s3") {
     const client = s3Client(configuration);
     try {
       await client.send(new PutObjectCommand({
-        Bucket: configuration.bucket, Key: s3Key(configuration, storageKey), Body: buffer,
-        ContentLength: buffer.length, Metadata: { sha256: sha256(buffer) }, IfNoneMatch: "*",
+        Bucket: configuration.bucket, Key: s3Key(configuration, storageKey), Body: bytes,
+        ContentLength: bytes.length, Metadata: { sha256: sha256(bytes) }, IfNoneMatch: "*",
         ServerSideEncryption: env[envKey(plane, "S3_KMS_KEY_ID")] ? "aws:kms" : "AES256",
         SSEKMSKeyId: env[envKey(plane, "S3_KMS_KEY_ID")]?.trim() || undefined,
       }));
@@ -273,7 +281,7 @@ export async function storeNativeEsignArtifact(
     } catch (error: any) {
       if (!["PreconditionFailed", "ConditionalRequestConflict"].includes(error?.name) && error?.$metadata?.httpStatusCode !== 412) throw error;
       const existing = await readNativeEsignArtifact(storageKey, env, plane);
-      if (existing.length !== buffer.length || sha256(existing) !== sha256(buffer))
+      if (existing.length !== bytes.length || sha256(existing) !== sha256(bytes))
         throw new Error("native_esign_artifact_immutable_conflict");
       return;
     } finally {
@@ -284,13 +292,13 @@ export async function storeNativeEsignArtifact(
   await mkdir(path.dirname(target), { recursive: true, mode: 0o700 });
   const temporary = `${target}.${randomUUID()}.tmp`;
   const handle = await open(temporary, "wx", 0o600);
-  try { await handle.writeFile(buffer); await handle.sync(); } finally { await handle.close(); }
+  try { await handle.writeFile(bytes); await handle.sync(); } finally { await handle.close(); }
   try {
     await copyFile(temporary, target, fsConstants.COPYFILE_EXCL);
   } catch (error: any) {
     if (error?.code !== "EEXIST") throw error;
     const existing = await readFile(target);
-    if (existing.length !== buffer.length || sha256(existing) !== sha256(buffer))
+    if (existing.length !== bytes.length || sha256(existing) !== sha256(bytes))
       throw new Error("native_esign_artifact_immutable_conflict");
   } finally {
     await rm(temporary, { force: true });
