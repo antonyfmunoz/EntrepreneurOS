@@ -12,6 +12,14 @@ export type SignatureImageCapture = {
   sha256: string;
 };
 
+export function hasExpectedImageSignature(bytes: Uint8Array, mimeType: string): boolean {
+  if (mimeType === "image/png") {
+    const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+    return signature.every((value, index) => bytes[index] === value);
+  }
+  return mimeType === "image/jpeg" && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+}
+
 async function captureFromBytes(bytes: Uint8Array, mimeType: "image/png" | "image/jpeg"): Promise<SignatureImageCapture> {
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   const sha256 = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -30,9 +38,10 @@ export function NativeEsignSignatureCapture(props: {
   onError: (message: string) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const uploadPreviewRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const [hasStroke, setHasStroke] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState("");
+  const [hasUploadPreview, setHasUploadPreview] = useState(false);
 
   useEffect(() => {
     if (props.method !== "drawn") return;
@@ -50,10 +59,6 @@ export function NativeEsignSignatureCapture(props: {
     setHasStroke(false);
     props.onCaptureChange(null);
   }, [props.method]);
-
-  useEffect(() => () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-  }, [previewUrl]);
 
   function point(event: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current!;
@@ -106,9 +111,38 @@ export function NativeEsignSignatureCapture(props: {
     if (!file) return;
     if (!["image/png", "image/jpeg"].includes(file.type)) return props.onError("Upload a PNG or JPEG signature image.");
     if (file.size > 512 * 1024) return props.onError("The signature image must be 512 KB or smaller.");
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(URL.createObjectURL(file));
-    props.onCaptureChange(await captureFromBytes(new Uint8Array(await file.arrayBuffer()), file.type as "image/png" | "image/jpeg"));
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (!hasExpectedImageSignature(bytes, file.type)) return props.onError("The file contents do not match the selected image format.");
+    try {
+      const bitmap = await createImageBitmap(new Blob([bytes], { type: file.type }));
+      if (!bitmap.width || !bitmap.height || bitmap.width > 4096 || bitmap.height > 4096 || bitmap.width * bitmap.height > 16_000_000) {
+        bitmap.close();
+        return props.onError("The signature image dimensions are invalid or too large.");
+      }
+      const canvas = uploadPreviewRef.current;
+      if (!canvas) {
+        bitmap.close();
+        return props.onError("The signature preview is unavailable. Try again.");
+      }
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        bitmap.close();
+        return props.onError("The signature image could not be processed. Try again.");
+      }
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      const sanitized = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+      if (!sanitized) return props.onError("The signature image could not be normalized. Try again.");
+      setHasUploadPreview(true);
+      props.onCaptureChange(await captureFromBytes(new Uint8Array(await sanitized.arrayBuffer()), "image/png"));
+    } catch {
+      setHasUploadPreview(false);
+      props.onCaptureChange(null);
+      props.onError("The signature image could not be decoded. Upload a valid PNG or JPEG.");
+    }
   }
 
   const methods: Array<{ key: SignatureMethod; label: string; icon: typeof Keyboard }> = [
@@ -131,7 +165,7 @@ export function NativeEsignSignatureCapture(props: {
       <Label htmlFor="signature-upload">Upload a signature image</Label>
       <Input id="signature-upload" type="file" accept="image/png,image/jpeg" onChange={(event) => void chooseUpload(event.target.files?.[0])}/>
       <p className="text-xs text-muted-foreground">PNG or JPEG, no larger than 512 KB. EOS validates and stores the capture privately.</p>
-      {previewUrl ? <img src={previewUrl} alt="Uploaded signature preview" className="max-h-40 w-full rounded-lg border bg-white object-contain p-3"/> : null}
+      <canvas ref={uploadPreviewRef} aria-label="Uploaded signature preview" className={`${hasUploadPreview ? "block" : "hidden"} max-h-40 w-full rounded-lg border bg-white object-contain p-3`}/>
     </div> : null}
   </div>;
 }
