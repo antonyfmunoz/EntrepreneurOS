@@ -60,7 +60,16 @@ if ($LASTEXITCODE -eq 0) {
 
 Write-Output "Collecting production values. Concealed prompts do not echo or enter shell history. Nothing is written until every value validates."
 
-$databaseUrl = Read-Managed "op://$SourceVault/Database-Neon/url"
+$databaseUrl = Read-Concealed "Paste the exact production Neon application-role DATABASE_URL" '^postgres(?:ql)?://.+' "A managed PostgreSQL connection URL is required."
+try {
+  $databaseUri = [Uri]$databaseUrl
+  $databaseName = $databaseUri.AbsolutePath.Trim('/')
+  if ($databaseUri.Scheme -notin @('postgres', 'postgresql') -or -not $databaseUri.Host -or $databaseUri.Host -in @('localhost', '127.0.0.1', '::1') -or $databaseName -ne 'eos_db') {
+    throw "mismatch"
+  }
+} catch {
+  throw "The production DATABASE_URL must target the managed eos_db database. The reusable UMH Database-Neon item targets neondb and must not be copied."
+}
 $anthropicKey = Read-Managed "op://$SourceVault/AI-Anthropic/api_key"
 $posthogKey = Read-Managed "op://$SourceVault/EOS-PostHog/POSTHOG_KEY"
 $clerkPublishable = Read-Concealed "Paste the Clerk production publishable key" '^pk_live_[A-Za-z0-9_-]+$' "A Clerk pk_live_ key is required."

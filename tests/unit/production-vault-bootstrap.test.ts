@@ -20,6 +20,12 @@ describe("production vault bootstrap contract", () => {
     expect(script).toContain("^whsec_");
   });
 
+  it("requires the exact production database instead of copying the legacy neondb credential", () => {
+    expect(script).toContain('Read-Concealed "Paste the exact production Neon application-role DATABASE_URL"');
+    expect(script).toContain("$databaseName -ne 'eos_db'");
+    expect(script).not.toContain('Read-Managed "op://$SourceVault/Database-Neon/url"');
+  });
+
   it("keeps primary and backup artifact authority independent", () => {
     expect(script).toContain("Primary and backup artifact buckets must be different");
     expect(script).toContain('New-Field "EOS_ARTIFACT_S3_ACCESS_KEY_ID"');
