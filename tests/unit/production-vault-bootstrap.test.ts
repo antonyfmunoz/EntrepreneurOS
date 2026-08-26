@@ -27,4 +27,9 @@ describe("production vault bootstrap contract", () => {
     expect(script).toContain('New-Field "EOS_ARTIFACT_S3_KMS_KEY_ID"');
     expect(script).toContain('New-Field "EOS_ARTIFACT_BACKUP_S3_KMS_KEY_ID"');
   });
+
+  it("declares the authoritative production DNS provider observed at the domain", () => {
+    expect(script).toContain('New-Field "EOS_DNS_VENDOR_NAME" "Google Cloud DNS"');
+    expect(script).not.toContain('New-Field "EOS_DNS_VENDOR_NAME" "Cloudflare"');
+  });
 });

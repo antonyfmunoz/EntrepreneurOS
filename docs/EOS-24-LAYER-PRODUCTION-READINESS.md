@@ -74,6 +74,14 @@ The repository-controlled implementation is materially ahead of the currently de
 
 The live recheck on 2026-08-26 still resolves Fly release v27 and immutable image digest `sha256:da08b87df4b2b699085a35a526cc37065e2a237eaf31f181fbce52c2b03b2cc1`. Its machine configuration remains the legacy `autostop=suspend`, `min_machines_running=0` shape, its build configuration exposes test Clerk and placeholder analytics classes, and health/readiness omit an immutable release subject. Repository `fly.toml` and the promotion path correct those properties, but they are not production evidence until an exact qualified image is promoted.
 
+The public domain resolves directly to Fly ingress and its authoritative
+nameservers are `ns-cloud-c1` through `ns-cloud-c4.googledomains.com`, so the
+current DNS provider declaration is `Google Cloud DNS`, not Cloudflare. Fly's
+certificate for `entrepreneuros.net` is issued, currently valid through
+2026-11-20, and the live response carries HSTS. These observations establish
+identity only; CDN/WAF policy, cache purge, expiry monitoring, and recovery
+receipts remain open production controls.
+
 The currently deployed pilot also fails the new public production smoke because its document response does not contain the required Content Security Policy. That is expected for the older release and is explicit proof that it must not be promoted or represented as this branch's qualified public MVP.
 
 The production dependency graph currently has zero known vulnerabilities. The complete development graph reports four moderate findings from an old `esbuild` nested inside the latest `drizzle-kit` CLI dependency; that development-only server path is not present in the pruned runtime image. Dependabot alert 1 is therefore recorded as a scoped tolerable-risk decision rather than forcing the CLI downgrade proposed by npm. CI inventories the complete graph and rejects high/critical findings, while Dependabot tracks both npm and pinned GitHub Action updates. Reopen the decision if Drizzle tooling becomes network-exposed or the upstream edge changes.
