@@ -19,9 +19,13 @@ EOS_PUBLIC_ORIGIN=https://entrepreneuros.net
 EOS_PRODUCTION_ENVIRONMENT_SUBJECT=environment:entrepreneuros-production
 EOS_PRODUCTION_RELEASE_BRANCH=feature/company-system
 EOS_GITHUB_REPOSITORY=antonyfmunoz/EntrepreneurOS
-EOS_PRODUCTION_BEARER_TOKEN=op://EntrepreneurOS/Production/EOS_PRODUCTION_BEARER_TOKEN
+# A fresh Clerk session JWT is requested through a concealed prompt immediately
+# before authenticated smoke. For noninteractive runs only, inject it into the
+# current process; never store the short-lived token in 1Password or this file.
 EOS_PRODUCTION_COMPANY_ID=op://EntrepreneurOS/Production/EOS_PRODUCTION_COMPANY_ID
 EOS_PRODUCTION_FORBIDDEN_COMPANY_ID=op://EntrepreneurOS/Production/EOS_PRODUCTION_FORBIDDEN_COMPANY_ID
+# Local secret-free JSON receipt pack; never stage this path into Fly.
+EOS_PRODUCTION_PROMOTION_EVIDENCE_PATH=.tmp/eos-production-promotion-evidence.json
 EOS_ALERT_WEBHOOK_URL=op://EntrepreneurOS/Production/EOS_ALERT_WEBHOOK_URL
 EOS_ALERT_WEBHOOK_SECRET=op://EntrepreneurOS/Production/EOS_ALERT_WEBHOOK_SECRET
 STRIPE_RESTRICTED_KEY=op://EntrepreneurOS/Production/STRIPE_RESTRICTED_KEY

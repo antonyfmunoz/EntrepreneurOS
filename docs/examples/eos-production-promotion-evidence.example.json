@@ -1,0 +1,41 @@
+{
+  "standard": "eos.production-promotion-prerequisites.v1",
+  "releaseSubject": "git:REPLACE_WITH_40_CHARACTER_RELEASE_COMMIT",
+  "environmentSubject": "environment:entrepreneuros-production",
+  "database": {
+    "productionSubject": "database:PROVIDER/NON_SECRET_DATABASE_ID",
+    "sourceMigrationCount": 9,
+    "backup": {
+      "result": "pass",
+      "receiptRef": "backup:PROVIDER/NON_SECRET_BACKUP_RECEIPT",
+      "completedAt": "REPLACE_WITH_ISO_8601_TIME_WITHIN_24_HOURS"
+    },
+    "migrationRehearsal": {
+      "result": "pass",
+      "databaseSubject": "database:PROVIDER/ISOLATED_REHEARSAL_DATABASE_ID",
+      "sourceMigrationCount": 9,
+      "targetMigrationCount": 111,
+      "receiptRef": "run:PROVIDER/NON_SECRET_MIGRATION_RECEIPT",
+      "completedAt": "REPLACE_WITH_ISO_8601_TIME_WITHIN_7_DAYS"
+    },
+    "restoreRehearsal": {
+      "result": "pass",
+      "receiptRef": "restore:PROVIDER/NON_SECRET_RESTORE_RECEIPT",
+      "completedAt": "REPLACE_WITH_ISO_8601_TIME_WITHIN_7_DAYS",
+      "rtoMinutes": 1,
+      "rpoMinutes": 0
+    }
+  },
+  "rollback": {
+    "releaseSubject": "image:sha256:REPLACE_WITH_64_CHARACTER_ROLLBACK_DIGEST",
+    "result": "pass",
+    "receiptRef": "run:fly/NON_SECRET_ROLLBACK_REHEARSAL_RECEIPT",
+    "completedAt": "REPLACE_WITH_ISO_8601_TIME_WITHIN_7_DAYS"
+  },
+  "approval": {
+    "decision": "approved",
+    "approvedByUserId": "user_REPLACE_WITH_PLATFORM_ADMINISTRATOR",
+    "approvedAt": "REPLACE_WITH_ISO_8601_TIME_WITHIN_24_HOURS",
+    "evidenceRef": "evidence:eos/NON_SECRET_RELEASE_APPROVAL_RECEIPT"
+  }
+}

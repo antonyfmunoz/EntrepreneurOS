@@ -5,10 +5,20 @@ const deployScript = readFileSync(new URL("../../scripts/deploy-fly.ps1", import
 const rollbackScript = readFileSync(new URL("../../scripts/rollback-fly.ps1", import.meta.url), "utf8");
 
 describe("production deployment script contract", () => {
-  it("refuses to release an uncommitted worktree", () => {
-    expect(deployScript).toContain("git status --porcelain");
+  it("refuses release-source changes while allowing the ignored local operator settings file", () => {
+    expect(deployScript).toContain("git status --porcelain --untracked-files=all");
+    expect(deployScript).toContain('$candidatePath -ne ".claude/settings.local.json"');
     expect(deployScript).toContain("Production releases require a clean worktree");
     expect(deployScript.indexOf("git status --porcelain")).toBeLessThan(deployScript.indexOf("git archive --format=tar"));
+  });
+
+  it("requires current release-bound backup, migration, restore, rollback, and approval evidence before building", () => {
+    const evidence = deployScript.indexOf("npm run release:evidence:verify");
+    const build = deployScript.indexOf("--build-only --push");
+    expect(deployScript).toContain("EOS_PRODUCTION_PROMOTION_EVIDENCE_PATH");
+    expect(deployScript).toContain("--rollback-subject $rollbackSubject");
+    expect(evidence).toBeGreaterThan(-1);
+    expect(evidence).toBeLessThan(build);
   });
 
   it("requires an exact app- and commit-bound credential cutover approval", () => {
@@ -87,5 +97,16 @@ describe("production deployment script contract", () => {
     expect(deployScript.match(/npm run test:e2e:production:authenticated/g)).toHaveLength(2);
     expect(rollbackScript).toContain("npm run test:e2e:production");
     expect(rollbackScript).toContain("npm run test:e2e:production:authenticated");
+  });
+
+  it("acquires short-lived Clerk smoke credentials only immediately before authenticated checks", () => {
+    expect(deployScript).toContain("Set-FreshProductionBearerToken");
+    expect(deployScript).toContain('Read-Host "Paste a fresh Clerk session JWT');
+    expect(deployScript).toContain('$env:EOS_PRODUCTION_BEARER_TOKEN = $null');
+    const firstPublicSmoke = deployScript.indexOf("npm run test:e2e:production");
+    const firstTokenPrompt = deployScript.indexOf("Set-FreshProductionBearerToken", firstPublicSmoke);
+    const firstAuthenticatedSmoke = deployScript.indexOf("npm run test:e2e:production:authenticated");
+    expect(firstTokenPrompt).toBeGreaterThan(firstPublicSmoke);
+    expect(firstTokenPrompt).toBeLessThan(firstAuthenticatedSmoke);
   });
 });

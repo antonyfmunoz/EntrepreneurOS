@@ -74,7 +74,6 @@ $required = @(
 )
 
 $smokeRequired = @(
-  "EOS_PRODUCTION_BEARER_TOKEN",
   "EOS_PRODUCTION_COMPANY_ID",
   "EOS_PRODUCTION_FORBIDDEN_COMPANY_ID"
 )
@@ -91,10 +90,35 @@ foreach ($name in $smokeRequired) {
   }
 }
 
+function Set-FreshProductionBearerToken {
+  if ($env:EOS_NONINTERACTIVE_RELEASE -eq "true") {
+    if (-not $env:EOS_PRODUCTION_BEARER_TOKEN) {
+      throw "EOS_PRODUCTION_BEARER_TOKEN is required for a noninteractive release. Supply a fresh short-lived Clerk session JWT only in the current process."
+    }
+    return
+  }
+  $secure = Read-Host "Paste a fresh Clerk session JWT for the authenticated production smoke" -AsSecureString
+  $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+  try {
+    $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
+    if (-not $token -or $token.Split('.').Count -ne 3) { throw "The supplied production smoke credential is not a JWT." }
+    $env:EOS_PRODUCTION_BEARER_TOKEN = $token
+  } finally {
+    if ($pointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
+  }
+}
+
+if (-not $env:EOS_PRODUCTION_PROMOTION_EVIDENCE_PATH) {
+  throw "Missing required release variable: EOS_PRODUCTION_PROMOTION_EVIDENCE_PATH"
+}
+
 $app = if ($env:EOS_FLY_APP) { $env:EOS_FLY_APP } else { "eos-app" }
 $releaseCommit = (git rev-parse HEAD).Trim().ToLowerInvariant()
 if ($releaseCommit -notmatch '^[a-f0-9]{40}$') { throw "Could not resolve an immutable release commit." }
-$dirtyPaths = @(git status --porcelain)
+$dirtyPaths = @(git status --porcelain --untracked-files=all | Where-Object {
+  $candidatePath = if ($_.Length -gt 3) { $_.Substring(3).Trim('"') } else { "" }
+  $candidatePath -ne ".claude/settings.local.json"
+})
 if ($LASTEXITCODE -ne 0) { throw "Could not inspect the release worktree." }
 if ($dirtyPaths.Count -gt 0) { throw "Production releases require a clean worktree because the immutable image is built from the committed release subject." }
 $expectedCutoverApproval = "CUTOVER $app $releaseCommit"
@@ -125,6 +149,14 @@ $rollbackImage = $rollbackImages[0]
 $rollbackSubjects = @($machines | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Where-Object { $_ } | Select-Object -Unique)
 $rollbackSubject = if ($rollbackSubjects.Count -eq 1) { $rollbackSubjects[0] } else { "image:$($machines[0].image_ref.digest)" }
 if ($rollbackSubject -notmatch '^(git:[a-f0-9]{40}|image:sha256:[a-f0-9]{64})$') { throw "Could not determine an immutable rollback subject." }
+$evidencePath = [IO.Path]::GetFullPath($env:EOS_PRODUCTION_PROMOTION_EVIDENCE_PATH)
+if (-not (Test-Path -LiteralPath $evidencePath -PathType Leaf)) { throw "The production promotion evidence file does not exist." }
+npm run release:evidence:verify -- --file $evidencePath `
+  --release-subject $env:EOS_RELEASE_SUBJECT `
+  --environment-subject $env:EOS_PRODUCTION_ENVIRONMENT_SUBJECT `
+  --rollback-subject $rollbackSubject `
+  --platform-administrators $env:EOS_PLATFORM_ADMIN_USER_IDS
+if ($LASTEXITCODE -ne 0) { throw "Production backup, migration, restore, rollback, or release-approval evidence is incomplete." }
 $secretsBeforeRelease = @(Get-FlySecrets -App $app)
 $pendingSecrets = @($secretsBeforeRelease | Where-Object { $_.status -ne "Deployed" })
 if ($pendingSecrets.Count -gt 0) {
@@ -226,6 +258,7 @@ try {
     $env:EOS_EXPECTED_RELEASE_SUBJECT = $env:EOS_RELEASE_SUBJECT
     npm run test:e2e:production
     if ($LASTEXITCODE -ne 0) { throw "Public production smoke failed." }
+    Set-FreshProductionBearerToken
     npm run test:e2e:production:authenticated
     if ($LASTEXITCODE -ne 0) { throw "Signed-in role and isolation smoke failed." }
   } catch {
@@ -245,6 +278,7 @@ try {
     $env:EOS_EXPECTED_RELEASE_SUBJECT = $rollbackSubject
     npm run test:e2e:production
     if ($LASTEXITCODE -ne 0) { throw "Promotion failed and the restored image failed public health, identity, or security smoke. Escalate immediately." }
+    Set-FreshProductionBearerToken
     npm run test:e2e:production:authenticated
     if ($LASTEXITCODE -ne 0) { throw "Promotion failed and the restored image failed signed-in role or tenant-isolation smoke. Escalate immediately." }
     throw "Promotion failed: $promotionError The prior immutable image was restored; inspect evidence before retrying."
@@ -267,6 +301,7 @@ try {
     finalReadinessPending = $true
   } | ConvertTo-Json | Set-Content -Encoding utf8 ".tmp/eos-last-deployment.json"
 } finally {
+  $env:EOS_PRODUCTION_BEARER_TOKEN = $null
   $resolvedContext = [IO.Path]::GetFullPath($releaseContext)
   $resolvedTemp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
   if ($resolvedContext.StartsWith($resolvedTemp, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $resolvedContext)) {

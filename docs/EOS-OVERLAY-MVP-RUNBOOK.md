@@ -188,6 +188,35 @@ For local development with the managed 1Password references, start the applicati
 op run --env-file=.env.op.tpl -- npm run dev
 ```
 
+Create production custody only after the live Clerk, Notion OAuth, Stripe,
+alerting, S3/KMS, backup S3/KMS, and malware-scanner resources exist. The
+bootstrap reads reusable Neon, Anthropic, and PostHog values from the existing
+`UMH-Production` vault, accepts every new secret through concealed prompts,
+validates live-key classes, and pipes one JSON template directly to 1Password.
+It never places secret values in command arguments, terminal history, output,
+or a temporary file, and it refuses to overwrite an existing Production item:
+
+```powershell
+.\scripts\bootstrap-production-vault.ps1
+```
+
+The Clerk bearer used for signed-in release smoke is intentionally not stored
+in the vault: run promotion interactively and paste a fresh session JWT only
+when the concealed prompt appears. Noninteractive automation may inject a
+fresh token into its current process with `EOS_NONINTERACTIVE_RELEASE=true`,
+but must not persist it.
+
+Before promotion, copy
+`docs/examples/eos-production-promotion-evidence.example.json` to the ignored
+`.tmp/eos-production-promotion-evidence.json` path and replace every example
+marker with real provider/operator receipts. References must be secret-free;
+HTTPS references cannot contain credentials, query strings, or fragments. The
+release command independently binds the pack to the exact candidate commit,
+production environment, prior rollback subject, current migration-file count,
+fresh provider backup, isolated migration rehearsal, restore RTO/RPO result,
+rollback rehearsal, and a configured platform administrator's approval. The
+example is a shape guide only and cannot pass verification unchanged.
+
 Promote a qualified commit to the existing Fly application without copying secret values into source or the shell history:
 
 ```powershell

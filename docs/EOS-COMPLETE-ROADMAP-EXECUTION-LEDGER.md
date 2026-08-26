@@ -41,7 +41,7 @@ Supporting Drive source:
 |---|---|---|
 | Canonical scope | Current Notion requirements and compatible Drive requirements are classified with no silent omission | Release ledger established; release-candidate reconciliation open |
 | Repository implementation | Software-controlled requirements exist with migrations, APIs, interactive UI, tests, and traceability | Locally qualified in the current working tree |
-| Reviewed release candidate | One reviewed commit and immutable image pass protected remote qualification | Open |
+| Reviewed release candidate | One reviewed commit and immutable image pass protected remote qualification | Commit `e62c40f9079d15687db103083d0100ca71232132` passed protected CodeQL `33017994960` and production qualification `33017994955`; deployment image digest remains open |
 | Public SaaS MVP | All 24 production layers have current evidence for the exact deployed release | Open |
 | Empyrean Client Zero | Empyrean completes real customer-value and recovery cycles through EOS with authoritative Evidence | Open |
 | Operatorized product | A qualified operator sustains repeated cycles with materially reduced founder dependence | Open |
@@ -56,7 +56,7 @@ The current local qualification reports:
 - all 25 Required Instrument Manifest families implemented through the canonical
   company-scoped instrument kernel;
 - 111 migrations applied on fresh PostgreSQL 16;
-- 58 test files and 398 tests, including 59 PostgreSQL journeys;
+- 59 test files and 407 tests, including 59 PostgreSQL journeys;
 - TypeScript, production build, local production image, dependency audit, and
   source-integrity checks passed;
 - all seven roles, all 14 modules, the 22-class artifact closure system, and the
@@ -64,9 +64,10 @@ The current local qualification reports:
 - zero serious or critical accessibility findings; and
 - 300/300 load responses at concurrency 20, 115.59 ms p95 and 120.23 ms p99.
 
-This baseline belongs to an uncommitted working tree and therefore does not
-satisfy reviewed-release, remote-CI, deployment, provider, professional, or field
-evidence gates.
+This baseline is preserved in reviewed commit
+`e62c40f9079d15687db103083d0100ca71232132` and satisfies repository and remote
+CI evidence only. It does not satisfy deployment, provider, professional, or
+field evidence gates.
 
 ## Execution sequence
 
@@ -90,10 +91,12 @@ class.
 - [x] Exclude local-only state and secret-shaped material.
 - [x] Review all migrations through `0109` for fresh and incremental behavior.
 - [x] Repeat the full qualification on a fresh disposable database.
-- [ ] Commit the intentionally reviewed candidate.
-- [ ] Push the exact candidate to the correct protected branch.
-- [ ] Preserve protected-CI, SBOM, attestation, dependency, image, and provenance
+- [x] Commit the intentionally reviewed candidate.
+- [x] Push the exact candidate to the correct protected branch.
+- [x] Preserve protected-CI, SBOM, attestation, dependency, and provenance
   receipts for the exact commit.
+- [ ] Preserve the immutable production image and deployment receipts for the
+  exact commit after provider and migration gates close.
 
 Exit: one reviewed commit and one immutable image digest are the release subject.
 
