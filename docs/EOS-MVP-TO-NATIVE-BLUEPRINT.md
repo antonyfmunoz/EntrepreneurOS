@@ -587,6 +587,11 @@ Replace in this order:
 ### Native module cutover
 
 - canonical and field ownership are explicit;
+- generic global task, workflow, conversation, agent, assistant, model-selection,
+  and provider-control execution surfaces are removed from the compiled runtime;
+  legacy requests receive stable tombstones, while per-user provider credentials
+  are administered only inside a resolved company, operating seat, Systems
+  visibility scope, and attributable policy decision;
 - shadow-mode output matches or intentionally supersedes the provider/manual behavior;
 - security, tenancy, policy, lifecycle, events, evidence, performance, observability, migration, rollback, and operational tests pass;
 - data is reconciled, cutover is feature-flagged, rollback is tested, and provider retention/decommission is documented;

@@ -1,35 +1,74 @@
-import { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { storage } from "../storage";
 import * as gmail from "../integrations/gmail";
 import * as notion from "../integrations/notion";
 import { credentialEncryptionConfigured, encryptCredential } from "../security/credential-encryption";
+import { allowedSurfacesFor } from "@shared/eos-runtime";
+import { authorizeAction, companyAccess, EosRouteError } from "./eos-runtime";
+
+type SupportedProvider = "gmail" | "notion";
+
+function providerFrom(req: Request): SupportedProvider {
+  if (req.params.provider === "gmail" || req.params.provider === "notion") return req.params.provider;
+  throw new EosRouteError(404, "integration_provider_not_found", "This provider is not available in the EOS integration registry.");
+}
+
+async function integrationAccess(req: Request, authorityClass: "view" | "execute" | "decide", actionKey: string) {
+  const access = await companyAccess(req);
+  if (!allowedSurfacesFor(access.role).includes("systems")) {
+    throw new EosRouteError(403, "integration_scope_denied", "Provider administration is outside this seat's visibility scope.");
+  }
+  await authorizeAction(req, access, {
+    authorityClass,
+    resource: "integration",
+    actionKey,
+    purpose: "administer_systems_registry",
+    classification: "confidential",
+  });
+  return access;
+}
+
+function providerError(res: Response, error: unknown) {
+  if (error instanceof EosRouteError) return res.status(error.status).json({ code: error.code, message: error.message });
+  return res.status(500).json({ code: "integration_provider_request_failed", message: "The provider request could not be completed." });
+}
 
 export function registerIntegrationRoutes(app: Express): void {
-  const retiredCatalogResponse = {
-    message: "The unscoped integration catalog has been retired. Use the authenticated provider status and authorization endpoints.",
-  };
-
-  app.get("/api/integrations", (_req, res) => {
-    res.status(410).json(retiredCatalogResponse);
-  });
-
-  app.post("/api/integrations/connect", (_req, res) => {
-    res.status(410).json(retiredCatalogResponse);
-  });
-
-  // Google Workspace OAuth routes. Provider connection state is derived from
-  // encrypted OAuth credentials, never from the legacy integration catalog.
-  app.get("/api/integrations/gmail/auth", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+  // Provider OAuth controls are company- and seat-scoped even though the
+  // encrypted credential belongs to the signed-in human. This prevents a
+  // global provider connection surface from escaping EOS authority context.
+  app.get("/api/eos/companies/:companyId/integrations/:provider/auth", async (req, res) => {
     try {
-      if (!gmail.isConfigured()) {
-        return res.status(400).json({ message: "Gmail OAuth or EOS credential encryption is not configured." });
-      }
-      const returnTo = typeof req.query.returnTo === "string" ? req.query.returnTo : undefined;
-      const authUrl = gmail.getAuthUrl(req.user.id, returnTo);
-      res.json({ authUrl });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      await integrationAccess(req, "execute", "integration_provider_authorization.request");
+      const provider = providerFrom(req);
+      const adapter = provider === "gmail" ? gmail : notion;
+      if (!adapter.isConfigured()) return res.status(400).json({ code: "integration_provider_not_configured", message: `${provider === "gmail" ? "Google Workspace" : "Notion"} OAuth or EOS credential encryption is not configured.` });
+      const returnTo = `/company/${encodeURIComponent(req.params.companyId)}#systems`;
+      return res.json({ authUrl: adapter.getAuthUrl(req.user.id, returnTo) });
+    } catch (error) {
+      return providerError(res, error);
+    }
+  });
+
+  app.get("/api/eos/companies/:companyId/integrations/:provider/status", async (req, res) => {
+    try {
+      await integrationAccess(req, "view", "integration_provider_connection.read");
+      const provider = providerFrom(req);
+      const adapter = provider === "gmail" ? gmail : notion;
+      const verify = req.query.verify === "true";
+      return res.json(verify ? await adapter.verifyConnection(req.user.id) : await adapter.connectionSummary(req.user.id));
+    } catch (error) {
+      return providerError(res, error);
+    }
+  });
+
+  app.post("/api/eos/companies/:companyId/integrations/:provider/disconnect", async (req, res) => {
+    try {
+      await integrationAccess(req, "decide", "integration_provider_authorization.revoke");
+      const provider = providerFrom(req);
+      return res.json(provider === "gmail" ? await gmail.disconnect(req.user.id) : await notion.disconnect(req.user.id));
+    } catch (error) {
+      return providerError(res, error);
     }
   });
 
@@ -66,51 +105,6 @@ export function registerIntegrationRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/integrations/gmail/status", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      const userId = (req.user as any).id;
-      const verify = req.query.verify === "true";
-      res.json(verify ? await gmail.verifyConnection(userId) : await gmail.connectionSummary(userId));
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/integrations/gmail/disconnect", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      const userId = (req.user as any).id;
-      res.json(await gmail.disconnect(userId));
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/integrations/notion/status", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      const userId = (req.user as any).id;
-      const verify = req.query.verify === "true";
-      res.json(verify ? await notion.verifyConnection(userId) : await notion.connectionSummary(userId));
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/integrations/notion/auth", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      if (!notion.isConfigured()) {
-        return res.status(400).json({ message: "Notion OAuth or EOS credential encryption is not configured." });
-      }
-      const returnTo = typeof req.query.returnTo === "string" ? req.query.returnTo : undefined;
-      res.json({ authUrl: notion.getAuthUrl(req.user.id, returnTo) });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
   app.get("/api/auth/notion/callback", async (req, res) => {
     if (!req.isAuthenticated()) return res.redirect("/portfolios?integration_error=not_authenticated");
     try {
@@ -141,12 +135,4 @@ export function registerIntegrationRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/integrations/notion/disconnect", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      res.json(await notion.disconnect(req.user.id));
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
 }

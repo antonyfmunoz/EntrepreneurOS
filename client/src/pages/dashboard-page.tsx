@@ -1,1 +1,0 @@
-export default function Fixed() { return <div>Fixed</div>; }
