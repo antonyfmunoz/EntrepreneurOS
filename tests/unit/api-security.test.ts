@@ -69,6 +69,14 @@ describe("EOS API security boundary", () => {
     expect(res.status).toHaveBeenCalledWith(410);
     blockLegacyUnscopedApis({ path: "/llm/chat" } as any, res, next);
     expect(res.status).toHaveBeenCalledWith(410);
+    blockLegacyUnscopedApis({ path: "/ai/models" } as any, res, next);
+    expect(res.status).toHaveBeenCalledWith(410);
+    expect(res.json).toHaveBeenLastCalledWith(expect.objectContaining({
+      replacement: "/api/eos/companies/:companyId/executive-assistant/messages",
+      sunset: true,
+    }));
+    blockLegacyUnscopedApis({ path: "/ai/provider-status" } as any, res, next);
+    expect(res.status).toHaveBeenCalledWith(410);
     for (const path of ["/actions/pending", "/crm/contacts", "/folders", "/documents", "/ai-assistant/messages", "/stats", "/analytics", "/ai/stats"]) {
       blockLegacyUnscopedApis({ path } as any, res, next);
       expect(res.status).toHaveBeenLastCalledWith(410);

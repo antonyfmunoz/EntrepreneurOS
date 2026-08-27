@@ -41,7 +41,7 @@ Supporting Drive source:
 |---|---|---|
 | Canonical scope | Current Notion requirements and compatible Drive requirements are classified with no silent omission | Locked to the five named Notion sources, compatible Drive master, source hierarchy, 25-instrument matrix, 24-layer matrix, and evidence-class contract below |
 | Repository implementation | Software-controlled requirements exist with migrations, APIs, interactive UI, tests, and traceability | Locally qualified in the current working tree |
-| Reviewed release candidate | One reviewed commit and immutable image pass protected remote qualification | Merge `038c61894e6e6c57ee11a5a97493a1690c621369` passed post-merge CodeQL `33021728101` and production qualification `33021728141`; the production-readiness action queue is the current locally qualified candidate and still requires protected review, while the deployment image digest remains open |
+| Reviewed release candidate | One reviewed commit and immutable image pass protected remote qualification | Merge `8efa33b1106005cd895e865a86cbfcdd07cdff4a` passed post-merge CodeQL `33023797759` and production qualification `33023797958`; the native communication-authority cutover is the current locally qualified candidate and still requires protected review, while the deployment image digest remains open |
 | Public SaaS MVP | All 24 production layers have current evidence for the exact deployed release | Open |
 | Empyrean Client Zero | Empyrean completes real customer-value and recovery cycles through EOS with authoritative Evidence | Open |
 | Operatorized product | A qualified operator sustains repeated cycles with materially reduced founder dependence | Open |
@@ -56,7 +56,7 @@ The current local qualification reports:
 - all 25 Required Instrument Manifest families implemented through the canonical
   company-scoped instrument kernel;
 - 112 migrations applied on fresh PostgreSQL 16;
-- 65 test files and 428 tests, including all 61 PostgreSQL-gated journeys;
+- 66 test files and 431 tests, including all 61 PostgreSQL-gated journeys;
 - TypeScript and production build passed for the current candidate; its protected
   base also passed local production image, dependency audit, and source-integrity
   checks;
@@ -67,13 +67,14 @@ The current local qualification reports:
   date, optimistic version, and immutable action history, while deliberately
   withholding any narrative complete/pass state;
 - zero serious or critical accessibility findings; and
-- 300/300 load responses at concurrency 20, 70.93 ms p95 and 76.05 ms p99.
+- 300/300 load responses at concurrency 20, 63.26 ms p95 and 72.84 ms p99.
 
 The protected base of this baseline is reviewed commit
-`038c61894e6e6c57ee11a5a97493a1690c621369`; the additional readiness-action
-queue, migration, API, UI, and tests are qualified in the current candidate and
-still require protected remote CI. Neither evidence class satisfies deployment,
-provider, professional, or field gates.
+`8efa33b1106005cd895e865a86cbfcdd07cdff4a`; the additional native
+communication-authority cutover removes the generic agent/assistant handler
+modules and is qualified in the current candidate, but still requires protected
+remote CI. Neither evidence class satisfies deployment, provider, professional,
+or field gates.
 
 ## Execution sequence
 
@@ -252,6 +253,10 @@ Every external capability advances independently through:
 - [ ] Pass parity, migration, rollback, security, and recovery tests.
 - [ ] Preserve specialist providers as rails where the canon requires them.
 - [ ] Retire duplicated authority only after retention and rollback windows close.
+- [x] Remove the generic global-agent and generic AI-assistant server handlers,
+  including direct-model selection and process-local API-key mutation, while
+  retaining stable `410 Gone` tombstones that identify the canonical
+  company-scoped EA/Role-Agent replacement.
 
 Exit: each native claim is backed by an approved field-level ownership change and
 field evidence.

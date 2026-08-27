@@ -506,6 +506,7 @@ Provisional MVP targets, to be ratified before release:
 
 - resolve Clerk/local identity and one principal/many portfolio tenancy;
 - enforce organization scope on every legacy resource and route;
+- remove the generic global-agent, direct-model, user-supplied-key, and generic assistant communication runtime; retain stable tombstones so stale clients fail closed and point to the company-scoped Executive Assistant/Role-Agent channel;
 - establish canonical IDs, source authority, classifications, temporal/version fields, audit, inbox/outbox, and error contracts;
 - remove placeholder integrations that imply functionality;
 - establish migration registry and authoritative schema/migration process;

@@ -1,8 +1,6 @@
 import { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
-import { registerAIRoutes } from "./routes/ai";
-import { registerAgentRoutes } from "./routes/agents";
 import { registerTaskRoutes } from "./routes/tasks";
 import { registerCompanyRoutes } from "./routes/companies";
 import { registerPortfolioRoutes } from "./routes/portfolios";
@@ -58,8 +56,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api", blockLegacyUnscopedApis);
 
   // Register all resource routes
-  registerAIRoutes(app);
-  registerAgentRoutes(app);
   registerCompanyRoutes(app);
   registerPortfolioRoutes(app);
   registerWorkflowRoutes(app);

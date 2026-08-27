@@ -406,6 +406,15 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     await api.get("/api/actions/pending").expect(410);
     await api.get("/api/analytics").expect(410);
     await api.get("/api/ai/stats").expect(410);
+    const legacyAgent = await api.get("/api/agents").expect(410);
+    expect(legacyAgent.body).toMatchObject({
+      code: "legacy_unscoped_route_disabled",
+      replacement: "/api/eos/companies/:companyId/executive-assistant/messages",
+      sunset: true,
+    });
+    await api.get("/api/ai-assistant/messages").expect(410);
+    await api.get("/api/ai/models").expect(410);
+    await api.get("/api/ai/provider-status").expect(410);
   });
 
   it("operates canonical instruments through tenant-safe commands, versions, relationships, and immutable events", async () => {

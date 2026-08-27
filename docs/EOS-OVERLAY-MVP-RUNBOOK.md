@@ -25,7 +25,7 @@ Included:
 - governed Google Calendar candidate booking/cancellation, Google Drive context, and Notion context when the connected account grants the required scopes;
 - native tenant-scoped electronic signing with immutable reusable PDF versions, visual field authoring, arbitrary recipient roles, optimistic-concurrency draft revision, sequential or parallel routing, explicit consent, Authority-Grant-controlled operation, link rotation, Gmail delivery receipts, hash-chained audit, sealed completion artifacts, expiration, void, and founder-only Recovery controls;
 - optional, fail-closed UMH federation for one proposal capability;
-- permanently quarantined legacy global task, agent, workflow, conversation, action, CRM, folder, document, assistant, and analytics routes;
+- permanently quarantined legacy global task, workflow, conversation, action, CRM, folder, document, and analytics routes; the generic global-agent and generic AI-assistant handler modules are removed from the server runtime entirely, while stable `410 Gone` tombstones direct old clients to the company-scoped EA/Role-Agent boundary;
 - overlay UI for Brief, Organization, internal Talent, the secure external candidate portal, governed invitation delivery, bilateral candidate scheduling, versioned human-review packets, governed paid trials, Workforce, Missions, Approvals, Evidence, Systems, and role-compiled assistant context.
 
 Deferred:
