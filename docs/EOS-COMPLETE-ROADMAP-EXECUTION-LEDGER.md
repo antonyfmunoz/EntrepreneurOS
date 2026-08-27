@@ -41,7 +41,7 @@ Supporting Drive source:
 |---|---|---|
 | Canonical scope | Current Notion requirements and compatible Drive requirements are classified with no silent omission | Locked to the five named Notion sources, compatible Drive master, source hierarchy, 25-instrument matrix, 24-layer matrix, and evidence-class contract below |
 | Repository implementation | Software-controlled requirements exist with migrations, APIs, interactive UI, tests, and traceability | Locally qualified in the current working tree |
-| Reviewed release candidate | One reviewed commit and immutable image pass protected remote qualification | Merge `4278a52880a52ae6c5ff07d45bee2bb350353016` passed post-merge CodeQL `33025602568` and production qualification `33025602608`; the native unscoped-runtime and company-scoped OAuth cutover is the current locally qualified candidate and still requires protected review, while the deployment image digest remains open |
+| Reviewed release candidate | One reviewed commit and immutable image pass protected remote qualification | Native unscoped-runtime and company-scoped OAuth cutover merge `b857f7d7f112e7e27a552698d67061c047fb5816` passed post-merge CodeQL `33027146031` and production qualification `33027146028`, including the immutable container build, SBOM, evidence pack, and attestation; the deployment image digest remains open |
 | Public SaaS MVP | All 24 production layers have current evidence for the exact deployed release | Open |
 | Empyrean Client Zero | Empyrean completes real customer-value and recovery cycles through EOS with authoritative Evidence | Open |
 | Operatorized product | A qualified operator sustains repeated cycles with materially reduced founder dependence | Open |
@@ -67,15 +67,17 @@ The current local qualification reports:
   date, optimistic version, and immutable action history, while deliberately
   withholding any narrative complete/pass state;
 - zero serious or critical accessibility findings; and
-- 300/300 load responses at concurrency 20, 63.26 ms p95 and 72.84 ms p99.
+- 300/300 local load responses at concurrency 20 and 69.93 ms p95, with the
+  exact-merge remote qualification independently recording 300/300 and 43.5 ms
+  p95.
 
-The protected base of this baseline is reviewed commit
-`4278a52880a52ae6c5ff07d45bee2bb350353016`; the additional native unscoped
-runtime cutover removes the generic task/workflow/conversation handlers and
-unreachable legacy client, and moves Google/Notion provider controls onto the
-company- and seat-scoped EOS authority surface. It is qualified in the current
-candidate but still requires protected remote CI. Neither evidence class
-satisfies deployment, provider, professional, or field gates.
+The protected implementation baseline is reviewed merge
+`b857f7d7f112e7e27a552698d67061c047fb5816`. Its native unscoped-runtime
+cutover removes the generic task/workflow/conversation handlers and unreachable
+legacy client, and moves Google/Notion provider controls onto the company- and
+seat-scoped EOS authority surface. Exact-merge CodeQL and production
+qualification are green. Neither evidence class satisfies deployment,
+provider, professional, or field gates.
 
 ## Execution sequence
 
