@@ -72,6 +72,7 @@ export function blockLegacyUnscopedApis(req: Request, res: Response, next: NextF
     || ["/stats", "/analytics", "/ai/stats"].includes(req.path)
     || req.path === "/integrations"
     || req.path === "/integrations/connect"
+    || /^\/integrations\/(gmail|notion)\/(auth|status|disconnect)$/.test(req.path)
     || ["/keys/save", "/ai/generate", "/ai/multi-agent", "/ai/models", "/ai/provider-status", "/llm/chat"].includes(req.path);
   if (legacyUnscoped) {
     const replacement = /^\/(agents|ai-assistant)(\/|$)/.test(req.path)
@@ -81,6 +82,8 @@ export function blockLegacyUnscopedApis(req: Request, res: Response, next: NextF
         ? "/api/eos/companies/:companyId/work-packets"
         : /^\/workflows(\/|$)/.test(req.path)
           ? "/api/eos/companies/:companyId/process-definitions"
+          : /^\/integrations(\/|$)/.test(req.path)
+            ? "/api/eos/companies/:companyId/integrations/:provider/:action"
           : "/api/eos/companies/:companyId/context";
     return res.status(410).json({
       code: "legacy_unscoped_route_disabled",

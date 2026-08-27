@@ -24,10 +24,28 @@ const storageAdapter = vi.hoisted(() => ({
   upsertOauthToken: vi.fn(),
   deleteOauthToken: vi.fn(),
 }));
+const eosAccess = vi.hoisted(() => ({
+  companyAccess: vi.fn(async () => ({
+    company: { id: 12 },
+    seat: { id: "seat-founder" },
+    role: "founder",
+    effectiveAuthority: { grants: [] },
+    authorityCandidates: [],
+  })),
+  authorizeAction: vi.fn(async () => ({ outcome: "permit", decisionId: "decision-1" })),
+}));
 
 vi.mock("../../server/integrations/notion", () => notionAdapter);
 vi.mock("../../server/integrations/gmail", () => gmailAdapter);
 vi.mock("../../server/storage", () => ({ storage: storageAdapter }));
+vi.mock("../../server/routes/eos-runtime", () => {
+  class EosRouteError extends Error {
+    constructor(public status: number, public code: string, message: string) {
+      super(message);
+    }
+  }
+  return { ...eosAccess, EosRouteError };
+});
 
 import { registerIntegrationRoutes } from "../../server/routes/integrations";
 
@@ -39,6 +57,8 @@ describe("Notion integration HTTP controls", () => {
     for (const mock of Object.values(notionAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
     for (const mock of Object.values(gmailAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
     storageAdapter.upsertOauthToken.mockReset();
+    eosAccess.companyAccess.mockClear();
+    eosAccess.authorizeAction.mockClear();
     const app = express();
     app.use(express.json());
     app.use((req, _res, next) => {
@@ -51,33 +71,42 @@ describe("Notion integration HTTP controls", () => {
   });
 
   it("creates an authorization request bound to the signed-in user and return path", async () => {
-    const response = await api.get("/api/integrations/notion/auth?returnTo=%2Fcompany%2F12%23systems").expect(200);
+    const response = await api.get("/api/eos/companies/12/integrations/notion/auth").expect(200);
     expect(response.body.authUrl).toContain("api.notion.com");
     expect(notionAdapter.getAuthUrl).toHaveBeenCalledWith(userId, "/company/12#systems");
+    expect(eosAccess.companyAccess).toHaveBeenCalledTimes(1);
+    expect(eosAccess.authorizeAction).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({
+      authorityClass: "execute",
+      actionKey: "integration_provider_authorization.request",
+    }));
   });
 
   it("performs an explicit live verification for the signed-in user", async () => {
-    const response = await api.get("/api/integrations/notion/status?verify=true").expect(200);
+    const response = await api.get("/api/eos/companies/12/integrations/notion/status?verify=true").expect(200);
     expect(response.body).toEqual(expect.objectContaining({ healthy: true }));
     expect(notionAdapter.verifyConnection).toHaveBeenCalledWith(userId);
   });
 
   it("revokes and deletes only the signed-in user's connection", async () => {
-    await api.post("/api/integrations/notion/disconnect").send({}).expect(200, { success: true, providerRevoked: true });
+    await api.post("/api/eos/companies/12/integrations/notion/disconnect").send({}).expect(200, { success: true, providerRevoked: true });
     expect(notionAdapter.disconnect).toHaveBeenCalledWith(userId);
   });
 
   it("routes Google disconnect through provider revocation for the signed-in user", async () => {
-    await api.post("/api/integrations/gmail/disconnect").send({}).expect(200, { success: true, providerRevoked: true });
+    await api.post("/api/eos/companies/12/integrations/gmail/disconnect").send({}).expect(200, { success: true, providerRevoked: true });
     expect(gmailAdapter.disconnect).toHaveBeenCalledWith(userId);
   });
 
-  it("retires the legacy unscoped integration catalog and mutation surface", async () => {
-    const expected = {
-      message: "The unscoped integration catalog has been retired. Use the authenticated provider status and authorization endpoints.",
-    };
-    await api.get("/api/integrations").expect(410, expected);
-    await api.post("/api/integrations/connect").send({ type: "gmail" }).expect(410, expected);
+  it("does not register any legacy unscoped provider-control route", async () => {
+    await api.get("/api/integrations/notion/status").expect(404);
+    await api.post("/api/integrations/gmail/disconnect").send({}).expect(404);
+  });
+
+  it("rejects providers outside the bounded native registry", async () => {
+    await api.get("/api/eos/companies/12/integrations/unknown/status").expect(404, {
+      code: "integration_provider_not_found",
+      message: "This provider is not available in the EOS integration registry.",
+    });
   });
 
   it("stores callback credentials encrypted and returns to the initiating company", async () => {

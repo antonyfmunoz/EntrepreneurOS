@@ -415,6 +415,12 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     await api.get("/api/ai-assistant/messages").expect(410);
     await api.get("/api/ai/models").expect(410);
     await api.get("/api/ai/provider-status").expect(410);
+    const legacyProvider = await api.get("/api/integrations/notion/status").expect(410);
+    expect(legacyProvider.body).toMatchObject({
+      replacement: "/api/eos/companies/:companyId/integrations/:provider/:action",
+      sunset: true,
+    });
+    await api.post("/api/integrations/gmail/disconnect").send({}).expect(410);
   });
 
   it("operates canonical instruments through tenant-safe commands, versions, relationships, and immutable events", async () => {

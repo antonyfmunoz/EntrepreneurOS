@@ -2635,7 +2635,7 @@ export default function EosOverlayPage() {
         integration.id === "google_workspace" ? "gmail" : integration.id;
       return requestJson<{ authUrl: string }>(
         "GET",
-        `/api/integrations/${provider}/auth?returnTo=${encodeURIComponent(`/company/${companyId}#systems`)}`,
+        `${root}/integrations/${provider}/auth`,
       );
     },
     onSuccess: ({ authUrl }) => window.location.assign(authUrl),
@@ -2649,7 +2649,7 @@ export default function EosOverlayPage() {
         integration.id === "google_workspace" ? "gmail" : integration.id;
       return requestJson<{ providerRevoked?: boolean }>(
         "POST",
-        `/api/integrations/${provider}/disconnect`,
+        `${root}/integrations/${provider}/disconnect`,
         {},
       );
     },
@@ -2673,7 +2673,7 @@ export default function EosOverlayPage() {
         integration.id === "google_workspace" ? "gmail" : integration.id;
       const status = await requestJson<JsonRecord>(
         "GET",
-        `/api/integrations/${provider}/status?verify=true`,
+        `${root}/integrations/${provider}/status?verify=true`,
       );
       if (!status.connected || !status.healthy)
         throw new Error(

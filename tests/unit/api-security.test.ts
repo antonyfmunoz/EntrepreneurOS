@@ -77,6 +77,14 @@ describe("EOS API security boundary", () => {
     }));
     blockLegacyUnscopedApis({ path: "/ai/provider-status" } as any, res, next);
     expect(res.status).toHaveBeenCalledWith(410);
+    blockLegacyUnscopedApis({ path: "/integrations/notion/status" } as any, res, next);
+    expect(res.status).toHaveBeenCalledWith(410);
+    expect(res.json).toHaveBeenLastCalledWith(expect.objectContaining({
+      replacement: "/api/eos/companies/:companyId/integrations/:provider/:action",
+      sunset: true,
+    }));
+    blockLegacyUnscopedApis({ path: "/integrations/gmail/disconnect" } as any, res, next);
+    expect(res.status).toHaveBeenCalledWith(410);
     for (const path of ["/actions/pending", "/crm/contacts", "/folders", "/documents", "/ai-assistant/messages", "/stats", "/analytics", "/ai/stats"]) {
       blockLegacyUnscopedApis({ path } as any, res, next);
       expect(res.status).toHaveBeenLastCalledWith(410);
