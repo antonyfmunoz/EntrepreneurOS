@@ -171,6 +171,8 @@ export function registerCompanyRoutes(app: Express): void {
   app.post("/api/company", async (req, res) => {
     const createCompanySchema = z.object({
       name: z.string().min(1, "Name is required"),
+      legalName: z.string().trim().min(1).max(240).optional(),
+      assumedBusinessNames: z.array(z.string().trim().min(2).max(240)).max(30).optional(),
       type: z.string().optional(),
       stage: z.string().optional(),
       offer: z.string().optional(),
@@ -196,6 +198,8 @@ export function registerCompanyRoutes(app: Express): void {
         .values({
           ownerUserId: userId,
           name: data.name,
+          legalName: data.legalName || data.name,
+          assumedBusinessNames: data.assumedBusinessNames || [],
           type: data.type ?? null,
           stage: data.stage ?? null,
           offer: data.offer ?? null,
@@ -222,6 +226,8 @@ export function registerCompanyRoutes(app: Express): void {
   app.patch("/api/company/:id", async (req, res) => {
     const updateCompanySchema = z.object({
       name: z.string().min(1).optional(),
+      legalName: z.string().trim().min(1).max(240).optional(),
+      assumedBusinessNames: z.array(z.string().trim().min(2).max(240)).max(30).optional(),
       type: z.string().optional().nullable(),
       stage: z.string().optional().nullable(),
       offer: z.string().optional().nullable(),
@@ -303,6 +309,8 @@ export function registerCompanyRoutes(app: Express): void {
   app.put("/api/companies/:id", async (req, res, next) => {
     const updateSchema = z.object({
       name: z.string().trim().min(1).max(160).optional(),
+      legalName: z.string().trim().min(1).max(240).optional(),
+      assumedBusinessNames: z.array(z.string().trim().min(2).max(240)).max(30).optional(),
       stage: z.string().trim().max(80).optional(),
       goals: z.string().trim().max(10_000).optional(),
     }).strict();

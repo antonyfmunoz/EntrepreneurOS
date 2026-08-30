@@ -3,6 +3,7 @@ import type { CompanySourceBinding } from "@shared/company-source-adapter";
 import {
   compileEmpyreanReferenceInstance,
   EMPYREAN_COMPANY_PACKAGE,
+  EMPYREAN_SOURCE_BINDINGS,
 } from "../reference-instances/empyrean-studios";
 import {
   AFM_COMPANY_PACKAGE,
@@ -50,7 +51,7 @@ export type RegisteredCompanyPackage = {
 const registeredPackages: RegisteredCompanyPackage[] = [
   {
     package: EMPYREAN_COMPANY_PACKAGE,
-    sourceBindings: [],
+    sourceBindings: EMPYREAN_SOURCE_BINDINGS,
     materialize: compileEmpyreanReferenceInstance,
   },
   {

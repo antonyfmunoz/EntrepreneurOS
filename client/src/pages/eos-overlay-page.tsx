@@ -4572,6 +4572,15 @@ export default function EosOverlayPage() {
                   availableCompanyPackages.map(
                     (packageDefinition: JsonRecord) => {
                       const installed = Boolean(packageDefinition.installed);
+                      const parity = (packageDefinition.parity || {}) as JsonRecord;
+                      const identityParity = (parity.identity || {}) as JsonRecord;
+                      const sourceParity = (parity.sources || {}) as JsonRecord;
+                      const seatParity = (parity.seats || {}) as JsonRecord;
+                      const capabilityParity = (parity.capabilities || {}) as JsonRecord;
+                      const closureParity = (parity.artifactClosure || {}) as JsonRecord;
+                      const canonicalRepresentationComplete = Boolean(
+                        parity.canonicalRepresentationComplete,
+                      );
                       const blockerCount = Array.isArray(
                         packageDefinition.activationBlockers,
                       )
@@ -4591,7 +4600,7 @@ export default function EosOverlayPage() {
                                   instance
                                 </p>
                                 <StateBadge
-                                  state={installed ? "compiled" : "available"}
+                                  state={canonicalRepresentationComplete ? "complete" : installed ? "reconciliation_required" : "available"}
                                 />
                               </div>
                               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
@@ -4609,7 +4618,29 @@ export default function EosOverlayPage() {
                               <p className="mt-2 text-xs text-muted-foreground">
                                 {packageDefinition.capabilityCount || 0} capabilities ·{" "}
                                 {packageDefinition.providerBindingCount || 0} provider declarations ·{" "}
-                                {packageDefinition.sourceBindingCount || 0} governed live-source bindings
+                                {packageDefinition.sourceBindingCount || 0} governed source contracts
+                              </p>
+                              <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
+                                {[
+                                  ["Identity", Boolean(identityParity.complete) ? "Complete" : "Open"],
+                                  ["Sources", `${sourceParity.represented || 0}/${sourceParity.expected || 0}`],
+                                  ["Seats", `${seatParity.represented || 0}/${seatParity.expected || 0}`],
+                                  ["Capabilities", `${capabilityParity.represented || 0}/${capabilityParity.expected || 0}`],
+                                  ["Artifact groups", `${closureParity.representedGroups || 0}/${closureParity.expectedGroups || 0}`],
+                                ].map(([label, value]) => (
+                                  <div key={String(label)} className="rounded-xl border border-primary/15 bg-background/80 px-3 py-2">
+                                    <p className="text-muted-foreground">{label}</p>
+                                    <p className="mt-1 font-semibold text-foreground">{value}</p>
+                                  </div>
+                                ))}
+                              </div>
+                              <p className="mt-3 text-xs font-medium text-foreground">
+                                {canonicalRepresentationComplete
+                                  ? `Canonical representation complete · ${closureParity.representedRows || 0}/${closureParity.expectedRows || 0} artifact states explicit`
+                                  : "Canonical representation requires reconciliation."}
+                              </p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Structural completeness does not claim staffing, provider authorization, pre-live qualification, or field proof.
                               </p>
                             </div>
                             <div className="flex flex-wrap gap-2">
@@ -4638,14 +4669,16 @@ export default function EosOverlayPage() {
                                   )
                                 }
                                 disabled={
-                                  companyPackageMutation.isPending || installed
+                                  companyPackageMutation.isPending || canonicalRepresentationComplete
                                 }
                               >
                                 <Blocks className="mr-2 h-4 w-4" />
                                 {companyPackageMutation.isPending
                                   ? `Compiling ${packageDefinition.operatingName}…`
-                                  : installed
-                                    ? "Reference instance compiled"
+                                  : canonicalRepresentationComplete
+                                    ? "Canonical representation complete"
+                                    : installed
+                                      ? "Reconcile canonical representation"
                                     : `Compile ${packageDefinition.operatingName} instance`}
                               </Button>
                             </div>

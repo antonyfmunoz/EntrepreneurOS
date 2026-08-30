@@ -175,6 +175,10 @@ export const companyPackageSchema = z
         .object({
           legalName: z.string().trim().min(2).max(240),
           operatingName: z.string().trim().min(2).max(240),
+          assumedBusinessNames: z
+            .array(z.string().trim().min(2).max(240))
+            .max(30)
+            .default([]),
           orgKey: z.string().trim().min(3).max(160),
           ownershipClass: z.enum(companyOwnershipClasses),
           visibility: z.enum(["public", "private", "client_confidential"]),

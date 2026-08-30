@@ -6412,7 +6412,13 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         organizationKey: "ORG-EMPYREAN-STUDIOS",
         capabilityCount: 17,
         providerBindingCount: 5,
+        sourceBindingCount: 5,
         installed: false,
+        parity: expect.objectContaining({
+          canonicalRepresentationComplete: false,
+          sources: expect.objectContaining({ represented: 5, expected: 5 }),
+          capabilities: expect.objectContaining({ represented: 0, expected: 17 }),
+        }),
       }),
     ]);
     const genericPath =
@@ -6450,7 +6456,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(first.body.manifest.status).toBe("draft");
     expect(first.body.report).toMatchObject({
       packageKey: "empyrean-studios-reference",
-      packageVersion: "2026-08-22",
+      packageVersion: "2026-08-30",
       organizationKey: "ORG-EMPYREAN-STUDIOS",
       activationState: "blocked",
     });
@@ -6467,6 +6473,11 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(first.body.compiledInstance.dormantCapabilityKeys).toHaveLength(3);
     expect(first.body.compiledInstance.providerBindingKeys).toHaveLength(5);
     expect(first.body.compiledInstance.provenanceGraph.length).toBeGreaterThan(0);
+    expect(first.body.semanticParity).toMatchObject({
+      canonicalCapabilitiesCreated: 17,
+      externalEffectsExecuted: false,
+    });
+    expect(first.body.semanticParity.closureRowsCreated).toBeGreaterThanOrEqual(17 * 22);
 
     const second = await api
       .post(compatibilityPath)
@@ -6475,7 +6486,18 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(second.body.created).toBe(false);
     expect(second.body.manifest.id).toBe(first.body.manifest.id);
     const catalogAfter = await api.get(catalogPath).expect(200);
-    expect(catalogAfter.body[0]).toMatchObject({ installed: true });
+    expect(catalogAfter.body[0]).toMatchObject({
+      installed: true,
+      parity: {
+        canonicalRepresentationComplete: true,
+        identity: { complete: true },
+        sources: { complete: true, represented: 5, expected: 5, missing: [] },
+        seats: { complete: true, represented: 9, expected: 9, missing: [] },
+        capabilities: { complete: true, represented: 17, expected: 17, missing: [] },
+        artifactClosure: expect.objectContaining({ complete: true }),
+        externalEffectsExecuted: false,
+      },
+    });
 
     const context = await api
       .get("/api/eos/companies/" + companyId + "/context")
@@ -6484,9 +6506,15 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(context.body.manifest.manifest.packageSelections).toContainEqual(
       expect.objectContaining({
         id: "empyrean-studios-reference",
-        version: "2026-08-22",
+        version: "2026-08-30",
       }),
     );
+    const [identity] = await sql<Array<{ legal_name: string; assumed_business_names: string[] }>>`
+      SELECT legal_name, assumed_business_names FROM companies WHERE id = ${companyId}`;
+    expect(identity).toEqual({
+      legal_name: "Empyrean Creative LLC",
+      assumed_business_names: ["Empyrean Studios"],
+    });
 
     const organization = await api
       .get("/api/eos/companies/" + companyId + "/organization-runtime")
@@ -7373,6 +7401,10 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         providerBindingCount: 5,
         sourceBindingCount: 7,
         installed: false,
+        parity: expect.objectContaining({
+          canonicalRepresentationComplete: false,
+          sources: expect.objectContaining({ represented: 7, expected: 7 }),
+        }),
       }),
     ]);
 
@@ -7406,6 +7438,18 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const second = await api.post(compilePath).send({ confirmOrganizationKey: "ORG-AFM" }).expect(200);
     expect(second.body.created).toBe(false);
     expect(second.body.manifest.id).toBe(first.body.manifest.id);
+    expect((await api.get(catalogPath).expect(200)).body[0]).toMatchObject({
+      installed: true,
+      parity: {
+        canonicalRepresentationComplete: true,
+        identity: { complete: true },
+        sources: { complete: true, represented: 7, expected: 7, missing: [] },
+        seats: { complete: true, represented: 8, expected: 8, missing: [] },
+        capabilities: { complete: true, represented: 11, expected: 11, missing: [] },
+        artifactClosure: expect.objectContaining({ complete: true }),
+        externalEffectsExecuted: false,
+      },
+    });
 
     const [state] = await sql<Array<{
       seats: number; work_packets: number; processes: number; assets: number; metrics: number; risk_controls: number;
@@ -7528,6 +7572,10 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
           providerBindingCount: fixture.providerCount,
           sourceBindingCount: fixture.sourceCount,
           installed: false,
+          parity: expect.objectContaining({
+            canonicalRepresentationComplete: false,
+            sources: expect.objectContaining({ represented: fixture.sourceCount, expected: fixture.sourceCount }),
+          }),
         }),
       ]);
 
@@ -7551,10 +7599,24 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
           packageKey: fixture.packageKey,
           externalEffectsExecuted: false,
         },
+        semanticParity: expect.objectContaining({ externalEffectsExecuted: false }),
       });
 
       const second = await api.post(compilePath).send({ confirmOrganizationKey: fixture.organizationKey }).expect(200);
       expect(second.body).toMatchObject({ created: false, manifest: { id: first.body.manifest.id } });
+      const reconciledCatalog = await api.get(`/api/eos/companies/${companyId}/reference-packages`).expect(200);
+      expect(reconciledCatalog.body[0]).toMatchObject({
+        installed: true,
+        parity: {
+          canonicalRepresentationComplete: true,
+          identity: { complete: true },
+          sources: { complete: true, represented: fixture.sourceCount, expected: fixture.sourceCount, missing: [] },
+          seats: { complete: true, represented: fixture.seatCount, expected: fixture.seatCount, missing: [] },
+          capabilities: { complete: true, represented: fixture.capabilityCount, expected: fixture.capabilityCount, missing: [] },
+          artifactClosure: expect.objectContaining({ complete: true }),
+          externalEffectsExecuted: false,
+        },
+      });
 
       const [runtime] = await sql<Array<{
         seats: number; active_seats: number; vacant_seats: number; planning_vacancies: number;

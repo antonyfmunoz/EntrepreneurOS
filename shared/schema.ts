@@ -755,6 +755,8 @@ export const companies = pgTable("companies", {
   ownerUserId: text("owner_user_id").notNull(),
   portfolioId: integer("portfolio_id").references(() => portfolios.id, { onDelete: "set null" }),
   name: text("name").notNull(),
+  legalName: text("legal_name").notNull().default(""),
+  assumedBusinessNames: jsonb("assumed_business_names").notNull().default([]),
   type: text("type"),
   stage: text("stage"),
   offer: text("offer"),
