@@ -8684,10 +8684,14 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     await api.post(`/api/eos/companies/${companyId}/artifact-closure/initialize`).send({ moduleId: 8, capabilityKey: "module-8", ownerSeatId: founderSeat.id, templateStack: [], classification: "confidential" }).expect(200).expect(({ body }) => expect(body.inserted).toBe(0));
 
     const state = await api.get(`/api/eos/companies/${companyId}/artifact-closure?moduleId=8`).expect(200);
-    expect(state.body).toMatchObject({ counts: { capabilityGroups: 1, rows: 22, blockers: 22, artifactComplete: 0, preLiveQualified: 0, nativeQualified: 0 } });
     expect(state.body.artifactClasses).toHaveLength(22);
-    expect(state.body.groups[0]).toMatchObject({ capabilityKey: "module-8", completeCoverage: true, preLiveQualified: false });
-    const record = state.body.records.find((item: any) => item.artifactClass === "capability_definition");
+    expect(state.body.groups.find((item: any) => item.capabilityKey === "module-8")).toMatchObject({
+      rowCount: 22,
+      openBlockers: 22,
+      completeCoverage: true,
+      preLiveQualified: false,
+    });
+    const record = state.body.records.find((item: any) => item.capabilityKey === "module-8" && item.artifactClass === "capability_definition");
     expect(record).toMatchObject({ applicability: "missing", maturity: "doctrine", version: 1 });
 
     const qualification = { expectedVersion: 1, applicability: "instantiated", maturity: "pre_live_qualified", ownerSeatId: founderSeat.id, templateStack: ["eos-universal-organization-template-v1"], evidenceIds: [], blocker: "", nextAction: "Retain current fixture evidence and monitor for an evidence-backed regression.", rationale: "The exact capability definition is implemented, but qualification cannot be claimed without verified Evidence.", triggerCondition: "", classification: "confidential" };
@@ -8709,9 +8713,10 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(bulkInitialized.body).toEqual({ inserted: 22, capabilityGroups: 1, totalRequiredPerCapability: 22 });
     await api.post(`/api/eos/companies/${companyId}/artifact-closure/initialize-module`).send({ moduleId: 8, classification: "confidential" }).expect(200).expect(({ body }) => expect(body.inserted).toBe(0));
     const mappedState = await api.get(`/api/eos/companies/${companyId}/artifact-closure?moduleId=8`).expect(200);
-    expect(mappedState.body).toMatchObject({ counts: { capabilityGroups: 2, rows: 44 } });
     expect(mappedState.body.capabilities.find((item: any) => item.id === mappedCapability.body.id)).toMatchObject({ moduleIds: [8] });
     expect(mappedState.body.groups.find((item: any) => item.capabilityInstanceId === mappedCapability.body.id)).toMatchObject({ rowCount: 22, openBlockers: 22, preLiveQualified: false });
+    expect(mappedState.body.records.filter((item: any) => item.capabilityKey === "module-8")).toHaveLength(22);
+    expect(mappedState.body.records.filter((item: any) => item.capabilityInstanceId === mappedCapability.body.id)).toHaveLength(22);
 
     await api.post(`/api/eos/companies/${companyId}/capabilities`).send({ name: "Concurrent initialization capability", capabilityKey: "concurrent-initialization-capability", moduleIds: [9], activationTrigger: "The accountable founder accepts the bounded systems remit." }).expect(201);
     const [companyInitialization, moduleInitialization] = await Promise.all([
