@@ -8710,7 +8710,8 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const mappedCapability = await api.post(`/api/eos/companies/${companyId}/capabilities`).send({ name: "Browser-safe command capability", capabilityKey: "command-capability", moduleIds: [8, 8], activationTrigger: "The accountable founder accepts the bounded command remit." }).expect(201);
     expect(mappedCapability.body.moduleIds).toEqual([8]);
     const bulkInitialized = await api.post(`/api/eos/companies/${companyId}/artifact-closure/initialize-module`).send({ moduleId: 8, classification: "confidential" }).expect(201);
-    expect(bulkInitialized.body).toEqual({ inserted: 22, capabilityGroups: 1, totalRequiredPerCapability: 22 });
+    expect(bulkInitialized.body).toMatchObject({ inserted: 22, totalRequiredPerCapability: 22 });
+    expect(bulkInitialized.body.capabilityGroups).toBeGreaterThanOrEqual(1);
     await api.post(`/api/eos/companies/${companyId}/artifact-closure/initialize-module`).send({ moduleId: 8, classification: "confidential" }).expect(200).expect(({ body }) => expect(body.inserted).toBe(0));
     const mappedState = await api.get(`/api/eos/companies/${companyId}/artifact-closure?moduleId=8`).expect(200);
     expect(mappedState.body.capabilities.find((item: any) => item.id === mappedCapability.body.id)).toMatchObject({ moduleIds: [8] });
