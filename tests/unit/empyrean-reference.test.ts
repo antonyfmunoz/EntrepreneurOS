@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   EMPYREAN_COMPANY_PACKAGE,
   EMPYREAN_REFERENCE_PACKAGE,
+  EMPYREAN_SOURCE_BINDINGS,
 } from "../../server/reference-instances/empyrean-studios";
 
 describe("Empyrean Studios reference package", () => {
@@ -9,7 +10,7 @@ describe("Empyrean Studios reference package", () => {
     expect(EMPYREAN_REFERENCE_PACKAGE).toMatchObject({
       organizationKey: "ORG-EMPYREAN-STUDIOS",
       canonicalName: "Empyrean Studios",
-      version: "2026-08-22",
+      version: "2026-08-30",
     });
     expect(EMPYREAN_REFERENCE_PACKAGE.seats).toHaveLength(8);
     expect(new Set(EMPYREAN_REFERENCE_PACKAGE.seats.map((seat) => seat.key)).size).toBe(8);
@@ -21,6 +22,7 @@ describe("Empyrean Studios reference package", () => {
     expect(EMPYREAN_COMPANY_PACKAGE.companyManifest.value).toMatchObject({
       legalName: "Empyrean Creative LLC",
       operatingName: "Empyrean Studios",
+      assumedBusinessNames: ["Empyrean Studios"],
       lifecycleStage: "validation",
     });
   });
@@ -38,5 +40,9 @@ describe("Empyrean Studios reference package", () => {
     );
     expect(Object.values(EMPYREAN_REFERENCE_PACKAGE.sources)).toHaveLength(5);
     expect(Object.values(EMPYREAN_REFERENCE_PACKAGE.sources).every((source) => source.startsWith("https://app.notion.com/"))).toBe(true);
+    expect(EMPYREAN_SOURCE_BINDINGS).toHaveLength(5);
+    expect(EMPYREAN_SOURCE_BINDINGS.map((source) => source.sourceRef)).toEqual(
+      expect.arrayContaining(Object.values(EMPYREAN_REFERENCE_PACKAGE.sources)),
+    );
   });
 });

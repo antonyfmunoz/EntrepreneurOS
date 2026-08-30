@@ -6412,7 +6412,13 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         organizationKey: "ORG-EMPYREAN-STUDIOS",
         capabilityCount: 17,
         providerBindingCount: 5,
+        sourceBindingCount: 5,
         installed: false,
+        parity: expect.objectContaining({
+          canonicalRepresentationComplete: false,
+          sources: expect.objectContaining({ represented: 5, expected: 5 }),
+          capabilities: expect.objectContaining({ represented: 0, expected: 17 }),
+        }),
       }),
     ]);
     const genericPath =
@@ -6450,7 +6456,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(first.body.manifest.status).toBe("draft");
     expect(first.body.report).toMatchObject({
       packageKey: "empyrean-studios-reference",
-      packageVersion: "2026-08-22",
+      packageVersion: "2026-08-30",
       organizationKey: "ORG-EMPYREAN-STUDIOS",
       activationState: "blocked",
     });
@@ -6467,6 +6473,11 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(first.body.compiledInstance.dormantCapabilityKeys).toHaveLength(3);
     expect(first.body.compiledInstance.providerBindingKeys).toHaveLength(5);
     expect(first.body.compiledInstance.provenanceGraph.length).toBeGreaterThan(0);
+    expect(first.body.semanticParity).toMatchObject({
+      canonicalCapabilitiesCreated: 17,
+      externalEffectsExecuted: false,
+    });
+    expect(first.body.semanticParity.closureRowsCreated).toBeGreaterThanOrEqual(17 * 22);
 
     const second = await api
       .post(compatibilityPath)
@@ -6475,7 +6486,18 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(second.body.created).toBe(false);
     expect(second.body.manifest.id).toBe(first.body.manifest.id);
     const catalogAfter = await api.get(catalogPath).expect(200);
-    expect(catalogAfter.body[0]).toMatchObject({ installed: true });
+    expect(catalogAfter.body[0]).toMatchObject({
+      installed: true,
+      parity: {
+        canonicalRepresentationComplete: true,
+        identity: { complete: true },
+        sources: { complete: true, represented: 5, expected: 5, missing: [] },
+        seats: { complete: true, represented: 9, expected: 9, missing: [] },
+        capabilities: { complete: true, represented: 17, expected: 17, missing: [] },
+        artifactClosure: expect.objectContaining({ complete: true }),
+        externalEffectsExecuted: false,
+      },
+    });
 
     const context = await api
       .get("/api/eos/companies/" + companyId + "/context")
@@ -6484,9 +6506,15 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(context.body.manifest.manifest.packageSelections).toContainEqual(
       expect.objectContaining({
         id: "empyrean-studios-reference",
-        version: "2026-08-22",
+        version: "2026-08-30",
       }),
     );
+    const [identity] = await sql<Array<{ legal_name: string; assumed_business_names: string[] }>>`
+      SELECT legal_name, assumed_business_names FROM companies WHERE id = ${companyId}`;
+    expect(identity).toEqual({
+      legal_name: "Empyrean Creative LLC",
+      assumed_business_names: ["Empyrean Studios"],
+    });
 
     const organization = await api
       .get("/api/eos/companies/" + companyId + "/organization-runtime")
@@ -7373,6 +7401,10 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         providerBindingCount: 5,
         sourceBindingCount: 7,
         installed: false,
+        parity: expect.objectContaining({
+          canonicalRepresentationComplete: false,
+          sources: expect.objectContaining({ represented: 7, expected: 7 }),
+        }),
       }),
     ]);
 
@@ -7406,6 +7438,18 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const second = await api.post(compilePath).send({ confirmOrganizationKey: "ORG-AFM" }).expect(200);
     expect(second.body.created).toBe(false);
     expect(second.body.manifest.id).toBe(first.body.manifest.id);
+    expect((await api.get(catalogPath).expect(200)).body[0]).toMatchObject({
+      installed: true,
+      parity: {
+        canonicalRepresentationComplete: true,
+        identity: { complete: true },
+        sources: { complete: true, represented: 7, expected: 7, missing: [] },
+        seats: { complete: true, represented: 8, expected: 8, missing: [] },
+        capabilities: { complete: true, represented: 11, expected: 11, missing: [] },
+        artifactClosure: expect.objectContaining({ complete: true }),
+        externalEffectsExecuted: false,
+      },
+    });
 
     const [state] = await sql<Array<{
       seats: number; work_packets: number; processes: number; assets: number; metrics: number; risk_controls: number;
@@ -7528,6 +7572,10 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
           providerBindingCount: fixture.providerCount,
           sourceBindingCount: fixture.sourceCount,
           installed: false,
+          parity: expect.objectContaining({
+            canonicalRepresentationComplete: false,
+            sources: expect.objectContaining({ represented: fixture.sourceCount, expected: fixture.sourceCount }),
+          }),
         }),
       ]);
 
@@ -7551,10 +7599,24 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
           packageKey: fixture.packageKey,
           externalEffectsExecuted: false,
         },
+        semanticParity: expect.objectContaining({ externalEffectsExecuted: false }),
       });
 
       const second = await api.post(compilePath).send({ confirmOrganizationKey: fixture.organizationKey }).expect(200);
       expect(second.body).toMatchObject({ created: false, manifest: { id: first.body.manifest.id } });
+      const reconciledCatalog = await api.get(`/api/eos/companies/${companyId}/reference-packages`).expect(200);
+      expect(reconciledCatalog.body[0]).toMatchObject({
+        installed: true,
+        parity: {
+          canonicalRepresentationComplete: true,
+          identity: { complete: true },
+          sources: { complete: true, represented: fixture.sourceCount, expected: fixture.sourceCount, missing: [] },
+          seats: { complete: true, represented: fixture.seatCount, expected: fixture.seatCount, missing: [] },
+          capabilities: { complete: true, represented: fixture.capabilityCount, expected: fixture.capabilityCount, missing: [] },
+          artifactClosure: expect.objectContaining({ complete: true }),
+          externalEffectsExecuted: false,
+        },
+      });
 
       const [runtime] = await sql<Array<{
         seats: number; active_seats: number; vacant_seats: number; planning_vacancies: number;
@@ -8622,10 +8684,14 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     await api.post(`/api/eos/companies/${companyId}/artifact-closure/initialize`).send({ moduleId: 8, capabilityKey: "module-8", ownerSeatId: founderSeat.id, templateStack: [], classification: "confidential" }).expect(200).expect(({ body }) => expect(body.inserted).toBe(0));
 
     const state = await api.get(`/api/eos/companies/${companyId}/artifact-closure?moduleId=8`).expect(200);
-    expect(state.body).toMatchObject({ counts: { capabilityGroups: 1, rows: 22, blockers: 22, artifactComplete: 0, preLiveQualified: 0, nativeQualified: 0 } });
     expect(state.body.artifactClasses).toHaveLength(22);
-    expect(state.body.groups[0]).toMatchObject({ capabilityKey: "module-8", completeCoverage: true, preLiveQualified: false });
-    const record = state.body.records.find((item: any) => item.artifactClass === "capability_definition");
+    expect(state.body.groups.find((item: any) => item.capabilityKey === "module-8")).toMatchObject({
+      rowCount: 22,
+      openBlockers: 22,
+      completeCoverage: true,
+      preLiveQualified: false,
+    });
+    const record = state.body.records.find((item: any) => item.capabilityKey === "module-8" && item.artifactClass === "capability_definition");
     expect(record).toMatchObject({ applicability: "missing", maturity: "doctrine", version: 1 });
 
     const qualification = { expectedVersion: 1, applicability: "instantiated", maturity: "pre_live_qualified", ownerSeatId: founderSeat.id, templateStack: ["eos-universal-organization-template-v1"], evidenceIds: [], blocker: "", nextAction: "Retain current fixture evidence and monitor for an evidence-backed regression.", rationale: "The exact capability definition is implemented, but qualification cannot be claimed without verified Evidence.", triggerCondition: "", classification: "confidential" };
@@ -8644,12 +8710,14 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const mappedCapability = await api.post(`/api/eos/companies/${companyId}/capabilities`).send({ name: "Browser-safe command capability", capabilityKey: "command-capability", moduleIds: [8, 8], activationTrigger: "The accountable founder accepts the bounded command remit." }).expect(201);
     expect(mappedCapability.body.moduleIds).toEqual([8]);
     const bulkInitialized = await api.post(`/api/eos/companies/${companyId}/artifact-closure/initialize-module`).send({ moduleId: 8, classification: "confidential" }).expect(201);
-    expect(bulkInitialized.body).toEqual({ inserted: 22, capabilityGroups: 1, totalRequiredPerCapability: 22 });
+    expect(bulkInitialized.body).toMatchObject({ inserted: 22, totalRequiredPerCapability: 22 });
+    expect(bulkInitialized.body.capabilityGroups).toBeGreaterThanOrEqual(1);
     await api.post(`/api/eos/companies/${companyId}/artifact-closure/initialize-module`).send({ moduleId: 8, classification: "confidential" }).expect(200).expect(({ body }) => expect(body.inserted).toBe(0));
     const mappedState = await api.get(`/api/eos/companies/${companyId}/artifact-closure?moduleId=8`).expect(200);
-    expect(mappedState.body).toMatchObject({ counts: { capabilityGroups: 2, rows: 44 } });
     expect(mappedState.body.capabilities.find((item: any) => item.id === mappedCapability.body.id)).toMatchObject({ moduleIds: [8] });
     expect(mappedState.body.groups.find((item: any) => item.capabilityInstanceId === mappedCapability.body.id)).toMatchObject({ rowCount: 22, openBlockers: 22, preLiveQualified: false });
+    expect(mappedState.body.records.filter((item: any) => item.capabilityKey === "module-8")).toHaveLength(22);
+    expect(mappedState.body.records.filter((item: any) => item.capabilityInstanceId === mappedCapability.body.id)).toHaveLength(22);
 
     await api.post(`/api/eos/companies/${companyId}/capabilities`).send({ name: "Concurrent initialization capability", capabilityKey: "concurrent-initialization-capability", moduleIds: [9], activationTrigger: "The accountable founder accepts the bounded systems remit." }).expect(201);
     const [companyInitialization, moduleInitialization] = await Promise.all([

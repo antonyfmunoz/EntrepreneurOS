@@ -302,7 +302,6 @@ import { integrationBindingConfigurationSnapshot } from "../integration-binding-
 import { EMPYREAN_REFERENCE_PACKAGE, EmpyreanCompilationError } from "../reference-instances/empyrean-studios";
 import {
   applicableCompanyPackages,
-  getRegisteredCompanyPackage,
 } from "../company-compilation/catalog";
 import {
   compileRegisteredCompanyPackage,
@@ -313,6 +312,7 @@ import {
   CompanySourceAdapterError,
 } from "../company-compilation/notion-source-adapter";
 import { DeclarativeMaterializationError } from "../company-compilation/declarative-materializer";
+import { companyPackageParitySnapshot } from "../company-compilation/semantic-parity";
 
 function escapeHtml(value: string): string {
   return value.replace(
@@ -11174,8 +11174,8 @@ export function registerEosRuntimeRoutes(app: Express): void {
         ? manifest.packageSelections
         : [];
       return {
-        body: applicableCompanyPackages(access.company.name).map(
-          ({ package: packageDefinition }) => ({
+        body: await Promise.all(applicableCompanyPackages(access.company.name).map(
+          async ({ package: packageDefinition, sourceBindings }) => ({
             packageKey: packageDefinition.packageKey,
             packageVersion: packageDefinition.packageVersion,
             organizationKey: packageDefinition.companyManifest.value.orgKey,
@@ -11191,9 +11191,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
               packageDefinition.capabilityManifest.value.length,
             providerBindingCount:
               packageDefinition.providerBindingDeclarations.value.length,
-            sourceBindingCount:
-              getRegisteredCompanyPackage(packageDefinition.packageKey)
-                ?.sourceBindings.length || 0,
+            sourceBindingCount: sourceBindings.length,
             sourceEffectiveAt: packageDefinition.metadata.effectiveAt,
             installed: packageSelections.some(
               (selection) =>
@@ -11204,8 +11202,13 @@ export function registerEosRuntimeRoutes(app: Express): void {
                 (selection as { version?: unknown }).version ===
                   packageDefinition.packageVersion,
             ),
+            parity: await companyPackageParitySnapshot(db, {
+              companyId: access.company.id,
+              packageDefinition,
+              sourceBindings,
+            }),
           }),
-        ),
+        )),
       };
     }),
   );

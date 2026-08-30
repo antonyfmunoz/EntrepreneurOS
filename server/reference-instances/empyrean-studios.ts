@@ -24,15 +24,17 @@ import {
 } from "@shared/schema";
 import { buildAdvisorCouncil, manifestInputSchema } from "@shared/eos-runtime";
 import { companyPackageSchema } from "@shared/company-compilation";
+import type { CompanySourceBinding } from "@shared/company-source-adapter";
 import { ensureSeatOperatingKernel } from "../role-kernel";
 import { integrationBindingConfigurationSnapshot } from "../integration-binding-configuration";
+import { createNotionSourceBinding } from "../company-compilation/notion-source-adapter";
 
 export const EMPYREAN_REFERENCE_PACKAGE = {
   key: "empyrean-studios-reference",
-  version: "2026-08-22",
+  version: "2026-08-30",
   organizationKey: "ORG-EMPYREAN-STUDIOS",
   canonicalName: "Empyrean Studios",
-  sourceEffectiveAt: "2026-08-22",
+  sourceEffectiveAt: "2026-08-30",
   sources: {
     registry:
       "https://app.notion.com/p/3c3da8b96e4f81679d74fac5fc7ed788",
@@ -192,12 +194,12 @@ const empyreanCapabilities = [
 }));
 
 const empyreanDormantCapabilities = [
-  "capital-investor-relations",
-  "mergers-acquisitions",
-  "board-advisor-governance",
-].map((key) => ({
+  { key: "capital-investor-relations", moduleIds: [9] },
+  { key: "mergers-acquisitions", moduleIds: [8, 13] },
+  { key: "board-advisor-governance", moduleIds: [8] },
+].map(({ key, moduleIds }) => ({
   key,
-  moduleIds: [],
+  moduleIds,
   name: key
     .split("-")
     .map((part) => `${part[0].toUpperCase()}${part.slice(1)}`)
@@ -254,6 +256,7 @@ export const EMPYREAN_COMPANY_PACKAGE = companyPackageSchema.parse({
     {
       legalName: "Empyrean Creative LLC",
       operatingName: EMPYREAN_REFERENCE_PACKAGE.canonicalName,
+      assumedBusinessNames: ["Empyrean Studios"],
       orgKey: EMPYREAN_REFERENCE_PACKAGE.organizationKey,
       ownershipClass: "owned",
       visibility: "public",
@@ -520,6 +523,12 @@ export const EMPYREAN_COMPANY_PACKAGE = companyPackageSchema.parse({
           4,
           "supporting",
         ],
+        [
+          "commercial-authority",
+          EMPYREAN_REFERENCE_PACKAGE.sources.commercialAuthority,
+          5,
+          "canonical",
+        ],
       ].map(([key, sourceRef, precedence, status]) => ({
         key,
         sourceRef,
@@ -535,6 +544,14 @@ export const EMPYREAN_COMPANY_PACKAGE = companyPackageSchema.parse({
     },
   ),
 });
+
+export const EMPYREAN_SOURCE_BINDINGS: CompanySourceBinding[] = [
+  createNotionSourceBinding({ sourceKey: "registry", orgKey: EMPYREAN_REFERENCE_PACKAGE.organizationKey, pageClass: "registry", sourceRef: EMPYREAN_REFERENCE_PACKAGE.sources.registry, expectedRevision: EMPYREAN_REFERENCE_PACKAGE.version, precedence: 1, maxAgeDays: 45, classification: "internal", importAuthority: "reference_only" }),
+  createNotionSourceBinding({ sourceKey: "runtime", orgKey: EMPYREAN_REFERENCE_PACKAGE.organizationKey, pageClass: "runtime", sourceRef: EMPYREAN_REFERENCE_PACKAGE.sources.runtime, expectedRevision: EMPYREAN_REFERENCE_PACKAGE.version, precedence: 2, maxAgeDays: 45, classification: "confidential", importAuthority: "reference_only" }),
+  createNotionSourceBinding({ sourceKey: "reference-implementation", orgKey: EMPYREAN_REFERENCE_PACKAGE.organizationKey, pageClass: "supporting", sourceRef: EMPYREAN_REFERENCE_PACKAGE.sources.referenceImplementation, expectedRevision: EMPYREAN_REFERENCE_PACKAGE.version, precedence: 3, maxAgeDays: 60, classification: "confidential", importAuthority: "reference_only" }),
+  createNotionSourceBinding({ sourceKey: "pre-live-authority", orgKey: EMPYREAN_REFERENCE_PACKAGE.organizationKey, pageClass: "authority", sourceRef: EMPYREAN_REFERENCE_PACKAGE.sources.preLiveAuthority, expectedRevision: EMPYREAN_REFERENCE_PACKAGE.version, precedence: 4, maxAgeDays: 45, classification: "restricted", importAuthority: "reference_only" }),
+  createNotionSourceBinding({ sourceKey: "commercial-authority", orgKey: EMPYREAN_REFERENCE_PACKAGE.organizationKey, pageClass: "authority", sourceRef: EMPYREAN_REFERENCE_PACKAGE.sources.commercialAuthority, expectedRevision: EMPYREAN_REFERENCE_PACKAGE.version, precedence: 5, maxAgeDays: 45, classification: "restricted", importAuthority: "reference_only" }),
+];
 
 export class EmpyreanCompilationError extends Error {
   constructor(
@@ -651,6 +668,8 @@ export async function compileEmpyreanReferenceInstance(
     .update(companies)
     .set({
       name: EMPYREAN_REFERENCE_PACKAGE.canonicalName,
+      legalName: "Empyrean Creative LLC",
+      assumedBusinessNames: ["Empyrean Studios"],
       type: "Venture-studio holdco and value-creation studio",
       stage: "Stage 1 — Validation / Reference Candidate",
       offer:

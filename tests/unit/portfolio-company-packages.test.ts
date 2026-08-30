@@ -164,4 +164,30 @@ describe("Lyfe Holdings company packages", () => {
       ).toHaveLength(1);
     }
   });
+
+  it("declares exact source contracts and a 22-class module home for every capability", () => {
+    for (const registration of listRegisteredCompanyPackages()) {
+      const packageDefinition = registration.package;
+      const sources = packageDefinition.sourceAuthorityManifest.value.sources;
+      expect(registration.sourceBindings).toHaveLength(sources.length);
+      expect(
+        sources.map((source) => ({
+          key: source.key,
+          ref: source.sourceRef,
+          revision: source.sourceRevision,
+        })),
+      ).toEqual(
+        registration.sourceBindings.map((binding) => ({
+          key: binding.sourceKey,
+          ref: binding.sourceRef,
+          revision: binding.expectedRevision,
+        })),
+      );
+      expect(
+        packageDefinition.capabilityManifest.value.every(
+          (capability) => capability.moduleIds.length > 0,
+        ),
+      ).toBe(true);
+    }
+  });
 });

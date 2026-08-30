@@ -76,9 +76,9 @@ describe("native EOS handoff and package lifecycle contracts", () => {
     expect(comparePackageVersions("2026-08-21", "2026-08-22")).toBeLessThan(0);
     expect(comparePackageVersions("1.10", "1.2")).toBeGreaterThan(0);
     expect(planCompanyPackageTransition({ packageDefinition: EMPYREAN_COMPANY_PACKAGE, installedVersion: null }).transition).toBe("install");
-    expect(planCompanyPackageTransition({ packageDefinition: EMPYREAN_COMPANY_PACKAGE, installedVersion: "2026-08-22" }).transition).toBe("no_change");
-    expect(planCompanyPackageTransition({ packageDefinition: EMPYREAN_COMPANY_PACKAGE, installedVersion: "2026-08-21" }).transition).toBe("upgrade");
-    expect(planCompanyPackageTransition({ packageDefinition: EMPYREAN_COMPANY_PACKAGE, installedVersion: "2026-08-23" })).toEqual(expect.objectContaining({
+    expect(planCompanyPackageTransition({ packageDefinition: EMPYREAN_COMPANY_PACKAGE, installedVersion: "2026-08-30" }).transition).toBe("no_change");
+    expect(planCompanyPackageTransition({ packageDefinition: EMPYREAN_COMPANY_PACKAGE, installedVersion: "2026-08-22" }).transition).toBe("upgrade");
+    expect(planCompanyPackageTransition({ packageDefinition: EMPYREAN_COMPANY_PACKAGE, installedVersion: "2026-08-31" })).toEqual(expect.objectContaining({
       transition: "blocked",
       compatible: false,
       externalEffectsPermitted: false,

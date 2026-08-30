@@ -15,6 +15,7 @@ import {
   founderSeatForCompany,
   recordCompiledPackageInstallation,
 } from "./lifecycle";
+import { ensureCompanyPackageSemanticParity } from "./semantic-parity";
 
 export class CompanyCompilationError extends Error {
   constructor(
@@ -160,6 +161,11 @@ export async function compileRegisteredCompanyPackage(
       "founder_seat_required",
       "A governed company package installation requires an active founder seat.",
     );
+  const semanticParity = await ensureCompanyPackageSemanticParity(executor, {
+    companyId: input.companyId,
+    actorUserId: input.actorUserId,
+    packageDefinition: validation.package,
+  });
   const packageInstallation = await recordCompiledPackageInstallation(executor, {
     companyId: input.companyId,
     portfolioId: Number(result.company.portfolioId) || null,
@@ -168,5 +174,5 @@ export async function compileRegisteredCompanyPackage(
     packageDefinition: validation.package,
     compiledInstance,
   });
-  return { ...result, compiledInstance, packageInstallation };
+  return { ...result, compiledInstance, packageInstallation, semanticParity };
 }

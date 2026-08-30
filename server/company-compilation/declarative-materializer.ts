@@ -177,6 +177,8 @@ export function declarativeCompanyPackageMaterializer(
     const definition = packageDefinition.companyManifest.value;
     const [updatedCompany] = await executor.update(companies).set({
       name: definition.operatingName,
+      legalName: definition.legalName,
+      assumedBusinessNames: definition.assumedBusinessNames,
       type: packageDefinition.domainPackRefs.map((item) => item.value.key).join(", "),
       stage: definition.lifecycleStage,
       offer: definition.offerKeys.join(", ") || "No current offer",
