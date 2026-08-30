@@ -2392,7 +2392,7 @@ try {
     .waitFor();
   await desktop
     .getByRole("button", {
-      name: "Reference instance compiled",
+      name: "Canonical representation complete",
       exact: true,
     })
     .waitFor();
