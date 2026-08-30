@@ -7493,6 +7493,100 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     ]);
   });
 
+  it("compiles every current Lyfe Holdings company into an isolated, truthful operating state", async () => {
+    const fixtures = [
+      {
+        name: "OST, Inc.", packageKey: "ost-company-package", organizationKey: "ORG-OST",
+        sourceCount: 7, capabilityCount: 14, providerCount: 7, seatCount: 11,
+        activeSeats: 11, vacantSeats: 0, dormantCapabilities: 0, activationState: "dry_run",
+      },
+      {
+        name: "Lyfe Institute", packageKey: "lyfe-institute-company-package", organizationKey: "ORG-LYFE-INSTITUTE",
+        sourceCount: 9, capabilityCount: 13, providerCount: 7, seatCount: 9,
+        activeSeats: 3, vacantSeats: 6, dormantCapabilities: 0, activationState: "blocked",
+      },
+      {
+        name: "Lyfe Spectrum", packageKey: "lyfe-spectrum-company-package", organizationKey: "ORG-LYFE-SPECTRUM",
+        sourceCount: 8, capabilityCount: 18, providerCount: 9, seatCount: 10,
+        activeSeats: 5, vacantSeats: 5, dormantCapabilities: 5, activationState: "dry_run",
+      },
+    ] as const;
+
+    for (const fixture of fixtures) {
+      const [company] = await sql<{ id: number }[]>`
+        INSERT INTO companies (owner_user_id, portfolio_id, name, stage, offer, target_customer, goals)
+        VALUES (${ownerId}, ${portfolioId}, ${fixture.name}, 'formation', 'Canonical company package', 'Company-specific stakeholders', 'Compile the current Notion operating design')
+        RETURNING id`;
+      const companyId = company.id;
+
+      const catalog = await api.get(`/api/eos/companies/${companyId}/reference-packages`).expect(200);
+      expect(catalog.body).toEqual([
+        expect.objectContaining({
+          packageKey: fixture.packageKey,
+          organizationKey: fixture.organizationKey,
+          capabilityCount: fixture.capabilityCount,
+          providerBindingCount: fixture.providerCount,
+          sourceBindingCount: fixture.sourceCount,
+          installed: false,
+        }),
+      ]);
+
+      const compilePath = `/api/eos/companies/${companyId}/company-packages/${fixture.packageKey}/compile`;
+      const first = await api.post(compilePath).send({ confirmOrganizationKey: fixture.organizationKey });
+      if (first.status !== 201)
+        throw new Error(`${fixture.name} compilation returned ${first.status}: ${JSON.stringify(first.body)}`);
+      expect(first.body).toMatchObject({
+        created: true,
+        company: { id: companyId, name: fixture.name },
+        report: {
+          packageKey: fixture.packageKey,
+          organizationKey: fixture.organizationKey,
+          activationState: fixture.activationState,
+          externalEffectsExecuted: false,
+        },
+        compiledInstance: {
+          schemaVersion: "eos.compiled-company-instance.v1",
+          companyId,
+          organizationKey: fixture.organizationKey,
+          packageKey: fixture.packageKey,
+          externalEffectsExecuted: false,
+        },
+      });
+
+      const second = await api.post(compilePath).send({ confirmOrganizationKey: fixture.organizationKey }).expect(200);
+      expect(second.body).toMatchObject({ created: false, manifest: { id: first.body.manifest.id } });
+
+      const [runtime] = await sql<Array<{
+        seats: number; active_seats: number; vacant_seats: number; planning_vacancies: number;
+        capabilities: number; dormant_capabilities: number; systems: number; integrations: number;
+        provider_effects: number; manifests: number;
+      }>>`
+        SELECT
+          (SELECT count(*)::int FROM eos_seats WHERE company_id = ${companyId}) AS seats,
+          (SELECT count(*)::int FROM eos_seats WHERE company_id = ${companyId} AND status = 'active') AS active_seats,
+          (SELECT count(*)::int FROM eos_seats WHERE company_id = ${companyId} AND status = 'vacant') AS vacant_seats,
+          (SELECT count(*)::int FROM eos_seats WHERE company_id = ${companyId} AND status = 'vacant' AND agent_mode = 'planning' AND occupant_user_id IS NULL) AS planning_vacancies,
+          (SELECT count(*)::int FROM eos_capability_instances WHERE company_id = ${companyId}) AS capabilities,
+          (SELECT count(*)::int FROM eos_capability_instances WHERE company_id = ${companyId} AND state = 'dormant') AS dormant_capabilities,
+          (SELECT count(*)::int FROM eos_systems WHERE company_id = ${companyId}) AS systems,
+          (SELECT count(*)::int FROM eos_integration_bindings WHERE company_id = ${companyId}) AS integrations,
+          (SELECT count(*)::int FROM eos_provider_executions WHERE company_id = ${companyId}) AS provider_effects,
+          (SELECT count(*)::int FROM eos_manifest_versions WHERE company_id = ${companyId} AND manifest->'compiledFrom'->'companyPackage'->>'packageKey' = ${fixture.packageKey}) AS manifests`;
+      expect(runtime).toEqual({
+        seats: fixture.seatCount,
+        active_seats: fixture.activeSeats,
+        vacant_seats: fixture.vacantSeats,
+        planning_vacancies: fixture.vacantSeats,
+        capabilities: fixture.capabilityCount,
+        dormant_capabilities: fixture.dormantCapabilities,
+        systems: fixture.providerCount,
+        integrations: fixture.providerCount,
+        provider_effects: 0,
+        manifests: 1,
+      });
+    }
+  });
+
   it("runs a controlled AFM to Empyrean service cycle without creating cross-company authority", async () => {
     const [servicePortfolio] = await sql<{ id: number }[]>`
       INSERT INTO portfolios (owner_id, name, description)
