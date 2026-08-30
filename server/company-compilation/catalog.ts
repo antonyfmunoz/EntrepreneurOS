@@ -9,6 +9,21 @@ import {
   AFM_SOURCE_BINDINGS,
   compileAfmReferenceInstance,
 } from "../reference-instances/afm";
+import {
+  LYFE_INSTITUTE_COMPANY_PACKAGE,
+  LYFE_INSTITUTE_SOURCE_BINDINGS,
+  compileLyfeInstituteReferenceInstance,
+} from "../reference-instances/lyfe-institute";
+import {
+  LYFE_SPECTRUM_COMPANY_PACKAGE,
+  LYFE_SPECTRUM_SOURCE_BINDINGS,
+  compileLyfeSpectrumReferenceInstance,
+} from "../reference-instances/lyfe-spectrum";
+import {
+  OST_COMPANY_PACKAGE,
+  OST_SOURCE_BINDINGS,
+  compileOstReferenceInstance,
+} from "../reference-instances/ost";
 
 export type CompanyPackageCompileInput = {
   companyId: number;
@@ -42,6 +57,21 @@ const registeredPackages: RegisteredCompanyPackage[] = [
     package: AFM_COMPANY_PACKAGE,
     sourceBindings: AFM_SOURCE_BINDINGS,
     materialize: compileAfmReferenceInstance,
+  },
+  {
+    package: OST_COMPANY_PACKAGE,
+    sourceBindings: OST_SOURCE_BINDINGS,
+    materialize: compileOstReferenceInstance,
+  },
+  {
+    package: LYFE_INSTITUTE_COMPANY_PACKAGE,
+    sourceBindings: LYFE_INSTITUTE_SOURCE_BINDINGS,
+    materialize: compileLyfeInstituteReferenceInstance,
+  },
+  {
+    package: LYFE_SPECTRUM_COMPANY_PACKAGE,
+    sourceBindings: LYFE_SPECTRUM_SOURCE_BINDINGS,
+    materialize: compileLyfeSpectrumReferenceInstance,
   },
 ];
 

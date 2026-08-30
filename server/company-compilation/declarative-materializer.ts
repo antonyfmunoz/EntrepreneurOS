@@ -184,9 +184,9 @@ export function declarativeCompanyPackageMaterializer(
       goals: definition.mission,
     }).where(eq(companies.id, company.id)).returning();
 
-    const activeSeats = await executor.select().from(eosSeats)
-      .where(and(eq(eosSeats.companyId, company.id), eq(eosSeats.status, "active")));
-    const seatsByTitle = new Map(activeSeats.map((seat: any) => [seat.title.toLowerCase(), seat]));
+    const existingSeats = await executor.select().from(eosSeats)
+      .where(eq(eosSeats.companyId, company.id));
+    const seatsByTitle = new Map(existingSeats.map((seat: any) => [seat.title.toLowerCase(), seat]));
     const seats = new Map<string, any>([["founder", founderSeat]]);
     const pending = packageDefinition.orgRoleAgentGraph.value.filter((seat) => seat.kind !== "founder");
     while (pending.length) {
@@ -209,11 +209,15 @@ export function declarativeCompanyPackageMaterializer(
           supervisorSeatId: seatDefinition.reportsToSeatKey ? seats.get(seatDefinition.reportsToSeatKey)?.id : founderSeat.id,
           occupantUserId,
           agentName: seatDefinition.agentName,
-          agentMode: occupantUserId ? "assistant" : "autonomous",
+          agentMode: occupantUserId
+            ? "assistant"
+            : seatDefinition.occupancyMode === "vacant"
+              ? "planning"
+              : "autonomous",
           mandate: seatDefinition.mandate,
           authority: { sourcePackage: packageDefinition.packageKey, explicitGrantRequired: true },
           toolEntitlements: [],
-          status: "active",
+          status: seatDefinition.occupancyMode === "vacant" ? "vacant" : "active",
           createdAt: new Date(),
           updatedAt: new Date(),
         }).returning();
@@ -221,7 +225,8 @@ export function declarativeCompanyPackageMaterializer(
       seats.set(seatDefinition.key, seat);
     }
 
-    for (const seat of Array.from(seats.values())) await ensureSeatOperatingKernel(executor, updatedCompany, seat, input.actorUserId);
+    for (const seat of Array.from(seats.values()).filter((candidate: any) => candidate.status === "active"))
+      await ensureSeatOperatingKernel(executor, updatedCompany, seat, input.actorUserId);
     for (const seatDefinition of packageDefinition.orgRoleAgentGraph.value.filter((seat) => seat.occupancyMode === "human_with_agent_assistant" && seat.kind !== "founder")) {
       const seat = seats.get(seatDefinition.key);
       await executor.insert(eosAssignments).values({
@@ -418,7 +423,7 @@ export function declarativeCompanyPackageMaterializer(
         evidenceRequirements: packet.evidenceRequirements, expectedOutput: packet.expectedOutput,
         acceptanceCriteria: packet.acceptanceCriteria, constraintsPolicies: packet.constraintsPolicies,
         failureEscalationCompensation: packet.failureEscalationCompensation,
-        humanFallback: "Return the request to the AFM CEO/founder; do not command an external-company agent or reconstruct acceptance.",
+        humanFallback: `Return the request to the ${definition.operatingName} CEO/founder; do not command an external-company agent or reconstruct acceptance.`,
         sourceLineage: packet.sourceLineage, outputArtifactKeys: packet.outputArtifactKeys,
         traceId: randomUUID(), correlationId: ids(`correlation:work:${packet.key}`), createdAt: now, updatedAt: now,
       }).onConflictDoNothing();
