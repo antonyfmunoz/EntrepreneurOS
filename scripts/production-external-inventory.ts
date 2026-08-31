@@ -152,7 +152,8 @@ async function notionObservation() {
 }
 
 async function databaseObservation(targetMigrationCount: number) {
-  const databaseUrl = managedValue("op://UMH-Production/Database-Neon/url");
+  const databaseUrl = managedValue("op://EntrepreneurOS/Production/DATABASE_URL")
+    || managedValue("op://UMH-Production/Database-Neon/url");
   if (!databaseUrl) return { reachable: false, managed: false, databaseName: null, tableCount: null, migrationCount: null, latestMigration: null, companyCount: null, userCount: null, targetMigrationCount };
   let sql: ReturnType<typeof postgres> | null = null;
   try {
@@ -245,8 +246,8 @@ const flySecretNames = flySecrets.filter((secret: any) => secret.status === "Dep
 const requiredFlySecretNames = [
   "CLERK_PUBLISHABLE_KEY", "CLERK_SECRET_KEY", "DATABASE_URL", "SESSION_SECRET", "EOS_CREDENTIAL_ENCRYPTION_KEY",
   "EOS_ALERT_WEBHOOK_URL", "EOS_ALERT_WEBHOOK_SECRET", "STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET", "EOS_STRIPE_PLANS",
-  "EOS_ARTIFACT_S3_BUCKET", "EOS_ARTIFACT_S3_KMS_KEY_ID", "EOS_ARTIFACT_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_S3_SECRET_ACCESS_KEY",
-  "EOS_ARTIFACT_BACKUP_S3_BUCKET", "EOS_ARTIFACT_BACKUP_S3_KMS_KEY_ID", "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY",
+  "EOS_ARTIFACT_S3_BUCKET", "EOS_ARTIFACT_S3_ENDPOINT", "EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_S3_SECRET_ACCESS_KEY",
+  "EOS_ARTIFACT_BACKUP_S3_BUCKET", "EOS_ARTIFACT_BACKUP_S3_ENDPOINT", "EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY",
   "EOS_MALWARE_SCAN_ENDPOINT", "EOS_MALWARE_SCAN_SECRET", "NOTION_CLIENT_ID", "NOTION_CLIENT_SECRET",
 ];
 const missingFlySecretNames = requiredFlySecretNames.filter((name) => !flySecretNames.includes(name));
@@ -275,8 +276,8 @@ const signals: ExternalProductionInventorySignals = {
     missingRequiredFields,
     clerkLive: productionFields.get("CLERK_PUBLISHABLE_KEY")?.startsWith("pk_live_") === true && productionFields.get("CLERK_SECRET_KEY")?.startsWith("sk_live_") === true,
     stripeLive: productionFields.get("STRIPE_RESTRICTED_KEY")?.startsWith("rk_live_") === true && productionFields.get("STRIPE_WEBHOOK_SECRET")?.startsWith("whsec_") === true,
-    primaryArtifactPlanePresent: ["EOS_ARTIFACT_S3_BUCKET", "EOS_ARTIFACT_S3_KMS_KEY_ID", "EOS_ARTIFACT_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_S3_SECRET_ACCESS_KEY"].every((name) => Boolean(productionFields.get(name)?.trim())),
-    backupArtifactPlanePresent: ["EOS_ARTIFACT_BACKUP_S3_BUCKET", "EOS_ARTIFACT_BACKUP_S3_KMS_KEY_ID", "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY"].every((name) => Boolean(productionFields.get(name)?.trim())) && productionFields.get("EOS_ARTIFACT_BACKUP_S3_BUCKET") !== productionFields.get("EOS_ARTIFACT_S3_BUCKET"),
+    primaryArtifactPlanePresent: ["EOS_ARTIFACT_S3_BUCKET", "EOS_ARTIFACT_S3_ENDPOINT", "EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_S3_SECRET_ACCESS_KEY"].every((name) => Boolean(productionFields.get(name)?.trim())),
+    backupArtifactPlanePresent: ["EOS_ARTIFACT_BACKUP_S3_BUCKET", "EOS_ARTIFACT_BACKUP_S3_ENDPOINT", "EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY"].every((name) => Boolean(productionFields.get(name)?.trim())) && productionFields.get("EOS_ARTIFACT_BACKUP_S3_BUCKET") !== productionFields.get("EOS_ARTIFACT_S3_BUCKET"),
     malwareScannerPresent: Boolean(productionFields.get("EOS_MALWARE_SCAN_ENDPOINT")?.startsWith("https://") && productionFields.get("EOS_MALWARE_SCAN_SECRET")),
     alertReceiverPresent: Boolean(productionFields.get("EOS_ALERT_WEBHOOK_URL")?.startsWith("https://") && productionFields.get("EOS_ALERT_WEBHOOK_SECRET")),
   },

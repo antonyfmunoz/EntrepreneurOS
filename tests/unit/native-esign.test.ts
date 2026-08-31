@@ -405,6 +405,7 @@ describe("EOS native e-sign foundation", () => {
       EOS_ARTIFACT_S3_REGION: "us-west-2",
       EOS_ARTIFACT_S3_ACCESS_KEY_ID: "primary-access-key",
       EOS_ARTIFACT_S3_SECRET_ACCESS_KEY: "primary-secret-key",
+      EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY: Buffer.alloc(32, 13).toString("base64"),
     } as NodeJS.ProcessEnv;
     const identity = nativeEsignStorageIdentitySha256(env, "primary");
     expect(identity).toBe(nativeEsignStorageIdentitySha256({
@@ -417,6 +418,15 @@ describe("EOS native e-sign foundation", () => {
       EOS_ARTIFACT_S3_SECRET_ACCESS_KEY: "",
     }, "primary")).toThrow("native_esign_primary_s3_credentials_invalid");
     expect(JSON.stringify({ identity })).not.toContain("primary-secret-key");
+    expect(JSON.stringify({ identity })).not.toContain(env.EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY);
+    expect(() => nativeEsignStorageIdentitySha256({
+      ...env,
+      EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY: "not-a-32-byte-key",
+    }, "primary")).toThrow("native_esign_primary_s3_customer_key_invalid");
+    expect(() => nativeEsignStorageIdentitySha256({
+      ...env,
+      EOS_ARTIFACT_S3_KMS_KEY_ID: "kms-key",
+    }, "primary")).toThrow("native_esign_primary_s3_encryption_ambiguous");
   });
 
   it("renders signer fields and an EOS evidence page into a completed PDF", async () => {

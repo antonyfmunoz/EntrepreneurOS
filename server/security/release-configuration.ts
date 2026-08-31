@@ -140,6 +140,18 @@ function hasS3ArtifactCredentials(env: ReleaseEnvironment, backup = false): bool
   );
 }
 
+function hasS3ArtifactEncryption(env: ReleaseEnvironment, backup = false): boolean {
+  const prefix = backup ? "EOS_ARTIFACT_BACKUP_" : "EOS_ARTIFACT_";
+  if (env[`${prefix}S3_KMS_KEY_ID`]?.trim()) return true;
+  try {
+    const value = env[`${prefix}S3_SSE_CUSTOMER_KEY`]?.trim() || "";
+    const decoded = Buffer.from(value, "base64");
+    return decoded.length === 32 && decoded.toString("base64") === value;
+  } catch {
+    return false;
+  }
+}
+
 export function declaredInfrastructureVendors(
   env: ReleaseEnvironment = process.env,
 ): string[] {
@@ -220,11 +232,11 @@ export function productionRuntimeConfiguration(
     artifactStorageConfigured: Boolean(env.EOS_ARTIFACT_STORAGE_ROOT?.trim()) || isS3ArtifactPlane(env),
     nativeEsignSharedStorageConfigured: isS3ArtifactPlane(env),
     nativeEsignPrimaryCredentialsConfigured: hasS3ArtifactCredentials(env),
-    nativeEsignPrimaryKmsConfigured: Boolean(env.EOS_ARTIFACT_S3_KMS_KEY_ID?.trim()),
+    nativeEsignPrimaryEncryptionConfigured: hasS3ArtifactEncryption(env),
     nativeEsignBackupStorageConfigured: isS3ArtifactPlane(env, true)
       && env.EOS_ARTIFACT_BACKUP_S3_BUCKET !== env.EOS_ARTIFACT_S3_BUCKET,
     nativeEsignBackupCredentialsConfigured: hasS3ArtifactCredentials(env, true),
-    nativeEsignBackupKmsConfigured: Boolean(env.EOS_ARTIFACT_BACKUP_S3_KMS_KEY_ID?.trim()),
+    nativeEsignBackupEncryptionConfigured: hasS3ArtifactEncryption(env, true),
     malwareScannerConfigured:
       isHttpsWebhook(env.EOS_MALWARE_SCAN_ENDPOINT) &&
       Boolean(

@@ -43,6 +43,14 @@ describe("production deployment script contract", () => {
     expect(promotion).toBeGreaterThan(secretStage);
   });
 
+  it("migrates through local owner authority but stages only the least-privilege runtime database credential", () => {
+    expect(deployScript).toContain("MIGRATION_DATABASE_URL is required in the local release process");
+    expect(deployScript).toContain('$env:DATABASE_URL = $env:MIGRATION_DATABASE_URL');
+    expect(deployScript).toContain("npm run db:migrate");
+    expect(deployScript).toContain("npm run db:migrations:verify");
+    expect(deployScript).not.toContain('"MIGRATION_DATABASE_URL=$env:MIGRATION_DATABASE_URL"');
+  });
+
   it("requires and stages the binding-keyed Recovery provider webhook secret map", () => {
     expect(deployScript.match(/EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS/g)?.length).toBeGreaterThanOrEqual(2);
     expect(deployScript).toContain('"EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS=$env:EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS"');
@@ -59,13 +67,15 @@ describe("production deployment script contract", () => {
       "EOS_ARTIFACT_STORAGE_PROVIDER",
       "EOS_ARTIFACT_S3_BUCKET",
       "EOS_ARTIFACT_S3_REGION",
-      "EOS_ARTIFACT_S3_KMS_KEY_ID",
+      "EOS_ARTIFACT_S3_ENDPOINT",
+      "EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY",
       "EOS_ARTIFACT_S3_ACCESS_KEY_ID",
       "EOS_ARTIFACT_S3_SECRET_ACCESS_KEY",
       "EOS_ARTIFACT_BACKUP_STORAGE_PROVIDER",
       "EOS_ARTIFACT_BACKUP_S3_BUCKET",
       "EOS_ARTIFACT_BACKUP_S3_REGION",
-      "EOS_ARTIFACT_BACKUP_S3_KMS_KEY_ID",
+      "EOS_ARTIFACT_BACKUP_S3_ENDPOINT",
+      "EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY",
       "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID",
       "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY",
       "EOS_MALWARE_SCAN_ENDPOINT",

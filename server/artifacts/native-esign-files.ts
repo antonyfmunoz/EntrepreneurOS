@@ -66,7 +66,7 @@ export type NativeEsignStorageCapabilitySnapshot = {
   identitySha256: string;
   reachable: boolean;
   shared: boolean;
-  requestedEncryption: "filesystem_operator_managed" | "sse_s3" | "sse_kms";
+  requestedEncryption: "filesystem_operator_managed" | "sse_s3" | "sse_kms" | "sse_c";
   defaultEncryption: NativeEsignStorageCapabilityStatus;
   versioning: NativeEsignStorageCapabilityStatus;
   objectLock: NativeEsignStorageCapabilityStatus;
@@ -88,6 +88,10 @@ type StorageConfiguration =
         secretAccessKey: string;
         sessionToken?: string;
       };
+      encryption:
+        | { mode: "sse_s3" }
+        | { mode: "sse_kms"; keyId: string }
+        | { mode: "sse_c"; customerKey: string };
     };
 
 function envKey(plane: NativeEsignStoragePlane, suffix: string): string {
@@ -132,6 +136,17 @@ function storageConfiguration(env: NodeJS.ProcessEnv, plane: NativeEsignStorageP
   if (Boolean(accessKeyId) !== Boolean(secretAccessKey))
     throw new Error(`native_esign_${plane}_s3_credentials_invalid`);
   const sessionToken = env[envKey(plane, "S3_SESSION_TOKEN")]?.trim();
+  const kmsKeyId = env[envKey(plane, "S3_KMS_KEY_ID")]?.trim();
+  const customerKey = env[envKey(plane, "S3_SSE_CUSTOMER_KEY")]?.trim();
+  if (kmsKeyId && customerKey)
+    throw new Error(`native_esign_${plane}_s3_encryption_ambiguous`);
+  if (customerKey) {
+    let decoded: Buffer;
+    try { decoded = Buffer.from(customerKey, "base64"); }
+    catch { throw new Error(`native_esign_${plane}_s3_customer_key_invalid`); }
+    if (decoded.length !== 32 || decoded.toString("base64") !== customerKey)
+      throw new Error(`native_esign_${plane}_s3_customer_key_invalid`);
+  }
   return {
     provider, bucket, region, prefix,
     endpoint: env[envKey(plane, "S3_ENDPOINT")]?.trim() || undefined,
@@ -139,7 +154,28 @@ function storageConfiguration(env: NodeJS.ProcessEnv, plane: NativeEsignStorageP
     credentials: accessKeyId && secretAccessKey
       ? { accessKeyId, secretAccessKey, sessionToken: sessionToken || undefined }
       : undefined,
+    encryption: customerKey
+      ? { mode: "sse_c", customerKey }
+      : kmsKeyId
+        ? { mode: "sse_kms", keyId: kmsKeyId }
+        : { mode: "sse_s3" },
   };
+}
+
+function objectEncryptionHeaders(configuration: Extract<StorageConfiguration, { provider: "s3" }>) {
+  if (configuration.encryption.mode === "sse_c") {
+    return {
+      SSECustomerAlgorithm: "AES256" as const,
+      SSECustomerKey: configuration.encryption.customerKey,
+    };
+  }
+  if (configuration.encryption.mode === "sse_kms") {
+    return {
+      ServerSideEncryption: "aws:kms" as const,
+      SSEKMSKeyId: configuration.encryption.keyId,
+    };
+  }
+  return { ServerSideEncryption: "AES256" as const };
 }
 
 function s3Key(configuration: Extract<StorageConfiguration, { provider: "s3" }>, storageKey: string): string {
@@ -181,6 +217,7 @@ export function nativeEsignStorageIdentitySha256(
         region: configuration.region,
         endpoint: configuration.endpoint || "aws",
         prefix: configuration.prefix,
+        encryption: configuration.encryption.mode,
       };
   return createHash("sha256").update(JSON.stringify(identity), "utf8").digest("hex");
 }
@@ -239,20 +276,22 @@ export async function probeNativeEsignStoragePlane(
     } catch (error) {
       return {
         plane, provider: "s3", identitySha256, reachable: false, shared: true,
-        requestedEncryption: env[envKey(plane, "S3_KMS_KEY_ID")]?.trim() ? "sse_kms" : "sse_s3",
+        requestedEncryption: configuration.encryption.mode,
         defaultEncryption: "unknown", versioning: "unknown", objectLock: "unknown", lifecycle: "unknown",
         failureCode: safeProviderFailureCode(error),
       };
     }
     const [defaultEncryption, versioning, objectLock, lifecycle] = await Promise.all([
-      capability(new GetBucketEncryptionCommand({ Bucket: bucket }), (response) => Boolean(response.ServerSideEncryptionConfiguration?.Rules?.length)),
+      configuration.encryption.mode === "sse_c"
+        ? Promise.resolve("not_applicable" as const)
+        : capability(new GetBucketEncryptionCommand({ Bucket: bucket }), (response) => Boolean(response.ServerSideEncryptionConfiguration?.Rules?.length)),
       capability(new GetBucketVersioningCommand({ Bucket: bucket }), (response) => response.Status === "Enabled"),
       capability(new GetObjectLockConfigurationCommand({ Bucket: bucket }), (response) => response.ObjectLockConfiguration?.ObjectLockEnabled === "Enabled" && Boolean(response.ObjectLockConfiguration?.Rule?.DefaultRetention)),
       capability(new GetBucketLifecycleConfigurationCommand({ Bucket: bucket }), (response) => Boolean(response.Rules?.some((rule: any) => rule.Status === "Enabled"))),
     ]);
     return {
       plane, provider: "s3", identitySha256, reachable: true, shared: true,
-      requestedEncryption: env[envKey(plane, "S3_KMS_KEY_ID")]?.trim() ? "sse_kms" : "sse_s3",
+      requestedEncryption: configuration.encryption.mode,
       defaultEncryption, versioning, objectLock, lifecycle, failureCode: "",
     };
   } finally {
@@ -299,8 +338,7 @@ export async function storeNativeEsignArtifact(
       await client.send(new PutObjectCommand({
         Bucket: configuration.bucket, Key: s3Key(configuration, storageKey), Body: bytes,
         ContentLength: bytes.length, Metadata: { sha256: sha256(bytes) }, IfNoneMatch: "*",
-        ServerSideEncryption: env[envKey(plane, "S3_KMS_KEY_ID")] ? "aws:kms" : "AES256",
-        SSEKMSKeyId: env[envKey(plane, "S3_KMS_KEY_ID")]?.trim() || undefined,
+        ...objectEncryptionHeaders(configuration),
       }));
       return;
     } catch (error: any) {
@@ -339,7 +377,11 @@ export async function readNativeEsignArtifact(
   if (configuration.provider === "filesystem") return readFile(resolvedArtifactPath(storageKey, env, plane));
   const client = s3Client(configuration);
   try {
-    const response = await client.send(new GetObjectCommand({ Bucket: configuration.bucket, Key: s3Key(configuration, storageKey) }));
+    const response = await client.send(new GetObjectCommand({
+      Bucket: configuration.bucket,
+      Key: s3Key(configuration, storageKey),
+      ...(configuration.encryption.mode === "sse_c" ? objectEncryptionHeaders(configuration) : {}),
+    }));
     if (!response.Body) throw new Error("native_esign_artifact_unavailable");
     return Buffer.from(await response.Body.transformToByteArray());
   } finally { client.destroy(); }
@@ -356,7 +398,11 @@ export async function inspectStoredNativeEsignArtifact(storageKey: string, env: 
   }
   const client = s3Client(configuration);
   try {
-    const response = await client.send(new HeadObjectCommand({ Bucket: configuration.bucket, Key: s3Key(configuration, storageKey) }));
+    const response = await client.send(new HeadObjectCommand({
+      Bucket: configuration.bucket,
+      Key: s3Key(configuration, storageKey),
+      ...(configuration.encryption.mode === "sse_c" ? objectEncryptionHeaders(configuration) : {}),
+    }));
     const recordedHash = response.Metadata?.sha256;
     if (recordedHash && /^[a-f0-9]{64}$/.test(recordedHash)) return { sizeBytes: response.ContentLength || 0, sha256: recordedHash };
   } finally { client.destroy(); }

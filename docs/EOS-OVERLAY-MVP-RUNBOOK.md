@@ -105,13 +105,14 @@ promotion receipt link back to the envelope; retrying cannot duplicate Evidence.
   `EOS_ARTIFACT_STORAGE_ROOT`;
 - shared primary: `EOS_ARTIFACT_STORAGE_PROVIDER=s3`,
   `EOS_ARTIFACT_S3_BUCKET`, `EOS_ARTIFACT_S3_REGION`,
-  `EOS_ARTIFACT_S3_KMS_KEY_ID`, and a complete
+  either `EOS_ARTIFACT_S3_KMS_KEY_ID` or a distinct base64 256-bit
+  `EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY`, and a complete
   `EOS_ARTIFACT_S3_ACCESS_KEY_ID` / `EOS_ARTIFACT_S3_SECRET_ACCESS_KEY`
   pair when the runtime has no workload identity; optional
   `EOS_ARTIFACT_S3_ENDPOINT`, `EOS_ARTIFACT_S3_PREFIX`,
   or `EOS_ARTIFACT_S3_FORCE_PATH_STYLE`;
 - independent backup: the corresponding `EOS_ARTIFACT_BACKUP_*` variables,
-  using a different bucket and separately scoped credential pair for
+  using a different bucket, encryption key, and separately scoped credential pair for
   production readiness.
 
 AWS role or workload credentials are preferred; no access key is stored in EOS

@@ -9,7 +9,7 @@ primary_region = "iad"
   PORT = "5000"
 
 [deploy]
-  release_command = "node dist/run-migration.js"
+  release_command = "node dist/verify-migration-state.js"
 
 [http_service]
   internal_port = 5000

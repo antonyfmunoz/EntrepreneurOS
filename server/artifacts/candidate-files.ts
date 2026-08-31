@@ -1,6 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
+import {
+  readNativeEsignArtifact,
+  removeNativeEsignArtifact,
+  storeNativeEsignArtifact,
+} from "./native-esign-files";
 
 export const CANDIDATE_FILE_MAX_BYTES = 10 * 1024 * 1024;
 
@@ -100,7 +105,12 @@ function configuredRoot(env: NodeJS.ProcessEnv = process.env): string | null {
 export function candidateFileStorageConfigured(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  return Boolean(configuredRoot(env));
+  return Boolean(
+    configuredRoot(env) ||
+      (env.EOS_ARTIFACT_STORAGE_PROVIDER === "s3" &&
+        env.EOS_ARTIFACT_S3_BUCKET?.trim() &&
+        env.EOS_ARTIFACT_S3_REGION?.trim()),
+  );
 }
 
 function artifactPath(
@@ -134,6 +144,10 @@ export async function storeCandidateFile(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
   const bytes = normalizedCandidateFileBuffer(buffer);
+  if (env.EOS_ARTIFACT_STORAGE_PROVIDER === "s3") {
+    await storeNativeEsignArtifact(storageKey, bytes, env);
+    return;
+  }
   const { target } = artifactPath(storageKey, env);
   await mkdir(path.dirname(target), { recursive: true, mode: 0o700 });
   const temporary = `${target}.${randomUUID()}.tmp`;
@@ -156,6 +170,8 @@ export async function readCandidateFile(
   storageKey: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<Buffer> {
+  if (env.EOS_ARTIFACT_STORAGE_PROVIDER === "s3")
+    return readNativeEsignArtifact(storageKey, env);
   return await readFile(artifactPath(storageKey, env).target);
 }
 
@@ -163,6 +179,10 @@ export async function deleteCandidateFile(
   storageKey: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
+  if (env.EOS_ARTIFACT_STORAGE_PROVIDER === "s3") {
+    await removeNativeEsignArtifact(storageKey, env);
+    return;
+  }
   await rm(artifactPath(storageKey, env).target, { force: true });
 }
 
