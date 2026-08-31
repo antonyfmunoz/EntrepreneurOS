@@ -3070,6 +3070,82 @@ export const eosRecoveryActivationEvents = pgTable("eos_recovery_activation_even
   check("eos_recovery_activation_events_sequence_check", sql`${table.sequence} > 0`),
 ]);
 
+// Live Recovery operations are intentionally separate from the synthetic
+// customer-value rehearsal. They preserve first-party Client Zero and paid
+// client execution without weakening TEST-PRELIVE database constraints.
+export const eosRecoveryEngagements = pgTable("eos_recovery_engagements", {
+  id: text("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  mode: text("mode").notNull(),
+  title: text("title").notNull(),
+  call2PacketId: text("call_2_packet_id").references(() => eosRecoveryCall2Packets.id, { onDelete: "restrict" }),
+  stakeholderId: text("stakeholder_id").references(() => eosStakeholders.id, { onDelete: "restrict" }),
+  relationshipId: text("relationship_id").references(() => eosStakeholderRelationships.id, { onDelete: "restrict" }),
+  customerSuccessAccountId: text("customer_success_account_id").references(() => eosCustomerSuccessAccounts.id, { onDelete: "restrict" }),
+  workPacketId: text("work_packet_id").notNull().references(() => eosWorkPackets.id, { onDelete: "restrict" }),
+  ownerSeatId: text("owner_seat_id").notNull().references(() => eosSeats.id, { onDelete: "restrict" }),
+  state: text("state").notNull().default("draft"),
+  returnState: text("return_state"),
+  objective: text("objective").notNull(),
+  eligiblePoolKeys: jsonb("eligible_pool_keys").notNull(),
+  sourceBoundary: text("source_boundary").notNull(),
+  consentPolicy: text("consent_policy").notNull(),
+  clientSideOwner: text("client_side_owner").notNull().default(""),
+  guaranteeWindowStart: text("guarantee_window_start"),
+  guaranteeWindowEnd: text("guarantee_window_end"),
+  nextAction: text("next_action").notNull(),
+  nextActionAt: text("next_action_at"),
+  healthState: text("health_state").notNull().default("unknown"),
+  blockers: jsonb("blockers").notNull().default([]),
+  evidenceIds: jsonb("evidence_ids").notNull().default([]),
+  externalEffectsExecuted: boolean("external_effects_executed").notNull().default(false),
+  sourceAuthority: text("source_authority").notNull().default("native_eos"),
+  classification: text("classification").notNull().default("confidential"),
+  version: integer("version").notNull().default(1),
+  lastEventId: text("last_event_id"),
+  recordedByUserId: text("recorded_by_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("eos_recovery_engagement_call2_idx").on(table.call2PacketId).where(sql`${table.call2PacketId} IS NOT NULL`),
+  index("eos_recovery_engagement_company_state_idx").on(table.companyId, table.state, table.updatedAt),
+  index("eos_recovery_engagement_owner_idx").on(table.ownerSeatId, table.state),
+  check("eos_recovery_engagement_mode_check", sql`${table.mode} IN ('client_zero','paid_client')`),
+  check("eos_recovery_engagement_state_check", sql`${table.state} IN ('draft','intake','baseline','audit','campaign_approval','bounded_launch','operating','reporting','guarantee_review','renewal_review','paused','recovery_required','closed','cancelled')`),
+  check("eos_recovery_engagement_return_state_check", sql`${table.returnState} IS NULL OR ${table.returnState} IN ('intake','baseline','audit','campaign_approval','bounded_launch','operating','reporting','guarantee_review','renewal_review')`),
+  check("eos_recovery_engagement_mode_source_check", sql`(${table.mode} = 'client_zero' AND ${table.call2PacketId} IS NULL) OR (${table.mode} = 'paid_client' AND ${table.call2PacketId} IS NOT NULL AND ${table.stakeholderId} IS NOT NULL AND ${table.relationshipId} IS NOT NULL)`),
+  check("eos_recovery_engagement_window_check", sql`${table.guaranteeWindowEnd} IS NULL OR ${table.guaranteeWindowStart} IS NULL OR ${table.guaranteeWindowEnd} > ${table.guaranteeWindowStart}`),
+  check("eos_recovery_engagement_json_check", sql`jsonb_typeof(${table.eligiblePoolKeys}) = 'array' AND jsonb_array_length(${table.eligiblePoolKeys}) BETWEEN 1 AND 3 AND jsonb_typeof(${table.blockers}) = 'array' AND jsonb_typeof(${table.evidenceIds}) = 'array'`),
+  check("eos_recovery_engagement_effect_check", sql`${table.externalEffectsExecuted} = false`),
+  check("eos_recovery_engagement_authority_check", sql`${table.sourceAuthority} = 'native_eos'`),
+  check("eos_recovery_engagement_classification_check", sql`${table.classification} IN ('internal','confidential','restricted')`),
+  check("eos_recovery_engagement_version_check", sql`${table.version} > 0`),
+]);
+
+export const eosRecoveryDeliveryPools = pgTable("eos_recovery_delivery_pools", {
+  id: text("id").primaryKey(), companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }), engagementId: text("engagement_id").notNull().references(() => eosRecoveryEngagements.id, { onDelete: "restrict" }), poolKey: text("pool_key").notNull(), state: text("state").notNull().default("unconfigured"), sourceSystemReference: text("source_system_reference").notNull().default(""), rawCount: integer("raw_count").notNull().default(0), eligibleCount: integer("eligible_count").notNull().default(0), excludedCount: integer("excluded_count").notNull().default(0), activationReadyCount: integer("activation_ready_count").notNull().default(0), exclusionSummary: text("exclusion_summary").notNull().default(""), qualificationNote: text("qualification_note").notNull().default(""), evidenceIds: jsonb("evidence_ids").notNull().default([]), version: integer("version").notNull().default(1), recordedByUserId: text("recorded_by_user_id").notNull().references(() => users.id, { onDelete: "restrict" }), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("eos_recovery_delivery_pool_key_idx").on(table.engagementId, table.poolKey), index("eos_recovery_delivery_pool_state_idx").on(table.companyId, table.state, table.updatedAt), check("eos_recovery_delivery_pool_key_check", sql`${table.poolKey} IN ('missed_calls','open_estimates','past_customers')`), check("eos_recovery_delivery_pool_state_check", sql`${table.state} IN ('unconfigured','collecting','qualified','approved','active','paused','completed','blocked')`), check("eos_recovery_delivery_pool_count_check", sql`${table.rawCount} >= 0 AND ${table.eligibleCount} >= 0 AND ${table.excludedCount} >= 0 AND ${table.activationReadyCount} >= 0 AND ${table.eligibleCount} + ${table.excludedCount} <= ${table.rawCount} AND ${table.activationReadyCount} <= ${table.eligibleCount}`), check("eos_recovery_delivery_pool_evidence_check", sql`jsonb_typeof(${table.evidenceIds}) = 'array'`), check("eos_recovery_delivery_pool_version_check", sql`${table.version} > 0`),
+]);
+
+export const eosRecoveryCampaignControls = pgTable("eos_recovery_campaign_controls", {
+  id: text("id").primaryKey(), companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }), engagementId: text("engagement_id").notNull().references(() => eosRecoveryEngagements.id, { onDelete: "restrict" }), poolKey: text("pool_key").notNull(), name: text("name").notNull(), channel: text("channel").notNull(), integrationBindingId: text("integration_binding_id").references(() => eosIntegrationBindings.id, { onDelete: "restrict" }), messageVersionReference: text("message_version_reference").notNull(), consentBasis: text("consent_basis").notNull(), quietHours: text("quiet_hours").notNull(), cadence: text("cadence").notNull(), stopConditions: text("stop_conditions").notNull(), optOutHandling: text("opt_out_handling").notNull(), routingOwnerSeatId: text("routing_owner_seat_id").notNull().references(() => eosSeats.id, { onDelete: "restrict" }), escalationOwnerSeatId: text("escalation_owner_seat_id").notNull().references(() => eosSeats.id, { onDelete: "restrict" }), state: text("state").notNull().default("draft"), approvalEvidenceIds: jsonb("approval_evidence_ids").notNull().default([]), version: integer("version").notNull().default(1), lastEventId: text("last_event_id"), recordedByUserId: text("recorded_by_user_id").notNull().references(() => users.id, { onDelete: "restrict" }), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("eos_recovery_campaign_name_idx").on(table.engagementId, table.name), index("eos_recovery_campaign_state_idx").on(table.companyId, table.state, table.updatedAt), check("eos_recovery_campaign_pool_check", sql`${table.poolKey} IN ('missed_calls','open_estimates','past_customers')`), check("eos_recovery_campaign_channel_check", sql`${table.channel} IN ('sms','email','phone','mixed','manual')`), check("eos_recovery_campaign_state_check", sql`${table.state} IN ('draft','awaiting_approval','approved','tested','active','paused','completed','rejected')`), check("eos_recovery_campaign_evidence_check", sql`jsonb_typeof(${table.approvalEvidenceIds}) = 'array'`), check("eos_recovery_campaign_version_check", sql`${table.version} > 0`),
+]);
+
+export const eosRecoveryOpportunities = pgTable("eos_recovery_opportunities", {
+  id: text("id").primaryKey(), companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }), engagementId: text("engagement_id").notNull().references(() => eosRecoveryEngagements.id, { onDelete: "restrict" }), poolKey: text("pool_key").notNull(), externalReferenceSha256: text("external_reference_sha256").notNull(), title: text("title").notNull(), summary: text("summary").notNull(), state: text("state").notNull().default("identified"), ownerSeatId: text("owner_seat_id").notNull().references(() => eosSeats.id, { onDelete: "restrict" }), estimatedValueMinor: integer("estimated_value_minor").notNull().default(0), actualValueMinor: integer("actual_value_minor").notNull().default(0), attributionModel: text("attribution_model").notNull().default("unattributed"), nextAction: text("next_action").notNull(), nextActionAt: text("next_action_at"), evidenceIds: jsonb("evidence_ids").notNull().default([]), version: integer("version").notNull().default(1), lastEventId: text("last_event_id"), recordedByUserId: text("recorded_by_user_id").notNull().references(() => users.id, { onDelete: "restrict" }), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("eos_recovery_opportunity_reference_idx").on(table.companyId, table.engagementId, table.poolKey, table.externalReferenceSha256), index("eos_recovery_opportunity_state_idx").on(table.engagementId, table.state, table.updatedAt), check("eos_recovery_opportunity_pool_check", sql`${table.poolKey} IN ('missed_calls','open_estimates','past_customers')`), check("eos_recovery_opportunity_state_check", sql`${table.state} IN ('identified','contacted','replied','qualified','routed','booked','won','lost','suppressed','disputed')`), check("eos_recovery_opportunity_attribution_check", sql`${table.attributionModel} IN ('direct','assisted','unattributed','disputed')`), check("eos_recovery_opportunity_value_check", sql`${table.estimatedValueMinor} >= 0 AND ${table.actualValueMinor} >= 0`), check("eos_recovery_opportunity_hash_check", sql`${table.externalReferenceSha256} ~ '^[0-9a-f]{64}$'`), check("eos_recovery_opportunity_evidence_check", sql`jsonb_typeof(${table.evidenceIds}) = 'array'`), check("eos_recovery_opportunity_version_check", sql`${table.version} > 0`),
+]);
+
+export const eosRecoveryEngagementEvents = pgTable("eos_recovery_engagement_events", {
+  id: text("id").primaryKey(), companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }), engagementId: text("engagement_id").notNull().references(() => eosRecoveryEngagements.id, { onDelete: "restrict" }), sequence: integer("sequence").notNull(), eventType: text("event_type").notNull(), entityType: text("entity_type").notNull(), entityId: text("entity_id").notNull(), fromState: text("from_state").notNull(), toState: text("to_state").notNull(), engagementVersionBefore: integer("engagement_version_before").notNull(), engagementVersionAfter: integer("engagement_version_after").notNull(), evidenceIds: jsonb("evidence_ids").notNull().default([]), payload: jsonb("payload").notNull().default({}), policyDecisionId: text("policy_decision_id").notNull().references((): AnyPgColumn => eosPolicyDecisions.id, { onDelete: "restrict" }), previousEventSha256: text("previous_event_sha256").notNull().default(""), eventSha256: text("event_sha256").notNull(), recordedByUserId: text("recorded_by_user_id").notNull().references(() => users.id, { onDelete: "restrict" }), recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("eos_recovery_engagement_event_sequence_idx").on(table.engagementId, table.sequence), uniqueIndex("eos_recovery_engagement_event_hash_idx").on(table.eventSha256), index("eos_recovery_engagement_event_company_idx").on(table.companyId, table.recordedAt), check("eos_recovery_engagement_event_sequence_check", sql`${table.sequence} > 0`), check("eos_recovery_engagement_event_entity_check", sql`${table.entityType} IN ('engagement','pool','campaign','opportunity','evidence','customer_success')`), check("eos_recovery_engagement_event_version_check", sql`${table.engagementVersionBefore} >= 0 AND ${table.engagementVersionAfter} >= ${table.engagementVersionBefore}`), check("eos_recovery_engagement_event_json_check", sql`jsonb_typeof(${table.evidenceIds}) = 'array' AND jsonb_typeof(${table.payload}) = 'object'`), check("eos_recovery_engagement_event_hash_check", sql`${table.eventSha256} ~ '^[0-9a-f]{64}$' AND (${table.previousEventSha256} = '' OR ${table.previousEventSha256} ~ '^[0-9a-f]{64}$')`),
+]);
+
 export const eosIntegrationBindingRevisions = pgTable("eos_integration_binding_revisions", {
   id: text("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),

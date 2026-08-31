@@ -14,6 +14,7 @@ import { registerLegalRoutes, registerPublicLegalRoutes } from "./routes/legal";
 import { registerOperationalRoutes } from "./routes/operations";
 import { registerPublicTalentPortalRoutes } from "./routes/talent-portal";
 import { registerPublicRecoveryCalculatorRoutes, registerRecoveryCalculatorRoutes } from "./routes/recovery-calculator";
+import { registerRecoveryOperationsRoutes } from "./routes/recovery-operations";
 import { registerNativeEsignRoutes, registerPublicNativeEsignRoutes } from "./routes/native-esign";
 import { registerComplianceRoutes } from "./routes/compliance";
 import { registerCustomerSuccessRoutes } from "./routes/customer-success";
@@ -58,6 +59,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerNotificationRoutes(app);
   registerIntegrationRoutes(app);
   registerRecoveryCalculatorRoutes(app);
+  registerRecoveryOperationsRoutes(app);
   registerNativeEsignRoutes(app);
   registerComplianceRoutes(app);
   registerCustomerSuccessRoutes(app);
