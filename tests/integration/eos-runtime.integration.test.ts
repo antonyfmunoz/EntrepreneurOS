@@ -127,7 +127,7 @@ vi.mock("../../server/integrations/gmail", async (importOriginal) => {
     startMailboxWatch: async (userId: string, topicName: string, expectedEmailAddress?: string) => {
       gmailDeliveryLifecycle.watchCalls.push({ userId, topicName, expectedEmailAddress });
       if (gmailDeliveryLifecycle.watchFailure) throw gmailDeliveryLifecycle.watchFailure;
-      return { emailAddress: expectedEmailAddress || "operator@example.test", historyId: "100", expiresAt: new Date("2026-09-01T00:00:00.000Z") };
+      return { emailAddress: expectedEmailAddress || "operator@example.test", historyId: "100", expiresAt: new Date("2099-09-01T00:00:00.000Z") };
     },
     stopMailboxWatch: async (userId: string) => {
       gmailDeliveryLifecycle.stopWatchCalls.push(userId);
@@ -140,11 +140,11 @@ vi.mock("../../server/integrations/gmail", async (importOriginal) => {
     getDriveStartPageToken: async (_userId: string, expectedEmailAddress?: string) => ({ emailAddress: expectedEmailAddress || "operator@example.test", cursor: "drive-cursor-100" }),
     startDriveChangesWatch: async (userId: string, input: any) => {
       gmailDeliveryLifecycle.googleChannelCalls.push({ provider: "google_drive", userId, input });
-      return { emailAddress: input.expectedEmailAddress || "operator@example.test", channelId: input.channelId, resourceId: "drive-resource-1", cursor: input.pageToken, expiresAt: new Date("2026-09-01T00:00:00.000Z") };
+      return { emailAddress: input.expectedEmailAddress || "operator@example.test", channelId: input.channelId, resourceId: "drive-resource-1", cursor: input.pageToken, expiresAt: new Date("2099-09-01T00:00:00.000Z") };
     },
     startCalendarWatch: async (userId: string, input: any) => {
       gmailDeliveryLifecycle.googleChannelCalls.push({ provider: "google_calendar", userId, input });
-      return { emailAddress: input.expectedEmailAddress || "operator@example.test", channelId: input.channelId, resourceId: "calendar-resource-1", cursor: "calendar-cursor-100", expiresAt: new Date("2026-09-01T00:00:00.000Z") };
+      return { emailAddress: input.expectedEmailAddress || "operator@example.test", channelId: input.channelId, resourceId: "calendar-resource-1", cursor: "calendar-cursor-100", expiresAt: new Date("2099-09-01T00:00:00.000Z") };
     },
     stopGoogleChannel: async (userId: string, channelId: string, resourceId: string) => { gmailDeliveryLifecycle.googleChannelStopCalls.push({ userId, channelId, resourceId }); },
     listDriveChanges: async (userId: string, pageToken: string, maxPages?: number) => {
