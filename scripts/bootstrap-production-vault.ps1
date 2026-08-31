@@ -53,8 +53,12 @@ function New-Field([string]$Label, [string]$Value, [string]$Type = "CONCEALED") 
 op whoami | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Authenticate the 1Password CLI before bootstrapping production custody." }
 
+$previousErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 $null = op item get Production --vault $TargetVault --format json 2>$null
-if ($LASTEXITCODE -eq 0) {
+$productionItemLookupExitCode = $LASTEXITCODE
+$ErrorActionPreference = $previousErrorActionPreference
+if ($productionItemLookupExitCode -eq 0) {
   throw "The $TargetVault/Production item already exists. This bootstrap is create-only so it cannot silently overwrite production custody."
 }
 
@@ -64,16 +68,31 @@ $databaseUrl = Read-Concealed "Paste the exact production Neon application-role 
 try {
   $databaseUri = [Uri]$databaseUrl
   $databaseName = $databaseUri.AbsolutePath.Trim('/')
-  if ($databaseUri.Scheme -notin @('postgres', 'postgresql') -or -not $databaseUri.Host -or $databaseUri.Host -in @('localhost', '127.0.0.1', '::1') -or $databaseName -ne 'eos_db') {
+  $databaseRole = [Uri]::UnescapeDataString($databaseUri.UserInfo.Split(':')[0])
+  if ($databaseUri.Scheme -notin @('postgres', 'postgresql') -or -not $databaseUri.Host -or $databaseUri.Host -in @('localhost', '127.0.0.1', '::1') -or $databaseName -ne 'eos_db' -or $databaseRole -ne 'eos_app') {
     throw "mismatch"
   }
 } catch {
-  throw "The production DATABASE_URL must target the managed eos_db database. The reusable UMH Database-Neon item targets neondb and must not be copied."
+  throw "The production DATABASE_URL must target the managed eos_db database through the eos_app application role."
+}
+$migrationDatabaseSource = Read-Managed "op://$SourceVault/Database-Neon/url"
+try {
+  $migrationDatabaseUri = [Uri]$migrationDatabaseSource
+  $migrationDatabaseRole = [Uri]::UnescapeDataString($migrationDatabaseUri.UserInfo.Split(':')[0])
+  if ($migrationDatabaseUri.Scheme -notin @('postgres', 'postgresql') -or -not $migrationDatabaseUri.Host -or $migrationDatabaseRole -ne 'neondb_owner') { throw "mismatch" }
+  $migrationDatabaseBuilder = [UriBuilder]$migrationDatabaseUri
+  $migrationDatabaseBuilder.Path = 'eos_db'
+  $migrationDatabaseUrl = $migrationDatabaseBuilder.Uri.AbsoluteUri
+} catch {
+  throw "The managed Database-Neon source must contain the production Neon owner credential used only for migrations."
 }
 $anthropicKey = Read-Managed "op://$SourceVault/AI-Anthropic/api_key"
 $posthogKey = Read-Managed "op://$SourceVault/EOS-PostHog/POSTHOG_KEY"
-$clerkPublishable = Read-Concealed "Paste the Clerk production publishable key" '^pk_live_[A-Za-z0-9_-]+$' "A Clerk pk_live_ key is required."
-$clerkSecret = Read-Concealed "Paste the Clerk production secret key" '^sk_live_[A-Za-z0-9_-]+$' "A Clerk sk_live_ key is required."
+$clerkPublishable = Read-Managed "op://$SourceVault/EOS-Clerk/publishable_key"
+$clerkSecret = Read-Managed "op://$SourceVault/EOS-Clerk/secret_key"
+if ($clerkPublishable -notmatch '^pk_live_[A-Za-z0-9_$-]+$' -or $clerkSecret -notmatch '^sk_live_[A-Za-z0-9_$-]+$') {
+  throw "The managed EOS-Clerk source item must contain Clerk production keys."
+}
 $notionClientId = Read-Concealed "Paste the public Notion OAuth client ID"
 $notionClientSecret = Read-Concealed "Paste the public Notion OAuth client secret"
 $companyId = Read-Required "Enter the authorized production company ID" '^\d+$'
@@ -92,13 +111,13 @@ try {
 
 $primaryBucket = Read-Required "Enter the primary S3 artifact bucket"
 $primaryRegion = Read-Required "Enter the primary S3 region"
-$primaryKms = Read-Required "Enter the primary KMS key ID or ARN"
+$primaryEndpoint = Read-Required "Enter the primary S3-compatible HTTPS endpoint" '^https://[^\s]+$'
 $primaryAccessKey = Read-Concealed "Paste the primary S3 least-privilege access key ID"
 $primarySecretKey = Read-Concealed "Paste the primary S3 secret access key"
 $backupBucket = Read-Required "Enter the independent backup S3 artifact bucket"
 if ($backupBucket -eq $primaryBucket) { throw "Primary and backup artifact buckets must be different." }
 $backupRegion = Read-Required "Enter the backup S3 region"
-$backupKms = Read-Required "Enter the backup KMS key ID or ARN"
+$backupEndpoint = Read-Required "Enter the backup S3-compatible HTTPS endpoint" '^https://[^\s]+$'
 $backupAccessKey = Read-Concealed "Paste the backup S3 least-privilege access key ID"
 $backupSecretKey = Read-Concealed "Paste the backup S3 secret access key"
 $malwareEndpoint = Read-Required "Enter the HTTPS malware-scanner endpoint" '^https://[^\s]+$'
@@ -110,6 +129,7 @@ $template.title = "Production"
 $template.fields = @($template.fields | Where-Object { $_.id -eq "notesPlain" })
 $template.fields += @(
   New-Field "DATABASE_URL" $databaseUrl
+  New-Field "MIGRATION_DATABASE_URL" $migrationDatabaseUrl
   New-Field "SESSION_SECRET" (New-RandomBase64 48)
   New-Field "ANTHROPIC_API_KEY" $anthropicKey
   New-Field "VITE_CLERK_PUBLISHABLE_KEY" $clerkPublishable
@@ -130,16 +150,18 @@ $template.fields += @(
   New-Field "EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS" "{}"
   New-Field "EOS_PLATFORM_ADMIN_USER_IDS" $platformAdministrators "STRING"
   New-Field "EOS_DATABASE_VENDOR_NAME" "Neon" "STRING"
-  New-Field "EOS_DNS_VENDOR_NAME" "Google Cloud DNS" "STRING"
+  New-Field "EOS_DNS_VENDOR_NAME" "Squarespace Domains" "STRING"
   New-Field "EOS_SECRET_VAULT_VENDOR_NAME" "1Password" "STRING"
   New-Field "EOS_ARTIFACT_S3_BUCKET" $primaryBucket "STRING"
   New-Field "EOS_ARTIFACT_S3_REGION" $primaryRegion "STRING"
-  New-Field "EOS_ARTIFACT_S3_KMS_KEY_ID" $primaryKms "STRING"
+  New-Field "EOS_ARTIFACT_S3_ENDPOINT" $primaryEndpoint "STRING"
+  New-Field "EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY" (New-RandomBase64 32)
   New-Field "EOS_ARTIFACT_S3_ACCESS_KEY_ID" $primaryAccessKey
   New-Field "EOS_ARTIFACT_S3_SECRET_ACCESS_KEY" $primarySecretKey
   New-Field "EOS_ARTIFACT_BACKUP_S3_BUCKET" $backupBucket "STRING"
   New-Field "EOS_ARTIFACT_BACKUP_S3_REGION" $backupRegion "STRING"
-  New-Field "EOS_ARTIFACT_BACKUP_S3_KMS_KEY_ID" $backupKms "STRING"
+  New-Field "EOS_ARTIFACT_BACKUP_S3_ENDPOINT" $backupEndpoint "STRING"
+  New-Field "EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY" (New-RandomBase64 32)
   New-Field "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID" $backupAccessKey
   New-Field "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY" $backupSecretKey
   New-Field "EOS_MALWARE_SCAN_ENDPOINT" $malwareEndpoint "STRING"

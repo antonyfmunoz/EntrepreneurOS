@@ -6,10 +6,11 @@
  * here. Historical hand-authored migrations in /scripts/migrations remain in
  * the plan. Each applied file is recorded exactly once by checksum.
  */
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import postgres from "postgres";
 import { compatibleMigrationChecksums, migrationChecksum } from "./migration-checksum";
+import { migrationPlan } from "./migration-plan";
 
 function loadEnvFile(path: string): void {
   if (!existsSync(path)) return;
@@ -27,20 +28,6 @@ function loadEnvFile(path: string): void {
   }
 }
 
-function migrationPlan() {
-  const sources = [
-    { label: "scripts/migrations", directory: resolve(process.cwd(), "scripts", "migrations"), include: (_file: string) => true },
-    { label: "migrations", directory: resolve(process.cwd(), "migrations"), include: (file: string) => !file.startsWith("0000_") },
-  ];
-  return sources.flatMap(({ label, directory, include }) => {
-    if (!existsSync(directory)) return [];
-    return readdirSync(directory)
-      .filter((file) => file.endsWith(".sql") && include(file))
-      .sort()
-      .map((file) => ({ id: `${label}/${file}`, fullPath: join(directory, file) }));
-  }).sort((a, b) => a.id.localeCompare(b.id));
-}
-
 async function main() {
   loadEnvFile(resolve(process.cwd(), ".env"));
   const migrations = migrationPlan();
@@ -49,9 +36,9 @@ async function main() {
     return;
   }
 
-  const dbUrl = process.env.DATABASE_URL;
+  const dbUrl = process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL;
   if (!dbUrl) {
-    console.error("DATABASE_URL is not set");
+    console.error("MIGRATION_DATABASE_URL or DATABASE_URL is not set");
     process.exitCode = 1;
     return;
   }

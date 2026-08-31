@@ -74,9 +74,11 @@ The repository-controlled implementation is materially ahead of the currently de
 
 The live recheck on 2026-08-26 still resolves Fly release v27 and immutable image digest `sha256:da08b87df4b2b699085a35a526cc37065e2a237eaf31f181fbce52c2b03b2cc1`. Its machine configuration remains the legacy `autostop=suspend`, `min_machines_running=0` shape, its build configuration exposes test Clerk and placeholder analytics classes, and health/readiness omit an immutable release subject. Repository `fly.toml` and the promotion path correct those properties, but they are not production evidence until an exact qualified image is promoted.
 
-The public domain resolves directly to Fly ingress and its authoritative
-nameservers are `ns-cloud-c1` through `ns-cloud-c4.googledomains.com`, so the
-current DNS provider declaration is `Google Cloud DNS`, not Cloudflare. Fly's
+The public domain resolves directly to Fly ingress. Its authoritative
+nameservers retain the inherited `ns-cloud-c1` through
+`ns-cloud-c4.googledomains.com` hostnames, but the current registrar and DNS
+management control plane is Squarespace Domains; production evidence must
+therefore declare `Squarespace Domains`, not Google Cloud DNS or Cloudflare. Fly's
 certificate for `entrepreneuros.net` is issued, currently valid through
 2026-11-20, and the live response carries HSTS. These observations establish
 identity only; CDN/WAF policy, cache purge, expiry monitoring, and recovery

@@ -1,0 +1,30 @@
+\set ON_ERROR_STOP on
+
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_roles
+    WHERE rolname = 'eos_app'
+      AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)
+  ) THEN
+    RAISE EXCEPTION 'eos_app has prohibited elevated role attributes';
+  END IF;
+END
+$$;
+
+GRANT CONNECT ON DATABASE eos_db TO eos_app;
+GRANT USAGE ON SCHEMA public TO eos_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO eos_app;
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO eos_app;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO eos_app;
+GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA public TO eos_app;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE neondb_owner IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO eos_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE neondb_owner IN SCHEMA public
+  GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO eos_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE neondb_owner IN SCHEMA public
+  GRANT EXECUTE ON FUNCTIONS TO eos_app;
