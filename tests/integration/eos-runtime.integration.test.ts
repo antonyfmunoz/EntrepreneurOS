@@ -127,7 +127,7 @@ vi.mock("../../server/integrations/gmail", async (importOriginal) => {
     startMailboxWatch: async (userId: string, topicName: string, expectedEmailAddress?: string) => {
       gmailDeliveryLifecycle.watchCalls.push({ userId, topicName, expectedEmailAddress });
       if (gmailDeliveryLifecycle.watchFailure) throw gmailDeliveryLifecycle.watchFailure;
-      return { emailAddress: expectedEmailAddress || "operator@example.test", historyId: "100", expiresAt: new Date("2099-09-01T00:00:00.000Z") };
+      return { emailAddress: expectedEmailAddress || "operator@example.test", historyId: "100", expiresAt: new Date(Date.now() + 24 * 60 * 60_000) };
     },
     stopMailboxWatch: async (userId: string) => {
       gmailDeliveryLifecycle.stopWatchCalls.push(userId);
@@ -140,11 +140,11 @@ vi.mock("../../server/integrations/gmail", async (importOriginal) => {
     getDriveStartPageToken: async (_userId: string, expectedEmailAddress?: string) => ({ emailAddress: expectedEmailAddress || "operator@example.test", cursor: "drive-cursor-100" }),
     startDriveChangesWatch: async (userId: string, input: any) => {
       gmailDeliveryLifecycle.googleChannelCalls.push({ provider: "google_drive", userId, input });
-      return { emailAddress: input.expectedEmailAddress || "operator@example.test", channelId: input.channelId, resourceId: "drive-resource-1", cursor: input.pageToken, expiresAt: new Date("2099-09-01T00:00:00.000Z") };
+      return { emailAddress: input.expectedEmailAddress || "operator@example.test", channelId: input.channelId, resourceId: "drive-resource-1", cursor: input.pageToken, expiresAt: new Date(Date.now() + 24 * 60 * 60_000) };
     },
     startCalendarWatch: async (userId: string, input: any) => {
       gmailDeliveryLifecycle.googleChannelCalls.push({ provider: "google_calendar", userId, input });
-      return { emailAddress: input.expectedEmailAddress || "operator@example.test", channelId: input.channelId, resourceId: "calendar-resource-1", cursor: "calendar-cursor-100", expiresAt: new Date("2099-09-01T00:00:00.000Z") };
+      return { emailAddress: input.expectedEmailAddress || "operator@example.test", channelId: input.channelId, resourceId: "calendar-resource-1", cursor: "calendar-cursor-100", expiresAt: new Date(Date.now() + 24 * 60 * 60_000) };
     },
     stopGoogleChannel: async (userId: string, channelId: string, resourceId: string) => { gmailDeliveryLifecycle.googleChannelStopCalls.push({ userId, channelId, resourceId }); },
     listDriveChanges: async (userId: string, pageToken: string, maxPages?: number) => {
@@ -9086,8 +9086,9 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       expect(afterRotation.body.health.alerts.some((item: any) => item.registrationId === configured.body.registration.id && item.kind === "reconciliation_dead_letter")).toBe(false);
 
       gmailDeliveryLifecycle.watchFailure = Object.assign(new Error("fixture Gmail watch unavailable"), { code: 503 });
-      for (const now of ["2026-09-02T00:00:00.000Z", "2026-09-02T00:02:00.000Z", "2026-09-02T00:10:00.000Z", "2026-09-02T01:00:00.000Z", "2026-09-02T05:01:00.000Z"])
-        expect((await renewGmailWatchOnce(configured.body.registration.id, { now: new Date(now) })).processed).toBe(true);
+      const restartedExpiry = new Date(restarted.body.registration.watchExpiresAt).getTime();
+      for (const minutesAfterExpiry of [0, 2, 10, 60, 301])
+        expect((await renewGmailWatchOnce(configured.body.registration.id, { now: new Date(restartedExpiry + minutesAfterExpiry * 60_000) })).processed).toBe(true);
       const watchFailureState = await api.get(`/api/eos/companies/${companyId}/provider-ingress`).expect(200);
       expect(watchFailureState.body.registrations.find((item: any) => item.id === configured.body.registration.id).state).toBe("failed");
       expect(watchFailureState.body.health.alerts.find((item: any) => item.registrationId === configured.body.registration.id && item.kind === "watch_dead_letter")).toMatchObject({ severity: "critical", action: "renew_watch" });
