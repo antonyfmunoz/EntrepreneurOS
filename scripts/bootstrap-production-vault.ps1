@@ -150,7 +150,7 @@ $template.fields += @(
   New-Field "EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS" "{}"
   New-Field "EOS_PLATFORM_ADMIN_USER_IDS" $platformAdministrators "STRING"
   New-Field "EOS_DATABASE_VENDOR_NAME" "Neon" "STRING"
-  New-Field "EOS_DNS_VENDOR_NAME" "Google Cloud DNS" "STRING"
+  New-Field "EOS_DNS_VENDOR_NAME" "Squarespace Domains" "STRING"
   New-Field "EOS_SECRET_VAULT_VENDOR_NAME" "1Password" "STRING"
   New-Field "EOS_ARTIFACT_S3_BUCKET" $primaryBucket "STRING"
   New-Field "EOS_ARTIFACT_S3_REGION" $primaryRegion "STRING"
