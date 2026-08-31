@@ -110,6 +110,7 @@ import type { NativeEsignField } from "@shared/native-esign";
 const NativeEsignOperatorConsole = lazy(() => import("@/components/native-esign-operator-console").then((module) => ({ default: module.NativeEsignOperatorConsole })));
 const ComplianceControlCenter = lazy(() => import("@/components/compliance-control-center").then((module) => ({ default: module.ComplianceControlCenter })));
 const CustomerSuccessControlCenter = lazy(() => import("@/components/customer-success-control-center").then((module) => ({ default: module.CustomerSuccessControlCenter })));
+const RecoveryOperationsControlCenter = lazy(() => import("@/components/recovery-operations-control-center").then((module) => ({ default: module.RecoveryOperationsControlCenter })));
 const ProductEvolutionControlCenter = lazy(() => import("@/components/product-evolution-control-center").then((module) => ({ default: module.ProductEvolutionControlCenter })));
 const IntegrationOperationsControlCenter = lazy(() => import("@/components/integration-operations-control-center").then((module) => ({ default: module.IntegrationOperationsControlCenter })));
 const ArtifactClosureControlCenter = lazy(() => import("@/components/artifact-closure-control-center").then((module) => ({ default: module.ArtifactClosureControlCenter })));
@@ -7097,6 +7098,14 @@ export default function EosOverlayPage() {
                       root={root}
                       canExecute={effectiveAuthorityClasses.has("execute")}
                       canDecide={effectiveAuthorityClasses.has("decide")}
+                    />
+                  )}
+                  {[5, 6].includes(selectedModule.id) && (
+                    <RecoveryOperationsControlCenter
+                      root={root}
+                      canExecute={effectiveAuthorityClasses.has("execute")}
+                      canDecide={effectiveAuthorityClasses.has("decide")}
+                      canApprove={effectiveAuthorityClasses.has("approve")}
                     />
                   )}
                   {selectedModule.id === 11 && (
