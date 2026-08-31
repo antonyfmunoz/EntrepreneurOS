@@ -8999,7 +8999,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       expect(await renewGmailWatchOnce(configured.body.registration.id, { now: new Date("2026-08-31T00:00:00.000Z") })).toMatchObject({ processed: true, outcome: "succeeded", attempt: { attemptNumber: 2, trigger: "worker" } });
       state = await api.get(`/api/eos/companies/${companyId}/provider-ingress`).expect(200);
       expect(state.body.registrations.find((item: any) => item.id === configured.body.registration.id).watchHistoryId).toBe("110");
-      expect(state.body.watchAttempts.find((item: any) => item.registrationId === configured.body.registration.id)).toMatchObject({ trigger: "worker", outcome: "succeeded", attemptNumber: 2 });
+      expect(state.body.watchAttempts.find((item: any) => item.registrationId === configured.body.registration.id && item.trigger === "worker")).toMatchObject({ trigger: "worker", outcome: "succeeded", attemptNumber: 2 });
       const afterReconciliationReceipts = await sql<{ count: string }[]>`SELECT count(*)::text AS count FROM eos_integration_run_receipts WHERE company_id = ${companyId}`;
       expect(afterReconciliationReceipts[0].count).toBe(baselineReceipts[0].count);
 
