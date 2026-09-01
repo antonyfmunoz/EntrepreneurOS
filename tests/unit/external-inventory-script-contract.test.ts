@@ -36,4 +36,11 @@ describe("production external inventory script contract", () => {
   it("accepts the least-privilege Drive metadata scope requested by the EOS adapter", () => {
     expect(script).toContain('googleScopes.has("https://www.googleapis.com/auth/drive.metadata.readonly")');
   });
+
+  it("distinguishes staged Fly credentials from credentials that are absent", () => {
+    expect(script).toContain("stagedRequiredSecretNames");
+    expect(script).toContain("absentRequiredSecretNames");
+    expect(script).toContain("stagedFlySecretNames");
+    expect(script).toContain("observedFlySecretNames");
+  });
 });
