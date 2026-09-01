@@ -115,25 +115,36 @@ async function tlsObservation(hostname: string) {
   });
 }
 
-async function googleObservation() {
-  const clientId = managedValue("op://UMH-Production/Google-Workspace-OAuth/client_id");
-  const clientSecret = managedValue("op://UMH-Production/Google-Workspace-OAuth/client_secret");
-  const refreshToken = managedValue("op://UMH-Production/Google-Workspace-OAuth/refresh_token");
-  if (!clientId || !clientSecret || !refreshToken) return { valid: false, scopes: [] as string[] };
+function runtimeGoogleObservation() {
+  const empty = {
+    valid: false,
+    scopes: [] as string[],
+    services: { Gmail: false, Calendar: false, Drive: false },
+    configuredAdministratorCount: 0,
+    connectedAdministratorCount: 0,
+    healthyAdministratorCount: 0,
+    encryptionKeySha256: null as string | null,
+    failureCodes: [] as string[],
+  };
+  const program = [
+    "Promise.all([import('postgres'),import('node:crypto')]).then(async([{default:p},crypto])=>{",
+    "let s;const blank={valid:false,scopes:[],services:{Gmail:false,Calendar:false,Drive:false},configuredAdministratorCount:0,connectedAdministratorCount:0,healthyAdministratorCount:0,encryptionKeySha256:null,failureCodes:[]};",
+    "try{const keyText=(process.env.EOS_CREDENTIAL_ENCRYPTION_KEY||'').trim();const key=Buffer.from(keyText,'base64');const ids=[...new Set((process.env.EOS_PLATFORM_ADMIN_USER_IDS||'').split(',').map(x=>x.trim()).filter(Boolean))];blank.configuredAdministratorCount=ids.length;blank.encryptionKeySha256=keyText?crypto.createHash('sha256').update(keyText).digest('hex'):null;if(key.length!==32||!ids.length)throw new Error('configuration');",
+    "const dec=v=>{if(!v||!v.startsWith('enc:v1:'))throw new Error('envelope');const [iv,tag,c]=v.slice(7).split('.');const d=crypto.createDecipheriv('aes-256-gcm',key,Buffer.from(iv,'base64url'));d.setAuthTag(Buffer.from(tag,'base64url'));return Buffer.concat([d.update(Buffer.from(c,'base64url')),d.final()]).toString('utf8')};",
+    "s=p(process.env.DATABASE_URL,{max:1,connect_timeout:15});const rows=await s.unsafe(\"SELECT access_token, refresh_token, expires_at, scope FROM oauth_tokens WHERE provider = 'gmail' AND user_id = ANY($1::text[]) ORDER BY updated_at DESC\",[ids]);blank.connectedAdministratorCount=rows.length;",
+    "const observations=await Promise.all(rows.map(async row=>{let stage='decrypt_access';let scopes=(row.scope||'').split(' ').map(x=>x.trim()).filter(Boolean);try{let access=dec(row.access_token);if(row.refresh_token&&(!row.expires_at||new Date(row.expires_at).getTime()<=Date.now()+60000)){stage='refresh_token';const response=await fetch('https://oauth2.googleapis.com/token',{method:'POST',signal:AbortSignal.timeout(30000),headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:process.env.GOOGLE_CLIENT_ID||'',client_secret:process.env.GOOGLE_CLIENT_SECRET||'',refresh_token:dec(row.refresh_token),grant_type:'refresh_token'})});const body=await response.json();if(!response.ok||!body.access_token)return{scopes,services:{Gmail:false,Calendar:false,Drive:false},failureCode:'refresh_http_'+response.status};access=body.access_token;if(body.scope)scopes=body.scope.split(' ').map(x=>x.trim()).filter(Boolean)}",
+    "stage='provider_probe';const headers={authorization:'Bearer '+access};const timeMin=encodeURIComponent(new Date().toISOString());const checks=await Promise.all([fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile',{headers,signal:AbortSignal.timeout(30000)}),fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1&singleEvents=true&timeMin='+timeMin,{headers,signal:AbortSignal.timeout(30000)}),fetch('https://www.googleapis.com/drive/v3/about?fields=user',{headers,signal:AbortSignal.timeout(30000)})]);return{scopes,services:{Gmail:checks[0].ok,Calendar:checks[1].ok,Drive:checks[2].ok},failureCode:checks.every(x=>x.ok)?null:'provider_http_'+checks.map(x=>x.status).join('_')}}catch{return{scopes,services:{Gmail:false,Calendar:false,Drive:false},failureCode:stage}}}));",
+    "const healthy=observations.filter(x=>Object.values(x.services).every(Boolean));const scopes=[...new Set(observations.flatMap(x=>x.scopes||[]))].sort();console.log('EOS_GOOGLE_INVENTORY:'+JSON.stringify({...blank,valid:healthy.length>0,scopes,services:{Gmail:observations.some(x=>x.services.Gmail),Calendar:observations.some(x=>x.services.Calendar),Drive:observations.some(x=>x.services.Drive)},healthyAdministratorCount:healthy.length,failureCodes:[...new Set(observations.map(x=>x.failureCode).filter(Boolean))].sort()}))",
+    "}catch{console.log('EOS_GOOGLE_INVENTORY:'+JSON.stringify({...blank,failureCodes:['runtime_observation']}))}finally{if(s)await s.end({timeout:5}).catch(()=>{})}})",
+  ].join("");
+  const remoteCommand = `node -e "${program.replaceAll('"', '\\"')}"`;
+  const output = commandText("flyctl", ["ssh", "console", "--app", flyApp, "--quiet", "-C", remoteCommand], 90_000);
+  const line = output?.split(/\r?\n/).find((entry) => entry.startsWith("EOS_GOOGLE_INVENTORY:"));
+  if (!line) return empty;
   try {
-    const response = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      signal: AbortSignal.timeout(30_000),
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken, grant_type: "refresh_token" }),
-    });
-    const body = await response.json() as { access_token?: string; scope?: string };
-    return {
-      valid: response.ok && Boolean(body.access_token),
-      scopes: String(body.scope || "").split(" ").filter(Boolean).sort(),
-    };
+    return JSON.parse(line.slice("EOS_GOOGLE_INVENTORY:".length)) as typeof empty;
   } catch {
-    return { valid: false, scopes: [] as string[] };
+    return empty;
   }
 }
 
@@ -244,6 +255,12 @@ function runtimeDatabaseObservation(targetMigrationCount: number) {
   }
 }
 
+const vaultItems = commandJson("op", ["item", "list", "--vault", "EntrepreneurOS", "--format", "json"]) || [];
+const productionItemExists = vaultItems.some((item: any) => item.title === "Production");
+const productionItem = productionItemExists ? commandJson("op", ["item", "get", "Production", "--vault", "EntrepreneurOS", "--format", "json"]) : null;
+const productionFields = itemFieldMap(productionItem);
+const productionDatabaseUrl = productionFields.get("DATABASE_URL") || managedValue("op://UMH-Production/Database-Neon/url");
+
 const [targetMigrationCount, home, health, ready, tls, ipv4, ipv6, nameservers, google, notion] = await Promise.all([
   currentMigrationCount(),
   httpObservation("/"),
@@ -253,7 +270,7 @@ const [targetMigrationCount, home, health, ready, tls, ipv4, ipv6, nameservers, 
   dns.resolve4(new URL(publicOrigin).hostname).catch(() => []),
   dns.resolve6(new URL(publicOrigin).hostname).catch(() => []),
   dns.resolveNs(new URL(publicOrigin).hostname).catch(() => []),
-  googleObservation(),
+  Promise.resolve(runtimeGoogleObservation()),
   notionObservation(),
 ]);
 const [vaultDatabaseCandidate, runtimeDatabase] = await Promise.all([
@@ -274,14 +291,10 @@ const githubEnvironment = commandJson("gh", ["api", `repos/${repository}/environ
 const machines = commandJson("flyctl", ["machines", "list", "--app", flyApp, "--json"], 60_000) || [];
 const releases = commandJson("flyctl", ["releases", "--app", flyApp, "--json"], 60_000) || [];
 const flySecrets = commandJson("flyctl", ["secrets", "list", "--app", flyApp, "--json"], 60_000) || [];
-const vaultItems = commandJson("op", ["item", "list", "--vault", "EntrepreneurOS", "--format", "json"]) || [];
-const productionItemExists = vaultItems.some((item: any) => item.title === "Production");
-const productionItem = productionItemExists ? commandJson("op", ["item", "get", "Production", "--vault", "EntrepreneurOS", "--format", "json"]) : null;
-const productionFields = itemFieldMap(productionItem);
 const clerkPlatformAdministrators = await clerkPlatformAdministratorsObservation(
   productionFields.get("CLERK_SECRET_KEY") || null,
   productionFields.get("EOS_PLATFORM_ADMIN_USER_IDS") || null,
-  productionFields.get("DATABASE_URL") || managedValue("op://UMH-Production/Database-Neon/url"),
+  productionDatabaseUrl,
 );
 const sourceClerk = itemFieldMap(commandJson("op", ["item", "get", "EOS-Clerk", "--vault", "UMH-Production", "--format", "json"]));
 const sourcePosthog = itemFieldMap(commandJson("op", ["item", "get", "EOS-PostHog", "--vault", "UMH-Production", "--format", "json"]));
@@ -308,6 +321,12 @@ const missingFlySecretNames = requiredFlySecretNames.filter((name) => !flySecret
 const absentFlySecretNames = requiredFlySecretNames.filter((name) => !observedFlySecretNames.includes(name));
 const stagedRequiredFlySecretNames = requiredFlySecretNames.filter((name) => stagedFlySecretNames.includes(name));
 const googleScopes = new Set(google.scopes);
+const vaultCredentialEncryptionKey = productionFields.get("EOS_CREDENTIAL_ENCRYPTION_KEY")?.trim() || "";
+const credentialEncryptionKeyMatchesRuntime = Boolean(
+  vaultCredentialEncryptionKey
+  && google.encryptionKeySha256
+  && createHash("sha256").update(vaultCredentialEncryptionKey).digest("hex") === google.encryptionKeySha256,
+);
 const environmentRules = Array.isArray(githubEnvironment?.protection_rules) ? githubEnvironment.protection_rules : [];
 const services = machines.flatMap((machine: any) => machine.config?.services || []);
 
@@ -334,6 +353,7 @@ const signals: ExternalProductionInventorySignals = {
     clerkPlatformAdministratorsValid: clerkPlatformAdministrators.configuredCount > 0
       && clerkPlatformAdministrators.databaseBoundCount === clerkPlatformAdministrators.configuredCount
       && clerkPlatformAdministrators.validCount === clerkPlatformAdministrators.configuredCount,
+    credentialEncryptionKeyMatchesRuntime,
     stripeLive: productionFields.get("STRIPE_RESTRICTED_KEY")?.startsWith("rk_live_") === true && productionFields.get("STRIPE_WEBHOOK_SECRET")?.startsWith("whsec_") === true,
     primaryArtifactPlanePresent: ["EOS_ARTIFACT_S3_BUCKET", "EOS_ARTIFACT_S3_ENDPOINT", "EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_S3_SECRET_ACCESS_KEY"].every((name) => Boolean(productionFields.get(name)?.trim())),
     backupArtifactPlanePresent: ["EOS_ARTIFACT_BACKUP_S3_BUCKET", "EOS_ARTIFACT_BACKUP_S3_ENDPOINT", "EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY"].every((name) => Boolean(productionFields.get(name)?.trim())) && productionFields.get("EOS_ARTIFACT_BACKUP_S3_BUCKET") !== productionFields.get("EOS_ARTIFACT_S3_BUCKET"),
@@ -383,7 +403,19 @@ const evidence = {
   },
   publicRuntime: { ...signals.publicRuntime, origin: publicOrigin, home, health, ready, tls, dns: { ipv4: ipv4.sort(), ipv6: ipv6.sort(), nameservers: nameservers.sort() } },
   vault: { ...signals.vault, itemTitles: vaultItems.map((item: any) => item.title).sort(), requiredFieldCount: requiredProductionFields.length, clerkPlatformAdministratorCounts: clerkPlatformAdministrators, sourceCredentialClasses: { clerkPublishable: sourceClerk.get("publishable_key")?.startsWith("pk_live_") ? "live" : sourceClerk.get("publishable_key")?.startsWith("pk_test_") ? "test" : "missing", clerkSecret: sourceClerk.get("secret_key")?.startsWith("sk_live_") ? "live" : sourceClerk.get("secret_key")?.startsWith("sk_test_") ? "test" : "missing" } },
-  providers: { ...signals.providers, googleScopes: google.scopes, notionInternalType: notion.type, notionInternalOwnerType: notion.ownerType },
+  providers: {
+    ...signals.providers,
+    googleScopes: google.scopes,
+    googleServiceHealth: google.services,
+    googleAdministratorCounts: {
+      configured: google.configuredAdministratorCount,
+      connected: google.connectedAdministratorCount,
+      healthy: google.healthyAdministratorCount,
+    },
+    googleProbeFailureCodes: google.failureCodes,
+    notionInternalType: notion.type,
+    notionInternalOwnerType: notion.ownerType,
+  },
   database: { runtime: runtimeDatabase, vaultCandidate: vaultDatabaseCandidate, vaultCandidateMatchesRuntime },
   gaps: externalProductionInventoryGaps(signals),
   outsideScopeRequiringSeparateEvidence: ["legal_professional_approval", "support_staffing_and_sla", "vendor_risk_dispositions", "production_drills", "empyrean_client_zero", "operator_handoff", "second_company", "native_cutovers", "optional_umh_field_round_trip", "institutional_scale"],

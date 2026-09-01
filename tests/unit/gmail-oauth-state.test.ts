@@ -39,6 +39,15 @@ describe("Gmail OAuth state binding", () => {
     expect(calendarWriteScopeCoverage(["https://www.googleapis.com/auth/calendar.events"])).toBe(true);
   });
 
+  it("does not require Calendar List authority for the events-only adapter", async () => {
+    const source = await import("node:fs/promises").then(({ readFile }) =>
+      readFile(new URL("../../server/integrations/gmail.ts", import.meta.url), "utf8"),
+    );
+    expect(source).toContain('calendarId: "primary"');
+    expect(source).toContain("events.list");
+    expect(source).not.toContain("calendarList.list");
+  });
+
   it("rejects email header injection before provider access", async () => {
     await expect(sendEmail("owner-1", { to: "safe@example.test", subject: "Hello\r\nBcc: attacker@example.test", body: "Safe body" })).rejects.toThrow("invalid line break");
   });

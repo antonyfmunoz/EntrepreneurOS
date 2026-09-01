@@ -579,7 +579,12 @@ export async function verifyConnection(userId: string): Promise<{
     oauth2Client.setCredentials({ access_token: accessToken });
     const checks = await Promise.allSettled([
       google.gmail({ version: "v1", auth: oauth2Client }).users.getProfile({ userId: "me" }),
-      google.calendar({ version: "v3", auth: oauth2Client }).calendarList.list({ maxResults: 1 }),
+      google.calendar({ version: "v3", auth: oauth2Client }).events.list({
+        calendarId: "primary",
+        maxResults: 1,
+        singleEvents: true,
+        timeMin: new Date().toISOString(),
+      }),
       google.drive({ version: "v3", auth: oauth2Client }).about.get({ fields: "user" }),
     ]);
     services.Gmail = checks[0].status === "fulfilled";

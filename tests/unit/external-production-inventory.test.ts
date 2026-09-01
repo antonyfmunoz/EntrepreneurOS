@@ -9,7 +9,7 @@ const complete: ExternalProductionInventorySignals = {
   github: { defaultBranchCanonical: true, protectedChecksConfigured: true, productionEnvironmentConfigured: true, productionEnvironmentApprovalRequired: true, openCodeScanningAlerts: 0, openDependabotAlerts: 0 },
   fly: { oneImmutableImage: true, releaseSubjectPresent: true, minimumMachineAvailable: true, productionSecretSetComplete: true },
   publicRuntime: { healthOk: true, readinessOk: true, hstsPresent: true, cspPresent: true, tlsValid: true },
-  vault: { productionItemExists: true, missingRequiredFields: [], clerkLive: true, clerkPlatformAdministratorsValid: true, stripeLive: true, primaryArtifactPlanePresent: true, backupArtifactPlanePresent: true, malwareScannerPresent: true, alertReceiverPresent: true },
+  vault: { productionItemExists: true, missingRequiredFields: [], clerkLive: true, clerkPlatformAdministratorsValid: true, credentialEncryptionKeyMatchesRuntime: true, stripeLive: true, primaryArtifactPlanePresent: true, backupArtifactPlanePresent: true, malwareScannerPresent: true, alertReceiverPresent: true },
   providers: { googleCredentialValid: true, gmailRead: true, gmailSend: true, driveRead: true, calendarEvents: true, notionInternalBotValid: true, notionPublicOAuthPresent: true, posthogProjectKeyPresent: true, anthropicCredentialPresent: true },
   database: { reachable: true, migrationCount: 111, targetMigrationCount: 111, vaultCandidateMatchesRuntime: true },
 };
@@ -50,6 +50,7 @@ describe("external production inventory", () => {
     incomplete.vault.productionItemExists = false;
     incomplete.vault.missingRequiredFields = ["CLERK_SECRET_KEY"];
     incomplete.vault.clerkPlatformAdministratorsValid = false;
+    incomplete.vault.credentialEncryptionKeyMatchesRuntime = false;
     incomplete.providers.gmailSend = false;
     incomplete.providers.calendarEvents = false;
     incomplete.providers.notionPublicOAuthPresent = false;
@@ -62,6 +63,7 @@ describe("external production inventory", () => {
       "production_vault_item_missing",
       "production_vault_fields_missing",
       "clerk_platform_administrator_identity_missing",
+      "credential_encryption_key_vault_runtime_mismatch",
       "google_gmail_send_scope_missing",
       "google_calendar_events_scope_missing",
       "notion_public_oauth_missing",
