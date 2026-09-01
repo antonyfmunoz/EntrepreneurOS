@@ -32,4 +32,8 @@ describe("production external inventory script contract", () => {
     expect(script).toContain("vaultCandidateMatchesRuntime");
     expect(script).toContain("database: { runtime: runtimeDatabase, vaultCandidate: vaultDatabaseCandidate, vaultCandidateMatchesRuntime }");
   });
+
+  it("accepts the least-privilege Drive metadata scope requested by the EOS adapter", () => {
+    expect(script).toContain('googleScopes.has("https://www.googleapis.com/auth/drive.metadata.readonly")');
+  });
 });
