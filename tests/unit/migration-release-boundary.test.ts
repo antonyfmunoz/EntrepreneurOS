@@ -32,6 +32,10 @@ describe("production migration release boundary", () => {
     expect(runner).toContain("await pool.reserve()");
     expect(runner).toContain("pg_advisory_lock");
     expect(runner).toContain("pg_advisory_unlock");
+    expect(runner).toContain('sql.unsafe("BEGIN")');
+    expect(runner).toContain('sql.unsafe("COMMIT")');
+    expect(runner).toContain('sql.unsafe("ROLLBACK")');
+    expect(runner).not.toContain("sql.begin");
     expect(runner).toContain("sql?.release()");
   });
 

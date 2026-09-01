@@ -71,10 +71,15 @@ async function main() {
         continue;
       }
       console.log(`-> Running ${migration.id}`);
-      await sql.begin(async (tx) => {
-        await tx.unsafe(contents);
-        await tx`INSERT INTO eos_schema_migrations (id, checksum) VALUES (${migration.id}, ${checksum})`;
-      });
+      await sql.unsafe("BEGIN");
+      try {
+        await sql.unsafe(contents);
+        await sql`INSERT INTO eos_schema_migrations (id, checksum) VALUES (${migration.id}, ${checksum})`;
+        await sql.unsafe("COMMIT");
+      } catch (error) {
+        try { await sql.unsafe("ROLLBACK"); } catch {}
+        throw error;
+      }
       console.log(`  OK ${migration.id}`);
     }
     console.log(`Migration plan complete (${migrations.length} known migration file(s)).`);
