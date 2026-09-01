@@ -46,6 +46,8 @@ describe("production external inventory script contract", () => {
 
   it("validates configured platform administrators in the production Clerk instance without serializing identities", () => {
     expect(script).toContain("clerkPlatformAdministratorsObservation");
+    expect(script).toContain("resolvePlatformAdministratorClerkBindings");
+    expect(script).toContain("databaseBoundCount");
     expect(script).toContain("clerkPlatformAdministratorCounts");
     expect(script).not.toContain("clerkPlatformAdministratorIdentifiers");
   });

@@ -50,6 +50,32 @@ export type ExternalProductionInventorySignals = {
   };
 };
 
+export type PlatformAdministratorIdentityRow = {
+  id: string;
+  clerkUserId: string | null;
+};
+
+export function resolvePlatformAdministratorClerkBindings(
+  configuredValue: string | null | undefined,
+  users: PlatformAdministratorIdentityRow[],
+): { configuredCount: number; databaseBoundCount: number; clerkUserIds: string[] } {
+  const configuredIds = Array.from(new Set(
+    String(configuredValue || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  ));
+  const usersById = new Map(users.map((user) => [user.id, user]));
+  const clerkUserIds = configuredIds
+    .map((id) => usersById.get(id)?.clerkUserId?.trim() || "")
+    .filter(Boolean);
+  return {
+    configuredCount: configuredIds.length,
+    databaseBoundCount: clerkUserIds.length,
+    clerkUserIds,
+  };
+}
+
 export function externalProductionInventoryGaps(
   signals: ExternalProductionInventorySignals,
 ): string[] {

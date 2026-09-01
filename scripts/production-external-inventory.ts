@@ -7,6 +7,7 @@ import { connect as tlsConnect } from "node:tls";
 import postgres from "postgres";
 import {
   externalProductionInventoryGaps,
+  resolvePlatformAdministratorClerkBindings,
   type ExternalProductionInventorySignals,
 } from "../server/security/external-production-inventory";
 
@@ -151,12 +152,34 @@ async function notionObservation() {
   }
 }
 
-async function clerkPlatformAdministratorsObservation(secret: string | null, configuredValue: string | null) {
-  const identifiers = String(configuredValue || "").split(",").map((value) => value.trim()).filter(Boolean);
-  if (!secret || !identifiers.length) return { configuredCount: identifiers.length, validCount: 0 };
-  const checks = await Promise.all(identifiers.map(async (identifier) => {
+async function clerkPlatformAdministratorsObservation(
+  secret: string | null,
+  configuredValue: string | null,
+  databaseUrl: string | null,
+) {
+  const empty = resolvePlatformAdministratorClerkBindings(configuredValue, []);
+  if (!secret || !empty.configuredCount || !databaseUrl) {
+    return { configuredCount: empty.configuredCount, databaseBoundCount: 0, validCount: 0 };
+  }
+  let sql: ReturnType<typeof postgres> | null = null;
+  let bindings = empty;
+  try {
+    const configuredIds = Array.from(new Set(
+      String(configuredValue || "").split(",").map((value) => value.trim()).filter(Boolean),
+    ));
+    sql = postgres(databaseUrl, { max: 1, connect_timeout: 15 });
+    const rows = await sql<{ id: string; clerkUserId: string | null }[]>`
+      SELECT id, clerk_user_id AS "clerkUserId" FROM users WHERE id IN ${sql(configuredIds)}
+    `;
+    bindings = resolvePlatformAdministratorClerkBindings(configuredValue, rows);
+  } catch {
+    return { configuredCount: empty.configuredCount, databaseBoundCount: 0, validCount: 0 };
+  } finally {
+    if (sql) await sql.end({ timeout: 5 }).catch(() => undefined);
+  }
+  const checks = await Promise.all(bindings.clerkUserIds.map(async (clerkUserId) => {
     try {
-      const response = await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(identifier)}`, {
+      const response = await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(clerkUserId)}`, {
         signal: AbortSignal.timeout(15_000),
         headers: { authorization: `Bearer ${secret}` },
       });
@@ -165,7 +188,11 @@ async function clerkPlatformAdministratorsObservation(secret: string | null, con
       return false;
     }
   }));
-  return { configuredCount: identifiers.length, validCount: checks.filter(Boolean).length };
+  return {
+    configuredCount: bindings.configuredCount,
+    databaseBoundCount: bindings.databaseBoundCount,
+    validCount: checks.filter(Boolean).length,
+  };
 }
 
 async function databaseObservation(targetMigrationCount: number) {
@@ -254,6 +281,7 @@ const productionFields = itemFieldMap(productionItem);
 const clerkPlatformAdministrators = await clerkPlatformAdministratorsObservation(
   productionFields.get("CLERK_SECRET_KEY") || null,
   productionFields.get("EOS_PLATFORM_ADMIN_USER_IDS") || null,
+  productionFields.get("DATABASE_URL") || managedValue("op://UMH-Production/Database-Neon/url"),
 );
 const sourceClerk = itemFieldMap(commandJson("op", ["item", "get", "EOS-Clerk", "--vault", "UMH-Production", "--format", "json"]));
 const sourcePosthog = itemFieldMap(commandJson("op", ["item", "get", "EOS-PostHog", "--vault", "UMH-Production", "--format", "json"]));
@@ -304,6 +332,7 @@ const signals: ExternalProductionInventorySignals = {
     missingRequiredFields,
     clerkLive: productionFields.get("CLERK_PUBLISHABLE_KEY")?.startsWith("pk_live_") === true && productionFields.get("CLERK_SECRET_KEY")?.startsWith("sk_live_") === true,
     clerkPlatformAdministratorsValid: clerkPlatformAdministrators.configuredCount > 0
+      && clerkPlatformAdministrators.databaseBoundCount === clerkPlatformAdministrators.configuredCount
       && clerkPlatformAdministrators.validCount === clerkPlatformAdministrators.configuredCount,
     stripeLive: productionFields.get("STRIPE_RESTRICTED_KEY")?.startsWith("rk_live_") === true && productionFields.get("STRIPE_WEBHOOK_SECRET")?.startsWith("whsec_") === true,
     primaryArtifactPlanePresent: ["EOS_ARTIFACT_S3_BUCKET", "EOS_ARTIFACT_S3_ENDPOINT", "EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_S3_SECRET_ACCESS_KEY"].every((name) => Boolean(productionFields.get(name)?.trim())),

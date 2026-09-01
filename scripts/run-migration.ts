@@ -47,9 +47,11 @@ async function main() {
     return;
   }
 
-  const sql = postgres(dbUrl, { max: 1 });
+  const pool = postgres(dbUrl, { max: 1 });
+  let sql: Awaited<ReturnType<typeof pool.reserve>> | null = null;
   let locked = false;
   try {
+    sql = await pool.reserve();
     await sql.unsafe(`
       CREATE TABLE IF NOT EXISTS eos_schema_migrations (
         id text PRIMARY KEY,
@@ -80,10 +82,11 @@ async function main() {
     console.error("Migration failed:", error);
     process.exitCode = 1;
   } finally {
-    if (locked) {
+    if (locked && sql) {
       try { await sql`SELECT pg_advisory_unlock(hashtext('entrepreneuros-schema-migrations'))`; } catch {}
     }
-    await sql.end({ timeout: 5 });
+    sql?.release();
+    await pool.end({ timeout: 5 });
   }
 }
 
