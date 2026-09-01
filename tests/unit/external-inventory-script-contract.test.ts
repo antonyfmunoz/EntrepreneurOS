@@ -37,6 +37,22 @@ describe("production external inventory script contract", () => {
     expect(script).toContain('googleScopes.has("https://www.googleapis.com/auth/drive.metadata.readonly")');
   });
 
+  it("verifies the production administrator's EOS-owned Google OAuth connection", () => {
+    expect(script).toContain("runtimeGoogleObservation");
+    expect(script).toContain("FROM oauth_tokens");
+    expect(script).toContain("provider = 'gmail'");
+    expect(script).toContain("EOS_CREDENTIAL_ENCRYPTION_KEY");
+    expect(script).toContain("calendars/primary/events");
+    expect(script).toContain("googleAdministratorCounts");
+    expect(script).not.toContain("op://UMH-Production/Google-Workspace-OAuth");
+  });
+
+  it("fails closed when the vault encryption key differs from the live runtime", () => {
+    expect(script).toContain("credentialEncryptionKeyMatchesRuntime");
+    expect(script).toContain("google.encryptionKeySha256");
+    expect(script).not.toContain("encryptionKeySha256: google.encryptionKeySha256");
+  });
+
   it("distinguishes staged Fly credentials from credentials that are absent", () => {
     expect(script).toContain("stagedRequiredSecretNames");
     expect(script).toContain("absentRequiredSecretNames");
