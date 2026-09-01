@@ -24,6 +24,21 @@ describe("production migration release boundary", () => {
     expect(verifier).toContain("compatibleMigrationChecksums");
   });
 
+  it("holds the migration advisory lock on one reserved database connection", () => {
+    const runner = readFileSync(
+      new URL("../../scripts/run-migration.ts", import.meta.url),
+      "utf8",
+    );
+    expect(runner).toContain("await pool.reserve()");
+    expect(runner).toContain("pg_advisory_lock");
+    expect(runner).toContain("pg_advisory_unlock");
+    expect(runner).toContain('sql.unsafe("BEGIN")');
+    expect(runner).toContain('sql.unsafe("COMMIT")');
+    expect(runner).toContain('sql.unsafe("ROLLBACK")');
+    expect(runner).not.toContain("sql.begin");
+    expect(runner).toContain("sql?.release()");
+  });
+
   it("keeps the runtime role non-DDL while granting current and future application DML", () => {
     const grants = readFileSync(
       new URL("../../scripts/configure-production-app-role.sql", import.meta.url),

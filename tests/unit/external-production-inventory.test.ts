@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { externalProductionInventoryGaps, type ExternalProductionInventorySignals } from "../../server/security/external-production-inventory";
+import {
+  externalProductionInventoryGaps,
+  resolvePlatformAdministratorClerkBindings,
+  type ExternalProductionInventorySignals,
+} from "../../server/security/external-production-inventory";
 
 const complete: ExternalProductionInventorySignals = {
   github: { defaultBranchCanonical: true, protectedChecksConfigured: true, productionEnvironmentConfigured: true, productionEnvironmentApprovalRequired: true, openCodeScanningAlerts: 0, openDependabotAlerts: 0 },
@@ -11,6 +15,29 @@ const complete: ExternalProductionInventorySignals = {
 };
 
 describe("external production inventory", () => {
+  it("resolves configured EOS administrator IDs through database Clerk bindings", () => {
+    expect(resolvePlatformAdministratorClerkBindings(" eos-owner, eos-backup, eos-owner ", [
+      { id: "eos-owner", clerkUserId: "user_clerk_owner" },
+      { id: "eos-backup", clerkUserId: "user_clerk_backup" },
+      { id: "unconfigured", clerkUserId: "user_other" },
+    ])).toEqual({
+      configuredCount: 2,
+      databaseBoundCount: 2,
+      clerkUserIds: ["user_clerk_owner", "user_clerk_backup"],
+    });
+  });
+
+  it("fails closed when a configured EOS administrator lacks a Clerk binding", () => {
+    expect(resolvePlatformAdministratorClerkBindings("eos-owner,eos-backup", [
+      { id: "eos-owner", clerkUserId: "user_clerk_owner" },
+      { id: "eos-backup", clerkUserId: null },
+    ])).toEqual({
+      configuredCount: 2,
+      databaseBoundCount: 1,
+      clerkUserIds: ["user_clerk_owner"],
+    });
+  });
+
   it("reports no technical inventory gaps only when every observed external control is present", () => {
     expect(externalProductionInventoryGaps(complete)).toEqual([]);
   });

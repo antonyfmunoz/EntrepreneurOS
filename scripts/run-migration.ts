@@ -47,9 +47,11 @@ async function main() {
     return;
   }
 
-  const sql = postgres(dbUrl, { max: 1 });
+  const pool = postgres(dbUrl, { max: 1 });
+  let sql: Awaited<ReturnType<typeof pool.reserve>> | null = null;
   let locked = false;
   try {
+    sql = await pool.reserve();
     await sql.unsafe(`
       CREATE TABLE IF NOT EXISTS eos_schema_migrations (
         id text PRIMARY KEY,
@@ -69,10 +71,15 @@ async function main() {
         continue;
       }
       console.log(`-> Running ${migration.id}`);
-      await sql.begin(async (tx) => {
-        await tx.unsafe(contents);
-        await tx`INSERT INTO eos_schema_migrations (id, checksum) VALUES (${migration.id}, ${checksum})`;
-      });
+      await sql.unsafe("BEGIN");
+      try {
+        await sql.unsafe(contents);
+        await sql`INSERT INTO eos_schema_migrations (id, checksum) VALUES (${migration.id}, ${checksum})`;
+        await sql.unsafe("COMMIT");
+      } catch (error) {
+        try { await sql.unsafe("ROLLBACK"); } catch {}
+        throw error;
+      }
       console.log(`  OK ${migration.id}`);
     }
     console.log(`Migration plan complete (${migrations.length} known migration file(s)).`);
@@ -80,10 +87,11 @@ async function main() {
     console.error("Migration failed:", error);
     process.exitCode = 1;
   } finally {
-    if (locked) {
+    if (locked && sql) {
       try { await sql`SELECT pg_advisory_unlock(hashtext('entrepreneuros-schema-migrations'))`; } catch {}
     }
-    await sql.end({ timeout: 5 });
+    sql?.release();
+    await pool.end({ timeout: 5 });
   }
 }
 
