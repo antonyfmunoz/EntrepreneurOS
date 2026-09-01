@@ -102,7 +102,7 @@ export default function Header({
         ...(allows("intelligence") ? [{ label: "Intelligence", detail: "Role-scoped context, guidance, and communication", href: `${companyRoot}#intelligence` }] : []),
         ...(allows("systems") ? [{ label: "Systems", detail: "Integration authority and fallback state", href: `${companyRoot}#systems` }] : []),
       ] : []),
-      { label: "Settings", detail: "Profile, company, privacy, AI spend, and billing", href: settingsHref },
+      { label: "Settings", detail: "Profile, company, privacy, AI spend, access, and payments", href: settingsHref },
       { label: "Support", detail: "Contact EntrepreneurOS support", href: "/support" },
     ].filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(searchTerm.trim().toLowerCase()));
   }, [allowedSurfaces, canBrowsePortfolio, canManageCompanySettings, companyHref, companyName, portfolioHref, searchTerm]);

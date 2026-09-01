@@ -26,7 +26,7 @@ export type ExternalProductionInventorySignals = {
     clerkLive: boolean;
     clerkPlatformAdministratorsValid: boolean;
     credentialEncryptionKeyMatchesRuntime: boolean;
-    stripeLive: boolean;
+    operatingCompanyPaymentsLive: boolean;
     primaryArtifactPlanePresent: boolean;
     backupArtifactPlanePresent: boolean;
     malwareScannerPresent: boolean;
@@ -103,7 +103,7 @@ export function externalProductionInventoryGaps(
   require(signals.vault.clerkLive, "clerk_production_instance_missing");
   require(signals.vault.clerkPlatformAdministratorsValid, "clerk_platform_administrator_identity_missing");
   require(signals.vault.credentialEncryptionKeyMatchesRuntime, "credential_encryption_key_vault_runtime_mismatch");
-  require(signals.vault.stripeLive, "stripe_live_configuration_missing");
+  require(signals.vault.operatingCompanyPaymentsLive, "operating_company_payments_missing");
   require(signals.vault.primaryArtifactPlanePresent, "artifact_primary_plane_missing");
   require(signals.vault.backupArtifactPlanePresent, "artifact_backup_plane_missing");
   require(signals.vault.malwareScannerPresent, "malware_scanner_missing");

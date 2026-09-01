@@ -37,6 +37,12 @@ describe("production external inventory script contract", () => {
     expect(script).toContain('googleScopes.has("https://www.googleapis.com/auth/drive.metadata.readonly")');
   });
 
+  it("checks company-scoped Stripe authority instead of EOS subscription plans", () => {
+    expect(script).toContain("operatingCompanyPaymentsConfigured");
+    expect(script).toContain("operatingCompanyPaymentsLive");
+    expect(script).not.toContain('"STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET", "EOS_STRIPE_PLANS"');
+  });
+
   it("verifies the production administrator's EOS-owned Google OAuth connection", () => {
     expect(script).toContain("runtimeGoogleObservation");
     expect(script).toContain("FROM oauth_tokens");

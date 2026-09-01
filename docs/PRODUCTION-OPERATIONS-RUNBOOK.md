@@ -185,3 +185,11 @@ The exact legal retention periods, litigation-hold behavior, backup expiry, tax-
 ## Control keys
 
 The readiness endpoint defines the current 24-layer control set. There is no generic `not_applicable` path. Key examples include `production_restore_drill`, `native_esign_storage_recovery_drill`, `database_isolation_review`, `observability_alert_test`, `billing_live_mode_acceptance`, `legal_approval`, `vendor_review`, `integration_round_trip`, `ai_governance_evaluation`, `data_lifecycle_drill`, and `accessibility_performance_release`.
+
+## Operating-company Stripe custody
+
+EntrepreneurOS currently runs with `EOS_PUBLIC_PAID_SAAS=false`. It must not create EOS subscription plans, request checkout from EOS users, or treat EntrepreneurOS as the merchant. Each operating company owns its customer relationship, Stripe account, payouts, disputes, tax posture, and provider receipts. EOS connects those accounts through company-scoped Integration Bindings and may show a portfolio-wide view without combining funds.
+
+For Empyrean, create or verify the Stripe Integration Binding in the Empyrean Studios workspace with the exact Empyrean Creative LLC Stripe account reference. Create a least-privilege live restricted key and a webhook destination dedicated to that binding. Then run `scripts/configure-company-stripe.ps1`; it collects the binding UUID, restricted key, and webhook signing secret through concealed prompts and updates the two binding-keyed 1Password JSON maps over stdin. It does not write secrets to disk or place them in command arguments.
+
+Do not deploy merely because the vault fields exist. Before enabling live client collection, verify the binding account reference against Stripe, create the authoritative Recovery product and price records, receive a signed live-mode webhook, complete one governed payment and one approved compensation/refund drill, reconcile the payout, and attach secret-free evidence to `billing_live_mode_acceptance`. A separately incorporated company requires its own Stripe merchant account and Integration Binding.

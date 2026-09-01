@@ -215,9 +215,17 @@ try {
       path: ".tmp/eos-settings-desktop.png",
       fullPage: true,
     });
-  await desktop.getByRole("tab", { name: "Billing", exact: true }).click();
   await desktop
-    .getByText("Billing is not available in this environment", { exact: true })
+    .getByRole("tab", { name: "Access & payments", exact: true })
+    .click();
+  await desktop
+    .getByText("Internal operator access", { exact: true })
+    .waitFor();
+  await desktop
+    .getByText(
+      "EntrepreneurOS does not charge you or your team for access. Company revenue stays inside each company workspace and is processed through that company's authorized Stripe connection.",
+      { exact: true },
+    )
     .waitFor();
   await desktop.getByRole("tab", { name: "AI spend", exact: true }).click();
   await desktop
@@ -2158,33 +2166,35 @@ try {
   await mobile
     .getByRole("heading", { name: "Settings", exact: true })
     .waitFor();
-  await mobile.getByRole("tab", { name: "Billing", exact: true }).click();
   await mobile
-    .getByText("Billing is not available in this environment", { exact: true })
+    .getByRole("tab", { name: "Access & payments", exact: true })
+    .click();
+  await mobile
+    .getByText("Internal operator access", { exact: true })
     .waitFor();
   if (
     (await mobile
-      .getByRole("tab", { name: "Billing", exact: true })
+      .getByRole("tab", { name: "Access & payments", exact: true })
       .getAttribute("data-state")) !== "active"
   )
-    throw new Error("Mobile Billing tab did not become active.");
+    throw new Error("Mobile Access & payments tab did not become active.");
   if (
     (await mobile
       .getByRole("tab", { name: "Profile", exact: true })
       .getAttribute("data-state")) !== "inactive"
   )
     throw new Error(
-      "Mobile Profile tab remained active after selecting Billing.",
+      "Mobile Profile tab remained active after selecting Access & payments.",
     );
   const profileTabBackground = await mobile
     .getByRole("tab", { name: "Profile", exact: true })
     .evaluate((element) => getComputedStyle(element).backgroundColor);
   const billingTabBackground = await mobile
-    .getByRole("tab", { name: "Billing", exact: true })
+    .getByRole("tab", { name: "Access & payments", exact: true })
     .evaluate((element) => getComputedStyle(element).backgroundColor);
   if (profileTabBackground === billingTabBackground)
     throw new Error(
-      "Mobile inactive Profile tab still looks active after selecting Billing.",
+      "Mobile inactive Profile tab still looks active after selecting Access & payments.",
     );
   if (process.env.EOS_CAPTURE_VISUALS === "true")
     await mobile.screenshot({

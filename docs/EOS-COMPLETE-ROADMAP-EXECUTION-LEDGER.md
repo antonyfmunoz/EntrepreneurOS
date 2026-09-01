@@ -184,7 +184,7 @@ Exit: every enabled integration has live receipts and a tested recovery path.
 | 11 | Load balancing and scaling | Production-like saturation and scale behavior |
 | 12 | Error tracking and logs | Live alerts, dashboards, and on-call receipt |
 | 13 | Availability and recovery | Database/artifact RTO/RPO and incident drills |
-| 14 | Payments and billing | Live billing, refund, dunning, and tax acceptance |
+| 14 | Company payments and revenue custody | Live Empyrean payment, refund, dispute, reconciliation, and tax acceptance; EOS subscription billing remains deferred until the product is sold externally |
 | 15 | Legal and compliance | Approved legal/privacy/records controls |
 | 16 | Customer support | Named staffing, SLA, and staffed exercise |
 | 17 | Product analytics | Production consent, dashboards, and retention |

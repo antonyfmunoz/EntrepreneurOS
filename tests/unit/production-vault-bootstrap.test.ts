@@ -13,15 +13,25 @@ describe("production vault bootstrap contract", () => {
     expect(script).not.toMatch(/Set-Content|Out-File|Add-Content/);
   });
 
-  it("refuses overwrite and validates production-class Clerk and Stripe credentials", () => {
+  it("refuses overwrite and validates production-class Clerk credentials without creating EOS SaaS billing", () => {
     expect(script).toContain("bootstrap is create-only");
     expect(script).toContain('Read-Managed "op://$SourceVault/EOS-Clerk/publishable_key"');
     expect(script).toContain('Read-Managed "op://$SourceVault/EOS-Clerk/secret_key"');
     expect(script).not.toContain('Read-Concealed "Paste the Clerk production');
     expect(script).toContain("^pk_live_");
     expect(script).toContain("^sk_live_");
-    expect(script).toContain("^rk_live_");
-    expect(script).toContain("^whsec_");
+    expect(script).not.toContain('New-Field "STRIPE_RESTRICTED_KEY"');
+    expect(script).not.toContain('New-Field "STRIPE_WEBHOOK_SECRET"');
+    expect(script).not.toContain('New-Field "EOS_STRIPE_PLANS"');
+    expect(script).toContain('New-Field "EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS" "{}"');
+    expect(script).toContain('New-Field "EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS" "{}"');
+  });
+
+  it("declares internal operator mode in the production environment", () => {
+    expect(environmentTemplate).toContain("EOS_PUBLIC_PAID_SAAS=false");
+    expect(environmentTemplate).toContain("EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED=true");
+    expect(environmentTemplate).not.toContain("STRIPE_RESTRICTED_KEY=op://EntrepreneurOS/Production");
+    expect(environmentTemplate).not.toContain("EOS_STRIPE_PLANS=op://EntrepreneurOS/Production");
   });
 
   it("requires the exact production database instead of copying the legacy neondb credential", () => {
