@@ -243,15 +243,21 @@ const missingRequiredFields = requiredProductionFields.filter(({ field }) => !pr
 const machineDigests = Array.from(new Set(machines.map((machine: any) => machine.image_ref?.digest).filter(Boolean)));
 const releaseSubjects = Array.from(new Set(machines.map((machine: any) => machine.config?.env?.EOS_RELEASE_SUBJECT).filter(Boolean)));
 const flySecretNames = flySecrets.filter((secret: any) => secret.status === "Deployed").map((secret: any) => secret.name).sort();
+const stagedFlySecretNames = flySecrets.filter((secret: any) => secret.status === "Staged").map((secret: any) => secret.name).sort();
+const observedFlySecretNames = flySecrets.map((secret: any) => secret.name).sort();
 const requiredFlySecretNames = [
-  "CLERK_PUBLISHABLE_KEY", "CLERK_SECRET_KEY", "DATABASE_URL", "SESSION_SECRET", "EOS_CREDENTIAL_ENCRYPTION_KEY",
-  "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET",
+  "ANTHROPIC_API_KEY", "VITE_CLERK_PUBLISHABLE_KEY", "CLERK_PUBLISHABLE_KEY", "CLERK_SECRET_KEY", "DATABASE_URL",
+  "SESSION_SECRET", "EOS_CREDENTIAL_ENCRYPTION_KEY", "VITE_POSTHOG_API_KEY", "POSTHOG_API_KEY",
+  "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "NOTION_CLIENT_ID", "NOTION_CLIENT_SECRET",
+  "EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS", "EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS", "EOS_PLATFORM_ADMIN_USER_IDS",
   "EOS_ALERT_WEBHOOK_URL", "EOS_ALERT_WEBHOOK_SECRET", "STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET", "EOS_STRIPE_PLANS",
-  "EOS_ARTIFACT_S3_BUCKET", "EOS_ARTIFACT_S3_ENDPOINT", "EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_S3_SECRET_ACCESS_KEY",
-  "EOS_ARTIFACT_BACKUP_S3_BUCKET", "EOS_ARTIFACT_BACKUP_S3_ENDPOINT", "EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY",
-  "EOS_MALWARE_SCAN_ENDPOINT", "EOS_MALWARE_SCAN_SECRET", "NOTION_CLIENT_ID", "NOTION_CLIENT_SECRET",
+  "EOS_ARTIFACT_S3_BUCKET", "EOS_ARTIFACT_S3_REGION", "EOS_ARTIFACT_S3_ENDPOINT", "EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_S3_SECRET_ACCESS_KEY",
+  "EOS_ARTIFACT_BACKUP_S3_BUCKET", "EOS_ARTIFACT_BACKUP_S3_REGION", "EOS_ARTIFACT_BACKUP_S3_ENDPOINT", "EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY",
+  "EOS_MALWARE_SCAN_ENDPOINT", "EOS_MALWARE_SCAN_SECRET",
 ];
 const missingFlySecretNames = requiredFlySecretNames.filter((name) => !flySecretNames.includes(name));
+const absentFlySecretNames = requiredFlySecretNames.filter((name) => !observedFlySecretNames.includes(name));
+const stagedRequiredFlySecretNames = requiredFlySecretNames.filter((name) => stagedFlySecretNames.includes(name));
 const googleScopes = new Set(google.scopes);
 const environmentRules = Array.isArray(githubEnvironment?.protection_rules) ? githubEnvironment.protection_rules : [];
 const services = machines.flatMap((machine: any) => machine.config?.services || []);
@@ -319,6 +325,8 @@ const evidence = {
     releaseSubjects,
     latestReleaseVersion: releases[0]?.Version ?? releases[0]?.version ?? null,
     deployedSecretNames: flySecretNames,
+    stagedRequiredSecretNames: stagedRequiredFlySecretNames,
+    absentRequiredSecretNames: absentFlySecretNames,
     missingRequiredSecretNames: missingFlySecretNames,
   },
   publicRuntime: { ...signals.publicRuntime, origin: publicOrigin, home, health, ready, tls, dns: { ipv4: ipv4.sort(), ipv6: ipv6.sort(), nameservers: nameservers.sort() } },

@@ -36,7 +36,7 @@ describe("production deployment script contract", () => {
 
   it("builds the immutable image before staging any credentials", () => {
     const build = deployScript.indexOf("--build-only --push");
-    const secretStage = deployScript.indexOf("flyctl secrets set --app $app --stage");
+    const secretStage = deployScript.indexOf("Import-FlySecretsFromEnvironment -App $app");
     const promotion = deployScript.indexOf("--image $imageReference --strategy canary");
     expect(build).toBeGreaterThan(-1);
     expect(secretStage).toBeGreaterThan(build);
@@ -53,13 +53,13 @@ describe("production deployment script contract", () => {
 
   it("requires and stages the binding-keyed Recovery provider webhook secret map", () => {
     expect(deployScript.match(/EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS/g)?.length).toBeGreaterThanOrEqual(2);
-    expect(deployScript).toContain('"EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS=$env:EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS"');
+    expect(deployScript).toMatch(/\$runtimeSecretNames[\s\S]*"EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS"/);
   });
 
   it("requires and stages the separately kill-switched Recovery execution credential map", () => {
     expect(deployScript.match(/EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED/g)?.length).toBeGreaterThanOrEqual(2);
     expect(deployScript.match(/EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS/g)?.length).toBeGreaterThanOrEqual(2);
-    expect(deployScript).toContain('"EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS=$env:EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS"');
+    expect(deployScript).toMatch(/\$runtimeSecretNames[\s\S]*"EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS"/);
   });
 
   it("requires and stages both credentialed S3 custody planes and malware scanning", () => {
@@ -82,13 +82,13 @@ describe("production deployment script contract", () => {
       "EOS_MALWARE_SCAN_SECRET",
     ]) {
       expect(deployScript.match(new RegExp(name, "g"))?.length).toBeGreaterThanOrEqual(2);
-      expect(deployScript).toContain(`"${name}=$env:${name}"`);
+      expect(deployScript).toMatch(new RegExp(`\\$runtimeSecretNames[\\s\\S]*"${name}"`));
     }
   });
 
   it("stages optional transcription credentials only when the kill switch is enabled", () => {
     expect(deployScript).toContain('$env:EOS_CANDIDATE_STT_ENABLED -eq "true"');
-    expect(deployScript).toContain('"OPENAI_API_KEY=$env:OPENAI_API_KEY"');
+    expect(deployScript).toContain('Import-FlySecretsFromEnvironment -App $app -Names @("OPENAI_API_KEY")');
   });
 
   it("carries provider-ingress and dispatch-recovery worker timing into production", () => {
@@ -98,8 +98,14 @@ describe("production deployment script contract", () => {
       "EOS_INTEGRATION_DISPATCH_RECOVERY_INTERVAL_MS",
     ]) {
       expect(deployScript.match(new RegExp(name, "g"))?.length).toBeGreaterThanOrEqual(2);
-      expect(deployScript).toContain(`"${name}=$env:${name}"`);
+      expect(deployScript).toMatch(new RegExp(`\\$runtimeSecretNames[\\s\\S]*"${name}"`));
     }
+  });
+
+  it("streams Fly secrets over stdin instead of exposing values in process arguments", () => {
+    expect(deployScript).toContain("$payload | flyctl secrets import --app $App --stage");
+    expect(deployScript).not.toContain("flyctl secrets set --app $app --stage");
+    expect(deployScript).not.toMatch(/flyctl secrets (?:set|import)[^\r\n]*\$env:/);
   });
 
   it("qualifies both successful promotion and rollback with public and signed-in smokes", () => {
