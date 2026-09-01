@@ -151,6 +151,23 @@ async function notionObservation() {
   }
 }
 
+async function clerkPlatformAdministratorsObservation(secret: string | null, configuredValue: string | null) {
+  const identifiers = String(configuredValue || "").split(",").map((value) => value.trim()).filter(Boolean);
+  if (!secret || !identifiers.length) return { configuredCount: identifiers.length, validCount: 0 };
+  const checks = await Promise.all(identifiers.map(async (identifier) => {
+    try {
+      const response = await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(identifier)}`, {
+        signal: AbortSignal.timeout(15_000),
+        headers: { authorization: `Bearer ${secret}` },
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }));
+  return { configuredCount: identifiers.length, validCount: checks.filter(Boolean).length };
+}
+
 async function databaseObservation(targetMigrationCount: number) {
   const databaseUrl = managedValue("op://EntrepreneurOS/Production/DATABASE_URL")
     || managedValue("op://UMH-Production/Database-Neon/url");
@@ -234,6 +251,10 @@ const vaultItems = commandJson("op", ["item", "list", "--vault", "EntrepreneurOS
 const productionItemExists = vaultItems.some((item: any) => item.title === "Production");
 const productionItem = productionItemExists ? commandJson("op", ["item", "get", "Production", "--vault", "EntrepreneurOS", "--format", "json"]) : null;
 const productionFields = itemFieldMap(productionItem);
+const clerkPlatformAdministrators = await clerkPlatformAdministratorsObservation(
+  productionFields.get("CLERK_SECRET_KEY") || null,
+  productionFields.get("EOS_PLATFORM_ADMIN_USER_IDS") || null,
+);
 const sourceClerk = itemFieldMap(commandJson("op", ["item", "get", "EOS-Clerk", "--vault", "UMH-Production", "--format", "json"]));
 const sourcePosthog = itemFieldMap(commandJson("op", ["item", "get", "EOS-PostHog", "--vault", "UMH-Production", "--format", "json"]));
 const sourceAnthropic = itemFieldMap(commandJson("op", ["item", "get", "AI-Anthropic", "--vault", "UMH-Production", "--format", "json"]));
@@ -282,6 +303,8 @@ const signals: ExternalProductionInventorySignals = {
     productionItemExists,
     missingRequiredFields,
     clerkLive: productionFields.get("CLERK_PUBLISHABLE_KEY")?.startsWith("pk_live_") === true && productionFields.get("CLERK_SECRET_KEY")?.startsWith("sk_live_") === true,
+    clerkPlatformAdministratorsValid: clerkPlatformAdministrators.configuredCount > 0
+      && clerkPlatformAdministrators.validCount === clerkPlatformAdministrators.configuredCount,
     stripeLive: productionFields.get("STRIPE_RESTRICTED_KEY")?.startsWith("rk_live_") === true && productionFields.get("STRIPE_WEBHOOK_SECRET")?.startsWith("whsec_") === true,
     primaryArtifactPlanePresent: ["EOS_ARTIFACT_S3_BUCKET", "EOS_ARTIFACT_S3_ENDPOINT", "EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_S3_SECRET_ACCESS_KEY"].every((name) => Boolean(productionFields.get(name)?.trim())),
     backupArtifactPlanePresent: ["EOS_ARTIFACT_BACKUP_S3_BUCKET", "EOS_ARTIFACT_BACKUP_S3_ENDPOINT", "EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY"].every((name) => Boolean(productionFields.get(name)?.trim())) && productionFields.get("EOS_ARTIFACT_BACKUP_S3_BUCKET") !== productionFields.get("EOS_ARTIFACT_S3_BUCKET"),
@@ -330,7 +353,7 @@ const evidence = {
     missingRequiredSecretNames: missingFlySecretNames,
   },
   publicRuntime: { ...signals.publicRuntime, origin: publicOrigin, home, health, ready, tls, dns: { ipv4: ipv4.sort(), ipv6: ipv6.sort(), nameservers: nameservers.sort() } },
-  vault: { ...signals.vault, itemTitles: vaultItems.map((item: any) => item.title).sort(), requiredFieldCount: requiredProductionFields.length, sourceCredentialClasses: { clerkPublishable: sourceClerk.get("publishable_key")?.startsWith("pk_live_") ? "live" : sourceClerk.get("publishable_key")?.startsWith("pk_test_") ? "test" : "missing", clerkSecret: sourceClerk.get("secret_key")?.startsWith("sk_live_") ? "live" : sourceClerk.get("secret_key")?.startsWith("sk_test_") ? "test" : "missing" } },
+  vault: { ...signals.vault, itemTitles: vaultItems.map((item: any) => item.title).sort(), requiredFieldCount: requiredProductionFields.length, clerkPlatformAdministratorCounts: clerkPlatformAdministrators, sourceCredentialClasses: { clerkPublishable: sourceClerk.get("publishable_key")?.startsWith("pk_live_") ? "live" : sourceClerk.get("publishable_key")?.startsWith("pk_test_") ? "test" : "missing", clerkSecret: sourceClerk.get("secret_key")?.startsWith("sk_live_") ? "live" : sourceClerk.get("secret_key")?.startsWith("sk_test_") ? "test" : "missing" } },
   providers: { ...signals.providers, googleScopes: google.scopes, notionInternalType: notion.type, notionInternalOwnerType: notion.ownerType },
   database: { runtime: runtimeDatabase, vaultCandidate: vaultDatabaseCandidate, vaultCandidateMatchesRuntime },
   gaps: externalProductionInventoryGaps(signals),

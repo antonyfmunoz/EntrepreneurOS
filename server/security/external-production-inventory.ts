@@ -24,6 +24,7 @@ export type ExternalProductionInventorySignals = {
     productionItemExists: boolean;
     missingRequiredFields: string[];
     clerkLive: boolean;
+    clerkPlatformAdministratorsValid: boolean;
     stripeLive: boolean;
     primaryArtifactPlanePresent: boolean;
     backupArtifactPlanePresent: boolean;
@@ -73,6 +74,7 @@ export function externalProductionInventoryGaps(
   require(signals.vault.productionItemExists, "production_vault_item_missing");
   if (signals.vault.missingRequiredFields.length) gaps.push("production_vault_fields_missing");
   require(signals.vault.clerkLive, "clerk_production_instance_missing");
+  require(signals.vault.clerkPlatformAdministratorsValid, "clerk_platform_administrator_identity_missing");
   require(signals.vault.stripeLive, "stripe_live_configuration_missing");
   require(signals.vault.primaryArtifactPlanePresent, "artifact_primary_plane_missing");
   require(signals.vault.backupArtifactPlanePresent, "artifact_backup_plane_missing");
