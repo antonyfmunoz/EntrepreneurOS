@@ -46,6 +46,7 @@ describe("EOS API security boundary", () => {
     expect(res.setHeader).toHaveBeenCalledWith("X-Frame-Options", "DENY");
     expect(res.setHeader).toHaveBeenCalledWith("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
     expect(res.setHeader).toHaveBeenCalledWith("Content-Security-Policy", expect.stringContaining("frame-ancestors 'none'"));
+    expect(res.setHeader).toHaveBeenCalledWith("Content-Security-Policy", expect.stringContaining("https://clerk.entrepreneuros.net"));
     expect(next).toHaveBeenCalledOnce();
   });
 

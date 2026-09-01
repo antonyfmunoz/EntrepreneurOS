@@ -18,12 +18,12 @@ export function applySecurityHeaders(req: Request, res: Response, next: NextFunc
     "object-src 'none'",
     "frame-ancestors 'none'",
     "form-action 'self'",
-    "script-src 'self' https://*.clerk.accounts.dev https://*.clerk.com",
+    "script-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://clerk.entrepreneuros.net",
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",
     "img-src 'self' data: blob: https:",
-    `connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://*.posthog.com wss://*.clerk.accounts.dev ${extraConnectSources.join(" ")}`.trim(),
-    "frame-src https://*.clerk.accounts.dev https://*.clerk.com",
+    `connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://clerk.entrepreneuros.net https://*.posthog.com wss://*.clerk.accounts.dev wss://clerk.entrepreneuros.net ${extraConnectSources.join(" ")}`.trim(),
+    "frame-src https://*.clerk.accounts.dev https://*.clerk.com https://clerk.entrepreneuros.net",
     "worker-src 'self' blob:",
   ].join("; "));
   if (req.path?.startsWith("/api")) res.setHeader("Cache-Control", "no-store");
