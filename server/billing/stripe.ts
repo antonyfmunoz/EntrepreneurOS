@@ -17,7 +17,18 @@ function planConfig(): PlanConfig {
 }
 
 export function billingConfigured(): boolean {
-  return Boolean(process.env.STRIPE_RESTRICTED_KEY?.startsWith("rk_") && process.env.STRIPE_WEBHOOK_SECRET?.startsWith("whsec_") && Object.keys(planConfig()).length);
+  return Boolean(
+    process.env.EOS_PUBLIC_PAID_SAAS === "true" &&
+    process.env.STRIPE_RESTRICTED_KEY?.startsWith("rk_") &&
+    process.env.STRIPE_WEBHOOK_SECRET?.startsWith("whsec_") &&
+    Object.keys(planConfig()).length,
+  );
+}
+
+export function billingMode(): "internal_operator" | "public_paid_saas" {
+  return process.env.EOS_PUBLIC_PAID_SAAS === "true"
+    ? "public_paid_saas"
+    : "internal_operator";
 }
 
 export function availableBillingPlans(): Array<{ key: string }> {

@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { z } from "zod";
-import { availableBillingPlans, billingConfigured, createCheckout, createPortal, processStripeWebhook, subscriptionForUser } from "../billing/stripe";
+import { availableBillingPlans, billingConfigured, billingMode, createCheckout, createPortal, processStripeWebhook, subscriptionForUser } from "../billing/stripe";
 import { teamSeatSummaryForOwner } from "../billing/team-seats";
 import { legalStatusForUser } from "../legal/service";
 
@@ -22,12 +22,13 @@ export function registerBillingRoutes(app: Express): void {
     try {
       const [subscription, teamSeats] = await Promise.all([subscriptionForUser(req.user.id), teamSeatSummaryForOwner(req.user.id)]);
       const configured = billingConfigured();
-      return res.json({ configured, availablePlans: configured ? availableBillingPlans() : [], teamSeats, subscription: subscription ? { planKey: subscription.planKey, status: subscription.status, entitlements: subscription.entitlements, seatLimit: subscription.seatLimit, cancelAtPeriodEnd: subscription.cancelAtPeriodEnd, currentPeriodEnd: subscription.currentPeriodEnd } : null });
+      return res.json({ mode: billingMode(), configured, availablePlans: configured ? availableBillingPlans() : [], teamSeats, subscription: subscription ? { planKey: subscription.planKey, status: subscription.status, entitlements: subscription.entitlements, seatLimit: subscription.seatLimit, cancelAtPeriodEnd: subscription.cancelAtPeriodEnd, currentPeriodEnd: subscription.currentPeriodEnd } : null });
     } catch (error) { return next(error); }
   });
   app.post("/api/billing/checkout", async (req, res, next) => {
     try {
       const { planKey } = z.object({ planKey: z.string().min(1).max(80) }).parse(req.body);
+      if (billingMode() === "internal_operator") return res.status(409).json({ code: "platform_billing_disabled", message: "EntrepreneurOS is operating in internal mode and does not sell user subscriptions." });
       if (!billingConfigured()) return res.status(503).json({ code: "billing_not_configured", message: "Billing is not available in this environment." });
       const legal = await legalStatusForUser(req.user.id);
       if (legal.enforcement && (!legal.configurationReady || legal.missing.length)) return res.status(409).json({ code: "legal_acceptance_required", message: "Current required legal documents must be published and accepted before starting a paid plan." });
@@ -39,6 +40,7 @@ export function registerBillingRoutes(app: Express): void {
   });
   app.post("/api/billing/portal", async (req, res, next) => {
     try {
+      if (billingMode() === "internal_operator") return res.status(409).json({ code: "platform_billing_disabled", message: "EntrepreneurOS is operating in internal mode and does not sell user subscriptions." });
       if (!billingConfigured()) return res.status(503).json({ code: "billing_not_configured", message: "Billing is not available in this environment." });
       return res.json({ url: await createPortal(req.user.id) });
     } catch (error) { return next(error); }

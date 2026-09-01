@@ -103,14 +103,6 @@ if ($companyId -eq $forbiddenCompanyId) { throw "The authorized and forbidden co
 $platformAdministrators = Read-Required "Enter comma-separated Clerk user IDs for production platform administrators" '^user_[A-Za-z0-9_-]+(?:,\s*user_[A-Za-z0-9_-]+)*$'
 $alertWebhookUrl = Read-Required "Enter the HTTPS operational alert receiver URL" '^https://[^\s]+$'
 $alertWebhookSecret = Read-Concealed "Paste the alert receiver HMAC secret (32+ characters)" '^.{32,}$'
-$stripeRestrictedKey = Read-Concealed "Paste the Stripe live restricted key" '^rk_live_[A-Za-z0-9_-]+$' "A Stripe rk_live_ restricted key is required."
-$stripeWebhookSecret = Read-Concealed "Paste the Stripe live webhook signing secret" '^whsec_[A-Za-z0-9_-]+$'
-$stripePlans = Read-Concealed "Paste the EOS_STRIPE_PLANS JSON map"
-try {
-  $parsedPlans = $stripePlans | ConvertFrom-Json
-  if (-not $parsedPlans.PSObject.Properties.Count) { throw "empty" }
-} catch { throw "EOS_STRIPE_PLANS must be a non-empty JSON object." }
-
 $primaryBucket = Read-Required "Enter the primary S3 artifact bucket"
 $primaryRegion = Read-Required "Enter the primary S3 region"
 $primaryEndpoint = Read-Required "Enter the primary S3-compatible HTTPS endpoint" '^https://[^\s]+$'
@@ -147,9 +139,6 @@ $template.fields += @(
   New-Field "EOS_PRODUCTION_FORBIDDEN_COMPANY_ID" $forbiddenCompanyId "STRING"
   New-Field "EOS_ALERT_WEBHOOK_URL" $alertWebhookUrl "STRING"
   New-Field "EOS_ALERT_WEBHOOK_SECRET" $alertWebhookSecret
-  New-Field "STRIPE_RESTRICTED_KEY" $stripeRestrictedKey
-  New-Field "STRIPE_WEBHOOK_SECRET" $stripeWebhookSecret
-  New-Field "EOS_STRIPE_PLANS" $stripePlans
   New-Field "EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS" "{}"
   New-Field "EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS" "{}"
   New-Field "EOS_PLATFORM_ADMIN_USER_IDS" $platformAdministrators "STRING"

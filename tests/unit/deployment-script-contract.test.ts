@@ -62,6 +62,12 @@ describe("production deployment script contract", () => {
     expect(deployScript).toMatch(/\$runtimeSecretNames[\s\S]*"EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS"/);
   });
 
+  it("does not require or stage EOS subscription billing in internal operator mode", () => {
+    expect(deployScript).not.toContain('"STRIPE_RESTRICTED_KEY"');
+    expect(deployScript).not.toContain('"STRIPE_WEBHOOK_SECRET"');
+    expect(deployScript).not.toContain('"EOS_STRIPE_PLANS"');
+  });
+
   it("requires and stages both credentialed S3 custody planes and malware scanning", () => {
     for (const name of [
       "EOS_ARTIFACT_STORAGE_PROVIDER",

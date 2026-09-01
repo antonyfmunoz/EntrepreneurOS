@@ -1,3 +1,5 @@
+import { operatingCompanyPaymentsConfigured } from "./company-payments";
+
 type ReleaseEnvironment = Record<string, string | undefined>;
 
 function isManagedPostgres(value?: string): boolean {
@@ -171,6 +173,13 @@ export function declaredInfrastructureVendors(
 export function productionRuntimeConfiguration(
   env: ReleaseEnvironment = process.env,
 ) {
+  const paidSaas = env.EOS_PUBLIC_PAID_SAAS === "true";
+  const paidSaasDeclared = paidSaas || env.EOS_PUBLIC_PAID_SAAS === "false";
+  const platformBillingFieldsPresent = Boolean(
+    env.STRIPE_RESTRICTED_KEY?.trim() ||
+    env.STRIPE_WEBHOOK_SECRET?.trim() ||
+    env.EOS_STRIPE_PLANS?.trim(),
+  );
   return {
     managedDatabase: isManagedPostgres(env.DATABASE_URL),
     clerkPublishableProduction: Boolean(
@@ -204,12 +213,17 @@ export function productionRuntimeConfiguration(
       ),
     accountDeletionEnabled: env.EOS_ACCOUNT_DELETION_ENABLED === "true",
     legalEnforcementEnabled: env.EOS_LEGAL_ENFORCEMENT === "true",
-    paidSaasEnabled: env.EOS_PUBLIC_PAID_SAAS === "true",
-    billingConfigured: Boolean(
-      env.STRIPE_RESTRICTED_KEY?.startsWith("rk_live_") &&
-      env.STRIPE_WEBHOOK_SECRET?.startsWith("whsec_") &&
-      hasStripePlans(env.EOS_STRIPE_PLANS),
-    ),
+    commercialModeDeclared: paidSaasDeclared,
+    platformBillingSafe: paidSaas
+      ? Boolean(
+          env.STRIPE_RESTRICTED_KEY?.startsWith("rk_live_") &&
+          env.STRIPE_WEBHOOK_SECRET?.startsWith("whsec_") &&
+          hasStripePlans(env.EOS_STRIPE_PLANS),
+        )
+      : !platformBillingFieldsPresent,
+    operatingCompanyPaymentsConfigured: paidSaas
+      ? true
+      : operatingCompanyPaymentsConfigured(env),
     anthropicConfigured: Boolean(env.ANTHROPIC_API_KEY?.trim()),
     productAnalyticsConfigured: Boolean(
       env.POSTHOG_API_KEY?.startsWith("phc_") &&

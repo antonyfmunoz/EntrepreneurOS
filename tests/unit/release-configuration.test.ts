@@ -117,8 +117,8 @@ describe("production runtime configuration", () => {
       "operationalAlertsConfigured",
       "accountDeletionEnabled",
       "legalEnforcementEnabled",
-      "paidSaasEnabled",
-      "billingConfigured",
+      "platformBillingSafe",
+      "operatingCompanyPaymentsConfigured",
       "anthropicConfigured",
       "productAnalyticsConfigured",
       "platformAdministratorsConfigured",
@@ -155,6 +155,32 @@ describe("production runtime configuration", () => {
         "binding-id": "managed-at-runtime",
       }),
     })).not.toContain("recoveryProviderExecutionSafe");
+  });
+
+  it("supports internal operator mode only with company-scoped live Stripe authority", () => {
+    const internal = {
+      ...valid,
+      EOS_PUBLIC_PAID_SAAS: "false",
+      STRIPE_RESTRICTED_KEY: "",
+      STRIPE_WEBHOOK_SECRET: "",
+      EOS_STRIPE_PLANS: "",
+      EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED: "true",
+      EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS: JSON.stringify({
+        "11111111-1111-4111-8111-111111111111": { provider: "stripe", secretKey: "rk_live_company_fixture" },
+      }),
+      EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS: JSON.stringify({
+        "11111111-1111-4111-8111-111111111111": ["whsec_company_fixture"],
+      }),
+    };
+    expect(productionRuntimeConfigurationIssues(internal)).toEqual([]);
+    expect(productionRuntimeConfigurationIssues({
+      ...internal,
+      EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED: "false",
+    })).toContain("operatingCompanyPaymentsConfigured");
+    expect(productionRuntimeConfigurationIssues({
+      ...internal,
+      STRIPE_RESTRICTED_KEY: "rk_live_platform_should_not_be_loaded",
+    })).toContain("platformBillingSafe");
   });
 
   it("fails closed when generic provider effects are enabled without managed OAuth rails", () => {

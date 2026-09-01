@@ -10,6 +10,7 @@ import {
   resolvePlatformAdministratorClerkBindings,
   type ExternalProductionInventorySignals,
 } from "../server/security/external-production-inventory";
+import { operatingCompanyPaymentsConfigured } from "../server/security/company-payments";
 
 const repository = process.env.EOS_GITHUB_REPOSITORY || "antonyfmunoz/EntrepreneurOS";
 const releaseBranch = process.env.EOS_PRODUCTION_RELEASE_BRANCH || "feature/company-system";
@@ -312,7 +313,7 @@ const requiredFlySecretNames = [
   "SESSION_SECRET", "EOS_CREDENTIAL_ENCRYPTION_KEY", "VITE_POSTHOG_API_KEY", "POSTHOG_API_KEY",
   "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "NOTION_CLIENT_ID", "NOTION_CLIENT_SECRET",
   "EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS", "EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS", "EOS_PLATFORM_ADMIN_USER_IDS",
-  "EOS_ALERT_WEBHOOK_URL", "EOS_ALERT_WEBHOOK_SECRET", "STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET", "EOS_STRIPE_PLANS",
+  "EOS_ALERT_WEBHOOK_URL", "EOS_ALERT_WEBHOOK_SECRET",
   "EOS_ARTIFACT_S3_BUCKET", "EOS_ARTIFACT_S3_REGION", "EOS_ARTIFACT_S3_ENDPOINT", "EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_S3_SECRET_ACCESS_KEY",
   "EOS_ARTIFACT_BACKUP_S3_BUCKET", "EOS_ARTIFACT_BACKUP_S3_REGION", "EOS_ARTIFACT_BACKUP_S3_ENDPOINT", "EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY",
   "EOS_MALWARE_SCAN_ENDPOINT", "EOS_MALWARE_SCAN_SECRET",
@@ -354,7 +355,11 @@ const signals: ExternalProductionInventorySignals = {
       && clerkPlatformAdministrators.databaseBoundCount === clerkPlatformAdministrators.configuredCount
       && clerkPlatformAdministrators.validCount === clerkPlatformAdministrators.configuredCount,
     credentialEncryptionKeyMatchesRuntime,
-    stripeLive: productionFields.get("STRIPE_RESTRICTED_KEY")?.startsWith("rk_live_") === true && productionFields.get("STRIPE_WEBHOOK_SECRET")?.startsWith("whsec_") === true,
+    operatingCompanyPaymentsLive: operatingCompanyPaymentsConfigured({
+      EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED: "true",
+      EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS: productionFields.get("EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS"),
+      EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS: productionFields.get("EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS"),
+    }),
     primaryArtifactPlanePresent: ["EOS_ARTIFACT_S3_BUCKET", "EOS_ARTIFACT_S3_ENDPOINT", "EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_S3_SECRET_ACCESS_KEY"].every((name) => Boolean(productionFields.get(name)?.trim())),
     backupArtifactPlanePresent: ["EOS_ARTIFACT_BACKUP_S3_BUCKET", "EOS_ARTIFACT_BACKUP_S3_ENDPOINT", "EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY"].every((name) => Boolean(productionFields.get(name)?.trim())) && productionFields.get("EOS_ARTIFACT_BACKUP_S3_BUCKET") !== productionFields.get("EOS_ARTIFACT_S3_BUCKET"),
     malwareScannerPresent: Boolean(productionFields.get("EOS_MALWARE_SCAN_ENDPOINT")?.startsWith("https://") && productionFields.get("EOS_MALWARE_SCAN_SECRET")),

@@ -1,14 +1,16 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { availableBillingPlans, billingConfigured } from "../../server/billing/stripe";
+import { availableBillingPlans, billingConfigured, billingMode } from "../../server/billing/stripe";
 
 afterEach(() => {
   delete process.env.STRIPE_RESTRICTED_KEY;
   delete process.env.STRIPE_WEBHOOK_SECRET;
   delete process.env.EOS_STRIPE_PLANS;
+  delete process.env.EOS_PUBLIC_PAID_SAAS;
 });
 
 describe("billing configuration", () => {
   it("fails closed without a restricted key, signed webhook, and configured plan", () => {
+    process.env.EOS_PUBLIC_PAID_SAAS = "true";
     process.env.STRIPE_RESTRICTED_KEY = "sk_test_not-accepted";
     process.env.STRIPE_WEBHOOK_SECRET = ["whsec", "fixture"].join("_");
     process.env.EOS_STRIPE_PLANS = JSON.stringify({ founder: { priceId: "price_fixture", entitlements: ["portfolio"], seatLimit: 10 } });
@@ -16,6 +18,7 @@ describe("billing configuration", () => {
   });
 
   it("accepts a restricted-key configuration with server-owned price mapping", () => {
+    process.env.EOS_PUBLIC_PAID_SAAS = "true";
     process.env.STRIPE_RESTRICTED_KEY = "rk_test_fixture";
     process.env.STRIPE_WEBHOOK_SECRET = ["whsec", "fixture"].join("_");
     process.env.EOS_STRIPE_PLANS = JSON.stringify({ founder: { priceId: "price_fixture", entitlements: ["portfolio"], seatLimit: 10 } });
@@ -31,5 +34,14 @@ describe("billing configuration", () => {
       founder: { priceId: "price_founder", entitlements: ["portfolio"], seatLimit: 5 },
     });
     expect(availableBillingPlans()).toEqual([{ key: "founder" }, { key: "team" }]);
+  });
+
+  it("keeps EOS subscription checkout disabled in internal operator mode", () => {
+    process.env.EOS_PUBLIC_PAID_SAAS = "false";
+    process.env.STRIPE_RESTRICTED_KEY = "rk_live_platform_fixture";
+    process.env.STRIPE_WEBHOOK_SECRET = ["whsec", "fixture"].join("_");
+    process.env.EOS_STRIPE_PLANS = JSON.stringify({ founder: { priceId: "price_fixture", entitlements: ["portfolio"], seatLimit: 10 } });
+    expect(billingMode()).toBe("internal_operator");
+    expect(billingConfigured()).toBe(false);
   });
 });
