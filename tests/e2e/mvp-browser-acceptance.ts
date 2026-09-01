@@ -215,9 +215,17 @@ try {
       path: ".tmp/eos-settings-desktop.png",
       fullPage: true,
     });
-  await desktop.getByRole("tab", { name: "Billing", exact: true }).click();
   await desktop
-    .getByText("Billing is not available in this environment", { exact: true })
+    .getByRole("tab", { name: "Access & payments", exact: true })
+    .click();
+  await desktop
+    .getByText("Internal operator access", { exact: true })
+    .waitFor();
+  await desktop
+    .getByText(
+      "EntrepreneurOS does not charge you or your team for access. Company revenue stays inside each company workspace and is processed through that company's authorized Stripe connection.",
+      { exact: true },
+    )
     .waitFor();
   await desktop.getByRole("tab", { name: "AI spend", exact: true }).click();
   await desktop
