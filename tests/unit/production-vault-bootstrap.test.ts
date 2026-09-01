@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const script = readFileSync(new URL("../../scripts/bootstrap-production-vault.ps1", import.meta.url), "utf8");
+const environmentTemplate = readFileSync(new URL("../../.env.production.op.tpl", import.meta.url), "utf8");
 
 describe("production vault bootstrap contract", () => {
   it("uses concealed prompts and a stdin JSON template instead of secret command arguments or files", () => {
@@ -45,5 +46,15 @@ describe("production vault bootstrap contract", () => {
   it("declares the authoritative production DNS provider observed at the domain", () => {
     expect(script).toContain('New-Field "EOS_DNS_VENDOR_NAME" "Squarespace Domains"');
     expect(script).not.toContain('New-Field "EOS_DNS_VENDOR_NAME" "Cloudflare"');
+  });
+
+  it("custodies dedicated EOS Google and Notion OAuth clients in the production item", () => {
+    for (const provider of ["GOOGLE", "NOTION"]) {
+      expect(script).toContain(`New-Field "${provider}_CLIENT_ID"`);
+      expect(script).toContain(`New-Field "${provider}_CLIENT_SECRET"`);
+      expect(environmentTemplate).toContain(`${provider}_CLIENT_ID=op://EntrepreneurOS/Production/${provider}_CLIENT_ID`);
+      expect(environmentTemplate).toContain(`${provider}_CLIENT_SECRET=op://EntrepreneurOS/Production/${provider}_CLIENT_SECRET`);
+    }
+    expect(environmentTemplate).not.toContain("op://UMH-Production/Google-Workspace-OAuth");
   });
 });

@@ -93,6 +93,8 @@ $clerkSecret = Read-Managed "op://$SourceVault/EOS-Clerk/secret_key"
 if ($clerkPublishable -notmatch '^pk_live_[A-Za-z0-9_$-]+$' -or $clerkSecret -notmatch '^sk_live_[A-Za-z0-9_$-]+$') {
   throw "The managed EOS-Clerk source item must contain Clerk production keys."
 }
+$googleClientId = Read-Concealed "Paste the EOS production Google OAuth client ID"
+$googleClientSecret = Read-Concealed "Paste the EOS production Google OAuth client secret"
 $notionClientId = Read-Concealed "Paste the public Notion OAuth client ID"
 $notionClientSecret = Read-Concealed "Paste the public Notion OAuth client secret"
 $companyId = Read-Required "Enter the authorized production company ID" '^\d+$'
@@ -137,6 +139,8 @@ $template.fields += @(
   New-Field "CLERK_SECRET_KEY" $clerkSecret
   New-Field "EOS_CREDENTIAL_ENCRYPTION_KEY" (New-RandomBase64 32)
   New-Field "VITE_POSTHOG_API_KEY" $posthogKey
+  New-Field "GOOGLE_CLIENT_ID" $googleClientId
+  New-Field "GOOGLE_CLIENT_SECRET" $googleClientSecret
   New-Field "NOTION_CLIENT_ID" $notionClientId
   New-Field "NOTION_CLIENT_SECRET" $notionClientSecret
   New-Field "EOS_PRODUCTION_COMPANY_ID" $companyId "STRING"

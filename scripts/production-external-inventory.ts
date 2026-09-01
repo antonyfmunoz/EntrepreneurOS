@@ -245,6 +245,7 @@ const releaseSubjects = Array.from(new Set(machines.map((machine: any) => machin
 const flySecretNames = flySecrets.filter((secret: any) => secret.status === "Deployed").map((secret: any) => secret.name).sort();
 const requiredFlySecretNames = [
   "CLERK_PUBLISHABLE_KEY", "CLERK_SECRET_KEY", "DATABASE_URL", "SESSION_SECRET", "EOS_CREDENTIAL_ENCRYPTION_KEY",
+  "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET",
   "EOS_ALERT_WEBHOOK_URL", "EOS_ALERT_WEBHOOK_SECRET", "STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET", "EOS_STRIPE_PLANS",
   "EOS_ARTIFACT_S3_BUCKET", "EOS_ARTIFACT_S3_ENDPOINT", "EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_S3_SECRET_ACCESS_KEY",
   "EOS_ARTIFACT_BACKUP_S3_BUCKET", "EOS_ARTIFACT_BACKUP_S3_ENDPOINT", "EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY",
@@ -285,7 +286,9 @@ const signals: ExternalProductionInventorySignals = {
     googleCredentialValid: google.valid,
     gmailRead: googleScopes.has("https://www.googleapis.com/auth/gmail.readonly"),
     gmailSend: googleScopes.has("https://www.googleapis.com/auth/gmail.send"),
-    driveRead: googleScopes.has("https://www.googleapis.com/auth/drive.readonly"),
+    driveRead: googleScopes.has("https://www.googleapis.com/auth/drive.metadata.readonly")
+      || googleScopes.has("https://www.googleapis.com/auth/drive.readonly")
+      || googleScopes.has("https://www.googleapis.com/auth/drive"),
     calendarEvents: googleScopes.has("https://www.googleapis.com/auth/calendar.events"),
     notionInternalBotValid: notion.valid && notion.type === "bot" && notion.ownerType === "workspace",
     notionPublicOAuthPresent: Boolean(productionFields.get("NOTION_CLIENT_ID") && productionFields.get("NOTION_CLIENT_SECRET")),
