@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { declaredInfrastructureVendors, productionRuntimeConfigurationIssues, runtimeReleaseSubject } from "../../server/security/release-configuration";
+import { declaredInfrastructureVendors, productionDeploymentConfiguration, productionDeploymentConfigurationIssues, productionRuntimeConfiguration, productionRuntimeConfigurationIssues, runtimeReleaseSubject } from "../../server/security/release-configuration";
 
 const valid = {
   DATABASE_URL: "postgresql://app:secret@db.example.com/eos?sslmode=require",
@@ -50,6 +50,47 @@ const valid = {
 };
 
 describe("production runtime configuration", () => {
+  const internalDisabled = {
+    ...valid, EOS_PUBLIC_PAID_SAAS: "false", EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED: "false",
+    STRIPE_RESTRICTED_KEY: "", STRIPE_WEBHOOK_SECRET: "", EOS_STRIPE_PLANS: "",
+  };
+
+  it("allows a safe internal release while payment-launch readiness remains false", () => {
+    expect(productionDeploymentConfigurationIssues(internalDisabled)).toEqual([]);
+    expect(productionRuntimeConfigurationIssues(internalDisabled)).toEqual(["operatingCompanyPaymentsConfigured"]);
+    expect(internalDisabled.EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED).toBe("false");
+    const { operatingCompanyPaymentsConfigured, ...readiness } = productionRuntimeConfiguration(internalDisabled);
+    const { operatingCompanyPaymentBoundarySafe, ...deployment } = productionDeploymentConfiguration(internalDisabled);
+    expect(operatingCompanyPaymentsConfigured).toBe(false);
+    expect(operatingCompanyPaymentBoundarySafe).toBe(true);
+    expect(deployment).toEqual(readiness);
+  });
+
+  it.each([undefined, "", "0", "FALSE", "disabled", "true"])("rejects a non-explicit disabled payment boundary: %s", effects => {
+    expect(productionDeploymentConfigurationIssues({ ...internalDisabled, EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED: effects }))
+      .toContain("operatingCompanyPaymentBoundarySafe");
+  });
+
+  it("retains every other failing configuration check for an internal release", () => {
+    const env = { EOS_PUBLIC_PAID_SAAS: "false", EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED: "false" };
+    const launchIssues = productionRuntimeConfigurationIssues(env).filter(key => key !== "operatingCompanyPaymentsConfigured");
+    expect(productionDeploymentConfigurationIssues(env)).toEqual(launchIssues);
+    expect(launchIssues.length).toBeGreaterThan(20);
+    expect(productionDeploymentConfigurationIssues({ ...internalDisabled, STRIPE_RESTRICTED_KEY: "rk_live_platform_fixture" }))
+      .toContain("platformBillingSafe");
+    expect(productionDeploymentConfigurationIssues({ ...internalDisabled, EOS_ALERT_WEBHOOK_SECRET: "" }))
+      .toContain("operationalAlertsConfigured");
+    expect(productionDeploymentConfigurationIssues({ ...internalDisabled, EOS_RELEASE_SUBJECT: "latest" }))
+      .toContain("immutableReleaseSubject");
+  });
+
+  it("does not turn internal-release permission into public SaaS permission", () => {
+    expect(productionDeploymentConfigurationIssues({ ...internalDisabled, EOS_PUBLIC_PAID_SAAS: "true" }))
+      .toContain("platformBillingSafe");
+    expect(productionDeploymentConfigurationIssues({ ...internalDisabled, EOS_PUBLIC_PAID_SAAS: undefined }))
+      .toEqual(expect.arrayContaining(["commercialModeDeclared", "operatingCompanyPaymentBoundarySafe"]));
+  });
+
   it("accepts a complete production identity and managed runtime", () => {
     expect(productionRuntimeConfigurationIssues(valid)).toEqual([]);
     expect(runtimeReleaseSubject(valid)).toBe(valid.EOS_RELEASE_SUBJECT);

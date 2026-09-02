@@ -314,3 +314,24 @@ export function productionRuntimeConfigurationIssues(
     .filter(([, configured]) => !configured)
     .map(([key]) => key);
 }
+
+/** Deployment safety is not payment-launch readiness. All other gates are shared. */
+export function productionDeploymentConfiguration(
+  env: ReleaseEnvironment = process.env,
+) {
+  const { operatingCompanyPaymentsConfigured: paymentsConfigured, ...safety } = productionRuntimeConfiguration(env);
+  return {
+    ...safety,
+    operatingCompanyPaymentBoundarySafe: paymentsConfigured || (
+      env.EOS_PUBLIC_PAID_SAAS === "false" && env.EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED === "false"
+    ),
+  };
+}
+
+export function productionDeploymentConfigurationIssues(
+  env: ReleaseEnvironment = process.env,
+): string[] {
+  return Object.entries(productionDeploymentConfiguration(env))
+    .filter(([, configured]) => !configured)
+    .map(([key]) => key);
+}

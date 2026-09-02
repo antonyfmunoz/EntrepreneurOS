@@ -1,7 +1,7 @@
-import { productionRuntimeConfiguration } from "../server/security/release-configuration";
+import { productionDeploymentConfiguration } from "../server/security/release-configuration";
 
 const report = {
-  ...productionRuntimeConfiguration(),
+  ...productionDeploymentConfiguration(),
   clerkBuildPublishableProduction: (process.env.VITE_CLERK_PUBLISHABLE_KEY || "").startsWith("pk_live_"),
   posthogProductionConfigured: Boolean(process.env.VITE_POSTHOG_API_KEY?.startsWith("phc_") && !process.env.VITE_POSTHOG_API_KEY.toLowerCase().includes("placeholder")),
   anthropicConfigured: Boolean(process.env.ANTHROPIC_API_KEY),

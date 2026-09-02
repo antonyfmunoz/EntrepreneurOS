@@ -15,8 +15,9 @@ export function alertEmailConfiguration(env: NodeJS.ProcessEnv = process.env) {
   return { senderUserId, senderAddress, recipient, secret };
 }
 
-export function verifyAlertEmailRequest(raw: Buffer, timestamp: string, signature: string, secret: string, now = Date.now()) {
-  if (!raw.length || raw.length > 16_384 || !/^\d{10}$/.test(timestamp)
+export function verifyAlertEmailRequest(raw: unknown, timestamp: unknown, signature: unknown, secret: string, now = Date.now()) {
+  if (!Buffer.isBuffer(raw) || typeof timestamp !== "string" || typeof signature !== "string"
+    || !raw.length || raw.length > 16_384 || !/^\d{10}$/.test(timestamp)
     || Math.abs(now - Number(timestamp) * 1000) > 300_000 || !/^sha256=[a-f0-9]{64}$/.test(signature))
     throw new Error("Invalid signed alert.");
   const expected = createHmac("sha256", secret).update(timestamp).update(".").update(raw).digest();

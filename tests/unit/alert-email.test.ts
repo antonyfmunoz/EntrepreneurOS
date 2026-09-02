@@ -38,6 +38,12 @@ describe("signed fixed-recipient operational alerts", () => {
     const raw = Buffer.alloc(16_385, 65);
     expect(() => verifyAlertEmailRequest(raw, timestamp, sign(raw), secret, now)).toThrow();
   });
+  it("rejects body and header type confusion before reading or hashing input", () => {
+    for (const raw of [null, undefined, body.toString(), [], { length: body.length }, { type: "Buffer", data: [...body] }])
+      expect(() => verifyAlertEmailRequest(raw, timestamp, sign(), secret, now)).toThrow("Invalid signed alert.");
+    expect(() => verifyAlertEmailRequest(body, [timestamp], sign(), secret, now)).toThrow("Invalid signed alert.");
+    expect(() => verifyAlertEmailRequest(body, timestamp, [sign()], secret, now)).toThrow("Invalid signed alert.");
+  });
   it("requires a configured platform-admin sender and one fixed recipient", () => {
     expect(alertEmailConfiguration(env)?.recipient).toBe("recipient@example.test");
     for (const change of [{ EOS_ALERT_EMAIL_SENDER_USER_ID: "other" }, { EOS_ALERT_EMAIL_RECIPIENT: "a@example.test,b@example.test" }, { EOS_ALERT_EMAIL_RECIPIENT: "a@example.test\r\nBcc:x@example.test" }, { EOS_ALERT_EMAIL_SENDER_ADDRESS: "" }, { EOS_ALERT_WEBHOOK_SECRET: "short" }])
