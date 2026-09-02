@@ -184,7 +184,6 @@ async function requireCleanUploadedArtifact(
 ): Promise<void> {
   const scan = await scanBufferForMalware(bytes, {
     mimeType,
-    sizeBytes: bytes.length,
     sha256,
   });
   if (scan.state === "infected")
