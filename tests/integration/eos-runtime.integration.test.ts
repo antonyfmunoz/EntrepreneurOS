@@ -6595,7 +6595,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       organizationKey: "ORG-EMPYREAN-STUDIOS",
       activationState: "blocked",
     });
-    expect(first.body.report.activationBlockers).toHaveLength(7);
+    expect(first.body.report.activationBlockers).toHaveLength(8);
     expect(first.body.compiledInstance).toMatchObject({
       schemaVersion: "eos.compiled-company-instance.v1",
       companyId,
@@ -6606,7 +6606,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     });
     expect(first.body.compiledInstance.activeCapabilityKeys).toHaveLength(14);
     expect(first.body.compiledInstance.dormantCapabilityKeys).toHaveLength(3);
-    expect(first.body.compiledInstance.providerBindingKeys).toHaveLength(5);
+    expect(first.body.compiledInstance.providerBindingKeys).toHaveLength(7);
     expect(first.body.compiledInstance.provenanceGraph.length).toBeGreaterThan(0);
     expect(first.body.semanticParity).toMatchObject({
       canonicalCapabilitiesCreated: 17,
@@ -6702,7 +6702,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const referenceBindings = systems.body.bindings.filter((binding: any) =>
       binding.integrationKey.startsWith("INTEGRATION-EMPYREAN-"),
     );
-    expect(referenceBindings).toHaveLength(5);
+    expect(referenceBindings).toHaveLength(7);
     expect(
       referenceBindings.every(
         (binding: any) =>
@@ -7267,7 +7267,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const approvedCycle = approvedState.body.customerValueCycles.find(
       (item: any) => item.id === created.body.id,
     );
-    expect(approvedCycle.providerCheckpoints).toHaveLength(5);
+    expect(approvedCycle.providerCheckpoints).toHaveLength(6);
     expect(
       approvedCycle.providerCheckpoints.map((item: any) => item.providerKey),
     ).toEqual([
@@ -7275,6 +7275,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       "gohighlevel",
       "google-workspace",
       "notion",
+      "quickbooks",
       "stripe",
     ]);
     expect(

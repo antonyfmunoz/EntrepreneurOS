@@ -33,7 +33,7 @@ describe("EOS company compilation contracts", () => {
         (capability) => capability.state === "dormant",
       ),
     ).toHaveLength(3);
-    expect(result.package?.providerBindingDeclarations.value).toHaveLength(5);
+    expect(result.package?.providerBindingDeclarations.value).toHaveLength(7);
     expect(
       result.package?.providerBindingDeclarations.value.every(
         (binding) =>
