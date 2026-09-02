@@ -68,7 +68,7 @@ describe("production deployment script contract", () => {
     expect(deployScript).not.toContain('"EOS_STRIPE_PLANS"');
   });
 
-  it("requires and stages both credentialed S3 custody planes and malware scanning", () => {
+  it("requires and stages both credentialed S3 custody planes without external malware-scanner credentials", () => {
     for (const name of [
       "EOS_ARTIFACT_STORAGE_PROVIDER",
       "EOS_ARTIFACT_S3_BUCKET",
@@ -84,12 +84,12 @@ describe("production deployment script contract", () => {
       "EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY",
       "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID",
       "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY",
-      "EOS_MALWARE_SCAN_ENDPOINT",
-      "EOS_MALWARE_SCAN_SECRET",
     ]) {
       expect(deployScript.match(new RegExp(name, "g"))?.length).toBeGreaterThanOrEqual(2);
       expect(deployScript).toMatch(new RegExp(`\\$runtimeSecretNames[\\s\\S]*"${name}"`));
     }
+    expect(deployScript).not.toContain("EOS_MALWARE_SCAN_ENDPOINT");
+    expect(deployScript).not.toContain("EOS_MALWARE_SCAN_SECRET");
   });
 
   it("stages optional transcription credentials only when the kill switch is enabled", () => {

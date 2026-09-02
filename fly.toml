@@ -7,6 +7,9 @@ primary_region = "iad"
 [env]
   NODE_ENV = "production"
   PORT = "5000"
+  EOS_MALWARE_SCAN_MODE = "clamav"
+  EOS_CLAMAV_HOST = "127.0.0.1"
+  EOS_CLAMAV_PORT = "3310"
 
 [deploy]
   release_command = "node dist/verify-migration-state.js"
@@ -32,4 +35,4 @@ primary_region = "iad"
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "512mb"
+  memory = "2gb"

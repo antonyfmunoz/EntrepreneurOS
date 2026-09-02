@@ -61,6 +61,21 @@ const artifactLifecycle = vi.hoisted(() => ({
   objects: new Map<string, Buffer>(),
 }));
 
+vi.mock("../../server/security/malware-scanner", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("../../server/security/malware-scanner")
+    >();
+  return {
+    ...actual,
+    scanBufferForMalware: async () => ({
+      state: "clean" as const,
+      engine: "fixture-scanner",
+      completedAt: new Date("2026-08-16T00:00:00.000Z"),
+    }),
+  };
+});
+
 vi.mock("../../server/artifacts/candidate-files", async (importOriginal) => {
   const actual =
     await importOriginal<

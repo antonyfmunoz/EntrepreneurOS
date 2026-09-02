@@ -1,4 +1,5 @@
 import { operatingCompanyPaymentsConfigured } from "./company-payments";
+import { nativeClamavConfigured } from "./malware-scanner";
 
 type ReleaseEnvironment = Record<string, string | undefined>;
 
@@ -252,10 +253,11 @@ export function productionRuntimeConfiguration(
     nativeEsignBackupCredentialsConfigured: hasS3ArtifactCredentials(env, true),
     nativeEsignBackupEncryptionConfigured: hasS3ArtifactEncryption(env, true),
     malwareScannerConfigured:
-      isHttpsWebhook(env.EOS_MALWARE_SCAN_ENDPOINT) &&
-      Boolean(
-        env.EOS_MALWARE_SCAN_SECRET && env.EOS_MALWARE_SCAN_SECRET.length >= 32,
-      ),
+      nativeClamavConfigured(env as NodeJS.ProcessEnv) ||
+      (isHttpsWebhook(env.EOS_MALWARE_SCAN_ENDPOINT) &&
+        Boolean(
+          env.EOS_MALWARE_SCAN_SECRET && env.EOS_MALWARE_SCAN_SECRET.length >= 32,
+        )),
     candidateTranscriptionSafe:
       env.EOS_CANDIDATE_STT_ENABLED !== "true" ||
       Boolean(

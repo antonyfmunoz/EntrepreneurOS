@@ -58,8 +58,11 @@ EOS_ARTIFACT_BACKUP_S3_PREFIX=native-esign
 EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY=op://EntrepreneurOS/Production/EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY
 EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID=op://EntrepreneurOS/Production/EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID
 EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY=op://EntrepreneurOS/Production/EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY
-EOS_MALWARE_SCAN_ENDPOINT=op://EntrepreneurOS/Production/EOS_MALWARE_SCAN_ENDPOINT
-EOS_MALWARE_SCAN_SECRET=op://EntrepreneurOS/Production/EOS_MALWARE_SCAN_SECRET
+# Malware scanning is EOS-owned and runs through the ClamAV daemon bundled in
+# the production image. These non-secret values are also pinned in fly.toml.
+EOS_MALWARE_SCAN_MODE=clamav
+EOS_CLAMAV_HOST=127.0.0.1
+EOS_CLAMAV_PORT=3310
 EOS_CANDIDATE_STT_ENABLED=false
 EOS_CANDIDATE_STT_MODEL=gpt-4o-mini-transcribe
 # When EOS_CANDIDATE_STT_ENABLED=true, add:
