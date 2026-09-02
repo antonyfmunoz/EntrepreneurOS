@@ -22,6 +22,7 @@ import { startIntegrationDispatchRecoveryWorker } from "./integrations/dispatch-
 import { startProviderIngressWorker } from "./integrations/provider-ingress-worker";
 import { startAgentScheduleWorker } from "./agents/scheduler";
 import { productionRuntimeConfigurationIssues, runtimeReleaseSubject } from "./security/release-configuration";
+import { nativeClamavConfigured, nativeClamavHealthy } from "./security/malware-scanner";
 
 const app = express();
 app.use(applySecurityHeaders);
@@ -55,6 +56,8 @@ app.get("/api/ready", async (_req, res) => {
   try {
     await db.execute(sql`select 1`);
     if (configurationIssues.length) return res.status(503).json({ status: "not_ready", reason: "configuration" });
+    if (nativeClamavConfigured() && !(await nativeClamavHealthy()))
+      return res.status(503).json({ status: "not_ready", reason: "malware_scanner" });
     return res.status(200).json({ status: "ready", app: "eos", releaseSubject: runtimeReleaseSubject() });
   } catch {
     return res.status(503).json({ status: "not_ready", reason: "database" });

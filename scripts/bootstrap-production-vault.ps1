@@ -114,8 +114,6 @@ $backupRegion = Read-Required "Enter the backup S3 region"
 $backupEndpoint = Read-Required "Enter the backup S3-compatible HTTPS endpoint" '^https://[^\s]+$'
 $backupAccessKey = Read-Concealed "Paste the backup S3 least-privilege access key ID"
 $backupSecretKey = Read-Concealed "Paste the backup S3 secret access key"
-$malwareEndpoint = Read-Required "Enter the HTTPS malware-scanner endpoint" '^https://[^\s]+$'
-$malwareSecret = Read-Concealed "Paste the malware-scanner bearer secret (32+ characters)" '^.{32,}$'
 
 $template = op item template get "Secure Note" --format json | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0) { throw "Could not load the 1Password Secure Note template." }
@@ -157,8 +155,6 @@ $template.fields += @(
   New-Field "EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY" (New-RandomBase64 32)
   New-Field "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID" $backupAccessKey
   New-Field "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY" $backupSecretKey
-  New-Field "EOS_MALWARE_SCAN_ENDPOINT" $malwareEndpoint "STRING"
-  New-Field "EOS_MALWARE_SCAN_SECRET" $malwareSecret
   New-Field "EOS_PRODUCTION_VAULT_BOOTSTRAP_RECEIPT" ("receipt:1password/" + (New-RandomHex 16)) "STRING"
 )
 

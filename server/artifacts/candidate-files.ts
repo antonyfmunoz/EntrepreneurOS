@@ -6,6 +6,7 @@ import {
   removeNativeEsignArtifact,
   storeNativeEsignArtifact,
 } from "./native-esign-files";
+import { scanBufferForMalware, type MalwareScanResult } from "../security/malware-scanner";
 
 export const CANDIDATE_FILE_MAX_BYTES = 10 * 1024 * 1024;
 
@@ -186,11 +187,7 @@ export async function deleteCandidateFile(
   await rm(artifactPath(storageKey, env).target, { force: true });
 }
 
-export type CandidateFileScanResult = {
-  state: "pending" | "clean" | "infected" | "failed";
-  engine: string | null;
-  completedAt: Date | null;
-};
+export type CandidateFileScanResult = MalwareScanResult;
 
 export async function scanCandidateFile(
   buffer: unknown,
@@ -200,64 +197,7 @@ export async function scanCandidateFile(
   const bytes = normalizedCandidateFileBuffer(buffer);
   if (bytes.length !== metadata.sizeBytes || candidateFileSha256(bytes) !== metadata.sha256)
     throw new Error("candidate_file_metadata_mismatch");
-  const endpointValue = env.EOS_MALWARE_SCAN_ENDPOINT?.trim();
-  if (!endpointValue)
-    return { state: "pending", engine: null, completedAt: null };
-  let endpoint: URL;
-  try {
-    endpoint = new URL(endpointValue);
-  } catch {
-    return { state: "failed", engine: null, completedAt: new Date() };
-  }
-  if (
-    endpoint.protocol !== "https:" ||
-    endpoint.username ||
-    endpoint.password ||
-    endpoint.search ||
-    endpoint.hash
-  )
-    return { state: "failed", engine: null, completedAt: new Date() };
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": metadata.mimeType,
-        "Content-Length": String(bytes.length),
-        "X-Content-SHA256": metadata.sha256,
-        ...(env.EOS_MALWARE_SCAN_SECRET
-          ? { Authorization: `Bearer ${env.EOS_MALWARE_SCAN_SECRET}` }
-          : {}),
-      },
-      body: bytes,
-      signal: controller.signal,
-    });
-    if (!response.ok)
-      return { state: "failed", engine: null, completedAt: new Date() };
-    const payload = (await response.json()) as {
-      verdict?: string;
-      engine?: string;
-    };
-    const state =
-      payload.verdict === "clean"
-        ? "clean"
-        : payload.verdict === "infected"
-          ? "infected"
-          : "failed";
-    return {
-      state,
-      engine:
-        typeof payload.engine === "string"
-          ? payload.engine.slice(0, 120)
-          : null,
-      completedAt: new Date(),
-    };
-  } catch {
-    return { state: "failed", engine: null, completedAt: new Date() };
-  } finally {
-    clearTimeout(timeout);
-  }
+  return scanBufferForMalware(bytes, metadata, env);
 }
 
 export function safeAttachmentHeader(fileName: string): string {

@@ -43,8 +43,9 @@ const valid = {
   EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY: Buffer.alloc(32, 12).toString("base64"),
   EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID: "backup-access-key-id",
   EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY: "backup-secret-access-key-example",
-  EOS_MALWARE_SCAN_ENDPOINT: "https://scanner.example.com/scan",
-  EOS_MALWARE_SCAN_SECRET: "m".repeat(32),
+  EOS_MALWARE_SCAN_MODE: "clamav",
+  EOS_CLAMAV_HOST: "127.0.0.1",
+  EOS_CLAMAV_PORT: "3310",
 };
 
 describe("production runtime configuration", () => {
@@ -100,8 +101,9 @@ describe("production runtime configuration", () => {
       EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY: "",
       EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID: "",
       EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY: "",
-      EOS_MALWARE_SCAN_ENDPOINT: "http://scanner.example.com/scan?secret=bad",
-      EOS_MALWARE_SCAN_SECRET: "short",
+      EOS_MALWARE_SCAN_MODE: "clamav",
+      EOS_CLAMAV_HOST: "scanner.example.com",
+      EOS_CLAMAV_PORT: "3310",
       EOS_CANDIDATE_STT_ENABLED: "true",
       EOS_CANDIDATE_STT_MODEL: "",
       OPENAI_API_KEY: "",

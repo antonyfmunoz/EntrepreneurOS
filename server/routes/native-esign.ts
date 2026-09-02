@@ -165,6 +165,7 @@ import {
 import { listNativeEsignStorageDrills, runNativeEsignStorageDrill } from "../esign/storage-drill";
 import { writeLog } from "../observability/logger";
 import { encryptCredential } from "../security/credential-encryption";
+import { scanBufferForMalware } from "../security/malware-scanner";
 import * as gmail from "../integrations/gmail";
 import { deliverNativeEsignRecipient } from "../esign/recipient-delivery";
 import { EosRouteError, authorizeAction, companyAccess, mayAccessClassification, visibleSeatIds } from "./eos-runtime";
@@ -174,6 +175,29 @@ class NativeEsignError extends Error {
   constructor(public status: number, public code: string, message: string) {
     super(message);
   }
+}
+
+async function requireCleanUploadedArtifact(
+  bytes: Buffer,
+  mimeType: string,
+  sha256: string,
+): Promise<void> {
+  const scan = await scanBufferForMalware(bytes, {
+    mimeType,
+    sha256,
+  });
+  if (scan.state === "infected")
+    throw new NativeEsignError(
+      422,
+      "native_esign_upload_infected",
+      "EOS rejected the upload because the malware scanner detected unsafe content.",
+    );
+  if (scan.state !== "clean")
+    throw new NativeEsignError(
+      503,
+      "native_esign_upload_scan_unavailable",
+      "EOS could not complete the required malware scan. Nothing was stored; retry later.",
+    );
 }
 
 const publicEsignRateLimit = fixedWindowRateLimit({
@@ -950,6 +974,11 @@ export function registerPublicNativeEsignRoutes(app: Express): void {
       signatureCaptureSizeBytes = capture.sizeBytes;
       signatureCaptureWidth = capture.width;
       signatureCaptureHeight = capture.height;
+      await requireCleanUploadedArtifact(
+        capture.bytes,
+        capture.mimeType,
+        capture.sha256,
+      );
       signatureCaptureStorageKey = nativeEsignSignatureStorageKey(
         context.envelope.companyId,
         context.envelope.id,
@@ -1428,12 +1457,20 @@ export function registerNativeEsignRoutes(app: Express): void {
       const missingSignatureRoles = nativeEsignRolesMissingRequiredSignature(input.fields);
       if (missingSignatureRoles.length)
         throw new NativeEsignError(400, "native_esign_recipient_signature_field_missing", `Every authored recipient role requires a visible, required signature field. Missing: ${missingSignatureRoles.join(", ")}.`);
-      let metadata;
+      let boundedMetadata: ReturnType<typeof validateNativeEsignPdf>;
       try {
-        metadata = await inspectNativeEsignPdf(req.body);
+        boundedMetadata = validateNativeEsignPdf(req.body);
       } catch {
         throw new NativeEsignError(400, "native_esign_pdf_invalid", "Upload a readable, non-encrypted PDF with at least one page.");
       }
+      await requireCleanUploadedArtifact(
+        req.body,
+        boundedMetadata.mimeType,
+        boundedMetadata.sha256,
+      );
+      let metadata;
+      try { metadata = await inspectNativeEsignPdf(req.body); }
+      catch { throw new NativeEsignError(400, "native_esign_pdf_invalid", "Upload a readable, non-encrypted PDF with at least one page."); }
       if (input.fields.some((field) => field.page > metadata.pageCount))
         throw new NativeEsignError(400, "native_esign_field_page_invalid", "Every signing field must be placed on a page in the uploaded PDF.");
       if (input.counselEvidenceId) {
@@ -1497,6 +1534,12 @@ export function registerNativeEsignRoutes(app: Express): void {
         const sourceEnvelope = await db.query.eosEsignEnvelopes.findFirst({ where: and(eq(eosEsignEnvelopes.id, negotiation.envelopeId), eq(eosEsignEnvelopes.companyId, companyId), eq(eosEsignEnvelopes.documentVersionId, source.id)) });
         if (!sourceEnvelope) throw new NativeEsignError(409, "native_esign_revision_source_mismatch", "The negotiation does not govern this source document version.");
       }
+      let boundedMetadata: ReturnType<typeof validateNativeEsignPdf>;
+      try {
+        boundedMetadata = validateNativeEsignPdf(req.body);
+      }
+      catch { throw new NativeEsignError(400, "native_esign_pdf_invalid", "Upload a readable, non-encrypted PDF with at least one page."); }
+      await requireCleanUploadedArtifact(req.body, boundedMetadata.mimeType, boundedMetadata.sha256);
       let pdfMetadata;
       try { pdfMetadata = await inspectNativeEsignPdf(req.body); }
       catch { throw new NativeEsignError(400, "native_esign_pdf_invalid", "Upload a readable, non-encrypted PDF with at least one page."); }

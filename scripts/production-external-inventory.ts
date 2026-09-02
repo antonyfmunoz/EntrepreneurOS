@@ -316,7 +316,6 @@ const requiredFlySecretNames = [
   "EOS_ALERT_WEBHOOK_URL", "EOS_ALERT_WEBHOOK_SECRET",
   "EOS_ARTIFACT_S3_BUCKET", "EOS_ARTIFACT_S3_REGION", "EOS_ARTIFACT_S3_ENDPOINT", "EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_S3_SECRET_ACCESS_KEY",
   "EOS_ARTIFACT_BACKUP_S3_BUCKET", "EOS_ARTIFACT_BACKUP_S3_REGION", "EOS_ARTIFACT_BACKUP_S3_ENDPOINT", "EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY",
-  "EOS_MALWARE_SCAN_ENDPOINT", "EOS_MALWARE_SCAN_SECRET",
 ];
 const missingFlySecretNames = requiredFlySecretNames.filter((name) => !flySecretNames.includes(name));
 const absentFlySecretNames = requiredFlySecretNames.filter((name) => !observedFlySecretNames.includes(name));
@@ -362,7 +361,11 @@ const signals: ExternalProductionInventorySignals = {
     }),
     primaryArtifactPlanePresent: ["EOS_ARTIFACT_S3_BUCKET", "EOS_ARTIFACT_S3_ENDPOINT", "EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_S3_SECRET_ACCESS_KEY"].every((name) => Boolean(productionFields.get(name)?.trim())),
     backupArtifactPlanePresent: ["EOS_ARTIFACT_BACKUP_S3_BUCKET", "EOS_ARTIFACT_BACKUP_S3_ENDPOINT", "EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY"].every((name) => Boolean(productionFields.get(name)?.trim())) && productionFields.get("EOS_ARTIFACT_BACKUP_S3_BUCKET") !== productionFields.get("EOS_ARTIFACT_S3_BUCKET"),
-    malwareScannerPresent: Boolean(productionFields.get("EOS_MALWARE_SCAN_ENDPOINT")?.startsWith("https://") && productionFields.get("EOS_MALWARE_SCAN_SECRET")),
+    malwareScannerPresent: machines.length > 0 && machines.every((machine: any) =>
+      machine.config?.env?.EOS_MALWARE_SCAN_MODE === "clamav"
+      && ["127.0.0.1", "::1", "localhost"].includes(String(machine.config?.env?.EOS_CLAMAV_HOST || "127.0.0.1").toLowerCase())
+      && Number(machine.config?.env?.EOS_CLAMAV_PORT || 3310) === 3310
+    ),
     alertReceiverPresent: Boolean(productionFields.get("EOS_ALERT_WEBHOOK_URL")?.startsWith("https://") && productionFields.get("EOS_ALERT_WEBHOOK_SECRET")),
   },
   providers: {

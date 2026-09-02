@@ -53,10 +53,12 @@ The production helper refuses a dirty worktree, a commit that is not the remote 
 Credential cutover is a distinct production change. Fly exposes secret names, deployment status, and opaque digests—not the previous plaintext values—so an image rollback cannot restore credentials changed by the release. Before approving `CUTOVER`, prove that the credential vault retains the complete prior secret set, identify the provider-side rollback/revocation steps, and assign the operator who can restore it. If secret staging fails partially, stop: the next release will reject the pending state until an operator deliberately completes or restores that cutover. Never treat successful image rollback smoke as proof that credential rollback is complete.
 
 The production vault item must also contain separate least-privilege access-key
-pairs for the primary and backup S3 planes, their distinct bucket/region/KMS
-identities, and the malware-scanner endpoint and bearer secret. The release
-helper stages this entire custody contract together; it rejects a missing or
-partial plane credential pair. EOS never writes those credentials into storage
+pairs for the primary and backup S3 planes and their distinct bucket/region/KMS
+identities. Malware scanning is EOS-owned: the production image bundles ClamAV,
+current signatures, and the continuous signature updater, and exposes the daemon
+only on the machine loopback interface. No external scanner endpoint or bearer
+credential is required. The release helper stages the custody contract together;
+it rejects a missing or partial plane credential pair. EOS never writes credentials into storage
 identity hashes, readiness evidence, or deployment receipts. Candidate
 transcription remains disabled unless its kill switch is explicitly enabled;
 only then is an OpenAI credential required and staged.
