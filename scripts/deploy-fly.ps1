@@ -212,7 +212,8 @@ $releaseContext = Join-Path ([IO.Path]::GetTempPath()) "eos-release-$releaseComm
 $archivePath = Join-Path $releaseContext "source.tar"
 New-Item -ItemType Directory -Path $releaseContext | Out-Null
 try {
-  git archive --format=tar --output=$archivePath $releaseCommit
+  # Preserve committed LF bytes for Linux scripts/configs even on Windows hosts with autocrlf=true.
+  git -c core.autocrlf=false archive --format=tar --output=$archivePath $releaseCommit
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   tar -xf $archivePath -C $releaseContext
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

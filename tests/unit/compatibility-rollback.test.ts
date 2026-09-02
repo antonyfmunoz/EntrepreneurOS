@@ -58,4 +58,8 @@ describe("prepared compatibility rollback evidence", () => {
     expect(deploy.match(/npm run test:e2e:production:authenticated/g)).toHaveLength(2);
     expect(deploy).toContain("rollbackManifestSha256 = $rollbackManifestSha256");
   });
+  it("preserves Linux-compatible source bytes when archiving on Windows", () => {
+    const deploy = readFileSync(new URL("../../scripts/deploy-fly.ps1", import.meta.url), "utf8");
+    expect(deploy).toContain("git -c core.autocrlf=false archive --format=tar --output=$archivePath $releaseCommit");
+  });
 });

@@ -9,7 +9,9 @@ describe("production deployment script contract", () => {
     expect(deployScript).toContain("git status --porcelain --untracked-files=all");
     expect(deployScript).toContain('$candidatePath -ne ".claude/settings.local.json"');
     expect(deployScript).toContain("Production releases require a clean worktree");
-    expect(deployScript.indexOf("git status --porcelain")).toBeLessThan(deployScript.indexOf("git archive --format=tar"));
+    const archive = deployScript.indexOf("git -c core.autocrlf=false archive --format=tar");
+    expect(archive).toBeGreaterThan(-1);
+    expect(deployScript.indexOf("git status --porcelain")).toBeLessThan(archive);
   });
 
   it("requires current release-bound backup, migration, restore, rollback, and approval evidence before building", () => {

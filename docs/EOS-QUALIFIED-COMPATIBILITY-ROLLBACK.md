@@ -11,3 +11,5 @@ Required rehearsal proofs: runtime readiness, public smoke, authenticated role/t
 The compatibility fallback retains shared security fixes and intentionally disables only the new Stripe health HTTP probe. This is a bounded fallback, not protection against every defect in shared application code. Record this limitation in the approval. No merchant account is deleted, no Stripe object is activated and no payment action is authorized by fallback selection.
 
 If configured, the final deployment receipt records the incumbent image, chosen rollback image and manifest SHA-256 separately. Without a complete approved manifest, preparation must stop before any production mutation. Never populate missing receipts or approvals with synthetic passing values.
+
+Release archives explicitly disable Git's Windows CRLF conversion. The Linux entrypoint and ClamAV configuration must retain their committed LF bytes; otherwise a locally packaged build fails even when the same commit passes Linux CI. Fallback image preparation must use the same archive setting.
