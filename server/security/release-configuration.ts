@@ -1,5 +1,6 @@
 import { operatingCompanyPaymentsConfigured } from "./company-payments";
 import { nativeClamavConfigured } from "./malware-scanner";
+import { ALERT_EMAIL_PATH, alertEmailConfiguration } from "../observability/alert-email";
 
 type ReleaseEnvironment = Record<string, string | undefined>;
 
@@ -248,6 +249,8 @@ export function productionRuntimeConfiguration(
       Boolean(
         env.EOS_ALERT_WEBHOOK_SECRET &&
         env.EOS_ALERT_WEBHOOK_SECRET.length >= 32,
+      ) && (
+        !env.EOS_ALERT_WEBHOOK_URL?.endsWith(ALERT_EMAIL_PATH) || Boolean(alertEmailConfiguration(env))
       ),
     accountDeletionEnabled: env.EOS_ACCOUNT_DELETION_ENABLED === "true",
     legalEnforcementEnabled: env.EOS_LEGAL_ENFORCEMENT === "true",

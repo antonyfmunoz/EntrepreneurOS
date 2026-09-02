@@ -29,6 +29,9 @@ EOS_PRODUCTION_FORBIDDEN_COMPANY_ID=op://EntrepreneurOS/Production/EOS_PRODUCTIO
 EOS_PRODUCTION_PROMOTION_EVIDENCE_PATH=.tmp/eos-production-promotion-evidence.json
 EOS_ALERT_WEBHOOK_URL=op://EntrepreneurOS/Production/EOS_ALERT_WEBHOOK_URL
 EOS_ALERT_WEBHOOK_SECRET=op://EntrepreneurOS/Production/EOS_ALERT_WEBHOOK_SECRET
+EOS_ALERT_EMAIL_SENDER_USER_ID=op://EntrepreneurOS/Production/EOS_ALERT_EMAIL_SENDER_USER_ID
+EOS_ALERT_EMAIL_SENDER_ADDRESS=op://EntrepreneurOS/Production/EOS_ALERT_EMAIL_SENDER_ADDRESS
+EOS_ALERT_EMAIL_RECIPIENT=op://EntrepreneurOS/Production/EOS_ALERT_EMAIL_RECIPIENT
 EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS=op://EntrepreneurOS/Production/EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS
 # Keep disabled until the exact merchant, credentials, prices, and receipts are
 # verified and live execution is explicitly approved after the account cutover.

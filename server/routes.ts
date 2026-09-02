@@ -34,8 +34,10 @@ import { errorHandler } from "./middleware/error-handler";
 import { blockLegacyUnscopedApis, requireLocalApiAuth } from "./middleware/api-security";
 import { federationCommandRateLimit, localApiRateLimit } from "./middleware/rate-limit";
 import { untrustedArtifactIngressMode } from "./security/release-configuration";
+import { registerAlertEmailReceiver, registerAlertEmailReceiptRoutes } from "./routes/alert-email";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  registerAlertEmailReceiver(app);
   app.get("/api/runtime-capabilities", (_req, res) => {
     const artifactIngressMode = untrustedArtifactIngressMode();
     res.setHeader("Cache-Control", "no-store");
@@ -93,6 +95,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerUserRoutes(app);
   registerLegalRoutes(app);
   registerOperationalRoutes(app);
+  registerAlertEmailReceiptRoutes(app);
 
   // __ORCHESTRATOR_GENERATED_ROUTES__ (do not remove this marker)
   {

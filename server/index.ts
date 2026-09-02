@@ -32,7 +32,7 @@ app.use(express.json({
   limit: process.env.EOS_JSON_BODY_LIMIT || "1mb",
   verify(req, _res, buffer) {
     const request = req as express.Request;
-    if (request.originalUrl === "/api/billing/webhook" || request.originalUrl.startsWith("/api/eos/recovery-provider-webhooks/") || request.originalUrl.startsWith("/api/eos/integration-webhooks/") || request.originalUrl.startsWith("/api/eos/provider-ingress/"))
+    if (request.path === "/api/operations/alert-email" || request.originalUrl === "/api/billing/webhook" || request.originalUrl.startsWith("/api/eos/recovery-provider-webhooks/") || request.originalUrl.startsWith("/api/eos/integration-webhooks/") || request.originalUrl.startsWith("/api/eos/provider-ingress/"))
       request.rawBody = Buffer.from(buffer);
   },
 }));
