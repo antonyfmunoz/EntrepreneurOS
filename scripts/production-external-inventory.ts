@@ -281,7 +281,7 @@ const productionItem = productionItemExists ? commandJson("op", ["item", "get", 
 const productionFields = itemFieldMap(productionItem);
 const productionDatabaseUrl = productionFields.get("DATABASE_URL") || managedValue("op://UMH-Production/Database-Neon/url");
 
-const [targetMigrationCount, home, health, ready, tls, ipv4, ipv6, nameservers, google, notion, artifactIngress] = await Promise.all([
+const [targetMigrationCount, home, health, ready, tls, ipv4, ipv6, nameservers, notion, artifactIngress] = await Promise.all([
   currentMigrationCount(),
   httpObservation("/"),
   httpObservation("/health"),
@@ -290,10 +290,13 @@ const [targetMigrationCount, home, health, ready, tls, ipv4, ipv6, nameservers, 
   dns.resolve4(new URL(publicOrigin).hostname).catch(() => []),
   dns.resolve6(new URL(publicOrigin).hostname).catch(() => []),
   dns.resolveNs(new URL(publicOrigin).hostname).catch(() => []),
-  Promise.resolve(runtimeGoogleObservation()),
   notionObservation(),
   artifactIngressObservation(),
 ]);
+// The Google observation uses a synchronous remote-console probe. Run it only
+// after the parallel network checks complete so it cannot starve the event
+// loop and turn an otherwise-valid TLS handshake into a false negative.
+const google = runtimeGoogleObservation();
 const [vaultDatabaseCandidate, runtimeDatabase] = await Promise.all([
   databaseObservation(targetMigrationCount),
   Promise.resolve(runtimeDatabaseObservation(targetMigrationCount)),
