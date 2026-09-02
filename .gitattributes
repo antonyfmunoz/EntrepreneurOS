@@ -2,3 +2,4 @@
 # Keep its runtime configuration Unix-normalized even when the repository is
 # prepared from a Windows workstation.
 docker/*.conf text eol=lf
+docker/*.sh text eol=lf
