@@ -17,7 +17,7 @@ const gmailAdapter = vi.hoisted(() => ({
   readOAuthState: vi.fn(),
   exchangeCode: vi.fn(),
   connectionSummary: vi.fn(async () => ({ configured: false, connected: false, grantedScopes: [] })),
-  verifyConnection: vi.fn(async () => ({ configured: false, connected: false, healthy: false, services: {}, grantedScopes: [] })),
+  verifyConnection: vi.fn(async () => ({ configured: true, connected: true, healthy: true, services: { Gmail: true, Calendar: true, Drive: true }, grantedScopes: ["https://www.googleapis.com/auth/gmail.send"], accountEmail: "operator@example.test" })),
   disconnect: vi.fn(async () => ({ success: true, providerRevoked: true })),
 }));
 const storageAdapter = vi.hoisted(() => ({
@@ -95,6 +95,16 @@ describe("Notion integration HTTP controls", () => {
   it("routes Google disconnect through provider revocation for the signed-in user", async () => {
     await api.post("/api/eos/companies/12/integrations/gmail/disconnect").send({}).expect(200, { success: true, providerRevoked: true });
     expect(gmailAdapter.disconnect).toHaveBeenCalledWith(userId);
+  });
+
+  it("returns the verified Google account and the exact granted capabilities", async () => {
+    const response = await api.get("/api/eos/companies/12/integrations/gmail/status?verify=true").expect(200);
+    expect(response.body).toEqual(expect.objectContaining({
+      healthy: true,
+      accountEmail: "operator@example.test",
+      grantedScopes: ["https://www.googleapis.com/auth/gmail.send"],
+    }));
+    expect(gmailAdapter.verifyConnection).toHaveBeenCalledWith(userId);
   });
 
   it("does not register any legacy unscoped provider-control route", async () => {

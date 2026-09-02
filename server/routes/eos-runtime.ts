@@ -20561,6 +20561,8 @@ export function registerEosRuntimeRoutes(app: Express): void {
             risk: "consequential_write",
             services: gmail.GOOGLE_WORKSPACE_SERVICES,
             serviceHealth: googleWorkspace.services,
+            accountEmail: googleWorkspace.accountEmail,
+            connectionScope: "The signed-in human authorizes this connection. EOS applies it only through this company workspace's seat, authority, approval, and audit controls.",
             operations: gmail.GOOGLE_WORKSPACE_TOOLS,
             requiredScopes: gmail.requestedScopes(),
             grantedScopes: googleWorkspace.grantedScopes,
@@ -20600,6 +20602,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
               "Read content shared with the EntrepreneurOS integration",
             ],
             workspace: notionConnection.workspace,
+            connectionScope: "The signed-in human authorizes this workspace connection. EOS exposes only content that the Notion integration is explicitly allowed to read in this company workspace.",
             executionAdapter: "EOS-owned Notion API adapter",
             manualFallback: "Open the canonical Notion workspace directly.",
             actions: notionConnection.connected
