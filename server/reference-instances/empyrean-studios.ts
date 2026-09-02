@@ -52,6 +52,7 @@ export const EMPYREAN_REFERENCE_PACKAGE = {
     "Verify the exact GoHighLevel location and behavioral test path.",
     "Verify the exact Stripe account, legal holder, mode, payout and event behavior.",
     "Verify the exact DocuSign workspace, template, sender authority and event behavior.",
+    "Verify the exact Slack workspace, app identity, channel scope, permission grant and recovery owner.",
     "Verify the operational mailbox and kickoff calendar.",
     "Complete qualified legal, privacy, tax and accounting review where applicable.",
     "Pass a synthetic payment-to-closeout rehearsal with failure and rollback evidence.",
@@ -405,6 +406,8 @@ export const EMPYREAN_COMPANY_PACKAGE = companyPackageSchema.parse({
       ["docusign", "DocuSign", "esign_oauth"],
       ["google-workspace", "Google Workspace", "workspace_oauth"],
       ["notion", "Notion", "notion_public_oauth"],
+      ["quickbooks", "QuickBooks Online", "accounting_oauth"],
+      ["slack", "Slack", "communications_oauth"],
     ].map(([key, provider, adapterClass]) => ({
       key,
       provider,
@@ -818,7 +821,7 @@ export async function compileEmpyreanReferenceInstance(
         "Distinct founder-led operating context served by Empyrean; this record does not assert separate legal-entity status.",
       classification: "confidential",
     },
-    ...["GoHighLevel", "Stripe", "DocuSign", "Google Workspace", "Notion"].map(
+    ...["GoHighLevel", "Stripe", "DocuSign", "Google Workspace", "Notion", "QuickBooks Online", "Slack"].map(
       (name) => ({
         key: `vendor-${name.toLowerCase().replaceAll(" ", "-")}`,
         name,
@@ -1517,6 +1520,24 @@ export async function compileEmpyreanReferenceInstance(
       fields: ["external reference pages"],
       intent: "migrate",
     },
+    {
+      key: "quickbooks",
+      name: "QuickBooks Online",
+      type: "provider",
+      capabilities: ["accounting ledger", "invoicing", "reconciliation", "financial reporting"],
+      domains: ["finance", "accounting", "tax support"],
+      fields: ["ledger entries", "invoices", "accounts", "reconciliations", "period-close reports"],
+      intent: "integrate",
+    },
+    {
+      key: "slack",
+      name: "Slack",
+      type: "application",
+      capabilities: ["channels", "internal messaging", "decision capture"],
+      domains: ["communications", "operations", "governance"],
+      fields: ["channel messages", "thread replies", "decision links"],
+      intent: "integrate",
+    },
   ] as const;
   await executor
     .insert(eosSystems)
@@ -1573,7 +1594,7 @@ export async function compileEmpyreanReferenceInstance(
       })
       .onConflictDoNothing();
     const adapterKind =
-      provider.key === "google-workspace" || provider.key === "notion"
+      provider.key === "google-workspace" || provider.key === "notion" || provider.key === "quickbooks" || provider.key === "slack"
         ? "oauth"
         : "webhook";
     const integrationBindingId = packageId(`integration:${provider.key}`);

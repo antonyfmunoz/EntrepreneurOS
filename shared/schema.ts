@@ -1803,7 +1803,7 @@ export const eosCustomerValueProviderCheckpoints = pgTable("eos_customer_value_p
 }, (table) => [
   uniqueIndex("eos_customer_value_provider_checkpoint_key_idx").on(table.cycleId, table.providerKey),
   index("eos_customer_value_provider_checkpoint_state_idx").on(table.companyId, table.state),
-  check("eos_customer_value_provider_checkpoint_provider_check", sql`${table.providerKey} IN ('gohighlevel','stripe','docusign','google-workspace','notion')`),
+  check("eos_customer_value_provider_checkpoint_provider_check", sql`${table.providerKey} IN ('gohighlevel','stripe','docusign','google-workspace','notion','quickbooks')`),
   check("eos_customer_value_provider_checkpoint_state_check", sql`${table.state} IN ('required','contract_qualified','contract_failed')`),
   check("eos_customer_value_provider_checkpoint_version_check", sql`${table.version} > 0`),
   check("eos_customer_value_provider_checkpoint_no_live_check", sql`${table.liveProviderVerified} = false`),

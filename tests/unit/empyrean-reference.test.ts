@@ -28,7 +28,7 @@ describe("Empyrean Studios reference package", () => {
   });
 
   it("fails closed on activation and binds every assertion to current Notion sources", () => {
-    expect(EMPYREAN_REFERENCE_PACKAGE.activationBlockers).toHaveLength(7);
+    expect(EMPYREAN_REFERENCE_PACKAGE.activationBlockers).toHaveLength(8);
     expect(EMPYREAN_REFERENCE_PACKAGE.activationBlockers).toEqual(
       expect.arrayContaining([
         expect.stringMatching(/operative agreement/i),
