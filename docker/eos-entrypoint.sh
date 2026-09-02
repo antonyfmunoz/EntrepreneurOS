@@ -1,6 +1,10 @@
 #!/bin/sh
 set -eu
 
+if [ "$#" -gt 0 ]; then
+  exec "$@"
+fi
+
 if [ "${EOS_UNTRUSTED_UPLOADS_ENABLED:-}" = "true" ] && [ "${EOS_MALWARE_SCAN_MODE:-}" = "clamav" ]; then
   mkdir -p /run/clamav
   chown clamav:clamav /run/clamav /var/lib/clamav
