@@ -24,6 +24,13 @@ const storageAdapter = vi.hoisted(() => ({
   upsertOauthToken: vi.fn(),
   deleteOauthToken: vi.fn(),
 }));
+const stripeHealthAdapter = vi.hoisted(() => ({
+  verifyStripeConnection: vi.fn(async () => ({ connected: true, healthy: true, reason: "ready", scope: "merchant_identity_and_credential_configuration", deliveryVerified: false, externalReference: "provider:stripe:acct_fixture:merchant_identity_verified" })),
+}));
+const dbAdapter = vi.hoisted(() => ({
+  bindings: [] as any[],
+  select: vi.fn(() => ({ from: () => ({ where: () => dbAdapter.bindings }) })),
+}));
 const eosAccess = vi.hoisted(() => ({
   companyAccess: vi.fn(async () => ({
     company: { id: 12 },
@@ -37,7 +44,9 @@ const eosAccess = vi.hoisted(() => ({
 
 vi.mock("../../server/integrations/notion", () => notionAdapter);
 vi.mock("../../server/integrations/gmail", () => gmailAdapter);
+vi.mock("../../server/integrations/stripe-health", () => stripeHealthAdapter);
 vi.mock("../../server/storage", () => ({ storage: storageAdapter }));
+vi.mock("../../server/db", () => ({ db: dbAdapter }));
 vi.mock("../../server/routes/eos-runtime", () => {
   class EosRouteError extends Error {
     constructor(public status: number, public code: string, message: string) {
@@ -57,6 +66,8 @@ describe("Notion integration HTTP controls", () => {
     for (const mock of Object.values(notionAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
     for (const mock of Object.values(gmailAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
     storageAdapter.upsertOauthToken.mockReset();
+    stripeHealthAdapter.verifyStripeConnection.mockClear();
+    dbAdapter.bindings = [];
     eosAccess.companyAccess.mockClear();
     eosAccess.authorizeAction.mockClear();
     const app = express();
@@ -105,6 +116,14 @@ describe("Notion integration HTTP controls", () => {
       grantedScopes: ["https://www.googleapis.com/auth/gmail.send"],
     }));
     expect(gmailAdapter.verifyConnection).toHaveBeenCalledWith(userId);
+  });
+
+  it("verifies a company-managed Stripe connection without exposing credentials", async () => {
+    dbAdapter.bindings = [{ id: "stripe-binding-1", companyId: 12, providerKey: "stripe", providerAccountReference: "acct_fixture", lifecycleState: "active", credentialReference: "op://EOS/stripe/restricted-key" }];
+    const response = await api.get("/api/eos/companies/12/integrations/stripe/status?verify=true").expect(200);
+    expect(response.body).toEqual(expect.objectContaining({ configured: true, connected: true, healthy: true, accountReference: "acct_fixture", bindingId: "stripe-binding-1" }));
+    expect(JSON.stringify(response.body)).not.toContain("restricted-key");
+    expect(stripeHealthAdapter.verifyStripeConnection).toHaveBeenCalledWith(expect.objectContaining({ id: "stripe-binding-1" }));
   });
 
   it("does not register any legacy unscoped provider-control route", async () => {
