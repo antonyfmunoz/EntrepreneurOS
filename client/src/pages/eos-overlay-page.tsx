@@ -12507,6 +12507,15 @@ function IntegrationControlCard({
             </p>
           </div>
         )}
+        {integration.accountReference && (
+          <div className="rounded-xl border border-border/70 p-4">
+            <p className="eos-label">Merchant account</p>
+            <p className="mt-1 break-all font-medium">{integration.accountReference}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              This reference identifies the company&apos;s selected payment account; its credentials stay in the deployment vault.
+            </p>
+          </div>
+        )}
         {integration.workspace?.workspaceName && (
           <div className="rounded-xl border border-border/70 p-4">
             <p className="eos-label">Authorized workspace</p>

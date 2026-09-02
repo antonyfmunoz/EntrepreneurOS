@@ -2,15 +2,45 @@ import type { Express, Request, Response } from "express";
 import { storage } from "../storage";
 import * as gmail from "../integrations/gmail";
 import * as notion from "../integrations/notion";
+import { verifyStripeConnection } from "../integrations/stripe-health";
 import { credentialEncryptionConfigured, encryptCredential } from "../security/credential-encryption";
+import { db } from "../db";
+import { eosIntegrationBindings } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { allowedSurfacesFor } from "@shared/eos-runtime";
 import { authorizeAction, companyAccess, EosRouteError } from "./eos-runtime";
 
-type SupportedProvider = "gmail" | "notion";
+type SupportedProvider = "gmail" | "notion" | "stripe";
 
 function providerFrom(req: Request): SupportedProvider {
-  if (req.params.provider === "gmail" || req.params.provider === "notion") return req.params.provider;
+  if (["gmail", "notion", "stripe"].includes(req.params.provider)) return req.params.provider as SupportedProvider;
   throw new EosRouteError(404, "integration_provider_not_found", "This provider is not available in the EOS integration registry.");
+}
+
+async function stripeConnectionStatus(companyId: number) {
+  const bindings = await db.select().from(eosIntegrationBindings).where(
+    eq(eosIntegrationBindings.companyId, companyId),
+  );
+  const binding = bindings.find((item) => item.providerKey === "stripe" && item.lifecycleState === "active")
+    || bindings.find((item) => item.providerKey === "stripe")
+    || null;
+  if (!binding) {
+    return {
+      configured: false,
+      connected: false,
+      healthy: false,
+      reason: "binding_invalid" as const,
+      accountReference: null,
+      bindingId: null,
+    };
+  }
+  const health = await verifyStripeConnection(binding);
+  return {
+    configured: true,
+    ...health,
+    accountReference: binding.providerAccountReference,
+    bindingId: binding.id,
+  };
 }
 
 async function integrationAccess(req: Request, authorityClass: "view" | "execute" | "decide", actionKey: string) {
@@ -41,6 +71,9 @@ export function registerIntegrationRoutes(app: Express): void {
     try {
       await integrationAccess(req, "execute", "integration_provider_authorization.request");
       const provider = providerFrom(req);
+      if (provider === "stripe") {
+        throw new EosRouteError(409, "integration_provider_managed_connection", "Stripe is a company-managed merchant connection. Configure its binding and vaulted restricted key through the Systems registry.");
+      }
       const adapter = provider === "gmail" ? gmail : notion;
       if (!adapter.isConfigured()) return res.status(400).json({ code: "integration_provider_not_configured", message: `${provider === "gmail" ? "Google Workspace" : "Notion"} OAuth or EOS credential encryption is not configured.` });
       const returnTo = `/company/${encodeURIComponent(req.params.companyId)}#systems`;
@@ -54,6 +87,9 @@ export function registerIntegrationRoutes(app: Express): void {
     try {
       await integrationAccess(req, "view", "integration_provider_connection.read");
       const provider = providerFrom(req);
+      if (provider === "stripe") {
+        return res.json(await stripeConnectionStatus(Number(req.params.companyId)));
+      }
       const adapter = provider === "gmail" ? gmail : notion;
       const verify = req.query.verify === "true";
       return res.json(verify ? await adapter.verifyConnection(req.user.id) : await adapter.connectionSummary(req.user.id));
@@ -66,6 +102,9 @@ export function registerIntegrationRoutes(app: Express): void {
     try {
       await integrationAccess(req, "decide", "integration_provider_authorization.revoke");
       const provider = providerFrom(req);
+      if (provider === "stripe") {
+        throw new EosRouteError(409, "integration_provider_managed_connection", "Stripe credentials are company-managed. Revoke the binding's provider access and credential reference through the approved merchant recovery procedure.");
+      }
       return res.json(provider === "gmail" ? await gmail.disconnect(req.user.id) : await notion.disconnect(req.user.id));
     } catch (error) {
       return providerError(res, error);
