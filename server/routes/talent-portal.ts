@@ -47,6 +47,7 @@ import {
   storeCandidateFile,
   validateCandidateFile,
 } from "../artifacts/candidate-files";
+import { requireScannerBackedArtifactIngress } from "../middleware/untrusted-artifact-ingress";
 import { transcribeCandidateAudio } from "../artifacts/candidate-transcription";
 import {
   ADAPTIVE_FOLLOW_UP_LIMIT,
@@ -937,6 +938,7 @@ export function registerPublicTalentPortalRoutes(app: Express): void {
 
   app.post(
     "/api/eos/talent-portal/:token/evidence/files",
+    requireScannerBackedArtifactIngress,
     express.raw({
       type: [
         "application/pdf",

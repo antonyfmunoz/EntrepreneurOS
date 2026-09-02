@@ -21,7 +21,7 @@ import { startNativeEsignReminderWorker } from "./esign/reminder-worker";
 import { startIntegrationDispatchRecoveryWorker } from "./integrations/dispatch-recovery-worker";
 import { startProviderIngressWorker } from "./integrations/provider-ingress-worker";
 import { startAgentScheduleWorker } from "./agents/scheduler";
-import { productionRuntimeConfigurationIssues, runtimeReleaseSubject } from "./security/release-configuration";
+import { productionDeploymentConfigurationIssues, runtimeReleaseSubject, untrustedArtifactUploadsEnabled } from "./security/release-configuration";
 import { nativeClamavConfigured, nativeClamavHealthy } from "./security/malware-scanner";
 
 const app = express();
@@ -32,7 +32,7 @@ app.use(express.json({
   limit: process.env.EOS_JSON_BODY_LIMIT || "1mb",
   verify(req, _res, buffer) {
     const request = req as express.Request;
-    if (request.originalUrl === "/api/billing/webhook" || request.originalUrl.startsWith("/api/eos/recovery-provider-webhooks/") || request.originalUrl.startsWith("/api/eos/integration-webhooks/") || request.originalUrl.startsWith("/api/eos/provider-ingress/"))
+    if (request.path === "/api/operations/alert-email" || request.originalUrl === "/api/billing/webhook" || request.originalUrl.startsWith("/api/eos/recovery-provider-webhooks/") || request.originalUrl.startsWith("/api/eos/integration-webhooks/") || request.originalUrl.startsWith("/api/eos/provider-ingress/"))
       request.rawBody = Buffer.from(buffer);
   },
 }));
@@ -51,14 +51,14 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/api/ready", async (_req, res) => {
   const configurationIssues = process.env.NODE_ENV === "production"
-    ? productionRuntimeConfigurationIssues()
+    ? productionDeploymentConfigurationIssues()
     : [];
   try {
     await db.execute(sql`select 1`);
     if (configurationIssues.length) return res.status(503).json({ status: "not_ready", reason: "configuration" });
-    if (nativeClamavConfigured() && !(await nativeClamavHealthy()))
+    if (untrustedArtifactUploadsEnabled() && nativeClamavConfigured() && !(await nativeClamavHealthy()))
       return res.status(503).json({ status: "not_ready", reason: "malware_scanner" });
-    return res.status(200).json({ status: "ready", app: "eos", releaseSubject: runtimeReleaseSubject() });
+    return res.status(200).json({ status: "ready", readinessScope: "runtime", app: "eos", releaseSubject: runtimeReleaseSubject() });
   } catch {
     return res.status(503).json({ status: "not_ready", reason: "database" });
   }

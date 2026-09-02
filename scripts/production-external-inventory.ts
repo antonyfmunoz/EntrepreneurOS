@@ -96,6 +96,25 @@ async function httpObservation(path: string) {
   }
 }
 
+async function artifactIngressObservation() {
+  try {
+    const response = await fetch(new URL("/api/runtime-capabilities", publicOrigin), {
+      signal: AbortSignal.timeout(15_000), redirect: "manual",
+    });
+    const payload = await response.json();
+    return {
+      verified: response.ok,
+      trustedSource: response.ok && payload.artifactIngressMode === "trusted_source"
+        && payload.untrustedUploadsEnabled === false
+        && JSON.stringify(payload.signatureMethods) === JSON.stringify(["typed"]),
+      scannerBacked: response.ok && payload.artifactIngressMode === "scanner_backed"
+        && payload.untrustedUploadsEnabled === true,
+    };
+  } catch {
+    return { verified: false, trustedSource: false, scannerBacked: false };
+  }
+}
+
 async function tlsObservation(hostname: string) {
   return new Promise<{ valid: boolean; issuer: string | null; validFrom: string | null; validTo: string | null; fingerprint256: string | null; protocol: string | null }>((resolveResult) => {
     const socket = tlsConnect({ host: hostname, port: 443, servername: hostname, rejectUnauthorized: true }, () => {
@@ -262,7 +281,7 @@ const productionItem = productionItemExists ? commandJson("op", ["item", "get", 
 const productionFields = itemFieldMap(productionItem);
 const productionDatabaseUrl = productionFields.get("DATABASE_URL") || managedValue("op://UMH-Production/Database-Neon/url");
 
-const [targetMigrationCount, home, health, ready, tls, ipv4, ipv6, nameservers, google, notion] = await Promise.all([
+const [targetMigrationCount, home, health, ready, tls, ipv4, ipv6, nameservers, google, notion, artifactIngress] = await Promise.all([
   currentMigrationCount(),
   httpObservation("/"),
   httpObservation("/health"),
@@ -273,6 +292,7 @@ const [targetMigrationCount, home, health, ready, tls, ipv4, ipv6, nameservers, 
   dns.resolveNs(new URL(publicOrigin).hostname).catch(() => []),
   Promise.resolve(runtimeGoogleObservation()),
   notionObservation(),
+  artifactIngressObservation(),
 ]);
 const [vaultDatabaseCandidate, runtimeDatabase] = await Promise.all([
   databaseObservation(targetMigrationCount),
@@ -361,7 +381,12 @@ const signals: ExternalProductionInventorySignals = {
     }),
     primaryArtifactPlanePresent: ["EOS_ARTIFACT_S3_BUCKET", "EOS_ARTIFACT_S3_ENDPOINT", "EOS_ARTIFACT_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_S3_SECRET_ACCESS_KEY"].every((name) => Boolean(productionFields.get(name)?.trim())),
     backupArtifactPlanePresent: ["EOS_ARTIFACT_BACKUP_S3_BUCKET", "EOS_ARTIFACT_BACKUP_S3_ENDPOINT", "EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY", "EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID", "EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY"].every((name) => Boolean(productionFields.get(name)?.trim())) && productionFields.get("EOS_ARTIFACT_BACKUP_S3_BUCKET") !== productionFields.get("EOS_ARTIFACT_S3_BUCKET"),
-    malwareScannerPresent: machines.length > 0 && machines.every((machine: any) =>
+    trustedSourceModePresent: artifactIngress.trustedSource && machines.length > 0 && machines.every((machine: any) =>
+      machine.config?.env?.EOS_UNTRUSTED_UPLOADS_ENABLED === "false"
+    ),
+    malwareScannerPresent: artifactIngress.scannerBacked && machines.length > 0 && machines.every((machine: any) =>
+      machine.config?.env?.EOS_UNTRUSTED_UPLOADS_ENABLED === "true"
+      &&
       machine.config?.env?.EOS_MALWARE_SCAN_MODE === "clamav"
       && ["127.0.0.1", "::1", "localhost"].includes(String(machine.config?.env?.EOS_CLAMAV_HOST || "127.0.0.1").toLowerCase())
       && Number(machine.config?.env?.EOS_CLAMAV_PORT || 3310) === 3310
@@ -409,7 +434,7 @@ const evidence = {
     absentRequiredSecretNames: absentFlySecretNames,
     missingRequiredSecretNames: missingFlySecretNames,
   },
-  publicRuntime: { ...signals.publicRuntime, origin: publicOrigin, home, health, ready, tls, dns: { ipv4: ipv4.sort(), ipv6: ipv6.sort(), nameservers: nameservers.sort() } },
+  publicRuntime: { ...signals.publicRuntime, origin: publicOrigin, home, health, ready, artifactIngress, tls, dns: { ipv4: ipv4.sort(), ipv6: ipv6.sort(), nameservers: nameservers.sort() } },
   vault: { ...signals.vault, itemTitles: vaultItems.map((item: any) => item.title).sort(), requiredFieldCount: requiredProductionFields.length, clerkPlatformAdministratorCounts: clerkPlatformAdministrators, sourceCredentialClasses: { clerkPublishable: sourceClerk.get("publishable_key")?.startsWith("pk_live_") ? "live" : sourceClerk.get("publishable_key")?.startsWith("pk_test_") ? "test" : "missing", clerkSecret: sourceClerk.get("secret_key")?.startsWith("sk_live_") ? "live" : sourceClerk.get("secret_key")?.startsWith("sk_test_") ? "test" : "missing" } },
   providers: {
     ...signals.providers,

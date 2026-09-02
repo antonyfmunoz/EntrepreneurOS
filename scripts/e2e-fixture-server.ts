@@ -479,6 +479,12 @@ app.post("/__fixture/reset-rate-limits", (_req, res) => {
   resetInMemoryRateLimitsForFixture();
   return res.json({ reset: true });
 });
+app.post("/__fixture/artifact-ingress", (req, res) => {
+  if (!["trusted_source", "scanner_backed"].includes(req.body?.mode))
+    return res.status(400).json({ error: "Unknown artifact ingress fixture mode." });
+  process.env.EOS_UNTRUSTED_UPLOADS_ENABLED = req.body.mode === "scanner_backed" ? "true" : "false";
+  return res.json({ mode: req.body.mode });
+});
 
 const server = await registerRoutes(app);
 const port = Number(process.env.PORT || 5111);

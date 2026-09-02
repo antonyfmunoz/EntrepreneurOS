@@ -166,6 +166,8 @@ import { listNativeEsignStorageDrills, runNativeEsignStorageDrill } from "../esi
 import { writeLog } from "../observability/logger";
 import { encryptCredential } from "../security/credential-encryption";
 import { scanBufferForMalware } from "../security/malware-scanner";
+import { requireScannerBackedArtifactIngress } from "../middleware/untrusted-artifact-ingress";
+import { untrustedArtifactUploadsEnabled } from "../security/release-configuration";
 import * as gmail from "../integrations/gmail";
 import { deliverNativeEsignRecipient } from "../esign/recipient-delivery";
 import { EosRouteError, authorizeAction, companyAccess, mayAccessClassification, visibleSeatIds } from "./eos-runtime";
@@ -932,6 +934,8 @@ export function registerPublicNativeEsignRoutes(app: Express): void {
   app.post("/api/eos/native-esign/public/:token/sign", route(async (req, res) => {
     publicHeaders(res);
     const input = nativeEsignSignatureSchema.parse(req.body);
+    if (input.signatureMethod !== "typed" && !untrustedArtifactUploadsEnabled())
+      throw new NativeEsignError(409, "untrusted_artifact_uploads_disabled", "EOS is operating in trusted-source mode. Use a typed signature to continue.");
     const context = await resolvePublicRecipient(req);
     const openNegotiation = await db.query.eosEsignNegotiations.findFirst({ where: and(eq(eosEsignNegotiations.envelopeId, context.envelope.id), eq(eosEsignNegotiations.companyId, context.envelope.companyId), eq(eosEsignNegotiations.state, "open")) });
     if (openNegotiation) throw new NativeEsignError(409, "native_esign_negotiation_resolution_required", "Resolve the open change request before signing this document.");
@@ -1440,6 +1444,7 @@ export function registerNativeEsignRoutes(app: Express): void {
   }));
 
   app.post("/api/eos/companies/:companyId/native-esign/documents",
+    requireScannerBackedArtifactIngress,
     express.raw({ type: "application/pdf", limit: NATIVE_ESIGN_MAX_DOCUMENT_BYTES }),
     route(async (req, res) => {
       const companyId = Number(req.params.companyId);
@@ -1506,6 +1511,7 @@ export function registerNativeEsignRoutes(app: Express): void {
   );
 
   app.post("/api/eos/companies/:companyId/native-esign/documents/:sourceDocumentVersionId/revisions",
+    requireScannerBackedArtifactIngress,
     express.raw({ type: "application/pdf", limit: NATIVE_ESIGN_MAX_DOCUMENT_BYTES }),
     route(async (req, res) => {
       const companyId = Number(req.params.companyId);

@@ -29,6 +29,7 @@ export type ExternalProductionInventorySignals = {
     operatingCompanyPaymentsLive: boolean;
     primaryArtifactPlanePresent: boolean;
     backupArtifactPlanePresent: boolean;
+    trustedSourceModePresent: boolean;
     malwareScannerPresent: boolean;
     alertReceiverPresent: boolean;
   };
@@ -106,7 +107,10 @@ export function externalProductionInventoryGaps(
   require(signals.vault.operatingCompanyPaymentsLive, "operating_company_payments_missing");
   require(signals.vault.primaryArtifactPlanePresent, "artifact_primary_plane_missing");
   require(signals.vault.backupArtifactPlanePresent, "artifact_backup_plane_missing");
-  require(signals.vault.malwareScannerPresent, "malware_scanner_missing");
+  require(
+    signals.vault.trustedSourceModePresent || signals.vault.malwareScannerPresent,
+    "untrusted_artifact_ingress_unsafe",
+  );
   require(signals.vault.alertReceiverPresent, "operational_alert_receiver_missing");
   require(signals.providers.googleCredentialValid, "google_oauth_credential_invalid");
   require(signals.providers.gmailRead, "google_gmail_read_scope_missing");

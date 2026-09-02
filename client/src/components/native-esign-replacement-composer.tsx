@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useRuntimeCapabilities } from "@/hooks/use-runtime-capabilities";
 import { encodeNativeEsignFieldSchema, encodeNativeEsignHeader, nativeEsignErrorMessage } from "@/lib/native-esign";
 import { apiBinaryRequest, apiRequest } from "@/lib/queryClient";
 
@@ -43,6 +44,7 @@ async function json<T>(method: "GET" | "POST", url: string, body?: unknown): Pro
 }
 
 export function NativeEsignReplacementComposer({ root, sourceDocument, sourceEnvelope, negotiationId, onCompleted }: { root: string; sourceDocument: SourceDocument; sourceEnvelope: SourceEnvelope; negotiationId: string; onCompleted: (envelopeId: string) => Promise<void> | void }) {
+  const { untrustedUploadsEnabled } = useRuntimeCapabilities();
   const { toast } = useToast();
   const canGenerate = Boolean(sourceDocument.templateVersionId);
   const [mode, setMode] = useState<"generated" | "upload">(canGenerate ? "generated" : "upload");
@@ -104,7 +106,7 @@ export function NativeEsignReplacementComposer({ root, sourceDocument, sourceEnv
     <div className="mt-3 space-y-3">
       <div className="flex flex-wrap gap-2">
         {canGenerate ? <Button type="button" size="sm" variant={mode === "generated" ? "default" : "outline"} onClick={() => chooseMode("generated")}><Sparkles className="mr-2 h-4 w-4"/>Approved template</Button> : null}
-        <Button type="button" size="sm" variant={mode === "upload" ? "default" : "outline"} onClick={() => chooseMode("upload")}><FileDiff className="mr-2 h-4 w-4"/>Reviewed PDF</Button>
+        {untrustedUploadsEnabled ? <Button type="button" size="sm" variant={mode === "upload" ? "default" : "outline"} onClick={() => chooseMode("upload")}><FileDiff className="mr-2 h-4 w-4"/>Reviewed PDF</Button> : null}
       </div>
 
       {mode === "generated" ? <div className="space-y-3">
@@ -117,7 +119,7 @@ export function NativeEsignReplacementComposer({ root, sourceDocument, sourceEnv
         <Input value={draft.documentVersion} onChange={(event) => { setDraft((value) => ({ ...value, documentVersion: event.target.value })); setRevision(null); }} placeholder="Replacement version"/>
         <Textarea value={draft.revisionSummary} onChange={(event) => { setDraft((value) => ({ ...value, revisionSummary: event.target.value })); setRevision(null); }} placeholder="Human-reviewed reason for this revision"/>
         {!revision ? <Button type="button" variant="outline" onClick={registerGeneratedRevision} disabled={!generatedReady || Boolean(working)}>{working === "revision" ? <RefreshCw className="mr-2 h-4 w-4 animate-spin"/> : <Sparkles className="mr-2 h-4 w-4"/>}Generate and compare exact text</Button> : null}
-      </div> : <div className="space-y-3">
+      </div> : untrustedUploadsEnabled ? <div className="space-y-3">
         <p className="text-xs text-muted-foreground">Upload the reviewed replacement PDF, place fresh fields, and declare the material changes. EOS never claims an automated legal redline for an uploaded PDF.</p>
         <div className="grid gap-2 sm:grid-cols-2"><Input value={draft.title} onChange={(event) => setDraft((value) => ({ ...value, title: event.target.value }))} placeholder="Replacement title"/><Input value={draft.documentVersion} onChange={(event) => setDraft((value) => ({ ...value, documentVersion: event.target.value }))} placeholder="Version"/><Input className="sm:col-span-2" value={draft.sourceReference} onChange={(event) => setDraft((value) => ({ ...value, sourceReference: event.target.value }))} placeholder="Counsel or review reference"/></div>
         <Textarea value={draft.revisionSummary} onChange={(event) => setDraft((value) => ({ ...value, revisionSummary: event.target.value }))} placeholder="Human-reviewed revision summary"/>
@@ -125,7 +127,7 @@ export function NativeEsignReplacementComposer({ root, sourceDocument, sourceEnv
         <Input type="file" accept="application/pdf,.pdf" onChange={(event) => { setFile(event.target.files?.[0] || null); setFields([]); setRevision(null); }}/>
         <NativeEsignFieldEditor file={file} fields={fields} onFieldsChange={setFields} roleOptions={roleOptions}/>
         {!revision ? <Button type="button" variant="outline" onClick={registerUploadedRevision} disabled={!uploadReady || Boolean(working)}>{working === "revision" ? <RefreshCw className="mr-2 h-4 w-4 animate-spin"/> : <FileDiff className="mr-2 h-4 w-4"/>}Register immutable revision</Button> : null}
-      </div>}
+      </div> : <Alert><ShieldCheck className="h-4 w-4"/><AlertTitle>PDF replacements are unavailable</AlertTitle><AlertDescription>Trusted-source mode permits revisions generated from an approved EOS template. This uploaded source cannot be automatically converted into a governed template; recreate reviewed terms in Library or retain an external document reference.</AlertDescription></Alert>}
 
       {revision ? <Alert><ShieldCheck className="h-4 w-4"/><AlertTitle className="flex flex-wrap items-center gap-2">Revision and comparison sealed <Badge variant="outline">{revision.comparison.comparisonType === "generated_text" ? "exact generated-text diff" : "operator declared"}</Badge></AlertTitle><AlertDescription><span className="block">Revision Evidence {revision.revisionEvidenceSha256.slice(0, 16)}…</span><span className="block">Comparison {revision.comparison.comparisonSha256.slice(0, 16)}…</span>{revision.comparison.diffStats ? <span className="block">{revision.comparison.diffStats.deletedLines} deleted · {revision.comparison.diffStats.insertedLines} inserted · {revision.comparison.diffStats.equalLines} unchanged lines</span> : null}</AlertDescription></Alert> : null}
       {revision ? <div className="space-y-2"><label className="space-y-1 text-sm font-medium">Replacement expiry<Input type="datetime-local" value={draft.expiresAt} onChange={(event) => setDraft((value) => ({ ...value, expiresAt: event.target.value }))}/></label><Button type="button" onClick={createReplacement} disabled={Boolean(working)}>{working === "replacement" ? <RefreshCw className="mr-2 h-4 w-4 animate-spin"/> : <ShieldCheck className="mr-2 h-4 w-4"/>}Retire old envelope and create draft</Button></div> : null}

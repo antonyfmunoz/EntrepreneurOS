@@ -4655,4 +4655,21 @@ export const eosInstrumentLinks = pgTable("eos_instrument_links", {
   check("eos_instrument_links_distinct_check", sql`${table.sourceObjectId} <> ${table.targetObjectId}`),
   check("eos_instrument_links_metadata_check", sql`jsonb_typeof(${table.metadata}) = 'object'`),
 ]);
+export const eosAlertEmailReceipts = pgTable("eos_alert_email_receipts", {
+  id: text("id").primaryKey(),
+  event: text("event").notNull(),
+  severity: text("severity").notNull(),
+  senderUserId: text("sender_user_id").notNull(),
+  recipient: text("recipient").notNull(),
+  state: text("state").notNull().default("dispatching"),
+  providerMessageId: text("provider_message_id"),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+  settledAt: timestamp("settled_at", { withTimezone: true }),
+}, table => [
+  index("eos_alert_email_received_idx").on(table.receivedAt),
+  check("eos_alert_email_id_check", sql`${table.id} ~ '^[0-9a-f]{64}$'`),
+  check("eos_alert_email_state_check", sql`${table.state} IN ('dispatching','delivered','uncertain')`),
+  check("eos_alert_email_receipt_check", sql`${table.state} <> 'delivered' OR (${table.providerMessageId} IS NOT NULL AND length(${table.providerMessageId}) > 0)`),
+]);
+
 export type InsertConversation = z.infer<typeof insertConversationSchema>;

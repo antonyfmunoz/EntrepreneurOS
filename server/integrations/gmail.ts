@@ -194,6 +194,24 @@ export async function sendEmail(
   return { messageId: result.data.id || "" };
 }
 
+/** Fixed-recipient operational mail: exact mailbox identity, bounded calls, no send retry. */
+export async function sendVerifiedAlertEmail(userId: string, expectedAddress: string,
+  params: { to: string; subject: string; body: string; receiptId: string }): Promise<{ messageId: string }> {
+  if ([params.to, params.subject].some(value => /[\r\n]/.test(value)) || !/^[a-f0-9]{64}$/.test(params.receiptId))
+    throw new Error("Invalid operational mail.");
+  const token = await storage.getOauthToken(userId, "gmail");
+  if (!scopeCoverage((token?.scope || "").split(/\s+/)).Gmail) throw new Error("Gmail send scope unavailable.");
+  const auth = getOAuth2Client();
+  auth.setCredentials({ access_token: await getAccessToken(userId) });
+  const client = google.gmail({ version: "v1", auth });
+  const profile = await client.users.getProfile({ userId: "me" }, { timeout: 10_000, retry: false });
+  if (profile.data.emailAddress?.toLowerCase() !== expectedAddress.toLowerCase()) throw new Error("Alert sender identity mismatch.");
+  const message = [`To: ${params.to}`, `Subject: ${params.subject}`, "Content-Type: text/html; charset=utf-8",
+    `Message-ID: <eos-alert-${params.receiptId}@entrepreneuros.net>`, "", params.body].join("\r\n");
+  const sent = await client.users.messages.send({ userId: "me", requestBody: { raw: Buffer.from(message).toString("base64url") } }, { timeout: 15_000, retry: false });
+  return { messageId: sent.data.id || "" };
+}
+
 export async function isConnected(userId: string): Promise<boolean> {
   try {
     if (!credentialEncryptionConfigured()) return false;

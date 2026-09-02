@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { ALERT_EMAIL_PATH, alertEmailConfiguration } from "./alert-email";
 
 type AlertPayload = Record<string, unknown> & { event: string; deduplicationKey?: string };
 const lastSentAt = new Map<string, number>();
@@ -6,7 +7,8 @@ const lastSentAt = new Map<string, number>();
 export function operationalAlertsConfigured(): boolean {
   try {
     const url = new URL(process.env.EOS_ALERT_WEBHOOK_URL || "");
-    return url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash && Boolean(process.env.EOS_ALERT_WEBHOOK_SECRET && process.env.EOS_ALERT_WEBHOOK_SECRET.length >= 32);
+    return url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash && Boolean(process.env.EOS_ALERT_WEBHOOK_SECRET && process.env.EOS_ALERT_WEBHOOK_SECRET.length >= 32)
+      && (url.pathname !== ALERT_EMAIL_PATH || Boolean(alertEmailConfiguration()));
   } catch {
     return false;
   }
@@ -23,7 +25,8 @@ export async function dispatchOperationalAlert(payload: AlertPayload, now = Date
   const timestamp = String(Math.floor(now / 1000));
   const signature = createHmac("sha256", process.env.EOS_ALERT_WEBHOOK_SECRET!).update(`${timestamp}.${body}`).digest("hex");
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5_000);
+  const nativeEmail = new URL(process.env.EOS_ALERT_WEBHOOK_URL!).pathname === ALERT_EMAIL_PATH;
+  const timeout = setTimeout(() => controller.abort(), nativeEmail ? 35_000 : 5_000);
   try {
     const response = await fetch(process.env.EOS_ALERT_WEBHOOK_URL!, {
       method: "POST",

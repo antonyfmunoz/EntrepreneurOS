@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
+import { useRuntimeCapabilities } from "@/hooks/use-runtime-capabilities";
 
 type PortalView = {
   company: { name: string };
@@ -241,6 +242,7 @@ function humanState(value: string): string {
 }
 
 export default function CandidatePortalPage() {
+  const { untrustedUploadsEnabled } = useRuntimeCapabilities();
   const token = useMemo(tokenFromPath, []);
   const { toast } = useToast();
   const [view, setView] = useState<PortalView | null>(null);
@@ -866,14 +868,14 @@ export default function CandidatePortalPage() {
               <CardHeader>
                 <CardTitle>Evidence</CardTitle>
                 <CardDescription>
-                  Record a voice response, upload a file, submit an HTTPS
-                  reference, or add a factual statement. Files remain
-                  quarantined until a security scanner clears them; all material
-                  remains candidate-provided until a human verifies it.
+                  {untrustedUploadsEnabled
+                    ? "Record a voice response, upload a file, submit an HTTPS reference, or add a factual statement. Files stay quarantined until scanned."
+                    : "Share an HTTPS link or a factual statement. Direct file and voice uploads are unavailable in trusted-source mode."}
+                  {" "}All material remains candidate-provided until a human verifies it.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
-                <VoiceEvidenceRecorder
+                {untrustedUploadsEnabled ? <><VoiceEvidenceRecorder
                   token={token}
                   canSubmit={view.application.actions.canSubmitEvidence}
                   voiceConsentActive={view.application.consentScope.includes(
@@ -952,7 +954,7 @@ export default function CandidatePortalPage() {
                     <FileUp className="mr-2 h-4 w-4" />
                     Upload file
                   </Button>
-                </div>
+                </div></> : <Alert><ShieldCheck className="h-4 w-4"/><AlertTitle>Share a link or written response</AlertTitle><AlertDescription>Keep files in Google Drive or another approved service and paste the HTTPS link below. EOS stores the reference, not the file, and does not claim it has been scanned.</AlertDescription></Alert>}
                 <div className="border-t pt-5">
                   <p className="text-sm font-semibold">
                     Add a link or statement

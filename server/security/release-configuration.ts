@@ -1,5 +1,6 @@
 import { operatingCompanyPaymentsConfigured } from "./company-payments";
 import { nativeClamavConfigured } from "./malware-scanner";
+import { ALERT_EMAIL_PATH, alertEmailConfiguration } from "../observability/alert-email";
 
 type ReleaseEnvironment = Record<string, string | undefined>;
 
@@ -48,6 +49,43 @@ function isHttpsWebhook(value?: string): boolean {
   } catch {
     return false;
   }
+}
+
+export type UntrustedArtifactIngressMode =
+  | "trusted_source"
+  | "scanner_backed"
+  | "unsafe";
+
+export function malwareScannerConfigured(
+  env: ReleaseEnvironment = process.env,
+): boolean {
+  return (
+    nativeClamavConfigured(env as NodeJS.ProcessEnv) ||
+    (isHttpsWebhook(env.EOS_MALWARE_SCAN_ENDPOINT) &&
+      Boolean(
+        env.EOS_MALWARE_SCAN_SECRET &&
+          env.EOS_MALWARE_SCAN_SECRET.length >= 32,
+      ))
+  );
+}
+
+export function untrustedArtifactIngressMode(
+  env: ReleaseEnvironment = process.env,
+): UntrustedArtifactIngressMode {
+  if (env.EOS_UNTRUSTED_UPLOADS_ENABLED === "false") return "trusted_source";
+  if (
+    env.EOS_UNTRUSTED_UPLOADS_ENABLED === "true" &&
+    (malwareScannerConfigured(env) ||
+      (env.NODE_ENV === "test" && env.EOS_MALWARE_SCAN_MODE === "test-fixture"))
+  )
+    return "scanner_backed";
+  return "unsafe";
+}
+
+export function untrustedArtifactUploadsEnabled(
+  env: ReleaseEnvironment = process.env,
+): boolean {
+  return untrustedArtifactIngressMode(env) === "scanner_backed";
 }
 
 function hasStripePlans(value?: string): boolean {
@@ -211,6 +249,8 @@ export function productionRuntimeConfiguration(
       Boolean(
         env.EOS_ALERT_WEBHOOK_SECRET &&
         env.EOS_ALERT_WEBHOOK_SECRET.length >= 32,
+      ) && (
+        !env.EOS_ALERT_WEBHOOK_URL?.endsWith(ALERT_EMAIL_PATH) || Boolean(alertEmailConfiguration(env))
       ),
     accountDeletionEnabled: env.EOS_ACCOUNT_DELETION_ENABLED === "true",
     legalEnforcementEnabled: env.EOS_LEGAL_ENFORCEMENT === "true",
@@ -252,12 +292,8 @@ export function productionRuntimeConfiguration(
       && env.EOS_ARTIFACT_BACKUP_S3_BUCKET !== env.EOS_ARTIFACT_S3_BUCKET,
     nativeEsignBackupCredentialsConfigured: hasS3ArtifactCredentials(env, true),
     nativeEsignBackupEncryptionConfigured: hasS3ArtifactEncryption(env, true),
-    malwareScannerConfigured:
-      nativeClamavConfigured(env as NodeJS.ProcessEnv) ||
-      (isHttpsWebhook(env.EOS_MALWARE_SCAN_ENDPOINT) &&
-        Boolean(
-          env.EOS_MALWARE_SCAN_SECRET && env.EOS_MALWARE_SCAN_SECRET.length >= 32,
-        )),
+    untrustedArtifactIngressSafe:
+      untrustedArtifactIngressMode(env) !== "unsafe",
     candidateTranscriptionSafe:
       env.EOS_CANDIDATE_STT_ENABLED !== "true" ||
       Boolean(
@@ -275,6 +311,27 @@ export function productionRuntimeConfigurationIssues(
   env: ReleaseEnvironment = process.env,
 ): string[] {
   return Object.entries(productionRuntimeConfiguration(env))
+    .filter(([, configured]) => !configured)
+    .map(([key]) => key);
+}
+
+/** Deployment safety is not payment-launch readiness. All other gates are shared. */
+export function productionDeploymentConfiguration(
+  env: ReleaseEnvironment = process.env,
+) {
+  const { operatingCompanyPaymentsConfigured: paymentsConfigured, ...safety } = productionRuntimeConfiguration(env);
+  return {
+    ...safety,
+    operatingCompanyPaymentBoundarySafe: paymentsConfigured || (
+      env.EOS_PUBLIC_PAID_SAAS === "false" && env.EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED === "false"
+    ),
+  };
+}
+
+export function productionDeploymentConfigurationIssues(
+  env: ReleaseEnvironment = process.env,
+): string[] {
+  return Object.entries(productionDeploymentConfiguration(env))
     .filter(([, configured]) => !configured)
     .map(([key]) => key);
 }

@@ -33,8 +33,22 @@ import { registerPublicStakeholderPortalRoutes, registerStakeholderPortalRoutes 
 import { errorHandler } from "./middleware/error-handler";
 import { blockLegacyUnscopedApis, requireLocalApiAuth } from "./middleware/api-security";
 import { federationCommandRateLimit, localApiRateLimit } from "./middleware/rate-limit";
+import { untrustedArtifactIngressMode } from "./security/release-configuration";
+import { registerAlertEmailReceiver, registerAlertEmailReceiptRoutes } from "./routes/alert-email";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  registerAlertEmailReceiver(app);
+  app.get("/api/runtime-capabilities", (_req, res) => {
+    const artifactIngressMode = untrustedArtifactIngressMode();
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({
+      artifactIngressMode,
+      untrustedUploadsEnabled: artifactIngressMode === "scanner_backed",
+      signatureMethods: artifactIngressMode === "scanner_backed"
+        ? ["typed", "drawn", "uploaded"]
+        : ["typed"],
+    });
+  });
   // Set up authentication routes and middleware
   setupAuth(app);
   registerBillingWebhook(app);
@@ -81,6 +95,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerUserRoutes(app);
   registerLegalRoutes(app);
   registerOperationalRoutes(app);
+  registerAlertEmailReceiptRoutes(app);
 
   // __ORCHESTRATOR_GENERATED_ROUTES__ (do not remove this marker)
   {

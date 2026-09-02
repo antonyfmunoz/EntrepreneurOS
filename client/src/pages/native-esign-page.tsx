@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { NATIVE_ESIGN_CONSENT_VERSION } from "@shared/native-esign";
 import { NativeEsignSignatureCapture, type SignatureImageCapture, type SignatureMethod } from "@/components/native-esign-signature-capture";
 import { NativeEsignComparisonView, type NativeEsignComparison } from "@/components/native-esign-comparison-view";
+import { useRuntimeCapabilities } from "@/hooks/use-runtime-capabilities";
 
 type SigningField = {
   id: string;
@@ -60,6 +61,7 @@ async function sha256(value: string): Promise<string> {
 }
 
 export default function NativeEsignPage() {
+  const capabilities = useRuntimeCapabilities();
   const token = useMemo(tokenFromPath, []);
   const [view, setView] = useState<SigningView | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,6 +86,13 @@ export default function NativeEsignPage() {
   const [changeRequest, setChangeRequest] = useState({ subject: "Requested agreement changes", body: "", requestedChanges: "" });
   const [negotiationReply, setNegotiationReply] = useState("");
   const [comparisonAccepted, setComparisonAccepted] = useState(false);
+
+  useEffect(() => {
+    if (!capabilities.untrustedUploadsEnabled) {
+      setSignatureMethod("typed");
+      setSignatureCapture(null);
+    }
+  }, [capabilities.untrustedUploadsEnabled]);
 
   useEffect(() => {
     let active = true;
@@ -228,10 +237,10 @@ export default function NativeEsignPage() {
                   </div>
                   {additionalFields.map((field) => field.type === "checkbox" ? <label key={field.id} className="flex items-start gap-3 text-sm"><Checkbox checked={fieldValues[field.id] === true} onCheckedChange={(value) => setFieldValues((current) => ({ ...current, [field.id]: value === true }))}/><span>{field.label}{field.required ? " *" : ""}</span></label> : <div key={field.id} className="space-y-2"><Label htmlFor={field.id}>{field.label}{field.required ? " *" : ""}</Label><Input id={field.id} value={String(fieldValues[field.id] || "")} onChange={(event) => setFieldValues((current) => ({ ...current, [field.id]: event.target.value }))}/></div>)}
                   <div className="space-y-2"><Label htmlFor="signature-name">Your full legal name</Label><Input id="signature-name" autoComplete="name" value={signatureName} onChange={(event) => setSignatureName(event.target.value)}/></div>
-                  <NativeEsignSignatureCapture method={signatureMethod} signerName={signatureName} capture={signatureCapture} onMethodChange={(method) => { setSignatureMethod(method); setSignatureCapture(null); }} onCaptureChange={setSignatureCapture} onError={setError}/>
+                  <NativeEsignSignatureCapture allowedMethods={capabilities.signatureMethods} method={signatureMethod} signerName={signatureName} capture={signatureCapture} onMethodChange={(method) => { setSignatureMethod(method); setSignatureCapture(null); }} onCaptureChange={setSignatureCapture} onError={setError}/>
                   <label className="flex items-start gap-3 text-sm"><Checkbox checked={intent} onCheckedChange={(value) => setIntent(value === true)}/><span>I intend to sign this document and adopt the {signatureMethod === "typed" ? "typed name" : signatureMethod === "drawn" ? "drawing" : "uploaded image"} above as my electronic signature.</span></label>
                   <Button className="w-full" disabled={working || negotiationOpen || !intent || signatureName.trim().length < 2 || missingRequired || missingSignatureCapture} onClick={sign}>{working ? <Loader2 className="animate-spin"/> : <FileSignature/>} Sign document</Button>
-                  <p className="text-xs text-muted-foreground">Image captures are validated, hashed, and stored privately. Choosing a visual method does not change the identity-assurance level of this envelope.</p>
+                  <p className="text-xs text-muted-foreground">{capabilities.untrustedUploadsEnabled ? "Image captures are validated, scanned, hashed, and stored privately. Choosing a visual method does not change the identity-assurance level of this envelope." : "Typed signatures are available in trusted-source mode. Consent, intent, identity checks, and signing evidence remain recorded; no signature image is uploaded."}</p>
                 </CardContent>
               </Card>}
               <Card><CardHeader><CardTitle>{view?.negotiation ? view.negotiation.subject : "Request changes"}</CardTitle><CardDescription>{view?.negotiation?.state === "open" ? "Signing is paused while you and the sender resolve this governed discussion." : view?.negotiation ? "This discussion is closed. Review the resolution before continuing." : "Ask the sender to review specific changes without signing or declining. The issued document remains immutable."}</CardDescription></CardHeader><CardContent className="space-y-3">{view?.negotiation ? <><div className="space-y-2">{view.negotiation.entries.map((entry) => <div key={entry.id} className="rounded-lg border bg-muted/50 p-3 text-sm"><div className="flex items-center justify-between gap-2 text-xs text-muted-foreground"><span>{entry.author} · {entry.entryType.replaceAll("_", " ")}</span><span>{new Date(entry.createdAt).toLocaleString()}</span></div><p className="mt-2 whitespace-pre-wrap">{entry.body}</p>{entry.requestedChanges.length ? <ul className="mt-2 list-disc pl-5 text-xs">{entry.requestedChanges.map((change) => <li key={change}>{change}</li>)}</ul> : null}<p className="mt-2 font-mono text-[10px] text-muted-foreground">Evidence {entry.entrySha256.slice(0, 16)}…</p></div>)}</div>{view.negotiation.state === "open" ? <><Textarea value={negotiationReply} onChange={(event) => setNegotiationReply(event.target.value)} placeholder="Reply to the sender"/><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={working || negotiationReply.trim().length < 2} onClick={replyToNegotiation}><MessageSquareText className="mr-2 h-4 w-4"/>Send reply</Button><Button variant="ghost" disabled={working} onClick={() => void refreshView()}>Refresh discussion</Button></div></> : <Alert><ShieldCheck className="h-4 w-4"/><AlertTitle>Discussion resolved</AlertTitle><AlertDescription>{view.negotiation.resolutionSummary}{view.negotiation.replacementEnvelopeId ? " The sender created a new envelope; use its new private signing link instead of this one." : ""}</AlertDescription></Alert>}</> : requestingChanges ? <><Input value={changeRequest.subject} onChange={(event) => setChangeRequest((value) => ({ ...value, subject: event.target.value }))} placeholder="Change request subject"/><Textarea value={changeRequest.body} onChange={(event) => setChangeRequest((value) => ({ ...value, body: event.target.value }))} placeholder="Explain the requested changes"/><Textarea value={changeRequest.requestedChanges} onChange={(event) => setChangeRequest((value) => ({ ...value, requestedChanges: event.target.value }))} placeholder="One concrete requested change per line"/><div className="flex gap-2"><Button disabled={working || changeRequest.subject.trim().length < 2 || changeRequest.body.trim().length < 2} onClick={requestChanges}>Send request</Button><Button variant="ghost" onClick={() => setRequestingChanges(false)}>Cancel</Button></div></> : <Button variant="outline" onClick={() => setRequestingChanges(true)}><MessageSquareText className="mr-2 h-4 w-4"/>Request changes</Button>}</CardContent></Card>

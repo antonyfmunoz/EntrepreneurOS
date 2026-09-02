@@ -29,8 +29,13 @@ EOS_PRODUCTION_FORBIDDEN_COMPANY_ID=op://EntrepreneurOS/Production/EOS_PRODUCTIO
 EOS_PRODUCTION_PROMOTION_EVIDENCE_PATH=.tmp/eos-production-promotion-evidence.json
 EOS_ALERT_WEBHOOK_URL=op://EntrepreneurOS/Production/EOS_ALERT_WEBHOOK_URL
 EOS_ALERT_WEBHOOK_SECRET=op://EntrepreneurOS/Production/EOS_ALERT_WEBHOOK_SECRET
+EOS_ALERT_EMAIL_SENDER_USER_ID=op://EntrepreneurOS/Production/EOS_ALERT_EMAIL_SENDER_USER_ID
+EOS_ALERT_EMAIL_SENDER_ADDRESS=op://EntrepreneurOS/Production/EOS_ALERT_EMAIL_SENDER_ADDRESS
+EOS_ALERT_EMAIL_RECIPIENT=op://EntrepreneurOS/Production/EOS_ALERT_EMAIL_RECIPIENT
 EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS=op://EntrepreneurOS/Production/EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS
-EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED=true
+# Keep disabled until the exact merchant, credentials, prices, and receipts are
+# verified and live execution is explicitly approved after the account cutover.
+EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED=false
 EOS_INTEGRATION_PROVIDER_EFFECTS_ENABLED=false
 EOS_PROVIDER_INGRESS_WORKER_INTERVAL_MS=60000
 EOS_INTEGRATION_DISPATCH_RECOVERY_AFTER_MS=300000
@@ -58,11 +63,9 @@ EOS_ARTIFACT_BACKUP_S3_PREFIX=native-esign
 EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY=op://EntrepreneurOS/Production/EOS_ARTIFACT_BACKUP_S3_SSE_CUSTOMER_KEY
 EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID=op://EntrepreneurOS/Production/EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID
 EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY=op://EntrepreneurOS/Production/EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY
-# Malware scanning is EOS-owned and runs through the ClamAV daemon bundled in
-# the production image. These non-secret values are also pinned in fly.toml.
-EOS_MALWARE_SCAN_MODE=clamav
-EOS_CLAMAV_HOST=127.0.0.1
-EOS_CLAMAV_PORT=3310
+# Trusted-source mode blocks new binary uploads and leaves the bundled scanner
+# dormant at the existing 512 MB allocation. Re-enable only after qualification.
+EOS_UNTRUSTED_UPLOADS_ENABLED=false
 EOS_CANDIDATE_STT_ENABLED=false
 EOS_CANDIDATE_STT_MODEL=gpt-4o-mini-transcribe
 # When EOS_CANDIDATE_STT_ENABLED=true, add:

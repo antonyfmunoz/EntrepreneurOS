@@ -1,7 +1,7 @@
 import express from "express";
 import postgres from "postgres";
 import supertest from "supertest";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash, createHmac, generateKeyPairSync, randomUUID, sign } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -20,6 +20,11 @@ const databaseUrl = process.env.EOS_TEST_DATABASE_URL;
 const providerLifecycle = vi.hoisted(() => ({
   gmailRevoke: vi.fn(async () => ({ providerRevoked: true })),
   notionRevoke: vi.fn(async () => ({ providerRevoked: true })),
+}));
+
+const stripeHealthLifecycle = vi.hoisted(() => ({ verify: vi.fn() }));
+vi.mock("../../server/integrations/stripe-health", () => ({
+  verifyStripeConnection: stripeHealthLifecycle.verify,
 }));
 
 const recoveryProviderLifecycle = vi.hoisted(() => ({
@@ -247,6 +252,8 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
   let otherCompanyId: number;
   let api: ReturnType<typeof supertest>;
   let currentUserId = ownerId;
+  let scenarioNumber = 0;
+  let scenarioClientIp = "192.0.2.1";
   let verifiedEmailOverride: string | undefined;
   const agentId = "test_eos_agent";
   const internalInstallationId = "test_eos_installation_row";
@@ -288,6 +295,8 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
   }
 
   beforeAll(async () => {
+    process.env.EOS_UNTRUSTED_UPLOADS_ENABLED = "true";
+    process.env.EOS_MALWARE_SCAN_MODE = "test-fixture";
     process.env.DATABASE_URL = databaseUrl;
     process.env.EOS_PUBLIC_ORIGIN = "https://entrepreneuros.example.test";
     process.env.EOS_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 37).toString("base64");
@@ -329,6 +338,9 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       },
     }));
     app.use((req, _res, next) => {
+      // Independent scenarios are different visitors. Preserve the real limiter
+      // within each scenario without sharing a minute's budget across the suite.
+      Object.defineProperty(req, "ip", { value: scenarioClientIp, configurable: true });
       const owner = currentUserId === ownerId;
       const candidate = currentUserId === candidateId;
       (req as any).user = {
@@ -399,7 +411,55 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     delete process.env.EOS_ARTIFACT_BACKUP_STORAGE_ROOT;
     delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
     delete process.env.EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS;
+    delete process.env.EOS_UNTRUSTED_UPLOADS_ENABLED;
+    delete process.env.EOS_MALWARE_SCAN_MODE;
   }, 180_000);
+
+  beforeEach(() => {
+    scenarioClientIp = `192.0.2.${++scenarioNumber}`;
+  });
+
+  afterEach(() => {
+    process.env.EOS_UNTRUSTED_UPLOADS_ENABLED = "true";
+  });
+
+  it("blocks every direct artifact ingress in trusted-source mode without blocking typed signing", async () => {
+    process.env.EOS_UNTRUSTED_UPLOADS_ENABLED = "false";
+    try {
+      const capabilities = await api.get("/api/runtime-capabilities").expect(200);
+      expect(capabilities.body).toEqual({ artifactIngressMode: "trusted_source", untrustedUploadsEnabled: false, signatureMethods: ["typed"] });
+      for (const endpoint of [
+        `/api/eos/companies/${companyId}/native-esign/documents`,
+        `/api/eos/companies/${companyId}/native-esign/documents/${randomUUID()}/revisions`,
+        "/api/eos/talent-portal/not-a-real-token/evidence/files",
+      ]) {
+        const response = await api.post(endpoint).set("Content-Type", "application/pdf").send(Buffer.from("not parsed or stored")).expect(409);
+        expect(response.body.code).toBe("untrusted_artifact_uploads_disabled");
+      }
+      const { NATIVE_ESIGN_CONSENT_VERSION } = await import("../../shared/native-esign");
+      const capture = createSyntheticSignaturePng();
+      for (const signatureMethod of ["drawn", "uploaded"]) {
+        const response = await api.post("/api/eos/native-esign/public/invalid/sign").send({ consentVersion: NATIVE_ESIGN_CONSENT_VERSION, intentToSignConfirmed: true, signatureMethod, signatureName: "Synthetic signer", signatureCaptureSha256: createHash("sha256").update(capture).digest("hex"), signatureCaptureMimeType: "image/png", signatureCaptureBase64: capture.toString("base64"), fieldValues: {} }).expect(409);
+        expect(response.body.code).toBe("untrusted_artifact_uploads_disabled");
+      }
+      const typed = await api.post("/api/eos/native-esign/public/invalid/sign").send({ consentVersion: NATIVE_ESIGN_CONSENT_VERSION, intentToSignConfirmed: true, signatureMethod: "typed", signatureName: "Synthetic signer", signatureCaptureSha256: createHash("sha256").update("typed\0Synthetic signer").digest("hex"), fieldValues: {} });
+      expect(typed.body.code).not.toBe("untrusted_artifact_uploads_disabled");
+    } finally {
+      process.env.EOS_UNTRUSTED_UPLOADS_ENABLED = "true";
+    }
+  });
+
+  it("retains public signing rate limits within each isolated visitor scenario", async () => {
+    const endpoint = "/api/eos/native-esign/public/rate-limit-fixture";
+    for (let request = 0; request < 60; request += 1) {
+      const response = await api.get(endpoint);
+      expect(response.status).not.toBe(429);
+      expect(response.headers["ratelimit-limit"]).toBe("60");
+      expect(response.headers["ratelimit-remaining"]).toBe(String(59 - request));
+    }
+    const blocked = await api.get(endpoint).expect(429);
+    expect(blocked.body.code).toBe("rate_limited");
+  });
 
   it("denies cross-tenant reads and quarantines unscoped legacy APIs", async () => {
     const manifest = await api
@@ -3266,6 +3326,66 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       .expect(200);
     await api.get(`/api/eos/companies/${companyId}/finance-state`).expect(404);
     currentUserId = ownerId;
+  });
+
+  it("records Stripe health from the exact server verifier without bypassing evidence, tenant or activation gates", async () => {
+    currentUserId = ownerId;
+    const packet = await api.post(`/api/eos/companies/${companyId}/work-packets`).send({
+      title: "Stripe identity qualification fixture",
+      objective: "Verify the merchant identity health path without executing payments",
+    }).expect(201);
+    const evidence = await api.post(`/api/eos/companies/${companyId}/evidence`).send({
+      workPacketId: packet.body.id, evidenceType: "test_result", title: "Stripe identity fixture evidence",
+      verificationState: "verified", confidenceQuality: "authoritative", sourceSystem: "stripe",
+      supportedClaimSummary: "Controlled test of exact merchant identity only; not a live payment or webhook receipt",
+      verifierMethod: "Isolated integration fixture",
+    }).expect(201);
+    const observedEvidence = await api.post(`/api/eos/companies/${companyId}/evidence`).send({
+      workPacketId: packet.body.id, evidenceType: "test_result", title: "Unverified Stripe identity fixture",
+      verificationState: "observed", sourceSystem: "stripe",
+    }).expect(201);
+    const system = await api.post(`/api/eos/companies/${companyId}/systems`).send({
+      name: "Stripe fixture", systemType: "application", capabilities: ["payments"],
+      dataDomains: ["commercial"], authoritativeFields: ["provider account identity"],
+    }).expect(201);
+    const binding = await api.post(`/api/eos/companies/${companyId}/integration-bindings`).send({
+      name: "Stripe exact merchant fixture", toSystemId: system.body.id, providerKey: "stripe",
+      providerAccountReference: "acct_fixture", adapterKind: "api_key", adapterReference: "stripe-health",
+      lifecycleState: "implementing", credentialReference: "op://EOS/stripe/credential",
+      manualFallback: "Keep payment effects off", failureRecovery: "Reconcile the exact merchant identity",
+    }).expect(201);
+    const payload = {
+      integrationBindingId: binding.body.id, healthState: "healthy", checkType: "live_provider",
+      summary: "Verify exact merchant identity; no payment or receipt claim", evidenceIds: [evidence.body.id],
+    };
+    try {
+      stripeHealthLifecycle.verify.mockResolvedValue({ connected: false, healthy: false,
+        externalReference: "provider:stripe:merchant_identity_check:account_mismatch" });
+      const mismatch = await api.post(`/api/eos/companies/${companyId}/integration-health-observations`).send(payload).expect(201);
+      expect(mismatch.body).toMatchObject({ healthState: "unavailable", externalReference: "provider:stripe:merchant_identity_check:account_mismatch" });
+      expect(stripeHealthLifecycle.verify).toHaveBeenCalledWith(expect.objectContaining({ id: binding.body.id, providerAccountReference: "acct_fixture" }));
+      stripeHealthLifecycle.verify.mockResolvedValue({ connected: true, healthy: true,
+        externalReference: "provider:stripe:acct_fixture:merchant_identity_verified" });
+      await api.post(`/api/eos/companies/${companyId}/integration-health-observations`).send({ ...payload, evidenceIds: [] }).expect(400);
+      const unverifiedEvidence = await api.post(`/api/eos/companies/${companyId}/integration-health-observations`).send({ ...payload, evidenceIds: [observedEvidence.body.id] }).expect(409);
+      expect(unverifiedEvidence.body.code).toBe("verified_health_evidence_required");
+      const health = await api.post(`/api/eos/companies/${companyId}/integration-health-observations`).send({ ...payload, healthState: "unavailable" }).expect(201);
+      expect(health.body).toMatchObject({ healthState: "healthy", externalReference: "provider:stripe:acct_fixture:merchant_identity_verified" });
+      const state = await api.get(`/api/eos/companies/${companyId}/systems-state`).expect(200);
+      expect(state.body.bindings.find((item: { id: string }) => item.id === binding.body.id)).toMatchObject({
+        lifecycleState: "implementing", connectionState: "connected", parityState: "not_tested",
+      });
+      await api.patch(`/api/eos/companies/${companyId}/integration-bindings/${binding.body.id}`).send({
+        lifecycleState: "active", expectedConfigurationVersion: 1,
+      }).expect(409);
+      const callCount = stripeHealthLifecycle.verify.mock.calls.length;
+      currentUserId = otherId;
+      await api.post(`/api/eos/companies/${companyId}/integration-health-observations`).send(payload).expect(404);
+      expect(stripeHealthLifecycle.verify).toHaveBeenCalledTimes(callCount);
+    } finally {
+      currentUserId = ownerId;
+      stripeHealthLifecycle.verify.mockReset();
+    }
   });
 
   it("runs the Systems inventory-to-qualified-automation loop with provider and tenant boundaries", async () => {
@@ -7868,6 +7988,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     await api.post(`/api/eos/companies/${companyId}/native-esign/template-versions/${templateVersion.body.id}/approve`).send({ reason: "Founder approved the synthetic template for integration qualification." }).expect(200);
 
     const counterparty = await api.post(`/api/eos/companies/${companyId}/native-esign/counterparties`).send({ partyType: "organization", legalName: "Example Client LLC", displayName: "Example Client", signerName: "Template Signer", signerEmail: "template-signer@example.test", externalReference: "crm://example-client", dataClassification: "confidential" }).expect(201);
+    process.env.EOS_UNTRUSTED_UPLOADS_ENABLED = "false";
     const generated = await api.post(`/api/eos/companies/${companyId}/native-esign/template-versions/${templateVersion.body.id}/generate`).send({ values: { "client-name": "Example Client LLC", "effective-date": "2026-09-01" }, counterpartyId: counterparty.body.id, workPacketId }).expect(201);
     expect(generated.body).toMatchObject({ templateVersionId: templateVersion.body.id, counterpartyId: counterparty.body.id, workPacketId, pageCount: 2 });
     expect(generated.body.fieldSchema).toHaveLength(2);
@@ -7880,6 +8001,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const token = new URL(issued.body.recipients[0].signingUrl).pathname.split("/").at(-1)!;
     await api.post(`/api/eos/native-esign/public/${token}/consent`).send({ consentVersion: "eos-native-esign-consent.v1", electronicRecordsAccepted: true, electronicSignaturesAccepted: true }).expect(200);
     await api.post(`/api/eos/native-esign/public/${token}/sign`).send({ consentVersion: "eos-native-esign-consent.v1", intentToSignConfirmed: true, signatureMethod: "typed", signatureName: "Template Signer", signatureCaptureSha256: createHash("sha256").update("typed\0Template Signer").digest("hex"), fieldValues: {} }).expect(200).expect(({ body }) => expect(body.envelopeState).toBe("completed"));
+    process.env.EOS_UNTRUSTED_UPLOADS_ENABLED = "true";
 
     await api.post(`/api/eos/companies/${companyId}/native-esign/envelopes/${envelope.body.id}/verify`).send({ reason: "Verify the exact sealed agreement before Evidence promotion." }).expect(201);
     const completed = await api.get(`/api/eos/companies/${companyId}/native-esign/envelopes/${envelope.body.id}`).expect(200);
