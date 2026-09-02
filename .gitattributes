@@ -1,0 +1,4 @@
+# ClamAV parses numeric configuration values strictly inside the Linux image.
+# Keep its runtime configuration Unix-normalized even when the repository is
+# prepared from a Windows workstation.
+docker/*.conf text eol=lf
