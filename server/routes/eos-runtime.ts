@@ -20640,7 +20640,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
               "Merchant identity": Boolean(stripeConnection?.healthy),
               "Webhook signing": stripeConnection?.reason === "ready",
             },
-            accountReference: stripeConnection?.accountReference || stripeBinding?.providerAccountReference || null,
+            accountReference: stripeBinding?.providerAccountReference || null,
             connectionScope: "This is the selected company's merchant connection. Its restricted key and webhook signing secret remain vault-managed and are never shared across companies.",
             operations: ["stripe.create_recovery_checkout_with_local_approval", "stripe.cancel_recovery_subscription_with_local_approval", "stripe.refund_recovery_setup_with_local_approval"],
             requiredScopes: ["Company-specific restricted Stripe key", "Binding-specific webhook signing secret"],
