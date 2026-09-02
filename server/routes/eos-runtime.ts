@@ -20532,10 +20532,15 @@ export function registerEosRuntimeRoutes(app: Express): void {
         purpose: "administer_systems_registry",
         classification: "confidential",
       });
-      const [googleWorkspace, notionConnection] = await Promise.all([
+      const [googleWorkspace, notionConnection, companyBindings] = await Promise.all([
         gmail.verifyConnection(req.user.id),
         notion.verifyConnection(req.user.id),
+        db.select().from(eosIntegrationBindings).where(eq(eosIntegrationBindings.companyId, access.company.id)),
       ]);
+      const stripeBinding = companyBindings.find((item) => item.providerKey === "stripe" && item.lifecycleState === "active")
+        || companyBindings.find((item) => item.providerKey === "stripe")
+        || null;
+      const stripeConnection = stripeBinding ? await verifyStripeConnection(stripeBinding) : null;
       const umhConfigured = federationConfigured();
       return {
         body: [
@@ -20561,6 +20566,8 @@ export function registerEosRuntimeRoutes(app: Express): void {
             risk: "consequential_write",
             services: gmail.GOOGLE_WORKSPACE_SERVICES,
             serviceHealth: googleWorkspace.services,
+            accountEmail: googleWorkspace.accountEmail,
+            connectionScope: "The signed-in human authorizes this connection. EOS applies it only through this company workspace's seat, authority, approval, and audit controls.",
             operations: gmail.GOOGLE_WORKSPACE_TOOLS,
             requiredScopes: gmail.requestedScopes(),
             grantedScopes: googleWorkspace.grantedScopes,
@@ -20600,6 +20607,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
               "Read content shared with the EntrepreneurOS integration",
             ],
             workspace: notionConnection.workspace,
+            connectionScope: "The signed-in human authorizes this workspace connection. EOS exposes only content that the Notion integration is explicitly allowed to read in this company workspace.",
             executionAdapter: "EOS-owned Notion API adapter",
             manualFallback: "Open the canonical Notion workspace directly.",
             actions: notionConnection.connected
@@ -20607,6 +20615,39 @@ export function registerEosRuntimeRoutes(app: Express): void {
               : notionConnection.configured
                 ? ["connect"]
                 : [],
+          },
+          {
+            id: "stripe",
+            name: "Stripe",
+            description: "Company-scoped merchant account for customer payments and payment receipts.",
+            state: !stripeBinding
+              ? "not_configured"
+              : stripeConnection?.connected
+                ? "connected"
+                : "available",
+            health: stripeConnection?.healthy
+              ? "healthy"
+              : stripeConnection?.connected
+                ? "degraded"
+                : "not_connected",
+            configured: Boolean(stripeBinding),
+            connected: Boolean(stripeConnection?.connected),
+            providerType: "company_managed_merchant",
+            authority: "company_payment_execution_after_local_approval",
+            risk: "consequential_write",
+            services: ["Merchant identity", "Webhook signing"],
+            serviceHealth: {
+              "Merchant identity": Boolean(stripeConnection?.healthy),
+              "Webhook signing": stripeConnection?.reason === "ready",
+            },
+            accountReference: stripeBinding?.providerAccountReference || null,
+            connectionScope: "This is the selected company's merchant connection. Its restricted key and webhook signing secret remain vault-managed and are never shared across companies.",
+            operations: ["stripe.create_recovery_checkout_with_local_approval", "stripe.cancel_recovery_subscription_with_local_approval", "stripe.refund_recovery_setup_with_local_approval"],
+            requiredScopes: ["Company-specific restricted Stripe key", "Binding-specific webhook signing secret"],
+            grantedScopes: stripeConnection?.healthy ? ["Company-specific restricted Stripe key", "Binding-specific webhook signing secret"] : [],
+            executionAdapter: "EOS-owned Stripe commercial adapter",
+            manualFallback: "Issue or reconcile the approved payment directly in the selected company's Stripe dashboard.",
+            actions: stripeBinding ? ["verify"] : [],
           },
           {
             id: "umh",

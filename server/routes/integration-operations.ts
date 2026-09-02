@@ -364,12 +364,26 @@ export function registerIntegrationOperationsRoutes(app: Express): void {
     if (!manifest || manifest.bindingConfigurationVersion !== binding.configurationVersion) throw new EosRouteError(409, "integration_dispatch_manifest_stale", "The run no longer references the current frozen binding configuration.");
     const now = new Date(); const operational = await db.query.eosIntegrationOperationalStates.findFirst({ where: eq(eosIntegrationOperationalStates.integrationBindingId, binding.id) });
     if (!operational || operational.trafficMode !== "provider") throw new EosRouteError(409, "integration_dispatch_traffic_blocked", "Provider dispatch is allowed only while provider traffic mode is active.");
+    // Approval and provider credential ownership are separate principals. A
+    // manager may approve a founder-owned run, but must never cause EOS to
+    // send through the manager's personal OAuth connection by accident.
+    const runOwnerSeat = await db.query.eosSeats.findFirst({
+      where: and(eq(eosSeats.id, run.ownerSeatId), eq(eosSeats.companyId, companyId)),
+    });
+    const bindingOwnerSeat = runOwnerSeat?.occupantUserId
+      ? null
+      : await db.query.eosSeats.findFirst({
+        where: and(eq(eosSeats.id, binding.ownerSeatId), eq(eosSeats.companyId, companyId)),
+      });
+    const credentialOwnerUserId = runOwnerSeat?.occupantUserId
+      || bindingOwnerSeat?.occupantUserId
+      || req.user.id;
     const executionId = randomUUID(); const executionKey = `${run.idempotencyKey}:attempt:${run.attemptCount + 1}`;
     const claimed = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`integration-run:${run.id}`}))`);
       const [current] = await tx.select().from(eosIntegrationRuns).where(eq(eosIntegrationRuns.id, run.id)).limit(1);
       if (!current || current.version !== run.version || current.state !== run.state) throw new EosRouteError(409, "integration_run_concurrent_change", "The run changed before provider dispatch could be claimed.");
-      const [providerExecution] = await tx.insert(eosProviderExecutions).values({ id: executionId, companyId, workPacketId: evidence[0].workPacketId, approvalId: null, requestedByUserId: req.user.id, provider: binding.providerKey, operation: run.operation, idempotencyKey: executionKey, status: "executing", request: { integrationRunId: run.id, requestReference: run.requestReference, requestSha256: run.requestSha256, requestShape: run.requestShape, bindingConfigurationVersion: binding.configurationVersion, manifestSha256: manifest.manifestSha256 }, receipt: {}, reconciliationStatus: "pending", failureCode: null, traceId: policy.traceId, correlationId: policy.correlationId, createdAt: now, updatedAt: now }).returning();
+      const [providerExecution] = await tx.insert(eosProviderExecutions).values({ id: executionId, companyId, workPacketId: evidence[0].workPacketId, approvalId: null, requestedByUserId: req.user.id, provider: binding.providerKey, operation: run.operation, idempotencyKey: executionKey, status: "executing", request: { integrationRunId: run.id, requestReference: run.requestReference, requestSha256: run.requestSha256, requestShape: run.requestShape, bindingConfigurationVersion: binding.configurationVersion, manifestSha256: manifest.manifestSha256, credentialOwnerUserId }, receipt: {}, reconciliationStatus: "pending", failureCode: null, traceId: policy.traceId, correlationId: policy.correlationId, createdAt: now, updatedAt: now }).returning();
       const event = await appendEvent(tx, { companyId, integrationBindingId: binding.id, eventType: "dispatch_claimed", subjectType: "run", subjectId: run.id, versionBefore: run.version, versionAfter: run.version + 1, evidenceIds: evidence.map((item) => item.id), payload: { providerExecutionId: executionId, operation: run.operation, executionKey, externalEffectExecuted: false }, policyDecisionId: policy.decisionId, recordedByUserId: req.user.id, recordedAt: now });
       const [claimedRun] = await tx.update(eosIntegrationRuns).set({ state: "dispatching", providerExecutionId: executionId, version: run.version + 1, lastEventId: event.id, updatedAt: now }).where(and(eq(eosIntegrationRuns.id, run.id), eq(eosIntegrationRuns.version, run.version))).returning();
       if (!claimedRun) throw new EosRouteError(409, "integration_run_concurrent_change", "The run changed before provider dispatch could be claimed.");
@@ -378,7 +392,7 @@ export function registerIntegrationOperationsRoutes(app: Express): void {
     });
 
     const startedAt = Date.now(); let dispatchResult: Awaited<ReturnType<typeof dispatchAllowlistedAdapterOperation>> | null = null; let dispatchError: AdapterDispatchError | null = null;
-    try { dispatchResult = await dispatchAllowlistedAdapterOperation({ userId: req.user.id, providerKey: binding.providerKey, operation: run.operation, requestShape: run.requestShape }); }
+    try { dispatchResult = await dispatchAllowlistedAdapterOperation({ userId: credentialOwnerUserId, providerKey: binding.providerKey, operation: run.operation, requestShape: run.requestShape }); }
     catch (error) { dispatchError = error instanceof AdapterDispatchError ? error : new AdapterDispatchError("provider_outcome_uncertain", error instanceof Error ? error.message : "Provider outcome is uncertain.", "uncertain"); }
     const completedAt = new Date(); const outcome = dispatchResult ? "succeeded" : dispatchError!.outcome; const authority = dispatchResult ? dispatchResult.authority : "provider_observation"; const externalReference = dispatchResult?.externalReference || `provider-execution:${executionId}`; const summary = dispatchResult?.summary || dispatchError!.message; const responseShape = dispatchResult?.responseShape || { code: dispatchError!.code, outcomeBoundary: dispatchError!.outcome, providerReferenceObserved: false };
     const result = await db.transaction(async (tx) => {

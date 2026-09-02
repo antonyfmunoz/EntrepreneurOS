@@ -586,10 +586,11 @@ export async function verifyConnection(userId: string): Promise<{
   healthy: boolean;
   services: Record<(typeof GOOGLE_WORKSPACE_SERVICES)[number], boolean>;
   grantedScopes: string[];
+  accountEmail: string | null;
 }> {
   const summary = await connectionSummary(userId);
   const services = scopeCoverage(summary.grantedScopes);
-  if (!summary.connected) return { ...summary, healthy: false, services };
+  if (!summary.connected) return { ...summary, healthy: false, services, accountEmail: null };
 
   try {
     const accessToken = await getAccessToken(userId);
@@ -608,9 +609,12 @@ export async function verifyConnection(userId: string): Promise<{
     services.Gmail = checks[0].status === "fulfilled";
     services.Calendar = checks[1].status === "fulfilled";
     services.Drive = checks[2].status === "fulfilled";
-    return { ...summary, healthy: Object.values(services).every(Boolean), services };
+    const accountEmail = checks[0].status === "fulfilled"
+      ? checks[0].value.data.emailAddress?.trim().toLowerCase() || null
+      : null;
+    return { ...summary, healthy: Object.values(services).every(Boolean), services, accountEmail };
   } catch {
-    return { ...summary, healthy: false, services };
+    return { ...summary, healthy: false, services, accountEmail: null };
   }
 }
 

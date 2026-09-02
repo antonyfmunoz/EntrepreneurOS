@@ -12483,7 +12483,7 @@ function IntegrationControlCard({
 
         {integration.serviceHealth && (
           <div>
-            <p className="eos-label mb-2">Live service health</p>
+            <p className="eos-label mb-2">Connected capabilities</p>
             <div className="flex flex-wrap gap-2">
               {Object.entries(integration.serviceHealth).map(
                 ([service, healthy]) => (
@@ -12496,6 +12496,24 @@ function IntegrationControlCard({
                 ),
               )}
             </div>
+          </div>
+        )}
+        {integration.accountEmail && (
+          <div className="rounded-xl border border-border/70 p-4">
+            <p className="eos-label">Authorized account</p>
+            <p className="mt-1 break-all font-medium">{integration.accountEmail}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Provider access is attached to your signed-in seat. EOS records every company use through its local approval and audit controls.
+            </p>
+          </div>
+        )}
+        {integration.accountReference && (
+          <div className="rounded-xl border border-border/70 p-4">
+            <p className="eos-label">Merchant account</p>
+            <p className="mt-1 break-all font-medium">{integration.accountReference}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              This reference identifies the company&apos;s selected payment account; its credentials stay in the deployment vault.
+            </p>
           </div>
         )}
         {integration.workspace?.workspaceName && (
@@ -12526,15 +12544,22 @@ function IntegrationControlCard({
               </div>
             </div>
             <div>
-              <p className="eos-label mb-2">Required scopes</p>
+              <p className="eos-label mb-2">Granted access</p>
               <ul className="space-y-1 text-sm text-muted-foreground">
                 {(integration.requiredScopes || []).map((scope: string) => (
-                  <li key={scope}>• {scopeLabels[scope] || scope}</li>
+                  <li key={scope} className="flex items-start gap-2">
+                    <span aria-hidden="true" className={Array.isArray(integration.grantedScopes) && integration.grantedScopes.includes(scope) ? "text-primary" : "text-muted-foreground"}>•</span>
+                    <span>{scopeLabels[scope] || scope}{Array.isArray(integration.grantedScopes) && integration.grantedScopes.includes(scope) ? " · granted" : " · not granted"}</span>
+                  </li>
                 ))}
               </ul>
             </div>
           </div>
         </details>
+
+        {integration.connectionScope && (
+          <p className="text-xs text-muted-foreground">{integration.connectionScope}</p>
+        )}
 
         <div className="rounded-xl bg-muted p-4 text-sm">
           <span className="font-medium">Manual fallback:</span>{" "}
