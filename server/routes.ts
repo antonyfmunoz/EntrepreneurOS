@@ -33,8 +33,20 @@ import { registerPublicStakeholderPortalRoutes, registerStakeholderPortalRoutes 
 import { errorHandler } from "./middleware/error-handler";
 import { blockLegacyUnscopedApis, requireLocalApiAuth } from "./middleware/api-security";
 import { federationCommandRateLimit, localApiRateLimit } from "./middleware/rate-limit";
+import { untrustedArtifactIngressMode } from "./security/release-configuration";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  app.get("/api/runtime-capabilities", (_req, res) => {
+    const artifactIngressMode = untrustedArtifactIngressMode();
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({
+      artifactIngressMode,
+      untrustedUploadsEnabled: artifactIngressMode === "scanner_backed",
+      signatureMethods: artifactIngressMode === "scanner_backed"
+        ? ["typed", "drawn", "uploaded"]
+        : ["typed"],
+    });
+  });
   // Set up authentication routes and middleware
   setupAuth(app);
   registerBillingWebhook(app);

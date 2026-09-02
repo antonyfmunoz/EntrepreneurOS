@@ -2452,6 +2452,14 @@ try {
     .first()
     .waitFor();
   await desktop.getByText("EOS Native Signing", { exact: true }).waitFor();
+  const trustedSourceResponse = await fetch(`${apiOrigin}/__fixture/artifact-ingress`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "trusted_source" }) });
+  if (!trustedSourceResponse.ok) throw new Error("Could not activate trusted-source browser qualification.");
+  await desktop.reload({ waitUntil: "domcontentloaded" });
+  await desktop.getByText("EOS Native Signing", { exact: true }).waitFor();
+  await desktop.getByLabel("Systems").getByRole("tab", { name: "Documents", exact: true }).click();
+  await desktop.getByText("Generate documents in EOS", { exact: true }).waitFor();
+  if (await desktop.getByText("Register an immutable signing document", { exact: true }).count())
+    throw new Error("Trusted-source mode exposed arbitrary PDF registration.");
   await desktop.getByLabel("Systems").getByRole("tab", { name: "Library", exact: true }).click();
   await desktop.getByText("Governed jurisdiction packs", { exact: true }).waitFor();
   await desktop.getByText("counsel attributed", { exact: true }).waitFor();
@@ -2562,6 +2570,9 @@ try {
   await desktop.getByText("I reviewed this replacement comparison.", { exact: true }).locator("xpath=ancestor::label[1]").getByRole("checkbox").check();
   await replacementConsentButton.click();
   await desktop.getByRole("heading", { name: "Sign the document", exact: true }).waitFor();
+  await desktop.getByRole("button", { name: "Type", exact: true }).waitFor();
+  if (await desktop.getByRole("button", { name: /^(Draw|Upload)$/ }).count())
+    throw new Error("Trusted-source signing exposed image capture methods.");
   const placementDisclosure = desktop.getByText("What EOS will place in the PDF", { exact: true }).locator("xpath=..");
   await placementDisclosure.waitFor();
   const placementDisclosureText = await placementDisclosure.textContent();
@@ -2645,6 +2656,9 @@ try {
   await contractControl.getByText("Browser-qualified contract administration notice", { exact: true }).waitFor();
   await contractControl.getByText("draft", { exact: true }).waitFor();
   const signerPdf = await PDFDocument.create();
+  const scannerBackedResponse = await fetch(`${apiOrigin}/__fixture/artifact-ingress`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "scanner_backed" }) });
+  if (!scannerBackedResponse.ok) throw new Error("Could not restore scanner-backed browser qualification.");
+  await desktop.reload({ waitUntil: "domcontentloaded" });
   signerPdf.addPage([612, 792]);
   const signerPdfBase64 = Buffer.from(await signerPdf.save()).toString("base64");
   const browserSignatureFieldId = randomUUID();
@@ -3045,6 +3059,8 @@ try {
         },
       },
       nativeEsignOperations: {
+        trustedSourceGeneratedSigning: true,
+        trustedSourceUploadControlsHidden: true,
         rendered: true,
         assuranceSelection: true,
         signedWebhookConfiguration: true,

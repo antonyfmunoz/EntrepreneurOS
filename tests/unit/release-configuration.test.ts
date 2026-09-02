@@ -44,6 +44,7 @@ const valid = {
   EOS_ARTIFACT_BACKUP_S3_ACCESS_KEY_ID: "backup-access-key-id",
   EOS_ARTIFACT_BACKUP_S3_SECRET_ACCESS_KEY: "backup-secret-access-key-example",
   EOS_MALWARE_SCAN_MODE: "clamav",
+  EOS_UNTRUSTED_UPLOADS_ENABLED: "true",
   EOS_CLAMAV_HOST: "127.0.0.1",
   EOS_CLAMAV_PORT: "3310",
 };
@@ -134,7 +135,7 @@ describe("production runtime configuration", () => {
       "nativeEsignBackupStorageConfigured",
       "nativeEsignBackupCredentialsConfigured",
       "nativeEsignBackupEncryptionConfigured",
-      "malwareScannerConfigured",
+      "untrustedArtifactIngressSafe",
       "candidateTranscriptionSafe",
     ]);
     expect(runtimeReleaseSubject({ EOS_RELEASE_SUBJECT: "latest" })).toBeNull();

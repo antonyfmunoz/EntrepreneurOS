@@ -27,9 +27,10 @@ describe("production vault bootstrap contract", () => {
     expect(script).toContain('New-Field "EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS" "{}"');
   });
 
-  it("declares internal operator mode in the production environment", () => {
+  it("declares internal operator mode without automatically enabling provider effects", () => {
     expect(environmentTemplate).toContain("EOS_PUBLIC_PAID_SAAS=false");
-    expect(environmentTemplate).toContain("EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED=true");
+    expect(environmentTemplate).toContain("EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED=false");
+    expect(environmentTemplate).not.toContain("EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED=true");
     expect(environmentTemplate).not.toContain("STRIPE_RESTRICTED_KEY=op://EntrepreneurOS/Production");
     expect(environmentTemplate).not.toContain("EOS_STRIPE_PLANS=op://EntrepreneurOS/Production");
   });

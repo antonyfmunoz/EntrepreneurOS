@@ -9,7 +9,7 @@ const complete: ExternalProductionInventorySignals = {
   github: { defaultBranchCanonical: true, protectedChecksConfigured: true, productionEnvironmentConfigured: true, productionEnvironmentApprovalRequired: true, openCodeScanningAlerts: 0, openDependabotAlerts: 0 },
   fly: { oneImmutableImage: true, releaseSubjectPresent: true, minimumMachineAvailable: true, productionSecretSetComplete: true },
   publicRuntime: { healthOk: true, readinessOk: true, hstsPresent: true, cspPresent: true, tlsValid: true },
-  vault: { productionItemExists: true, missingRequiredFields: [], clerkLive: true, clerkPlatformAdministratorsValid: true, credentialEncryptionKeyMatchesRuntime: true, operatingCompanyPaymentsLive: true, primaryArtifactPlanePresent: true, backupArtifactPlanePresent: true, malwareScannerPresent: true, alertReceiverPresent: true },
+  vault: { productionItemExists: true, missingRequiredFields: [], clerkLive: true, clerkPlatformAdministratorsValid: true, credentialEncryptionKeyMatchesRuntime: true, operatingCompanyPaymentsLive: true, primaryArtifactPlanePresent: true, backupArtifactPlanePresent: true, trustedSourceModePresent: false, malwareScannerPresent: true, alertReceiverPresent: true },
   providers: { googleCredentialValid: true, gmailRead: true, gmailSend: true, driveRead: true, calendarEvents: true, notionInternalBotValid: true, notionPublicOAuthPresent: true, posthogProjectKeyPresent: true, anthropicCredentialPresent: true },
   database: { reachable: true, migrationCount: 111, targetMigrationCount: 111, vaultCandidateMatchesRuntime: true },
 };
@@ -40,6 +40,15 @@ describe("external production inventory", () => {
 
   it("reports no technical inventory gaps only when every observed external control is present", () => {
     expect(externalProductionInventoryGaps(complete)).toEqual([]);
+  });
+
+  it("accepts verified trusted-source mode without pretending a scanner is present", () => {
+    const trusted = structuredClone(complete);
+    trusted.vault.malwareScannerPresent = false;
+    trusted.vault.trustedSourceModePresent = true;
+    expect(externalProductionInventoryGaps(trusted)).toEqual([]);
+    trusted.vault.trustedSourceModePresent = false;
+    expect(externalProductionInventoryGaps(trusted)).toContain("untrusted_artifact_ingress_unsafe");
   });
 
   it("names concrete gaps without collapsing unknown state into a pass", () => {

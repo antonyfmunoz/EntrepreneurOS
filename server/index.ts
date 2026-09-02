@@ -21,7 +21,7 @@ import { startNativeEsignReminderWorker } from "./esign/reminder-worker";
 import { startIntegrationDispatchRecoveryWorker } from "./integrations/dispatch-recovery-worker";
 import { startProviderIngressWorker } from "./integrations/provider-ingress-worker";
 import { startAgentScheduleWorker } from "./agents/scheduler";
-import { productionRuntimeConfigurationIssues, runtimeReleaseSubject } from "./security/release-configuration";
+import { productionRuntimeConfigurationIssues, runtimeReleaseSubject, untrustedArtifactUploadsEnabled } from "./security/release-configuration";
 import { nativeClamavConfigured, nativeClamavHealthy } from "./security/malware-scanner";
 
 const app = express();
@@ -56,7 +56,7 @@ app.get("/api/ready", async (_req, res) => {
   try {
     await db.execute(sql`select 1`);
     if (configurationIssues.length) return res.status(503).json({ status: "not_ready", reason: "configuration" });
-    if (nativeClamavConfigured() && !(await nativeClamavHealthy()))
+    if (untrustedArtifactUploadsEnabled() && nativeClamavConfigured() && !(await nativeClamavHealthy()))
       return res.status(503).json({ status: "not_ready", reason: "malware_scanner" });
     return res.status(200).json({ status: "ready", app: "eos", releaseSubject: runtimeReleaseSubject() });
   } catch {

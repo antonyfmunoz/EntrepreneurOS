@@ -20,6 +20,7 @@ const environment = {
   EOS_ARTIFACT_STORAGE_ROOT: process.env.EOS_ARTIFACT_STORAGE_ROOT || resolve(".tmp", "e2e-native-esign-primary"),
   EOS_ARTIFACT_BACKUP_STORAGE_ROOT: process.env.EOS_ARTIFACT_BACKUP_STORAGE_ROOT || resolve(".tmp", "e2e-native-esign-backup"),
   EOS_E2E_FIXTURE: "true",
+  EOS_UNTRUSTED_UPLOADS_ENABLED: "true",
   EOS_MALWARE_SCAN_MODE: "test-fixture",
   EOS_E2E_API_ORIGIN: "http://127.0.0.1:5111",
   EOS_E2E_CLIENT_ORIGIN: "http://127.0.0.1:5110",

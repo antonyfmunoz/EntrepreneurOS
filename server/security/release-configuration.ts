@@ -50,6 +50,43 @@ function isHttpsWebhook(value?: string): boolean {
   }
 }
 
+export type UntrustedArtifactIngressMode =
+  | "trusted_source"
+  | "scanner_backed"
+  | "unsafe";
+
+export function malwareScannerConfigured(
+  env: ReleaseEnvironment = process.env,
+): boolean {
+  return (
+    nativeClamavConfigured(env as NodeJS.ProcessEnv) ||
+    (isHttpsWebhook(env.EOS_MALWARE_SCAN_ENDPOINT) &&
+      Boolean(
+        env.EOS_MALWARE_SCAN_SECRET &&
+          env.EOS_MALWARE_SCAN_SECRET.length >= 32,
+      ))
+  );
+}
+
+export function untrustedArtifactIngressMode(
+  env: ReleaseEnvironment = process.env,
+): UntrustedArtifactIngressMode {
+  if (env.EOS_UNTRUSTED_UPLOADS_ENABLED === "false") return "trusted_source";
+  if (
+    env.EOS_UNTRUSTED_UPLOADS_ENABLED === "true" &&
+    (malwareScannerConfigured(env) ||
+      (env.NODE_ENV === "test" && env.EOS_MALWARE_SCAN_MODE === "test-fixture"))
+  )
+    return "scanner_backed";
+  return "unsafe";
+}
+
+export function untrustedArtifactUploadsEnabled(
+  env: ReleaseEnvironment = process.env,
+): boolean {
+  return untrustedArtifactIngressMode(env) === "scanner_backed";
+}
+
 function hasStripePlans(value?: string): boolean {
   try {
     const plans = JSON.parse(value || "{}") as Record<
@@ -252,12 +289,8 @@ export function productionRuntimeConfiguration(
       && env.EOS_ARTIFACT_BACKUP_S3_BUCKET !== env.EOS_ARTIFACT_S3_BUCKET,
     nativeEsignBackupCredentialsConfigured: hasS3ArtifactCredentials(env, true),
     nativeEsignBackupEncryptionConfigured: hasS3ArtifactEncryption(env, true),
-    malwareScannerConfigured:
-      nativeClamavConfigured(env as NodeJS.ProcessEnv) ||
-      (isHttpsWebhook(env.EOS_MALWARE_SCAN_ENDPOINT) &&
-        Boolean(
-          env.EOS_MALWARE_SCAN_SECRET && env.EOS_MALWARE_SCAN_SECRET.length >= 32,
-        )),
+    untrustedArtifactIngressSafe:
+      untrustedArtifactIngressMode(env) !== "unsafe",
     candidateTranscriptionSafe:
       env.EOS_CANDIDATE_STT_ENABLED !== "true" ||
       Boolean(

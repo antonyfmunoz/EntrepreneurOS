@@ -30,6 +30,7 @@ async function captureFromBytes(bytes: Uint8Array, mimeType: "image/png" | "imag
 }
 
 export function NativeEsignSignatureCapture(props: {
+  allowedMethods?: SignatureMethod[];
   method: SignatureMethod;
   signerName: string;
   capture: SignatureImageCapture | null;
@@ -153,7 +154,7 @@ export function NativeEsignSignatureCapture(props: {
 
   return <div className="space-y-4">
     <div className="grid grid-cols-3 gap-2" role="group" aria-label="Signature method">
-      {methods.map(({ key, label, icon: Icon }) => <Button key={key} type="button" variant={props.method === key ? "default" : "outline"} onClick={() => props.onMethodChange(key)} aria-pressed={props.method === key}><Icon className="h-4 w-4"/>{label}</Button>)}
+      {methods.filter(({ key }) => !props.allowedMethods || props.allowedMethods.includes(key)).map(({ key, label, icon: Icon }) => <Button key={key} type="button" variant={props.method === key ? "default" : "outline"} onClick={() => props.onMethodChange(key)} aria-pressed={props.method === key}><Icon className="h-4 w-4"/>{label}</Button>)}
     </div>
     {props.method === "typed" ? <div className="rounded-lg border bg-white px-4 py-5 text-center font-serif text-2xl italic" aria-label="Typed signature preview">{props.signerName || "Your signature"}</div> : null}
     {props.method === "drawn" ? <div className="space-y-2">

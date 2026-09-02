@@ -48,7 +48,7 @@ export const CONFIGURATION_ACTION_DEFINITIONS: Record<string, ConfigurationActio
   nativeEsignBackupStorageConfigured: { layer: 13, title: "Independent backup artifact plane", nextAction: "Provision an independent backup bucket with retention, versioning, lifecycle, and restore capability." },
   nativeEsignBackupCredentialsConfigured: { layer: 13, title: "Backup artifact-plane credentials", nextAction: "Grant a distinct minimum production role access to the backup artifact plane." },
   nativeEsignBackupEncryptionConfigured: { layer: 13, title: "Backup artifact-plane encryption", nextAction: "Bind the backup plane to an independent approved KMS key or distinct 256-bit SSE-C key." },
-  malwareScannerConfigured: { layer: 8, title: "Malware scanner", nextAction: "Configure the production scanner and qualify clean, infected, timeout, and unavailable outcomes." },
+  untrustedArtifactIngressSafe: { layer: 8, title: "File-ingress safety", nextAction: "Declare trusted-source mode, or enable direct uploads only with a qualified production malware scanner." },
   candidateTranscriptionSafe: { layer: 22, title: "Candidate transcription safety", nextAction: "Keep transcription disabled or configure the approved model and complete privacy and adversarial review." },
   recoveryProviderExecutionSafe: { layer: 21, title: "Recovery provider execution safety", nextAction: "Configure binding-scoped Stripe and DocuSign authority, signed callbacks, and compensation drills before enabling effects." },
   integrationProviderExecutionSafe: { layer: 21, title: "Integration provider execution safety", nextAction: "Configure encrypted Google and Notion execution authority and exact callbacks before enabling effects." },
