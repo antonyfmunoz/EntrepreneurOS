@@ -1,7 +1,7 @@
 import express from "express";
 import postgres from "postgres";
 import supertest from "supertest";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash, createHmac, generateKeyPairSync, randomUUID, sign } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -252,6 +252,8 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
   let otherCompanyId: number;
   let api: ReturnType<typeof supertest>;
   let currentUserId = ownerId;
+  let scenarioNumber = 0;
+  let scenarioClientIp = "192.0.2.1";
   let verifiedEmailOverride: string | undefined;
   const agentId = "test_eos_agent";
   const internalInstallationId = "test_eos_installation_row";
@@ -336,6 +338,9 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       },
     }));
     app.use((req, _res, next) => {
+      // Independent scenarios are different visitors. Preserve the real limiter
+      // within each scenario without sharing a minute's budget across the suite.
+      Object.defineProperty(req, "ip", { value: scenarioClientIp, configurable: true });
       const owner = currentUserId === ownerId;
       const candidate = currentUserId === candidateId;
       (req as any).user = {
@@ -410,6 +415,10 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     delete process.env.EOS_MALWARE_SCAN_MODE;
   }, 180_000);
 
+  beforeEach(() => {
+    scenarioClientIp = `192.0.2.${++scenarioNumber}`;
+  });
+
   afterEach(() => {
     process.env.EOS_UNTRUSTED_UPLOADS_ENABLED = "true";
   });
@@ -438,6 +447,18 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     } finally {
       process.env.EOS_UNTRUSTED_UPLOADS_ENABLED = "true";
     }
+  });
+
+  it("retains public signing rate limits within each isolated visitor scenario", async () => {
+    const endpoint = "/api/eos/native-esign/public/rate-limit-fixture";
+    for (let request = 0; request < 60; request += 1) {
+      const response = await api.get(endpoint);
+      expect(response.status).not.toBe(429);
+      expect(response.headers["ratelimit-limit"]).toBe("60");
+      expect(response.headers["ratelimit-remaining"]).toBe(String(59 - request));
+    }
+    const blocked = await api.get(endpoint).expect(429);
+    expect(blocked.body.code).toBe("rate_limited");
   });
 
   it("denies cross-tenant reads and quarantines unscoped legacy APIs", async () => {
