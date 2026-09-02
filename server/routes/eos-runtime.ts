@@ -11,7 +11,6 @@ import {
 } from "../ai/cost-control";
 import * as gmail from "../integrations/gmail";
 import * as notion from "../integrations/notion";
-import { verifyStripeConnection } from "../integrations/stripe-health";
 import {
   executeRecoveryCommercialEffect,
   recoveryCommercialEffectsConfigured,
@@ -19905,13 +19904,9 @@ export function registerEosRuntimeRoutes(app: Express): void {
               : "unavailable";
           externalReference = "provider:notion:server_verified";
         } else if (provider === "stripe") {
-          const checked = await verifyStripeConnection(binding);
-          observedHealthState = checked.healthy
-            ? "healthy"
-            : checked.connected
-              ? "degraded"
-              : "unavailable";
-          externalReference = checked.externalReference;
+          // Compatibility fallback: this image never performs the new Stripe health probe.
+          observedHealthState = "unavailable";
+          externalReference = "provider:stripe:compatibility_fallback:health_probe_disabled";
         } else if (["umh", "universal_meta_harness"].includes(provider)) {
           observedHealthState = federationConfigured()
             ? "healthy"

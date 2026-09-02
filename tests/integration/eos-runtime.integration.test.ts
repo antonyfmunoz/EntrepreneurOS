@@ -3328,7 +3328,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     currentUserId = ownerId;
   });
 
-  it("records Stripe health from the exact server verifier without bypassing evidence, tenant or activation gates", async () => {
+  it("keeps Stripe health unavailable in the compatibility fallback without bypassing evidence, tenant or activation gates", async () => {
     currentUserId = ownerId;
     const packet = await api.post(`/api/eos/companies/${companyId}/work-packets`).send({
       title: "Stripe identity qualification fixture",
@@ -3362,18 +3362,18 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       stripeHealthLifecycle.verify.mockResolvedValue({ connected: false, healthy: false,
         externalReference: "provider:stripe:merchant_identity_check:account_mismatch" });
       const mismatch = await api.post(`/api/eos/companies/${companyId}/integration-health-observations`).send(payload).expect(201);
-      expect(mismatch.body).toMatchObject({ healthState: "unavailable", externalReference: "provider:stripe:merchant_identity_check:account_mismatch" });
-      expect(stripeHealthLifecycle.verify).toHaveBeenCalledWith(expect.objectContaining({ id: binding.body.id, providerAccountReference: "acct_fixture" }));
+      expect(mismatch.body).toMatchObject({ healthState: "unavailable", externalReference: "provider:stripe:compatibility_fallback:health_probe_disabled" });
+      expect(stripeHealthLifecycle.verify).not.toHaveBeenCalled();
       stripeHealthLifecycle.verify.mockResolvedValue({ connected: true, healthy: true,
         externalReference: "provider:stripe:acct_fixture:merchant_identity_verified" });
       await api.post(`/api/eos/companies/${companyId}/integration-health-observations`).send({ ...payload, evidenceIds: [] }).expect(400);
       const unverifiedEvidence = await api.post(`/api/eos/companies/${companyId}/integration-health-observations`).send({ ...payload, evidenceIds: [observedEvidence.body.id] }).expect(409);
       expect(unverifiedEvidence.body.code).toBe("verified_health_evidence_required");
       const health = await api.post(`/api/eos/companies/${companyId}/integration-health-observations`).send({ ...payload, healthState: "unavailable" }).expect(201);
-      expect(health.body).toMatchObject({ healthState: "healthy", externalReference: "provider:stripe:acct_fixture:merchant_identity_verified" });
+      expect(health.body).toMatchObject({ healthState: "unavailable", externalReference: "provider:stripe:compatibility_fallback:health_probe_disabled" });
       const state = await api.get(`/api/eos/companies/${companyId}/systems-state`).expect(200);
       expect(state.body.bindings.find((item: { id: string }) => item.id === binding.body.id)).toMatchObject({
-        lifecycleState: "implementing", connectionState: "connected", parityState: "not_tested",
+        lifecycleState: "implementing", parityState: "not_tested",
       });
       await api.patch(`/api/eos/companies/${companyId}/integration-bindings/${binding.body.id}`).send({
         lifecycleState: "active", expectedConfigurationVersion: 1,
