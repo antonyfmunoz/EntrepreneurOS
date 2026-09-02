@@ -175,6 +175,21 @@ $rollbackImage = $rollbackImages[0]
 $rollbackSubjects = @($machines | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Where-Object { $_ } | Select-Object -Unique)
 $rollbackSubject = if ($rollbackSubjects.Count -eq 1) { $rollbackSubjects[0] } else { "image:$($machines[0].image_ref.digest)" }
 if ($rollbackSubject -notmatch '^(git:[a-f0-9]{40}|image:sha256:[a-f0-9]{64})$') { throw "Could not determine an immutable rollback subject." }
+$incumbentImage = $rollbackImage
+$incumbentSubject = $rollbackSubject
+$rollbackManifestSha256 = $null
+if ($env:EOS_COMPATIBILITY_ROLLBACK_MANIFEST_PATH) {
+  $verifiedRollbackRaw = npx tsx scripts/verify-compatibility-rollback.ts `
+    --file $env:EOS_COMPATIBILITY_ROLLBACK_MANIFEST_PATH --app $app `
+    --candidate-subject $env:EOS_RELEASE_SUBJECT `
+    --incumbent-image $incumbentImage --incumbent-subject $incumbentSubject
+  if ($LASTEXITCODE -ne 0) { throw "Prepared compatibility fallback did not qualify; no production changes were made." }
+  $verifiedRollback = $verifiedRollbackRaw | ConvertFrom-Json
+  if ($verifiedRollback.valid -ne $true) { throw "Prepared fallback verification did not produce an approval receipt." }
+  $rollbackImage = $verifiedRollback.image
+  $rollbackSubject = $verifiedRollback.releaseSubject
+  $rollbackManifestSha256 = $verifiedRollback.manifestSha256
+}
 $evidencePath = [IO.Path]::GetFullPath($env:EOS_PRODUCTION_PROMOTION_EVIDENCE_PATH)
 if (-not (Test-Path -LiteralPath $evidencePath -PathType Leaf)) { throw "The production promotion evidence file does not exist." }
 npm run release:evidence:verify -- --file $evidencePath `
@@ -197,7 +212,8 @@ $releaseContext = Join-Path ([IO.Path]::GetTempPath()) "eos-release-$releaseComm
 $archivePath = Join-Path $releaseContext "source.tar"
 New-Item -ItemType Directory -Path $releaseContext | Out-Null
 try {
-  git archive --format=tar --output=$archivePath $releaseCommit
+  # Preserve committed LF bytes for Linux scripts/configs even on Windows hosts with autocrlf=true.
+  git -c core.autocrlf=false archive --format=tar --output=$archivePath $releaseCommit
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   tar -xf $archivePath -C $releaseContext
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -269,7 +285,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Signed-in role and isolation smoke failed." }
   } catch {
     $promotionError = $_.Exception.Message
-    Write-Warning "Promotion or smoke qualification failed; restoring the exact prior image."
+    Write-Warning "Promotion or smoke qualification failed; restoring the exact qualified rollback image."
     flyctl deploy $releaseContext --app $app --image $rollbackImage --strategy rolling `
       --env "EOS_RELEASE_SUBJECT=$rollbackSubject" `
       --env "EOS_PRODUCTION_ENVIRONMENT_SUBJECT=$env:EOS_PRODUCTION_ENVIRONMENT_SUBJECT" `
@@ -287,7 +303,7 @@ try {
     Set-FreshProductionBearerToken
     npm run test:e2e:production:authenticated
     if ($LASTEXITCODE -ne 0) { throw "Promotion failed and the restored image failed signed-in role or tenant-isolation smoke. Escalate immediately." }
-    throw "Promotion failed: $promotionError The prior immutable image was restored; inspect evidence before retrying."
+    throw "Promotion failed: $promotionError The qualified immutable rollback image was restored; inspect evidence before retrying."
   }
 
   New-Item -ItemType Directory -Force -Path ".tmp" | Out-Null
@@ -301,6 +317,9 @@ try {
     imageTag = $imageReference
     rollbackImage = $rollbackImage
     rollbackSubject = $rollbackSubject
+    incumbentImage = $incumbentImage
+    incumbentSubject = $incumbentSubject
+    rollbackManifestSha256 = $rollbackManifestSha256
     qualificationRun = $qualifiedRun.url
     publicSmoke = $true
     authenticatedSmoke = $true

@@ -1,15 +1,36 @@
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const deployScript = readFileSync(new URL("../../scripts/deploy-fly.ps1", import.meta.url), "utf8");
 const rollbackScript = readFileSync(new URL("../../scripts/rollback-fly.ps1", import.meta.url), "utf8");
 
 describe("production deployment script contract", () => {
+  it("archives LF configuration even when the operator's Git uses Windows CRLF conversion", () => {
+    const directory = mkdtempSync(join(tmpdir(), "eos-archive-regression-"));
+    const run = (args: string[]) => execFileSync("git", args, { cwd: directory, stdio: ["ignore", "pipe", "pipe"], timeout: 20_000 });
+    try {
+      run(["init", "--quiet"]); run(["config", "core.autocrlf", "true"]);
+      mkdirSync(join(directory, "docker"));
+      const expected = "DatabaseOwner clamav\nChecks 12\nForeground yes\n";
+      writeFileSync(join(directory, "docker", "freshclam.conf"), expected);
+      run(["add", "docker/freshclam.conf"]);
+      run(["-c", "user.name=EOS Archive Test", "-c", "user.email=archive-test@example.invalid", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "-m", "Archive fixture"]);
+      const extract = (archive: Buffer) => execFileSync("tar", ["-xOf", "-", "docker/freshclam.conf"], { input: archive, encoding: "utf8", timeout: 20_000 });
+      expect(extract(run(["archive", "--format=tar", "HEAD"]))).toContain("\r\n");
+      expect(extract(run(["-c", "core.autocrlf=false", "archive", "--format=tar", "HEAD"]))).toBe(expected);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  }, 60_000);
+
   it("refuses release-source changes while allowing the ignored local operator settings file", () => {
     expect(deployScript).toContain("git status --porcelain --untracked-files=all");
     expect(deployScript).toContain('$candidatePath -ne ".claude/settings.local.json"');
     expect(deployScript).toContain("Production releases require a clean worktree");
-    expect(deployScript.indexOf("git status --porcelain")).toBeLessThan(deployScript.indexOf("git archive --format=tar"));
+    const archive = deployScript.indexOf("git -c core.autocrlf=false archive --format=tar");
+    expect(archive).toBeGreaterThan(-1);
+    expect(deployScript.indexOf("git status --porcelain")).toBeLessThan(archive);
   });
 
   it("requires current release-bound backup, migration, restore, rollback, and approval evidence before building", () => {
