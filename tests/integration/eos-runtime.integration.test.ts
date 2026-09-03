@@ -4475,12 +4475,16 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         expect.objectContaining({ direction: "team_to_candidate" }),
       ]),
     );
+    // Keep the accepted interview window ahead of the wall clock so this
+    // qualification remains deterministic when CI runs on a later date.
+    const selectedSlot = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const alternateSlot = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
     const scheduling = await api
       .post(`/api/eos/companies/${companyId}/talent-scheduling`)
       .send({
         applicationId: application.body.id,
         schedulingKind: "interview",
-        proposedSlots: ["2026-09-01T17:00:00.000Z", "2026-09-02T19:00:00.000Z"],
+        proposedSlots: [selectedSlot, alternateSlot],
         teamNote: "Choose one of the two controlled interview windows.",
       })
       .expect(201);
@@ -4488,7 +4492,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       .post(`${portalApi}/scheduling/${scheduling.body.id}/respond`)
       .send({
         response: "accept",
-        selectedSlot: "2026-09-02T19:00:00.000Z",
+        selectedSlot,
         timezone: "America/Los_Angeles",
         message: "The second time works.",
       })
@@ -4498,7 +4502,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         expect.objectContaining({
           id: scheduling.body.id,
           status: "accepted",
-          selectedSlot: "2026-09-02T19:00:00.000Z",
+          selectedSlot,
         }),
       ]),
     );
@@ -6546,7 +6550,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         packageKey: "empyrean-studios-reference",
         organizationKey: "ORG-EMPYREAN-STUDIOS",
         capabilityCount: 17,
-        providerBindingCount: 5,
+        providerBindingCount: 7,
         sourceBindingCount: 5,
         installed: false,
         parity: expect.objectContaining({
@@ -6595,7 +6599,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       organizationKey: "ORG-EMPYREAN-STUDIOS",
       activationState: "blocked",
     });
-    expect(first.body.report.activationBlockers).toHaveLength(7);
+    expect(first.body.report.activationBlockers).toHaveLength(8);
     expect(first.body.compiledInstance).toMatchObject({
       schemaVersion: "eos.compiled-company-instance.v1",
       companyId,
@@ -6606,7 +6610,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     });
     expect(first.body.compiledInstance.activeCapabilityKeys).toHaveLength(14);
     expect(first.body.compiledInstance.dormantCapabilityKeys).toHaveLength(3);
-    expect(first.body.compiledInstance.providerBindingKeys).toHaveLength(5);
+    expect(first.body.compiledInstance.providerBindingKeys).toHaveLength(7);
     expect(first.body.compiledInstance.provenanceGraph.length).toBeGreaterThan(0);
     expect(first.body.semanticParity).toMatchObject({
       canonicalCapabilitiesCreated: 17,
@@ -6702,7 +6706,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const referenceBindings = systems.body.bindings.filter((binding: any) =>
       binding.integrationKey.startsWith("INTEGRATION-EMPYREAN-"),
     );
-    expect(referenceBindings).toHaveLength(5);
+    expect(referenceBindings).toHaveLength(7);
     expect(
       referenceBindings.every(
         (binding: any) =>
@@ -7267,7 +7271,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const approvedCycle = approvedState.body.customerValueCycles.find(
       (item: any) => item.id === created.body.id,
     );
-    expect(approvedCycle.providerCheckpoints).toHaveLength(5);
+    expect(approvedCycle.providerCheckpoints).toHaveLength(6);
     expect(
       approvedCycle.providerCheckpoints.map((item: any) => item.providerKey),
     ).toEqual([
@@ -7275,6 +7279,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       "gohighlevel",
       "google-workspace",
       "notion",
+      "quickbooks",
       "stripe",
     ]);
     expect(
@@ -7383,7 +7388,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     ).toBe(true);
     expect(qualifiedState.body.counts).toMatchObject({
       providerContractsRequired: 0,
-      providerContractsQualified: 5,
+      providerContractsQualified: 6,
     });
 
     const advance = async (action: string, note: string) => {

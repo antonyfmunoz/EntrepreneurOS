@@ -7577,7 +7577,7 @@ export default function EosOverlayPage() {
                       (checkpoint: JsonRecord) => checkpoint.state === "contract_qualified",
                     );
                     const providerContractsReady =
-                      providerCheckpoints.length === 5 &&
+                      providerCheckpoints.length === 6 &&
                       qualifiedProviderCheckpoints.length === providerCheckpoints.length;
                     const primaryActions: Record<string, Array<{ action: string; label: string }>> = {
                       commercial_approved: [{ action: "verify_agreement", label: "Verify agreement fixture" }],
@@ -7630,7 +7630,7 @@ export default function EosOverlayPage() {
                             <div>
                               <p className="text-sm font-semibold">Provider contract checkpoints</p>
                               <p className="mt-1 text-xs text-muted-foreground">
-                                {qualifiedProviderCheckpoints.length}/{providerCheckpoints.length || 5} deterministic adapter suites qualified. This does not verify a provider account, credential, permission, health check, or live effect.
+                                {qualifiedProviderCheckpoints.length}/{providerCheckpoints.length || 6} deterministic adapter suites qualified. This does not verify a provider account, credential, permission, health check, or live effect.
                               </p>
                             </div>
                             <Badge variant={providerContractsReady ? "default" : "secondary"}>

@@ -2066,6 +2066,13 @@ const customerValueProviderFixtureSpecs = [
     liveProviderBlocker:
       "Exact Notion workspace, integration identity, parent pages, database access, permission scope, recovery owner, and live health evidence remain unverified.",
   },
+  {
+    providerKey: "quickbooks",
+    phaseKey: "reporting_reconciliation",
+    operationKey: "accounting.reconciliation_period_close_contract",
+    liveProviderBlocker:
+      "Exact QuickBooks company file, legal entity perimeter, administrator, chart of accounts, bank and Stripe feeds, tax configuration, close state, recovery owner, and live reconciliation evidence remain unverified.",
+  },
 ] as const;
 
 const customerValueProviderFixtureScenarios = [

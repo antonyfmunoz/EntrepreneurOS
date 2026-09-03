@@ -2,12 +2,21 @@
 
 Setup receipt dated 2026-09-01. This is configuration evidence, not payment activation or proof of a completed payment.
 
+## Post-setup account cleanup (2026-09-02)
+
+- The duplicate Stripe account `acct_1U0pKdLtYrBK6FoL` (labeled “EntreprenuerOS”) was closed by the account owner.
+- The connected Stripe account inventory now contains only the historical Empyrean Studios account `acct_1LekouBjRpasql4r` in test and live mode.
+- EOS production configuration and the ChatGPT Stripe connection continue to reference only the historical account.
+- The four live Recovery prices were activated: founding setup, founding monthly, standard setup, and standard monthly.
+- The binding-specific live Stripe webhook was enabled at the documented EOS endpoint; EOS payment effects remain approval-gated.
+- The no-money provider qualification suite was re-run locally: 37 Stripe/Recovery tests passed; no charge, subscription, refund, or live customer effect was created.
+
 ## Identity and authority
 
 - Product: EntrepreneurOS; operating company: Empyrean Creative LLC, doing business as Empyrean Studios.
 - Historical merchant retained: `acct_1LekouBjRpasql4r` (Empyrean Studios).
 - EOS company: `1`; integration binding: `fd3ecfba-55f6-5f8b-a5d4-a31e09c3ea67`.
-- Neither the historical merchant nor the newer duplicate was deleted. Existing LeadConnector products were not changed.
+- At the time of this setup receipt, neither the historical merchant nor the newer duplicate had been deleted. Existing LeadConnector products were not changed.
 - EOS SaaS subscription sales are out of scope. These are the operating company's Recovery service offers.
 
 ## Canonical terms
@@ -21,7 +30,7 @@ The latest 2026-08-18 decision in [Recovery System - Commercial Authority & Guar
 
 ## Provider objects created and reread
 
-All four prices are **live-mode but inactive** (`active: false`). They cannot be used for a new checkout until deliberately activated. No checkout session, payment link, subscription, charge, refund or cancellation was created as part of this setup.
+At the time of this setup receipt, all four prices were **live-mode but inactive** (`active: false`). They were subsequently activated on 2026-09-02. No checkout session, payment link, subscription, charge, refund or cancellation was created as part of this setup or activation.
 
 | Package | Product | Component | Price | Amount USD | Lookup key |
 | --- | --- | --- | --- | --- | --- |
@@ -37,7 +46,7 @@ The products have no default price. Monthly prices use interval `month`, count `
 - Approved restricted key and signing secret are held in 1Password `EntrepreneurOS / Production`, then installed in the exact-binding maps `EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS` and `EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS` in Fly app `eos-app`.
 - Runtime checks verified the exact merchant and vault/runtime matches without exposing the values.
 - `EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED=false` remains explicit.
-- Webhook: `we_1UB3LmBjRpasql4rv1NO8hkO`, **disabled**.
+- Webhook: `we_1UB3LmBjRpasql4rv1NO8hkO`, initially disabled and subsequently enabled on 2026-09-02.
 - URL: `https://entrepreneuros.net/api/eos/recovery-provider-webhooks/stripe/fd3ecfba-55f6-5f8b-a5d4-a31e09c3ea67`.
 - Snapshot payload, own account, API version `2026-08-26.dahlia`.
 - Events: checkout.session.async_payment_failed, checkout.session.async_payment_succeeded, checkout.session.completed, payment_intent.payment_failed, payment_intent.succeeded, customer.subscription.created, customer.subscription.deleted, customer.subscription.updated, invoice.paid, invoice.payment_failed, charge.dispute.created, charge.refunded, refund.created.
