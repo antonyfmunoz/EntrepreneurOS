@@ -19895,7 +19895,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
       let externalReference = input.externalReference || null;
       if (["live_provider", "monitoring"].includes(input.checkType)) {
         const provider = binding.providerKey.toLowerCase();
-        if (["gmail", "google_workspace", "google"].includes(provider)) {
+        if (["gmail", "google_workspace", "google-workspace", "google"].includes(provider)) {
           const checked = await gmail.verifyConnection(req.user.id);
           observedHealthState = checked.healthy
             ? "healthy"
@@ -20655,6 +20655,123 @@ export function registerEosRuntimeRoutes(app: Express): void {
             executionAdapter: "EOS-owned Stripe commercial adapter",
             manualFallback: "Issue or reconcile the approved payment directly in the selected company's Stripe dashboard.",
             actions: stripeBinding ? ["verify"] : [],
+          },
+          {
+            id: "gohighlevel",
+            name: "GoHighLevel",
+            description:
+              "CRM, forms, calendars, and workflow automation for the Empyrean Studios pipeline.",
+            state: "not_configured",
+            health: "not_connected",
+            configured: false,
+            connected: false,
+            providerType: "oauth",
+            authority: "external_crm_provider",
+            risk: "consequential_write",
+            services: ["CRM", "Forms", "Calendar", "Workflow"],
+            serviceHealth: {
+              CRM: false,
+              Forms: false,
+              Calendar: false,
+              Workflow: false,
+            },
+            operations: [],
+            requiredScopes: [
+              "Exact GoHighLevel location OAuth",
+              "Pipeline and contact access",
+              "Calendar and workflow access",
+            ],
+            executionAdapter: "EOS GoHighLevel adapter not configured",
+            manualFallback:
+              "Operate the governed EOS work packet and update the authorized GoHighLevel location manually.",
+            actions: [],
+          },
+          {
+            id: "docusign",
+            name: "DocuSign",
+            description:
+              "Agreement dispatch, signature status, and certificate evidence.",
+            state: "not_configured",
+            health: "not_connected",
+            configured: false,
+            connected: false,
+            providerType: "oauth",
+            authority: "external_signature_provider",
+            risk: "consequential_write",
+            services: ["Agreement dispatch", "Signature events", "Certificates"],
+            serviceHealth: {
+              "Agreement dispatch": false,
+              "Signature events": false,
+              Certificates: false,
+            },
+            operations: [],
+            requiredScopes: [
+              "Exact DocuSign account OAuth",
+              "Template and sender authority",
+              "Envelope and callback access",
+            ],
+            executionAdapter: "EOS DocuSign adapter not configured",
+            manualFallback:
+              "Prepare the agreement in EOS and send it from the authorized DocuSign workspace manually.",
+            actions: [],
+          },
+          {
+            id: "quickbooks",
+            name: "QuickBooks Online",
+            description:
+              "Authoritative accounting ledger, invoicing, reconciliation, and financial reporting.",
+            state: "not_configured",
+            health: "not_connected",
+            configured: false,
+            connected: false,
+            providerType: "oauth",
+            authority: "external_accounting_provider",
+            risk: "consequential_write",
+            services: ["Accounting ledger", "Invoicing", "Reconciliation"],
+            serviceHealth: {
+              "Accounting ledger": false,
+              Invoicing: false,
+              Reconciliation: false,
+            },
+            operations: [],
+            requiredScopes: [
+              "QuickBooks company-file OAuth",
+              "Read ledger and invoice data",
+              "Read reconciliation and period-close state",
+            ],
+            executionAdapter: "EOS QuickBooks adapter not configured",
+            manualFallback:
+              "Operate the governed EOS work packet and reconcile accounting facts manually in QuickBooks.",
+            actions: [],
+          },
+          {
+            id: "slack",
+            name: "Slack",
+            description:
+              "Internal channels and decision capture for the Empyrean Studios team.",
+            state: "not_configured",
+            health: "not_connected",
+            configured: false,
+            connected: false,
+            providerType: "oauth",
+            authority: "provider_execution_after_local_approval",
+            risk: "consequential_write",
+            services: ["Internal channels", "Thread replies", "Decision links"],
+            serviceHealth: {
+              "Internal channels": false,
+              "Thread replies": false,
+              "Decision links": false,
+            },
+            operations: [],
+            requiredScopes: [
+              "Empyrean Studios workspace OAuth",
+              "Approved internal channel metadata",
+              "Message draft/send only after local approval",
+            ],
+            executionAdapter: "EOS Slack adapter not configured",
+            manualFallback:
+              "Route communication through EOS hierarchy and record the decision in the governed Work Packet.",
+            actions: [],
           },
           {
             id: "umh",
