@@ -1946,6 +1946,37 @@ export const eosIntegrationBindings = pgTable("eos_integration_bindings", {
   check("eos_integration_bindings_adapter_check", sql`${table.adapterKind} IN ('oauth','api_key','webhook','signed_https','service_account','database','file_exchange','manual','native')`), check("eos_integration_bindings_state_check", sql`${table.lifecycleState} IN ('proposed','selected','implementing','active','degraded','replacement_planned','migrating','retired')`), check("eos_integration_bindings_connection_check", sql`${table.connectionState} IN ('unconfigured','configured','connected','revoked','failed')`), check("eos_integration_bindings_health_check", sql`${table.healthState} IN ('unknown','healthy','degraded','unavailable')`), check("eos_integration_bindings_replacement_check", sql`${table.replacementStatus} IN ('keep','integrate','migrate','replace','retire','unknown')`), check("eos_integration_bindings_parity_check", sql`${table.parityState} IN ('not_tested','test_planned','passing','failing','accepted_exception')`), check("eos_integration_bindings_authority_check", sql`${table.sourceAuthority} IN ('native_eos','notion_runtime','external_authoritative','reconciled')`), check("eos_integration_bindings_classification_check", sql`${table.classification} IN ('public','internal','confidential','restricted')`), check("eos_integration_bindings_endpoint_check", sql`${table.fromSystemId} IS NOT NULL OR ${table.toSystemId} IS NOT NULL`), check("eos_integration_bindings_external_check", sql`(${table.sourceSystem} IS NULL AND ${table.externalId} IS NULL) OR (${table.sourceSystem} IS NOT NULL AND ${table.externalId} IS NOT NULL)`), check("eos_integration_bindings_latency_check", sql`${table.latencyBudgetMs} IS NULL OR ${table.latencyBudgetMs} > 0`), check("eos_integration_bindings_timeout_check", sql`${table.timeoutMs} IS NULL OR ${table.timeoutMs} > 0`), check("eos_integration_bindings_configuration_version_check", sql`${table.configurationVersion} > 0`),
 ]);
 
+// A provider authorization is owned by a human, but its use must be explicitly
+// scoped to one EOS company. Keeping this separate from oauth_tokens prevents
+// a person who has connected Google or Notion once from accidentally making
+// that account available to every company, portfolio, or seat they can see.
+export const eosProviderConnections = pgTable("eos_provider_connections", {
+  id: text("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  providerKey: text("provider_key").notNull(),
+  authorizationUserId: text("authorization_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  ownerSeatId: text("owner_seat_id").notNull().references(() => eosSeats.id, { onDelete: "restrict" }),
+  recoveryOwnerSeatId: text("recovery_owner_seat_id").notNull().references(() => eosSeats.id, { onDelete: "restrict" }),
+  providerAccountReference: text("provider_account_reference").notNull(),
+  accountScope: text("account_scope").notNull().default(""),
+  grantedPermissions: jsonb("granted_permissions").notNull().default([]),
+  credentialReference: text("credential_reference").notNull().default("encrypted_user_oauth"),
+  connectionState: text("connection_state").notNull().default("configured"),
+  healthState: text("health_state").notNull().default("unknown"),
+  providerMetadata: jsonb("provider_metadata").notNull().default({}),
+  lastHealthAt: timestamp("last_health_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdByUserId: text("created_by_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("eos_provider_connections_company_provider_account_idx").on(table.companyId, table.providerKey, table.providerAccountReference),
+  index("eos_provider_connections_company_provider_idx").on(table.companyId, table.providerKey),
+  index("eos_provider_connections_authorization_user_idx").on(table.authorizationUserId),
+  check("eos_provider_connections_state_check", sql`${table.connectionState} IN ('unconfigured','configured','connected','revoked','failed')`),
+  check("eos_provider_connections_health_check", sql`${table.healthState} IN ('unknown','healthy','degraded','unavailable')`),
+]);
+
 // Recovery commercial activation separates legal authority, the client-specific
 // agreement package, and provider billing configuration. EOS can prepare and
 // evaluate these records but can assert signing only from its own completed,

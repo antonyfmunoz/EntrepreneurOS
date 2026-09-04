@@ -4,7 +4,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { ZodError } from "zod";
 import {
   eosAdapterCapabilityManifests, eosAuditRecords, eosAutomations, eosEvidence,
-  eosIntegrationBindings, eosIntegrationCutoverDecisions, eosIntegrationIncidents,
+  eosIntegrationBindings, eosIntegrationCutoverDecisions, eosIntegrationIncidents, eosProviderConnections,
   eosIntegrationOperationalStates, eosIntegrationOperationEvents, eosIntegrationQualifications,
   eosIntegrationRunReceipts, eosIntegrationRuns, eosIntegrationWebhookEndpoints,
   eosIntegrationWebhookEvents, eosProviderExecutions, eosSeats, eosWorkPackets,
@@ -85,6 +85,36 @@ async function visibleWebhookEndpoint(companyId: number, endpointId: string, acc
   if (!endpoint) throw new EosRouteError(404, "integration_webhook_endpoint_not_found", "Adapter webhook endpoint not found in this authority scope.");
   await visibleBinding(companyId, endpoint.integrationBindingId, access);
   return endpoint;
+}
+
+function companyProviderKey(providerKey: string): string {
+  const provider = providerKey.trim().toLowerCase().replaceAll("-", "_");
+  return ["gmail", "google", "google_workspace"].includes(provider) ? "google_workspace" : provider;
+}
+
+async function requireCurrentOperatorCompanyConnection(input: {
+  companyId: number;
+  providerKey: string;
+  providerAccountReference: string;
+  userId: string;
+}) {
+  const providerKey = companyProviderKey(input.providerKey);
+  const connection = await db.query.eosProviderConnections.findFirst({
+    where: and(
+      eq(eosProviderConnections.companyId, input.companyId),
+      eq(eosProviderConnections.providerKey, providerKey),
+      eq(eosProviderConnections.authorizationUserId, input.userId),
+      eq(eosProviderConnections.connectionState, "connected"),
+      eq(eosProviderConnections.healthState, "healthy"),
+    ),
+  });
+  if (!connection) {
+    throw new EosRouteError(409, "provider_company_connection_required", "The current operator has no healthy provider connection attached to this company. Connect and attach the provider in Systems before requesting an external effect.");
+  }
+  if (!input.providerAccountReference.trim() || connection.providerAccountReference !== input.providerAccountReference) {
+    throw new EosRouteError(409, "provider_account_scope_mismatch", "The active integration binding does not name the same company-scoped provider account. Reconcile the binding before requesting an external effect.");
+  }
+  return connection;
 }
 
 function webhookEndpointProjection(endpoint: typeof eosIntegrationWebhookEndpoints.$inferSelect, origin?: string) {
@@ -360,6 +390,7 @@ export function registerIntegrationOperationsRoutes(app: Express): void {
     if (!adapterOperationIsExecutable(run.operation) || !providerMatchesOperation(binding.providerKey, run.operation)) throw new EosRouteError(409, "integration_dispatch_unsupported", "This binding and operation do not map to an audited native dispatcher.");
     try { validateAdapterOperationRequest(run.operation, run.requestShape); } catch (error) { throw new EosRouteError(409, "integration_dispatch_request_invalid", error instanceof Error ? error.message : "The adapter request is invalid."); }
     if (binding.lifecycleState !== "active" || binding.connectionState !== "connected") throw new EosRouteError(409, "integration_binding_not_execution_ready", "Provider execution requires an active, connected integration binding.");
+    await requireCurrentOperatorCompanyConnection({ companyId, providerKey: binding.providerKey, providerAccountReference: binding.providerAccountReference, userId: req.user.id });
     const manifest = await db.query.eosAdapterCapabilityManifests.findFirst({ where: eq(eosAdapterCapabilityManifests.id, run.manifestId) });
     if (!manifest || manifest.bindingConfigurationVersion !== binding.configurationVersion) throw new EosRouteError(409, "integration_dispatch_manifest_stale", "The run no longer references the current frozen binding configuration.");
     const now = new Date(); const operational = await db.query.eosIntegrationOperationalStates.findFirst({ where: eq(eosIntegrationOperationalStates.integrationBindingId, binding.id) });

@@ -1012,6 +1012,22 @@ export default function EosOverlayPage() {
       ),
     ),
   });
+  const googleProviderConnectionsQuery = useQuery<JsonRecord>({
+    queryKey: [root, roleScopeKey, "google-provider-connections"],
+    queryFn: () => requestJson("GET", `${root}/integrations/gmail/connections`),
+    enabled: Boolean(
+      companyId &&
+      (contextQuery.data?.principalContext?.allowedSurfaces || []).includes("systems"),
+    ),
+  });
+  const notionProviderConnectionsQuery = useQuery<JsonRecord>({
+    queryKey: [root, roleScopeKey, "notion-provider-connections"],
+    queryFn: () => requestJson("GET", `${root}/integrations/notion/connections`),
+    enabled: Boolean(
+      companyId &&
+      (contextQuery.data?.principalContext?.allowedSurfaces || []).includes("systems"),
+    ),
+  });
   const systemsStateQuery = useQuery<JsonRecord>({
     queryKey: [root, roleScopeKey, "systems-state"],
     queryFn: () => requestJson("GET", `${root}/systems-state`),
@@ -1177,11 +1193,16 @@ export default function EosOverlayPage() {
     ),
   });
   const googleConnected = Boolean(
-    integrationsQuery.data?.find((item) => item.id === "google_workspace")
-      ?.connected,
+    integrationsQuery.data?.find((item) => item.id === "google_workspace")?.connected &&
+      (googleProviderConnectionsQuery.data?.connections || []).some(
+        (connection: JsonRecord) => connection.connectionState === "connected" && connection.authorizedForCurrentUser,
+      ),
   );
   const notionConnected = Boolean(
-    integrationsQuery.data?.find((item) => item.id === "notion")?.connected,
+    integrationsQuery.data?.find((item) => item.id === "notion")?.connected &&
+      (notionProviderConnectionsQuery.data?.connections || []).some(
+        (connection: JsonRecord) => connection.connectionState === "connected" && connection.authorizedForCurrentUser,
+      ),
   );
   const googleContextQuery = useQuery<JsonRecord>({
     queryKey: [root, roleScopeKey, "google-context"],
@@ -2659,18 +2680,64 @@ export default function EosOverlayPage() {
       showMutationError(`${integration.name} connection`, error),
   });
 
-  const disconnectIntegrationMutation = useMutation({
+  const attachIntegrationMutation = useMutation({
     mutationFn: (integration: JsonRecord) => {
+      const provider = integration.id === "google_workspace" ? "gmail" : integration.id;
+      return requestJson<JsonRecord>(
+        "POST",
+        `${root}/integrations/${provider}/connections/attach`,
+        {},
+      );
+    },
+    onSuccess: async (_, integration) => {
+      await Promise.all([
+        integrationsQuery.refetch(),
+        googleProviderConnectionsQuery.refetch(),
+        notionProviderConnectionsQuery.refetch(),
+      ]);
+      const current = new URL(window.location.href);
+      current.searchParams.delete(integration.id);
+      window.history.replaceState({}, "", `${current.pathname}${current.search}${current.hash}`);
+      toast({
+        title: `${integration.name} is attached to this company`,
+        description: "Its provider authorization remains scoped to this organization and accountable seats.",
+      });
+    },
+    onError: (error, integration) =>
+      showMutationError(`${integration.name} company connection`, error),
+  });
+
+  const disconnectIntegrationMutation = useMutation({
+    mutationFn: ({ integration, connection }: { integration: JsonRecord; connection?: JsonRecord }) => {
       const provider =
         integration.id === "google_workspace" ? "gmail" : integration.id;
+      if (connection?.id) {
+        return requestJson<JsonRecord>(
+          "POST",
+          `${root}/integrations/${provider}/connections/${connection.id}/revoke`,
+          {},
+        );
+      }
       return requestJson<{ providerRevoked?: boolean }>(
         "POST",
         `${root}/integrations/${provider}/disconnect`,
         {},
       );
     },
-    onSuccess: async (result, integration) => {
-      await integrationsQuery.refetch();
+    onSuccess: async (result: any, variables) => {
+      await Promise.all([
+        integrationsQuery.refetch(),
+        googleProviderConnectionsQuery.refetch(),
+        notionProviderConnectionsQuery.refetch(),
+      ]);
+      const integration = variables.integration;
+      if (variables.connection?.id) {
+        toast({
+          title: `${integration.name} removed from this company`,
+          description: "The underlying provider authorization was not changed for any other company.",
+        });
+        return;
+      }
       toast({
         title: `${integration.name} disconnected`,
         description:
@@ -2679,14 +2746,21 @@ export default function EosOverlayPage() {
             : "The provider authorization and local encrypted credential were removed.",
       });
     },
-    onError: (error, integration) =>
-      showMutationError(`${integration.name} disconnection`, error),
+    onError: (error, variables) =>
+      showMutationError(`${variables.integration.name} disconnection`, error),
   });
 
   const verifyIntegrationMutation = useMutation({
-    mutationFn: async (integration: JsonRecord) => {
+    mutationFn: async ({ integration, connection }: { integration: JsonRecord; connection?: JsonRecord }) => {
       const provider =
         integration.id === "google_workspace" ? "gmail" : integration.id;
+      if (connection?.id) {
+        return requestJson<JsonRecord>(
+          "POST",
+          `${root}/integrations/${provider}/connections/${connection.id}/verify`,
+          {},
+        );
+      }
       const status = await requestJson<JsonRecord>(
         "GET",
         `${root}/integrations/${provider}/status?verify=true`,
@@ -2698,15 +2772,38 @@ export default function EosOverlayPage() {
       await integrationsQuery.refetch();
       return integration;
     },
-    onSuccess: (integration) =>
+    onSuccess: async (_result, variables) => {
+      await Promise.all([
+        integrationsQuery.refetch(),
+        googleProviderConnectionsQuery.refetch(),
+        notionProviderConnectionsQuery.refetch(),
+      ]);
+      const integration = variables.integration;
       toast({
         title: `${integration.name} verified`,
         description:
-          "EntrepreneurOS reached the external provider using its configured adapter.",
-      }),
-    onError: (error, integration) =>
-      showMutationError(`${integration.name} verification`, error),
+          "EOS rechecked the authorized account for this company.",
+      });
+    },
+    onError: (error, variables) =>
+      showMutationError(`${variables.integration.name} verification`, error),
   });
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const providerId = query.get("google_workspace") === "authorized"
+      ? "google_workspace"
+      : query.get("notion") === "authorized"
+        ? "notion"
+        : null;
+    if (!providerId || attachIntegrationMutation.isPending) return;
+    const integration = integrationsQuery.data?.find((item) => item.id === providerId);
+    if (integration?.connected) attachIntegrationMutation.mutate(integration);
+  }, [
+    integrationsQuery.data,
+    attachIntegrationMutation.isPending,
+    attachIntegrationMutation.mutate,
+  ]);
 
   const eaMessageMutation = useMutation({
     mutationFn: async (content: string) =>
@@ -11973,16 +12070,33 @@ export default function EosOverlayPage() {
               <IntegrationControlCard
                 key={integration.id}
                 integration={integration}
+                companyConnections={
+                  integration.id === "google_workspace"
+                    ? googleProviderConnectionsQuery.data?.connections || []
+                    : integration.id === "notion"
+                      ? notionProviderConnectionsQuery.data?.connections || []
+                      : []
+                }
                 pending={
                   connectIntegrationMutation.isPending ||
+                  attachIntegrationMutation.isPending ||
                   disconnectIntegrationMutation.isPending ||
                   verifyIntegrationMutation.isPending
                 }
                 onConnect={() => connectIntegrationMutation.mutate(integration)}
-                onDisconnect={() =>
-                  disconnectIntegrationMutation.mutate(integration)
+                onAttach={() => attachIntegrationMutation.mutate(integration)}
+                onDisconnect={(connection) =>
+                  disconnectIntegrationMutation.mutate({
+                    integration,
+                    connection,
+                  })
                 }
-                onVerify={() => verifyIntegrationMutation.mutate(integration)}
+                onVerify={(connection) =>
+                  verifyIntegrationMutation.mutate({
+                    integration,
+                    connection,
+                  })
+                }
               />
             ))}
             {notionConnected && (
@@ -12421,18 +12535,28 @@ function EmptyState({
 
 function IntegrationControlCard({
   integration,
+  companyConnections,
   pending,
   onConnect,
+  onAttach,
   onDisconnect,
   onVerify,
 }: {
   integration: JsonRecord;
+  companyConnections: JsonRecord[];
   pending: boolean;
   onConnect: () => void;
-  onDisconnect: () => void;
-  onVerify: () => void;
+  onAttach: () => void;
+  onDisconnect: (connection?: JsonRecord) => void;
+  onVerify: (connection?: JsonRecord) => void;
 }) {
   const actions = new Set<string>(integration.actions || []);
+  const activeConnections = companyConnections.filter(
+    (connection) => connection.connectionState === "connected",
+  );
+  const activeCompanyConnection = activeConnections.find(
+    (connection) => connection.authorizedForCurrentUser,
+  ) || activeConnections[0];
   const scopeLabels: Record<string, string> = {
     "https://www.googleapis.com/auth/gmail.send": "Send approved email",
     "https://www.googleapis.com/auth/calendar.readonly": "Read calendars",
@@ -12480,6 +12604,39 @@ function IntegrationControlCard({
             value={integration.executionAdapter || "Not configured"}
           />
         </div>
+
+        {(integration.id === "google_workspace" || integration.id === "notion") && (
+          <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+            <p className="eos-label">Company connection</p>
+            {activeCompanyConnection ? (
+              <div className="mt-2 space-y-2">
+                <p className="font-medium">{activeCompanyConnection.providerAccountReference}</p>
+                <p className="text-sm text-muted-foreground">
+                  Connected to this company · owner seat {String(activeCompanyConnection.ownerSeatId).slice(0, 8)} · recovery seat {String(activeCompanyConnection.recoveryOwnerSeatId).slice(0, 8)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {activeCompanyConnection.accountScope || "Provider scope is recorded with this company connection."}
+                </p>
+                {!activeCompanyConnection.authorizedForCurrentUser && (
+                  <p className="text-xs text-muted-foreground">
+                    This connection is accountable to another seat. Attach your own approved authorization before EOS can use the provider on your behalf.
+                  </p>
+                )}
+                {activeCompanyConnection.lastHealthAt && (
+                  <p className="text-xs text-muted-foreground">
+                    Last verified {new Date(activeCompanyConnection.lastHealthAt).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">
+                {integration.connected
+                  ? "Your provider authorization is ready. Attach it to this company before EOS can use it here."
+                  : "No provider account is attached to this company."}
+              </p>
+            )}
+          </div>
+        )}
 
         {integration.serviceHealth && (
           <div>
@@ -12577,18 +12734,24 @@ function IntegrationControlCard({
                 : `Connect ${integration.name}`}
             </Button>
           )}
-          {actions.has("verify") && (
-            <Button variant="outline" onClick={onVerify} disabled={pending}>
+          {integration.connected && (!activeCompanyConnection || !activeCompanyConnection.authorizedForCurrentUser) && (integration.id === "google_workspace" || integration.id === "notion") && (
+            <Button onClick={onAttach} disabled={pending}>
+              <Link2 className="mr-2 h-4 w-4" />
+              Use in this company
+            </Button>
+          )}
+          {actions.has("verify") && Boolean(activeCompanyConnection?.authorizedForCurrentUser) && (
+            <Button variant="outline" onClick={() => onVerify(activeCompanyConnection)} disabled={pending}>
               <RefreshCw
                 className={`mr-2 h-4 w-4 ${pending ? "animate-spin" : ""}`}
               />
               Verify connection
             </Button>
           )}
-          {actions.has("disconnect") && (
-            <Button variant="outline" onClick={onDisconnect} disabled={pending}>
+          {activeCompanyConnection && (
+            <Button variant="outline" onClick={() => onDisconnect(activeCompanyConnection)} disabled={pending}>
               <Unplug className="mr-2 h-4 w-4" />
-              Disconnect
+              Remove from this company
             </Button>
           )}
           {actions.has("view_manifest") && (
