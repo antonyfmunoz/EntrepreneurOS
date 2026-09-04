@@ -319,9 +319,17 @@ export function productionRuntimeConfigurationIssues(
 export function productionDeploymentConfiguration(
   env: ReleaseEnvironment = process.env,
 ) {
-  const { operatingCompanyPaymentsConfigured: paymentsConfigured, ...safety } = productionRuntimeConfiguration(env);
+  const {
+    operatingCompanyPaymentsConfigured: paymentsConfigured,
+    legalEnforcementEnabled,
+    ...safety
+  } = productionRuntimeConfiguration(env);
   return {
     ...safety,
+    // Internal EOS is not a public product. Legal acceptance becomes a
+    // deployment requirement only once public paid-SaaS mode is declared;
+    // published-document enforcement remains fail-closed in that mode.
+    legalEnforcementEnabled: legalEnforcementEnabled || env.EOS_PUBLIC_PAID_SAAS === "false",
     operatingCompanyPaymentBoundarySafe: paymentsConfigured || (
       env.EOS_PUBLIC_PAID_SAAS === "false" && env.EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED === "false"
     ),
