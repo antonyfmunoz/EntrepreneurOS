@@ -3576,6 +3576,8 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       })
       .expect(409);
     expect(premature.body.code).toBe("integration_activation_incomplete");
+    await sql`INSERT INTO eos_provider_connections (id, company_id, provider_key, authorization_user_id, owner_seat_id, recovery_owner_seat_id, provider_account_reference, account_scope, granted_permissions, credential_reference, connection_state, health_state, provider_metadata, last_health_at, created_by_user_id)
+      VALUES (${randomUUID()}, ${companyId}, 'google_workspace', ${ownerId}, ${ownerSeatId}, ${ownerSeatId}, ${binding.body.providerAccountReference}, 'Company-owned Google Workspace fixture for governed Systems capability.', '["gmail.send"]'::jsonb, 'encrypted_user_oauth', 'connected', 'healthy', '{}'::jsonb, now(), ${ownerId})`;
     const health = await api
       .post(`/api/eos/companies/${companyId}/integration-health-observations`)
       .send({
@@ -8635,15 +8637,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const executable = await api.post(`/api/eos/companies/${companyId}/integration-operations/runs`).send(executableRequest).expect(201);
     await api.post(`/api/eos/companies/${companyId}/integration-operations/runs/${executable.body.run.id}/execute`).send({ expectedVersion: 1, confirmExternalEffect: true, evidenceIds: [providerEvidence.id] }).expect(409).expect(({ body }) => expect(body.code).toBe("integration_provider_effects_disabled"));
     process.env.EOS_INTEGRATION_PROVIDER_EFFECTS_ENABLED = "true";
-    try {
-      await api.post(`/api/eos/companies/${companyId}/integration-operations/runs/${executable.body.run.id}/execute`).send({ expectedVersion: 1, confirmExternalEffect: true, evidenceIds: [providerEvidence.id] }).expect(409).expect(({ body }) => expect(body.code).toBe("provider_company_connection_required"));
-    } finally {
-      delete process.env.EOS_INTEGRATION_PROVIDER_EFFECTS_ENABLED;
-    }
-    await sql`INSERT INTO eos_provider_connections (id, company_id, provider_key, authorization_user_id, owner_seat_id, recovery_owner_seat_id, provider_account_reference, account_scope, granted_permissions, credential_reference, connection_state, health_state, provider_metadata, last_health_at, created_by_user_id)
-      VALUES (${randomUUID()}, ${companyId}, 'google_workspace', ${ownerId}, ${founderSeat.id}, ${founderSeat.id}, ${binding.providerAccountReference}, 'Fixture Google Workspace account for Module 12 adapter qualification.', '["gmail.send"]'::jsonb, 'encrypted_user_oauth', 'connected', 'healthy', '{}'::jsonb, now(), ${ownerId})`;
     const deliveryCount = gmailDeliveryLifecycle.emails.length;
-    process.env.EOS_INTEGRATION_PROVIDER_EFFECTS_ENABLED = "true";
     try {
       const executed = await api.post(`/api/eos/companies/${companyId}/integration-operations/runs/${executable.body.run.id}/execute`).send({ expectedVersion: 1, confirmExternalEffect: true, evidenceIds: [providerEvidence.id] }).expect(201);
       expect(executed.body.run).toMatchObject({ state: "succeeded", attemptCount: 1, version: 3 });

@@ -204,8 +204,9 @@ export function registerIntegrationRoutes(app: Express): void {
     } catch (error) { return providerError(res, error); }
   });
 
-  // This is the tenant boundary. It adopts a verified OAuth authorization for
-  // this company only; it does not activate provider effects or a binding.
+  // This is the tenant boundary. It registers a verified external account as
+  // a company capability. The authorizing person remains a credential
+  // custodian; EOS role and policy controls determine who may use it.
   app.post("/api/eos/companies/:companyId/integrations/:provider/connections/attach", async (req, res) => {
     try {
       const { access, policy } = await integrationAccess(req, "execute", "integration_provider_connection.attach");
@@ -230,6 +231,9 @@ export function registerIntegrationRoutes(app: Express): void {
       )).limit(1);
       if (existing && !visible.has(existing.ownerSeatId)) {
         throw new EosRouteError(409, "provider_connection_owner_not_visible", "That provider account is already linked to this company under a seat outside your authority scope.");
+      }
+      if (existing && existing.authorizationUserId !== req.user.id) {
+        throw new EosRouteError(409, "provider_connection_already_company_managed", "That provider account is already connected to this company. Its company role policy controls use; rotate its credential through the accountable or recovery administrator instead of replacing the custodian silently.");
       }
       const values = {
         authorizationUserId: req.user.id, ownerSeatId, recoveryOwnerSeatId,
@@ -259,8 +263,7 @@ export function registerIntegrationRoutes(app: Express): void {
       const provider = oauthProvider(providerFrom(req));
       const connection = await visibleCompanyConnection(access.company.id, req.params.connectionId, access);
       if (connection.providerKey !== companyProviderKey(provider)) throw new EosRouteError(404, "provider_connection_not_found", "Provider connection not found in this authority scope.");
-      if (connection.authorizationUserId !== req.user.id) throw new EosRouteError(409, "provider_connection_reauthorization_required", "This company connection is owned by another authorized seat. That seat must reauthorize it, or an authorized administrator can attach their own provider account.");
-      const identity = await providerIdentity(provider, req.user.id);
+      const identity = await providerIdentity(provider, connection.authorizationUserId);
       const healthy = identity.connected && identity.healthy && identity.accountReference === connection.providerAccountReference;
       const now = new Date();
       const [updated] = await db.update(eosProviderConnections).set({

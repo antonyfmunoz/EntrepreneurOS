@@ -96,23 +96,19 @@ async function requireCurrentOperatorCompanyConnection(input: {
   companyId: number;
   providerKey: string;
   providerAccountReference: string;
-  userId: string;
 }) {
   const providerKey = companyProviderKey(input.providerKey);
   const connection = await db.query.eosProviderConnections.findFirst({
     where: and(
       eq(eosProviderConnections.companyId, input.companyId),
       eq(eosProviderConnections.providerKey, providerKey),
-      eq(eosProviderConnections.authorizationUserId, input.userId),
+      eq(eosProviderConnections.providerAccountReference, input.providerAccountReference),
       eq(eosProviderConnections.connectionState, "connected"),
       eq(eosProviderConnections.healthState, "healthy"),
     ),
   });
   if (!connection) {
-    throw new EosRouteError(409, "provider_company_connection_required", "The current operator has no healthy provider connection attached to this company. Connect and attach the provider in Systems before requesting an external effect.");
-  }
-  if (!input.providerAccountReference.trim() || connection.providerAccountReference !== input.providerAccountReference) {
-    throw new EosRouteError(409, "provider_account_scope_mismatch", "The active integration binding does not name the same company-scoped provider account. Reconcile the binding before requesting an external effect.");
+    throw new EosRouteError(409, "provider_company_connection_required", "This company has no healthy connection for the provider account named by the active integration binding. Reconcile the company connection before requesting an external effect.");
   }
   return connection;
 }
@@ -390,25 +386,15 @@ export function registerIntegrationOperationsRoutes(app: Express): void {
     if (!adapterOperationIsExecutable(run.operation) || !providerMatchesOperation(binding.providerKey, run.operation)) throw new EosRouteError(409, "integration_dispatch_unsupported", "This binding and operation do not map to an audited native dispatcher.");
     try { validateAdapterOperationRequest(run.operation, run.requestShape); } catch (error) { throw new EosRouteError(409, "integration_dispatch_request_invalid", error instanceof Error ? error.message : "The adapter request is invalid."); }
     if (binding.lifecycleState !== "active" || binding.connectionState !== "connected") throw new EosRouteError(409, "integration_binding_not_execution_ready", "Provider execution requires an active, connected integration binding.");
-    await requireCurrentOperatorCompanyConnection({ companyId, providerKey: binding.providerKey, providerAccountReference: binding.providerAccountReference, userId: req.user.id });
+    const companyConnection = await requireCurrentOperatorCompanyConnection({ companyId, providerKey: binding.providerKey, providerAccountReference: binding.providerAccountReference });
     const manifest = await db.query.eosAdapterCapabilityManifests.findFirst({ where: eq(eosAdapterCapabilityManifests.id, run.manifestId) });
     if (!manifest || manifest.bindingConfigurationVersion !== binding.configurationVersion) throw new EosRouteError(409, "integration_dispatch_manifest_stale", "The run no longer references the current frozen binding configuration.");
     const now = new Date(); const operational = await db.query.eosIntegrationOperationalStates.findFirst({ where: eq(eosIntegrationOperationalStates.integrationBindingId, binding.id) });
     if (!operational || operational.trafficMode !== "provider") throw new EosRouteError(409, "integration_dispatch_traffic_blocked", "Provider dispatch is allowed only while provider traffic mode is active.");
-    // Approval and provider credential ownership are separate principals. A
-    // manager may approve a founder-owned run, but must never cause EOS to
-    // send through the manager's personal OAuth connection by accident.
-    const runOwnerSeat = await db.query.eosSeats.findFirst({
-      where: and(eq(eosSeats.id, run.ownerSeatId), eq(eosSeats.companyId, companyId)),
-    });
-    const bindingOwnerSeat = runOwnerSeat?.occupantUserId
-      ? null
-      : await db.query.eosSeats.findFirst({
-        where: and(eq(eosSeats.id, binding.ownerSeatId), eq(eosSeats.companyId, companyId)),
-      });
-    const credentialOwnerUserId = runOwnerSeat?.occupantUserId
-      || bindingOwnerSeat?.occupantUserId
-      || req.user.id;
+    // Approval and provider credentials are separate principals. The person
+    // who set up a company connection is its custodian; EOS never switches to
+    // the approver's personal OAuth authorization merely because they acted.
+    const credentialOwnerUserId = companyConnection.authorizationUserId;
     const executionId = randomUUID(); const executionKey = `${run.idempotencyKey}:attempt:${run.attemptCount + 1}`;
     const claimed = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`integration-run:${run.id}`}))`);

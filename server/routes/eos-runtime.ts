@@ -20571,11 +20571,18 @@ export function registerEosRuntimeRoutes(app: Express): void {
         purpose: "administer_systems_registry",
         classification: "confidential",
       });
-      const [googleWorkspace, notionConnection, companyBindings] = await Promise.all([
-        gmail.verifyConnection(req.user.id),
-        notion.verifyConnection(req.user.id),
+      const [googleSetupAuthorization, notionSetupAuthorization, companyBindings, providerConnections] = await Promise.all([
+        gmail.connectionSummary(req.user.id),
+        notion.connectionSummary(req.user.id),
         db.select().from(eosIntegrationBindings).where(eq(eosIntegrationBindings.companyId, access.company.id)),
+        db.select().from(eosProviderConnections).where(eq(eosProviderConnections.companyId, access.company.id)),
       ]);
+      const googleCompanyConnection = providerConnections.find((connection) =>
+        connection.providerKey === "google_workspace" && connection.connectionState === "connected" && connection.healthState === "healthy",
+      ) || null;
+      const notionCompanyConnection = providerConnections.find((connection) =>
+        connection.providerKey === "notion" && connection.connectionState === "connected" && connection.healthState === "healthy",
+      ) || null;
       const stripeBinding = companyBindings.find((item) => item.providerKey === "stripe" && item.lifecycleState === "active")
         || companyBindings.find((item) => item.providerKey === "stripe")
         || null;
@@ -20587,35 +20594,36 @@ export function registerEosRuntimeRoutes(app: Express): void {
             id: "google_workspace",
             name: "Google Workspace",
             description:
-              "Gmail, Calendar, and Drive through user-authorized Google OAuth.",
-            state: googleWorkspace.connected
+              "Company mail, calendar, and Drive capabilities governed through EOS roles and approvals.",
+            state: googleCompanyConnection
               ? "connected"
-              : googleWorkspace.configured
+              : googleSetupAuthorization.configured
                 ? "available"
                 : "not_configured",
-            health: googleWorkspace.healthy
+            health: googleCompanyConnection
               ? "healthy"
-              : googleWorkspace.connected
-                ? "degraded"
-                : "not_connected",
-            configured: googleWorkspace.configured,
-            connected: googleWorkspace.connected,
-            providerType: "oauth",
+              : "not_connected",
+            configured: googleSetupAuthorization.configured,
+            connected: Boolean(googleCompanyConnection),
+            authorizationAvailable: googleSetupAuthorization.connected,
+            providerType: "company_managed_workspace",
             authority: "provider_execution_after_local_approval",
             risk: "consequential_write",
             services: gmail.GOOGLE_WORKSPACE_SERVICES,
-            serviceHealth: googleWorkspace.services,
-            accountEmail: googleWorkspace.accountEmail,
-            connectionScope: "The signed-in human authorizes this connection. EOS applies it only through this company workspace's seat, authority, approval, and audit controls.",
+            serviceHealth: Object.fromEntries(gmail.GOOGLE_WORKSPACE_SERVICES.map((service) => [service, Boolean(googleCompanyConnection)])),
+            accountEmail: googleCompanyConnection?.providerAccountReference || null,
+            connectionScope: "This is a company workspace connection. EOS grants its capabilities through company role, authority, approval, and audit controls; the authorization custodian does not become the business owner.",
             operations: gmail.GOOGLE_WORKSPACE_TOOLS,
             requiredScopes: gmail.requestedScopes(),
-            grantedScopes: googleWorkspace.grantedScopes,
+            grantedScopes: googleCompanyConnection?.grantedPermissions || [],
             executionAdapter: "EOS-owned Google Workspace OAuth adapter",
             manualFallback:
               "Copy an approved draft or event into the authorized Google Workspace client.",
-            actions: googleWorkspace.connected
-              ? ["verify", "reconnect", "disconnect"]
-              : googleWorkspace.configured
+            actions: googleCompanyConnection
+              ? ["verify", ...(googleSetupAuthorization.connected ? ["reconnect"] : [])]
+              : googleSetupAuthorization.connected
+              ? ["reconnect"]
+              : googleSetupAuthorization.configured
                 ? ["connect"]
                 : [],
           },
@@ -20623,35 +20631,39 @@ export function registerEosRuntimeRoutes(app: Express): void {
             id: "notion",
             name: "Notion",
             description:
-              "Current product intent and canonical operating context.",
-            state: notionConnection.connected
+              "Canonical company operating context available through EOS role and source controls.",
+            state: notionCompanyConnection
               ? "connected"
-              : notionConnection.configured
+              : notionSetupAuthorization.configured
                 ? "available"
                 : "not_configured",
-            health: notionConnection.healthy
+            health: notionCompanyConnection
               ? "healthy"
-              : notionConnection.connected
-                ? "degraded"
-                : "not_connected",
-            configured: notionConnection.configured,
-            connected: notionConnection.connected,
-            providerType: "oauth",
+              : "not_connected",
+            configured: notionSetupAuthorization.configured,
+            connected: Boolean(notionCompanyConnection),
+            authorizationAvailable: notionSetupAuthorization.connected,
+            providerType: "company_managed_knowledge",
             authority: "external_reference_provider",
             risk: "read_only",
             services: ["Workspace context"],
-            serviceHealth: { "Workspace context": notionConnection.healthy },
+            serviceHealth: { "Workspace context": Boolean(notionCompanyConnection) },
             operations: notion.NOTION_TOOLS,
             requiredScopes: [
               "Read content shared with the EntrepreneurOS integration",
             ],
-            workspace: notionConnection.workspace,
-            connectionScope: "The signed-in human authorizes this workspace connection. EOS exposes only content that the Notion integration is explicitly allowed to read in this company workspace.",
+            workspace: notionCompanyConnection ? {
+              workspaceId: notionCompanyConnection.providerMetadata?.workspaceId || null,
+              workspaceName: notionCompanyConnection.providerMetadata?.workspaceName || notionCompanyConnection.providerAccountReference,
+            } : null,
+            connectionScope: "This is a company knowledge connection. EOS exposes only content explicitly shared with the integration and permitted to the current role; the authorization custodian does not become the business owner.",
             executionAdapter: "EOS-owned Notion API adapter",
             manualFallback: "Open the canonical Notion workspace directly.",
-            actions: notionConnection.connected
-              ? ["verify", "reconnect", "disconnect"]
-              : notionConnection.configured
+            actions: notionCompanyConnection
+              ? ["verify", ...(notionSetupAuthorization.connected ? ["reconnect"] : [])]
+              : notionSetupAuthorization.connected
+              ? ["reconnect"]
+              : notionSetupAuthorization.configured
                 ? ["connect"]
                 : [],
           },
@@ -20839,23 +20851,30 @@ export function registerEosRuntimeRoutes(app: Express): void {
     "/api/eos/companies/:companyId/integrations/google/context",
     route(async (req) => {
       const access = await companyAccess(req);
+      if (!allowedSurfacesFor(access.role).includes("systems"))
+        throw new EosRouteError(
+          403,
+          "google_workspace_scope_denied",
+          "Direct company workspace context is outside this seat's visibility scope.",
+        );
       const connection = await db.query.eosProviderConnections.findFirst({
         where: and(
           eq(eosProviderConnections.companyId, access.company.id),
           eq(eosProviderConnections.providerKey, "google_workspace"),
-          eq(eosProviderConnections.authorizationUserId, req.user.id),
           eq(eosProviderConnections.connectionState, "connected"),
           eq(eosProviderConnections.healthState, "healthy"),
         ),
       });
-      const verification = await gmail.verifyConnection(req.user.id);
-      if (!connection || !verification.connected || !verification.healthy || verification.accountEmail !== connection.providerAccountReference)
+      const verification = connection
+        ? await gmail.verifyConnection(connection.authorizationUserId)
+        : null;
+      if (!connection || !verification?.connected || !verification.healthy || verification.accountEmail !== connection.providerAccountReference)
         throw new EosRouteError(
           409,
           "google_company_connection_required",
-          "Attach the current healthy Google Workspace account to this company before loading Calendar and Drive context.",
+          "This company has no healthy Google Workspace connection available to your role.",
         );
-      return { body: await gmail.operatingContext(req.user.id) };
+      return { body: await gmail.operatingContext(connection.authorizationUserId) };
     }),
   );
 
@@ -20869,23 +20888,23 @@ export function registerEosRuntimeRoutes(app: Express): void {
           "notion_scope_denied",
           "Direct canonical workspace search is outside this seat's visibility scope.",
         );
-      const verification = await notion.verifyConnection(req.user.id);
-      const accountReference = verification.workspace?.workspaceId || verification.workspace?.workspaceName || "";
       const connection = await db.query.eosProviderConnections.findFirst({
         where: and(
           eq(eosProviderConnections.companyId, access.company.id),
           eq(eosProviderConnections.providerKey, "notion"),
-          eq(eosProviderConnections.authorizationUserId, req.user.id),
-          eq(eosProviderConnections.providerAccountReference, accountReference),
           eq(eosProviderConnections.connectionState, "connected"),
           eq(eosProviderConnections.healthState, "healthy"),
         ),
       });
-      if (!verification.connected || !verification.healthy || !accountReference || !connection)
+      const verification = connection
+        ? await notion.verifyConnection(connection.authorizationUserId)
+        : null;
+      const accountReference = verification?.workspace?.workspaceId || verification?.workspace?.workspaceName || "";
+      if (!connection || !verification?.connected || !verification.healthy || !accountReference || accountReference !== connection.providerAccountReference)
         throw new EosRouteError(
           409,
           "notion_company_connection_required",
-          "Attach the current healthy Notion workspace to this company before searching shared context.",
+          "This company has no healthy Notion connection available to your role.",
         );
       const query =
         typeof req.query.q === "string" ? req.query.q.slice(0, 200) : "";
@@ -20893,7 +20912,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
         return {
           body: {
             generatedAt: new Date().toISOString(),
-            results: await notion.searchWorkspace(req.user.id, query, 20),
+            results: await notion.searchWorkspace(connection.authorizationUserId, query, 20),
           },
         };
       } catch (error: any) {

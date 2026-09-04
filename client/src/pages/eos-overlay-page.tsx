@@ -1195,13 +1195,13 @@ export default function EosOverlayPage() {
   const googleConnected = Boolean(
     integrationsQuery.data?.find((item) => item.id === "google_workspace")?.connected &&
       (googleProviderConnectionsQuery.data?.connections || []).some(
-        (connection: JsonRecord) => connection.connectionState === "connected" && connection.authorizedForCurrentUser,
+        (connection: JsonRecord) => connection.connectionState === "connected" && connection.healthState === "healthy",
       ),
   );
   const notionConnected = Boolean(
     integrationsQuery.data?.find((item) => item.id === "notion")?.connected &&
       (notionProviderConnectionsQuery.data?.connections || []).some(
-        (connection: JsonRecord) => connection.connectionState === "connected" && connection.authorizedForCurrentUser,
+        (connection: JsonRecord) => connection.connectionState === "connected" && connection.healthState === "healthy",
       ),
   );
   const googleContextQuery = useQuery<JsonRecord>({
@@ -2798,7 +2798,7 @@ export default function EosOverlayPage() {
         : null;
     if (!providerId || attachIntegrationMutation.isPending) return;
     const integration = integrationsQuery.data?.find((item) => item.id === providerId);
-    if (integration?.connected) attachIntegrationMutation.mutate(integration);
+    if (integration?.authorizationAvailable) attachIntegrationMutation.mutate(integration);
   }, [
     integrationsQuery.data,
     attachIntegrationMutation.isPending,
@@ -12554,9 +12554,7 @@ function IntegrationControlCard({
   const activeConnections = companyConnections.filter(
     (connection) => connection.connectionState === "connected",
   );
-  const activeCompanyConnection = activeConnections.find(
-    (connection) => connection.authorizedForCurrentUser,
-  ) || activeConnections[0];
+  const activeCompanyConnection = activeConnections[0];
   const scopeLabels: Record<string, string> = {
     "https://www.googleapis.com/auth/gmail.send": "Send approved email",
     "https://www.googleapis.com/auth/calendar.readonly": "Read calendars",
@@ -12619,7 +12617,7 @@ function IntegrationControlCard({
                 </p>
                 {!activeCompanyConnection.authorizedForCurrentUser && (
                   <p className="text-xs text-muted-foreground">
-                    This connection is accountable to another seat. Attach your own approved authorization before EOS can use the provider on your behalf.
+                    This is a company-managed connection. EOS grants use through role policy and approval controls; its credential custodian is not exposed as a business owner.
                   </p>
                 )}
                 {activeCompanyConnection.lastHealthAt && (
@@ -12630,8 +12628,8 @@ function IntegrationControlCard({
               </div>
             ) : (
               <p className="mt-2 text-sm text-muted-foreground">
-                {integration.connected
-                  ? "Your provider authorization is ready. Attach it to this company before EOS can use it here."
+                {integration.authorizationAvailable
+                  ? "Your provider authorization is ready. Connect this external account to the company before EOS can use it here."
                   : "No provider account is attached to this company."}
               </p>
             )}
@@ -12660,7 +12658,7 @@ function IntegrationControlCard({
             <p className="eos-label">Authorized account</p>
             <p className="mt-1 break-all font-medium">{integration.accountEmail}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Provider access is attached to your signed-in seat. EOS records every company use through its local approval and audit controls.
+              This identifies the company connection. EOS grants access through role policy, approval, and audit controls.
             </p>
           </div>
         )}
@@ -12734,13 +12732,13 @@ function IntegrationControlCard({
                 : `Connect ${integration.name}`}
             </Button>
           )}
-          {integration.connected && (!activeCompanyConnection || !activeCompanyConnection.authorizedForCurrentUser) && (integration.id === "google_workspace" || integration.id === "notion") && (
+          {integration.authorizationAvailable && !activeCompanyConnection && (integration.id === "google_workspace" || integration.id === "notion") && (
             <Button onClick={onAttach} disabled={pending}>
               <Link2 className="mr-2 h-4 w-4" />
               Use in this company
             </Button>
           )}
-          {actions.has("verify") && Boolean(activeCompanyConnection?.authorizedForCurrentUser) && (
+          {actions.has("verify") && Boolean(activeCompanyConnection) && (
             <Button variant="outline" onClick={() => onVerify(activeCompanyConnection)} disabled={pending}>
               <RefreshCw
                 className={`mr-2 h-4 w-4 ${pending ? "animate-spin" : ""}`}
