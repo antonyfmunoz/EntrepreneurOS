@@ -66,6 +66,17 @@ describe("production runtime configuration", () => {
     expect(deployment).toEqual(readiness);
   });
 
+  it("does not require legal documents for an internal operator release", () => {
+    const internalWithoutLegalGate = { ...internalDisabled, EOS_LEGAL_ENFORCEMENT: "false" };
+    expect(productionDeploymentConfigurationIssues(internalWithoutLegalGate)).toEqual([]);
+    expect(productionRuntimeConfigurationIssues(internalWithoutLegalGate)).toContain("legalEnforcementEnabled");
+  });
+
+  it("keeps legal enforcement fail-closed for public paid SaaS", () => {
+    expect(productionDeploymentConfigurationIssues({ ...valid, EOS_LEGAL_ENFORCEMENT: "false" }))
+      .toContain("legalEnforcementEnabled");
+  });
+
   it.each([undefined, "", "0", "FALSE", "disabled", "true"])("rejects a non-explicit disabled payment boundary: %s", effects => {
     expect(productionDeploymentConfigurationIssues({ ...internalDisabled, EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED: effects }))
       .toContain("operatingCompanyPaymentBoundarySafe");
@@ -73,7 +84,10 @@ describe("production runtime configuration", () => {
 
   it("retains every other failing configuration check for an internal release", () => {
     const env = { EOS_PUBLIC_PAID_SAAS: "false", EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED: "false" };
-    const launchIssues = productionRuntimeConfigurationIssues(env).filter(key => key !== "operatingCompanyPaymentsConfigured");
+    const launchIssues = productionRuntimeConfigurationIssues(env).filter(key => ![
+      "operatingCompanyPaymentsConfigured",
+      "legalEnforcementEnabled",
+    ].includes(key));
     expect(productionDeploymentConfigurationIssues(env)).toEqual(launchIssues);
     expect(launchIssues.length).toBeGreaterThan(20);
     expect(productionDeploymentConfigurationIssues({ ...internalDisabled, STRIPE_RESTRICTED_KEY: "rk_live_platform_fixture" }))
