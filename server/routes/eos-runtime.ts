@@ -19897,13 +19897,11 @@ export function registerEosRuntimeRoutes(app: Express): void {
       if (["live_provider", "monitoring"].includes(input.checkType)) {
         const provider = binding.providerKey.toLowerCase();
         if (["gmail", "google_workspace", "google-workspace", "google"].includes(provider)) {
-          const checked = await gmail.verifyConnection(req.user.id);
           const companyConnection = await db.query.eosProviderConnections.findFirst({
             where: and(
               eq(eosProviderConnections.companyId, access.company.id),
               eq(eosProviderConnections.providerKey, "google_workspace"),
-              eq(eosProviderConnections.authorizationUserId, req.user.id),
-              eq(eosProviderConnections.providerAccountReference, checked.accountEmail || ""),
+              eq(eosProviderConnections.providerAccountReference, binding.providerAccountReference),
               eq(eosProviderConnections.connectionState, "connected"),
             ),
           });
@@ -19913,6 +19911,13 @@ export function registerEosRuntimeRoutes(app: Express): void {
               "google_company_connection_required",
               "Attach the current Google Workspace account to this company before recording provider-backed health.",
             );
+          const checked = await gmail.verifyConnection(companyConnection.authorizationUserId);
+          if (checked.accountEmail && checked.accountEmail !== companyConnection.providerAccountReference)
+            throw new EosRouteError(
+              409,
+              "google_company_connection_account_mismatch",
+              "The verified Google Workspace account does not match the account attached to this company integration binding.",
+            );
           observedHealthState = checked.healthy
             ? "healthy"
             : checked.connected
@@ -19920,14 +19925,11 @@ export function registerEosRuntimeRoutes(app: Express): void {
               : "unavailable";
           externalReference = "provider:google_workspace:server_verified";
         } else if (provider === "notion") {
-          const checked = await notion.verifyConnection(req.user.id);
-          const accountReference = checked.workspace?.workspaceId || checked.workspace?.workspaceName || "";
           const companyConnection = await db.query.eosProviderConnections.findFirst({
             where: and(
               eq(eosProviderConnections.companyId, access.company.id),
               eq(eosProviderConnections.providerKey, "notion"),
-              eq(eosProviderConnections.authorizationUserId, req.user.id),
-              eq(eosProviderConnections.providerAccountReference, accountReference),
+              eq(eosProviderConnections.providerAccountReference, binding.providerAccountReference),
               eq(eosProviderConnections.connectionState, "connected"),
             ),
           });
@@ -19936,6 +19938,14 @@ export function registerEosRuntimeRoutes(app: Express): void {
               409,
               "notion_company_connection_required",
               "Attach the current Notion workspace to this company before recording provider-backed health.",
+            );
+          const checked = await notion.verifyConnection(companyConnection.authorizationUserId);
+          const accountReference = checked.workspace?.workspaceId || checked.workspace?.workspaceName || "";
+          if (accountReference && accountReference !== companyConnection.providerAccountReference)
+            throw new EosRouteError(
+              409,
+              "notion_company_connection_account_mismatch",
+              "The verified Notion workspace does not match the workspace attached to this company integration binding.",
             );
           observedHealthState = checked.healthy
             ? "healthy"
