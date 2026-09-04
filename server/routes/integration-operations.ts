@@ -113,6 +113,30 @@ async function requireCurrentOperatorCompanyConnection(input: {
   return connection;
 }
 
+async function requireOperatorProviderEntitlement(input: {
+  companyId: number;
+  binding: typeof eosIntegrationBindings.$inferSelect;
+  access: Access;
+  operation: string;
+}) {
+  const now = new Date();
+  const entitlements = await db.select().from(eosToolEntitlements).where(and(
+    eq(eosToolEntitlements.companyId, input.companyId),
+    eq(eosToolEntitlements.integrationBindingId, input.binding.id),
+    eq(eosToolEntitlements.granteeSeatId, input.access.seat.id),
+    eq(eosToolEntitlements.state, "active"),
+  ));
+  const entitlement = entitlements.find((item) =>
+    item.providerResourceReference === input.binding.providerAccountReference &&
+    Array.isArray(item.nativePermissions) && item.nativePermissions.includes(input.operation) &&
+    item.effectiveFrom <= now && (!item.effectiveUntil || item.effectiveUntil > now),
+  );
+  if (!entitlement) {
+    throw new EosRouteError(403, "provider_capability_not_entitled", "This seat does not hold an active entitlement for this company provider capability. Assign and activate the required role entitlement before requesting the external action.");
+  }
+  return entitlement;
+}
+
 function webhookEndpointProjection(endpoint: typeof eosIntegrationWebhookEndpoints.$inferSelect, origin?: string) {
   const endpointPath = `/api/eos/integration-webhooks/${endpoint.id}`;
   let endpointUrl: string | null = null;
@@ -386,6 +410,7 @@ export function registerIntegrationOperationsRoutes(app: Express): void {
     if (!adapterOperationIsExecutable(run.operation) || !providerMatchesOperation(binding.providerKey, run.operation)) throw new EosRouteError(409, "integration_dispatch_unsupported", "This binding and operation do not map to an audited native dispatcher.");
     try { validateAdapterOperationRequest(run.operation, run.requestShape); } catch (error) { throw new EosRouteError(409, "integration_dispatch_request_invalid", error instanceof Error ? error.message : "The adapter request is invalid."); }
     if (binding.lifecycleState !== "active" || binding.connectionState !== "connected") throw new EosRouteError(409, "integration_binding_not_execution_ready", "Provider execution requires an active, connected integration binding.");
+    const operatorEntitlement = await requireOperatorProviderEntitlement({ companyId, binding, access: initial, operation: run.operation });
     const companyConnection = await requireCurrentOperatorCompanyConnection({ companyId, providerKey: binding.providerKey, providerAccountReference: binding.providerAccountReference });
     const manifest = await db.query.eosAdapterCapabilityManifests.findFirst({ where: eq(eosAdapterCapabilityManifests.id, run.manifestId) });
     if (!manifest || manifest.bindingConfigurationVersion !== binding.configurationVersion) throw new EosRouteError(409, "integration_dispatch_manifest_stale", "The run no longer references the current frozen binding configuration.");
@@ -404,7 +429,7 @@ export function registerIntegrationOperationsRoutes(app: Express): void {
       const event = await appendEvent(tx, { companyId, integrationBindingId: binding.id, eventType: "dispatch_claimed", subjectType: "run", subjectId: run.id, versionBefore: run.version, versionAfter: run.version + 1, evidenceIds: evidence.map((item) => item.id), payload: { providerExecutionId: executionId, operation: run.operation, executionKey, externalEffectExecuted: false }, policyDecisionId: policy.decisionId, recordedByUserId: req.user.id, recordedAt: now });
       const [claimedRun] = await tx.update(eosIntegrationRuns).set({ state: "dispatching", providerExecutionId: executionId, version: run.version + 1, lastEventId: event.id, updatedAt: now }).where(and(eq(eosIntegrationRuns.id, run.id), eq(eosIntegrationRuns.version, run.version))).returning();
       if (!claimedRun) throw new EosRouteError(409, "integration_run_concurrent_change", "The run changed before provider dispatch could be claimed.");
-      await tx.insert(eosAuditRecords).values(audit(companyId, req.user.id, "integration_operations.provider.claimed", "integration_run", run.id, "dispatching", policy, { eventSha256: event.eventSha256, providerExecutionId: executionId, externalEffectExecuted: false }));
+      await tx.insert(eosAuditRecords).values(audit(companyId, req.user.id, "integration_operations.provider.claimed", "integration_run", run.id, "dispatching", policy, { eventSha256: event.eventSha256, providerExecutionId: executionId, entitlementId: operatorEntitlement.id, externalEffectExecuted: false }));
       return { run: claimedRun, providerExecution };
     });
 
