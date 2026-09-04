@@ -1017,11 +1017,20 @@ try {
     .waitFor();
   const notionCard = desktop
     .getByRole("heading", { name: "Notion", exact: true })
-    .locator("xpath=ancestor::*[.//button[normalize-space()='Disconnect']][1]");
+    .locator("xpath=ancestor::*[.//button[normalize-space()='Use in this company']][1]");
   await notionCard
+    .getByRole("button", { name: "Use in this company", exact: true })
+    .click();
+  await desktop
+    .getByText("Notion is attached to this company", { exact: true })
+    .waitFor();
+  const attachedNotionCard = desktop
+    .getByRole("heading", { name: "Notion", exact: true })
+    .locator("xpath=ancestor::*[.//button[normalize-space()='Remove from this company']][1]");
+  await attachedNotionCard
     .getByText("EOS Acceptance Workspace", { exact: true })
     .waitFor();
-  await notionCard
+  await attachedNotionCard
     .getByRole("button", { name: "Verify connection", exact: true })
     .click();
   await desktop.getByText("Notion verified", { exact: true }).waitFor();
@@ -1037,12 +1046,12 @@ try {
   await desktop
     .getByRole("button", { name: "Open in Notion", exact: true })
     .waitFor();
-  await notionCard
-    .getByRole("button", { name: "Disconnect", exact: true })
+  await attachedNotionCard
+    .getByRole("button", { name: "Remove from this company", exact: true })
     .click();
-  await desktop.getByText("Notion disconnected", { exact: true }).waitFor();
+  await desktop.getByText("Notion removed from this company", { exact: true }).waitFor();
   await desktop
-    .getByRole("button", { name: "Connect Notion", exact: true })
+    .getByRole("button", { name: "Use in this company", exact: true })
     .waitFor();
   await desktop.getByLabel("Monthly limit (USD)").fill("30");
   await desktop.getByLabel("Per-request limit (USD)").fill("2");
