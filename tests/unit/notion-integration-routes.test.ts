@@ -149,7 +149,7 @@ describe("Notion integration HTTP controls", () => {
     });
 
     const response = await api.get("/api/auth/notion/callback?code=provider-code&state=signed-state").expect(302);
-    expect(response.headers.location).toBe("/company/12?notion=connected#systems");
+    expect(response.headers.location).toBe("/company/12?notion=authorized#systems");
     expect(storageAdapter.upsertOauthToken).toHaveBeenCalledWith(expect.objectContaining({ userId, provider: "notion", metadata: { workspaceId: "workspace-1", workspaceName: "Workspace One" } }));
     const stored = storageAdapter.upsertOauthToken.mock.calls[0][0];
     expect(stored.accessToken).toMatch(/^enc:v1:/);

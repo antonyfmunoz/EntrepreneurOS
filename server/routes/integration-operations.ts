@@ -4,10 +4,10 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { ZodError } from "zod";
 import {
   eosAdapterCapabilityManifests, eosAuditRecords, eosAutomations, eosEvidence,
-  eosIntegrationBindings, eosIntegrationCutoverDecisions, eosIntegrationIncidents,
+  eosIntegrationBindings, eosIntegrationCutoverDecisions, eosIntegrationIncidents, eosProviderConnections,
   eosIntegrationOperationalStates, eosIntegrationOperationEvents, eosIntegrationQualifications,
   eosIntegrationRunReceipts, eosIntegrationRuns, eosIntegrationWebhookEndpoints,
-  eosIntegrationWebhookEvents, eosProviderExecutions, eosSeats, eosWorkPackets,
+  eosIntegrationWebhookEvents, eosProviderExecutions, eosSeats, eosToolEntitlements, eosWorkPackets,
 } from "@shared/schema";
 import {
   adapterManifestCreateSchema, executableAdapterOperations, integrationCutoverSchema, integrationFallbackSchema,
@@ -85,6 +85,56 @@ async function visibleWebhookEndpoint(companyId: number, endpointId: string, acc
   if (!endpoint) throw new EosRouteError(404, "integration_webhook_endpoint_not_found", "Adapter webhook endpoint not found in this authority scope.");
   await visibleBinding(companyId, endpoint.integrationBindingId, access);
   return endpoint;
+}
+
+function companyProviderKey(providerKey: string): string {
+  const provider = providerKey.trim().toLowerCase().replaceAll("-", "_");
+  return ["gmail", "google", "google_workspace"].includes(provider) ? "google_workspace" : provider;
+}
+
+async function requireCurrentOperatorCompanyConnection(input: {
+  companyId: number;
+  providerKey: string;
+  providerAccountReference: string;
+}) {
+  const providerKey = companyProviderKey(input.providerKey);
+  const connection = await db.query.eosProviderConnections.findFirst({
+    where: and(
+      eq(eosProviderConnections.companyId, input.companyId),
+      eq(eosProviderConnections.providerKey, providerKey),
+      eq(eosProviderConnections.providerAccountReference, input.providerAccountReference),
+      eq(eosProviderConnections.connectionState, "connected"),
+      eq(eosProviderConnections.healthState, "healthy"),
+    ),
+  });
+  if (!connection) {
+    throw new EosRouteError(409, "provider_company_connection_required", "This company has no healthy connection for the provider account named by the active integration binding. Reconcile the company connection before requesting an external effect.");
+  }
+  return connection;
+}
+
+async function requireOperatorProviderEntitlement(input: {
+  companyId: number;
+  binding: typeof eosIntegrationBindings.$inferSelect;
+  access: Access;
+  operation: string;
+}) {
+  const now = new Date();
+  const entitlements = await db.select().from(eosToolEntitlements).where(and(
+    eq(eosToolEntitlements.companyId, input.companyId),
+    eq(eosToolEntitlements.integrationBindingId, input.binding.id),
+    eq(eosToolEntitlements.granteeSeatId, input.access.seat.id),
+    eq(eosToolEntitlements.state, "active"),
+  ));
+  const entitlement = entitlements.find((item) =>
+    item.providerResourceReference === input.binding.providerAccountReference &&
+    Array.isArray(item.nativePermissions) && item.nativePermissions.includes(input.operation) &&
+    item.effectiveFrom <= now && (!item.effectiveUntil || item.effectiveUntil > now),
+  );
+  if (!entitlement) {
+    throw new EosRouteError(403, "provider_capability_not_entitled", "This seat does not hold an active entitlement for this company provider capability. Assign and activate the required role entitlement before requesting the external action.");
+  }
+  return entitlement;
 }
 
 function webhookEndpointProjection(endpoint: typeof eosIntegrationWebhookEndpoints.$inferSelect, origin?: string) {
@@ -360,24 +410,16 @@ export function registerIntegrationOperationsRoutes(app: Express): void {
     if (!adapterOperationIsExecutable(run.operation) || !providerMatchesOperation(binding.providerKey, run.operation)) throw new EosRouteError(409, "integration_dispatch_unsupported", "This binding and operation do not map to an audited native dispatcher.");
     try { validateAdapterOperationRequest(run.operation, run.requestShape); } catch (error) { throw new EosRouteError(409, "integration_dispatch_request_invalid", error instanceof Error ? error.message : "The adapter request is invalid."); }
     if (binding.lifecycleState !== "active" || binding.connectionState !== "connected") throw new EosRouteError(409, "integration_binding_not_execution_ready", "Provider execution requires an active, connected integration binding.");
+    const operatorEntitlement = await requireOperatorProviderEntitlement({ companyId, binding, access: initial, operation: run.operation });
+    const companyConnection = await requireCurrentOperatorCompanyConnection({ companyId, providerKey: binding.providerKey, providerAccountReference: binding.providerAccountReference });
     const manifest = await db.query.eosAdapterCapabilityManifests.findFirst({ where: eq(eosAdapterCapabilityManifests.id, run.manifestId) });
     if (!manifest || manifest.bindingConfigurationVersion !== binding.configurationVersion) throw new EosRouteError(409, "integration_dispatch_manifest_stale", "The run no longer references the current frozen binding configuration.");
     const now = new Date(); const operational = await db.query.eosIntegrationOperationalStates.findFirst({ where: eq(eosIntegrationOperationalStates.integrationBindingId, binding.id) });
     if (!operational || operational.trafficMode !== "provider") throw new EosRouteError(409, "integration_dispatch_traffic_blocked", "Provider dispatch is allowed only while provider traffic mode is active.");
-    // Approval and provider credential ownership are separate principals. A
-    // manager may approve a founder-owned run, but must never cause EOS to
-    // send through the manager's personal OAuth connection by accident.
-    const runOwnerSeat = await db.query.eosSeats.findFirst({
-      where: and(eq(eosSeats.id, run.ownerSeatId), eq(eosSeats.companyId, companyId)),
-    });
-    const bindingOwnerSeat = runOwnerSeat?.occupantUserId
-      ? null
-      : await db.query.eosSeats.findFirst({
-        where: and(eq(eosSeats.id, binding.ownerSeatId), eq(eosSeats.companyId, companyId)),
-      });
-    const credentialOwnerUserId = runOwnerSeat?.occupantUserId
-      || bindingOwnerSeat?.occupantUserId
-      || req.user.id;
+    // Approval and provider credentials are separate principals. The person
+    // who set up a company connection is its custodian; EOS never switches to
+    // the approver's personal OAuth authorization merely because they acted.
+    const credentialOwnerUserId = companyConnection.authorizationUserId;
     const executionId = randomUUID(); const executionKey = `${run.idempotencyKey}:attempt:${run.attemptCount + 1}`;
     const claimed = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`integration-run:${run.id}`}))`);
@@ -387,7 +429,7 @@ export function registerIntegrationOperationsRoutes(app: Express): void {
       const event = await appendEvent(tx, { companyId, integrationBindingId: binding.id, eventType: "dispatch_claimed", subjectType: "run", subjectId: run.id, versionBefore: run.version, versionAfter: run.version + 1, evidenceIds: evidence.map((item) => item.id), payload: { providerExecutionId: executionId, operation: run.operation, executionKey, externalEffectExecuted: false }, policyDecisionId: policy.decisionId, recordedByUserId: req.user.id, recordedAt: now });
       const [claimedRun] = await tx.update(eosIntegrationRuns).set({ state: "dispatching", providerExecutionId: executionId, version: run.version + 1, lastEventId: event.id, updatedAt: now }).where(and(eq(eosIntegrationRuns.id, run.id), eq(eosIntegrationRuns.version, run.version))).returning();
       if (!claimedRun) throw new EosRouteError(409, "integration_run_concurrent_change", "The run changed before provider dispatch could be claimed.");
-      await tx.insert(eosAuditRecords).values(audit(companyId, req.user.id, "integration_operations.provider.claimed", "integration_run", run.id, "dispatching", policy, { eventSha256: event.eventSha256, providerExecutionId: executionId, externalEffectExecuted: false }));
+      await tx.insert(eosAuditRecords).values(audit(companyId, req.user.id, "integration_operations.provider.claimed", "integration_run", run.id, "dispatching", policy, { eventSha256: event.eventSha256, providerExecutionId: executionId, entitlementId: operatorEntitlement.id, externalEffectExecuted: false }));
       return { run: claimedRun, providerExecution };
     });
 
