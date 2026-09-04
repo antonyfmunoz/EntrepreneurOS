@@ -7,7 +7,7 @@ import {
   eosIntegrationBindings, eosIntegrationCutoverDecisions, eosIntegrationIncidents, eosProviderConnections,
   eosIntegrationOperationalStates, eosIntegrationOperationEvents, eosIntegrationQualifications,
   eosIntegrationRunReceipts, eosIntegrationRuns, eosIntegrationWebhookEndpoints,
-  eosIntegrationWebhookEvents, eosProviderExecutions, eosSeats, eosWorkPackets,
+  eosIntegrationWebhookEvents, eosProviderExecutions, eosSeats, eosToolEntitlements, eosWorkPackets,
 } from "@shared/schema";
 import {
   adapterManifestCreateSchema, executableAdapterOperations, integrationCutoverSchema, integrationFallbackSchema,

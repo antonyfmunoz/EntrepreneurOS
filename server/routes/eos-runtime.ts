@@ -20652,10 +20652,13 @@ export function registerEosRuntimeRoutes(app: Express): void {
             requiredScopes: [
               "Read content shared with the EntrepreneurOS integration",
             ],
-            workspace: notionCompanyConnection ? {
-              workspaceId: notionCompanyConnection.providerMetadata?.workspaceId || null,
-              workspaceName: notionCompanyConnection.providerMetadata?.workspaceName || notionCompanyConnection.providerAccountReference,
-            } : null,
+            workspace: notionCompanyConnection ? (() => {
+              const metadata = notionCompanyConnection.providerMetadata as { workspaceId?: unknown; workspaceName?: unknown } | null;
+              return {
+                workspaceId: typeof metadata?.workspaceId === "string" ? metadata.workspaceId : null,
+                workspaceName: typeof metadata?.workspaceName === "string" ? metadata.workspaceName : notionCompanyConnection.providerAccountReference,
+              };
+            })() : null,
             connectionScope: "This is a company knowledge connection. EOS exposes only content explicitly shared with the integration and permitted to the current role; the authorization custodian does not become the business owner.",
             executionAdapter: "EOS-owned Notion API adapter",
             manualFallback: "Open the canonical Notion workspace directly.",
