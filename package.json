@@ -150,5 +150,10 @@
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
+  },
+  "overrides": {
+    "posthog-js": {
+      "fflate": "0.4.9"
+    }
   }
 }
