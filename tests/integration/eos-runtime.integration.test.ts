@@ -8614,7 +8614,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
   it("runs Module 12 from frozen adapter contract through receipts, recovery, parity, cutover, and rollback", async () => {
     currentUserId = ownerId;
     const [founderSeat] = await sql<{ id: string }[]>`SELECT id FROM eos_seats WHERE company_id = ${companyId} AND kind = 'founder' AND status = 'active' ORDER BY created_at LIMIT 1`;
-    const [binding] = await sql<{ id: string; configurationVersion: number }[]>`SELECT id, configuration_version AS "configurationVersion" FROM eos_integration_bindings WHERE company_id = ${companyId} AND operations @> '["gmail.send"]'::jsonb ORDER BY updated_at DESC LIMIT 1`;
+    const [binding] = await sql<{ id: string; configurationVersion: number; providerAccountReference: string }[]>`SELECT id, configuration_version AS "configurationVersion", provider_account_reference AS "providerAccountReference" FROM eos_integration_bindings WHERE company_id = ${companyId} AND operations @> '["gmail.send"]'::jsonb ORDER BY updated_at DESC LIMIT 1`;
     const [providerEvidence] = await sql<{ id: string }[]>`SELECT id FROM eos_evidence WHERE company_id = ${companyId} AND verification_state = 'verified' AND evidence_type IN ('provider_receipt','delivery_receipt','deployment_receipt','communication_receipt','analytics_receipt') ORDER BY created_at DESC LIMIT 1`;
     expect(founderSeat?.id).toBeTruthy(); expect(binding?.id).toBeTruthy(); expect(providerEvidence?.id).toBeTruthy();
 
@@ -8630,6 +8630,14 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const executableRequest = { integrationBindingId: binding.id, operation: "gmail.send", idempotencyKey: `module12-live-${randomUUID()}`, requestReference: "work-packet:module12-approved-delivery", requestShape: { to: "recipient@example.test", subject: "Approved Module 12 delivery", body: "This bounded fixture message exercises the actual Gmail adapter boundary." }, maxAttempts: 2, ownerSeatId: founderSeat.id, classification: "restricted" };
     const executable = await api.post(`/api/eos/companies/${companyId}/integration-operations/runs`).send(executableRequest).expect(201);
     await api.post(`/api/eos/companies/${companyId}/integration-operations/runs/${executable.body.run.id}/execute`).send({ expectedVersion: 1, confirmExternalEffect: true, evidenceIds: [providerEvidence.id] }).expect(409).expect(({ body }) => expect(body.code).toBe("integration_provider_effects_disabled"));
+    process.env.EOS_INTEGRATION_PROVIDER_EFFECTS_ENABLED = "true";
+    try {
+      await api.post(`/api/eos/companies/${companyId}/integration-operations/runs/${executable.body.run.id}/execute`).send({ expectedVersion: 1, confirmExternalEffect: true, evidenceIds: [providerEvidence.id] }).expect(409).expect(({ body }) => expect(body.code).toBe("provider_company_connection_required"));
+    } finally {
+      delete process.env.EOS_INTEGRATION_PROVIDER_EFFECTS_ENABLED;
+    }
+    await sql`INSERT INTO eos_provider_connections (id, company_id, provider_key, authorization_user_id, owner_seat_id, recovery_owner_seat_id, provider_account_reference, account_scope, granted_permissions, credential_reference, connection_state, health_state, provider_metadata, last_health_at, created_by_user_id)
+      VALUES (${randomUUID()}, ${companyId}, 'google_workspace', ${ownerId}, ${founderSeat.id}, ${founderSeat.id}, ${binding.providerAccountReference}, 'Fixture Google Workspace account for Module 12 adapter qualification.', '["gmail.send"]'::jsonb, 'encrypted_user_oauth', 'connected', 'healthy', '{}'::jsonb, now(), ${ownerId})`;
     const deliveryCount = gmailDeliveryLifecycle.emails.length;
     process.env.EOS_INTEGRATION_PROVIDER_EFFECTS_ENABLED = "true";
     try {

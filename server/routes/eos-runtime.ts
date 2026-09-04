@@ -50,6 +50,7 @@ import {
   eosSystems,
   eosIntegrationBindings,
   eosIntegrationBindingRevisions,
+  eosProviderConnections,
   eosToolEntitlements,
   eosAutomations,
   eosIntegrationHealthObservations,
@@ -19897,6 +19898,21 @@ export function registerEosRuntimeRoutes(app: Express): void {
         const provider = binding.providerKey.toLowerCase();
         if (["gmail", "google_workspace", "google-workspace", "google"].includes(provider)) {
           const checked = await gmail.verifyConnection(req.user.id);
+          const companyConnection = await db.query.eosProviderConnections.findFirst({
+            where: and(
+              eq(eosProviderConnections.companyId, access.company.id),
+              eq(eosProviderConnections.providerKey, "google_workspace"),
+              eq(eosProviderConnections.authorizationUserId, req.user.id),
+              eq(eosProviderConnections.providerAccountReference, checked.accountEmail || ""),
+              eq(eosProviderConnections.connectionState, "connected"),
+            ),
+          });
+          if (!companyConnection)
+            throw new EosRouteError(
+              409,
+              "google_company_connection_required",
+              "Attach the current Google Workspace account to this company before recording provider-backed health.",
+            );
           observedHealthState = checked.healthy
             ? "healthy"
             : checked.connected
@@ -19905,6 +19921,22 @@ export function registerEosRuntimeRoutes(app: Express): void {
           externalReference = "provider:google_workspace:server_verified";
         } else if (provider === "notion") {
           const checked = await notion.verifyConnection(req.user.id);
+          const accountReference = checked.workspace?.workspaceId || checked.workspace?.workspaceName || "";
+          const companyConnection = await db.query.eosProviderConnections.findFirst({
+            where: and(
+              eq(eosProviderConnections.companyId, access.company.id),
+              eq(eosProviderConnections.providerKey, "notion"),
+              eq(eosProviderConnections.authorizationUserId, req.user.id),
+              eq(eosProviderConnections.providerAccountReference, accountReference),
+              eq(eosProviderConnections.connectionState, "connected"),
+            ),
+          });
+          if (!companyConnection)
+            throw new EosRouteError(
+              409,
+              "notion_company_connection_required",
+              "Attach the current Notion workspace to this company before recording provider-backed health.",
+            );
           observedHealthState = checked.healthy
             ? "healthy"
             : checked.connected
@@ -20765,12 +20797,22 @@ export function registerEosRuntimeRoutes(app: Express): void {
   app.get(
     "/api/eos/companies/:companyId/integrations/google/context",
     route(async (req) => {
-      await companyAccess(req);
-      if (!(await gmail.isConnected(req.user.id)))
+      const access = await companyAccess(req);
+      const connection = await db.query.eosProviderConnections.findFirst({
+        where: and(
+          eq(eosProviderConnections.companyId, access.company.id),
+          eq(eosProviderConnections.providerKey, "google_workspace"),
+          eq(eosProviderConnections.authorizationUserId, req.user.id),
+          eq(eosProviderConnections.connectionState, "connected"),
+          eq(eosProviderConnections.healthState, "healthy"),
+        ),
+      });
+      const verification = await gmail.verifyConnection(req.user.id);
+      if (!connection || !verification.connected || !verification.healthy || verification.accountEmail !== connection.providerAccountReference)
         throw new EosRouteError(
           409,
-          "google_not_connected",
-          "Connect Google Workspace before loading Calendar and Drive context.",
+          "google_company_connection_required",
+          "Attach the current healthy Google Workspace account to this company before loading Calendar and Drive context.",
         );
       return { body: await gmail.operatingContext(req.user.id) };
     }),
@@ -20786,11 +20828,23 @@ export function registerEosRuntimeRoutes(app: Express): void {
           "notion_scope_denied",
           "Direct canonical workspace search is outside this seat's visibility scope.",
         );
-      if (!(await notion.connectionSummary(req.user.id)).connected)
+      const verification = await notion.verifyConnection(req.user.id);
+      const accountReference = verification.workspace?.workspaceId || verification.workspace?.workspaceName || "";
+      const connection = await db.query.eosProviderConnections.findFirst({
+        where: and(
+          eq(eosProviderConnections.companyId, access.company.id),
+          eq(eosProviderConnections.providerKey, "notion"),
+          eq(eosProviderConnections.authorizationUserId, req.user.id),
+          eq(eosProviderConnections.providerAccountReference, accountReference),
+          eq(eosProviderConnections.connectionState, "connected"),
+          eq(eosProviderConnections.healthState, "healthy"),
+        ),
+      });
+      if (!verification.connected || !verification.healthy || !accountReference || !connection)
         throw new EosRouteError(
           409,
-          "notion_not_connected",
-          "Connect Notion before searching shared workspace context.",
+          "notion_company_connection_required",
+          "Attach the current healthy Notion workspace to this company before searching shared context.",
         );
       const query =
         typeof req.query.q === "string" ? req.query.q.slice(0, 200) : "";
