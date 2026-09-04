@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { legalAcceptances, legalDocuments } from "@shared/schema";
 import { db } from "../db";
+import { legalEnforcementActive } from "./policy";
 
 export async function publishedLegalDocuments() {
   return db.select().from(legalDocuments).where(eq(legalDocuments.status, "published"));
@@ -17,7 +18,14 @@ export async function legalStatusForUser(userId: string) {
     ? await db.select().from(legalAcceptances).where(and(eq(legalAcceptances.userId, userId), inArray(legalAcceptances.documentId, required.map((document) => document.id))))
     : [];
   const acceptedIds = new Set(acceptances.filter((acceptance) => required.some((document) => document.id === acceptance.documentId && document.checksum === acceptance.documentChecksum)).map((acceptance) => acceptance.documentId));
-  return { enforcement: process.env.EOS_LEGAL_ENFORCEMENT === "true", configurationReady: missingConfiguration.length === 0, missingConfiguration, documents, missing: required.filter((document) => !acceptedIds.has(document.id)), acceptedAt: acceptances.map((acceptance) => ({ documentId: acceptance.documentId, acceptedAt: acceptance.acceptedAt })) };
+  const configurationReady = missingConfiguration.length === 0;
+  const enforcementRequested = process.env.EOS_LEGAL_ENFORCEMENT === "true";
+  const enforcement = legalEnforcementActive({
+    requested: enforcementRequested,
+    configurationReady,
+    publicPaidSaaS: process.env.EOS_PUBLIC_PAID_SAAS === "true",
+  });
+  return { enforcement, enforcementRequested, configurationReady, missingConfiguration, documents, missing: required.filter((document) => !acceptedIds.has(document.id)), acceptedAt: acceptances.map((acceptance) => ({ documentId: acceptance.documentId, acceptedAt: acceptance.acceptedAt })) };
 }
 
 export async function recordLegalAcceptance(input: { userId: string; documentId: string; ip: string; userAgent: string }) {
