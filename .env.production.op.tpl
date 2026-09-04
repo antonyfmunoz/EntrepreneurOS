@@ -71,5 +71,7 @@ EOS_CANDIDATE_STT_MODEL=gpt-4o-mini-transcribe
 # When EOS_CANDIDATE_STT_ENABLED=true, add:
 # OPENAI_API_KEY=op://EntrepreneurOS/Production/OPENAI_API_KEY
 EOS_ACCOUNT_DELETION_ENABLED=true
-EOS_LEGAL_ENFORCEMENT=true
+# EOS is an internal operator tool until public terms and privacy versions are
+# approved and published. Keep the acceptance gate off in this mode.
+EOS_LEGAL_ENFORCEMENT=false
 EOS_PUBLIC_PAID_SAAS=false
