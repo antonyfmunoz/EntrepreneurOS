@@ -153,6 +153,9 @@
   },
   "overrides": {
     "fast-uri": "3.1.7",
-    "qs": "$qs"
+    "qs": "$qs",
+    "posthog-js": {
+      "fflate": "0.4.9"
+    }
   }
 }
