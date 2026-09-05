@@ -17,6 +17,7 @@ import * as gohighlevel from "../integrations/gohighlevel";
 import { verifyStripeConnection } from "../integrations/stripe-health";
 import {
   executeRecoveryCommercialEffect,
+  recoveryCommercialBindingCredentialConfigured,
   recoveryCommercialEffectsConfigured,
   type RecoveryCommercialEffect,
 } from "../integrations/recovery-commercial";
@@ -20661,6 +20662,20 @@ export function registerEosRuntimeRoutes(app: Express): void {
         || companyBindings.find((item) => item.providerKey === "stripe")
         || null;
       const stripeConnection = stripeBinding ? await verifyStripeConnection(stripeBinding) : null;
+      const docusignBinding = companyBindings.find((item) => item.providerKey === "docusign" && item.lifecycleState === "active")
+        || companyBindings.find((item) => item.providerKey === "docusign")
+        || null;
+      const docusignConnectionHealthy = Boolean(
+        docusignBinding
+        && docusignBinding.lifecycleState === "active"
+        && docusignBinding.connectionState === "connected"
+        && docusignBinding.healthState === "healthy"
+        && docusignBinding.parityState === "passing",
+      );
+      const docusignCredentialConfigured = docusignBinding
+        ? recoveryCommercialBindingCredentialConfigured(docusignBinding)
+        : false;
+      const docusignExecutionReady = docusignConnectionHealthy && docusignCredentialConfigured;
       const umhConfigured = federationConfigured();
       return {
         body: [
@@ -20809,27 +20824,42 @@ export function registerEosRuntimeRoutes(app: Express): void {
             id: "docusign",
             name: "DocuSign",
             description:
-              "Agreement dispatch, signature status, and certificate evidence.",
-            state: "not_configured",
-            health: "not_connected",
-            configured: false,
-            connected: false,
-            providerType: "oauth",
-            authority: "external_signature_provider",
+              "Company-bound agreement dispatch, signature status, and certificate evidence.",
+            state: !docusignBinding
+              ? "not_configured"
+              : docusignExecutionReady
+                ? "connected"
+                : "available",
+            health: docusignExecutionReady
+              ? "healthy"
+              : docusignConnectionHealthy
+                ? "degraded"
+                : "not_connected",
+            configured: Boolean(docusignBinding),
+            connected: docusignExecutionReady,
+            providerType: "company_managed_signature",
+            authority: "company_agreement_execution_after_local_approval",
             risk: "consequential_write",
             services: ["Agreement dispatch", "Signature events", "Certificates"],
             serviceHealth: {
-              "Agreement dispatch": false,
-              "Signature events": false,
-              Certificates: false,
+              "Agreement dispatch": docusignExecutionReady,
+              "Signature events": docusignConnectionHealthy,
+              Certificates: docusignConnectionHealthy,
             },
-            operations: [],
+            operations: docusignBinding
+              ? ["docusign.send_recovery_agreement_with_local_approval", "docusign.void_recovery_agreement_with_local_approval"]
+              : [],
             requiredScopes: [
-              "Exact DocuSign account OAuth",
+              "Binding-specific managed DocuSign credential",
               "Template and sender authority",
-              "Envelope and callback access",
+              "Envelope and Connect HMAC callback access",
             ],
-            executionAdapter: "EOS DocuSign adapter not configured",
+            grantedScopes: docusignExecutionReady
+              ? ["Binding-specific managed DocuSign credential", "Template and sender authority", "Envelope and Connect HMAC callback access"]
+              : [],
+            accountReference: docusignBinding?.providerAccountReference || null,
+            connectionScope: "This is a company agreement binding. EOS executes only an exact, locally approved agreement action through the selected binding; the managed credential remains in the vault and is never shared across companies.",
+            executionAdapter: "EOS-owned DocuSign agreement and receipt-reconciliation adapter",
             manualFallback:
               "Prepare the agreement in EOS and send it from the authorized DocuSign workspace manually.",
             actions: [],

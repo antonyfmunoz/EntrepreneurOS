@@ -109,6 +109,20 @@ export function recoveryCommercialEffectsConfigured(): boolean {
   );
 }
 
+/**
+ * Confirms only that this exact company binding has an eligible managed
+ * execution credential. It deliberately does not claim external health; that
+ * remains a property of the binding's verified connection state.
+ */
+export function recoveryCommercialBindingCredentialConfigured(binding: Binding): boolean {
+  try {
+    credentialFor(binding);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function publicOrigin(): string {
   const origin = process.env.EOS_PUBLIC_ORIGIN?.replace(/\/$/, "");
   if (!origin?.startsWith("https://"))
