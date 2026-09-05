@@ -12,6 +12,7 @@ import {
 import * as gmail from "../integrations/gmail";
 import * as notion from "../integrations/notion";
 import * as quickbooks from "../integrations/quickbooks";
+import * as slack from "../integrations/slack";
 import { verifyStripeConnection } from "../integrations/stripe-health";
 import {
   executeRecoveryCommercialEffect,
@@ -19978,6 +19979,22 @@ export function registerEosRuntimeRoutes(app: Express): void {
             );
           observedHealthState = checked.healthy ? "healthy" : checked.connected ? "degraded" : "unavailable";
           externalReference = "provider:quickbooks:server_verified";
+        } else if (provider === "slack") {
+          const companyConnection = await db.query.eosProviderConnections.findFirst({
+            where: and(
+              eq(eosProviderConnections.companyId, access.company.id),
+              eq(eosProviderConnections.providerKey, "slack"),
+              eq(eosProviderConnections.providerAccountReference, binding.providerAccountReference),
+              eq(eosProviderConnections.connectionState, "connected"),
+            ),
+          });
+          if (!companyConnection)
+            throw new EosRouteError(409, "slack_company_connection_required", "Attach the selected Slack workspace to this EOS company before recording provider-backed health.");
+          const checked = await slack.verifyConnection(companyConnection.authorizationUserId);
+          if (checked.workspace?.teamId && checked.workspace.teamId !== companyConnection.providerAccountReference)
+            throw new EosRouteError(409, "slack_company_connection_account_mismatch", "The verified Slack workspace does not match the workspace attached to this integration binding.");
+          observedHealthState = checked.healthy ? "healthy" : checked.connected ? "degraded" : "unavailable";
+          externalReference = "provider:slack:server_verified";
         } else if (provider === "stripe") {
           const checked = await verifyStripeConnection(binding);
           observedHealthState = checked.healthy
@@ -20606,10 +20623,11 @@ export function registerEosRuntimeRoutes(app: Express): void {
         purpose: "administer_systems_registry",
         classification: "confidential",
       });
-      const [googleSetupAuthorization, notionSetupAuthorization, quickbooksSetupAuthorization, companyBindings, providerConnections] = await Promise.all([
+      const [googleSetupAuthorization, notionSetupAuthorization, quickbooksSetupAuthorization, slackSetupAuthorization, companyBindings, providerConnections] = await Promise.all([
         gmail.connectionSummary(req.user.id),
         notion.connectionSummary(req.user.id),
         quickbooks.connectionSummary(req.user.id),
+        slack.connectionSummary(req.user.id),
         db.select().from(eosIntegrationBindings).where(eq(eosIntegrationBindings.companyId, access.company.id)),
         db.select().from(eosProviderConnections).where(eq(eosProviderConnections.companyId, access.company.id)),
       ]);
@@ -20621,6 +20639,9 @@ export function registerEosRuntimeRoutes(app: Express): void {
       ) || null;
       const quickbooksCompanyConnection = providerConnections.find((connection) =>
         connection.providerKey === "quickbooks" && connection.connectionState === "connected" && connection.healthState === "healthy",
+      ) || null;
+      const slackCompanyConnection = providerConnections.find((connection) =>
+        connection.providerKey === "slack" && connection.connectionState === "connected" && connection.healthState === "healthy",
       ) || null;
       const stripeBinding = companyBindings.find((item) => item.providerKey === "stripe" && item.lifecycleState === "active")
         || companyBindings.find((item) => item.providerKey === "stripe")
@@ -20843,29 +20864,39 @@ export function registerEosRuntimeRoutes(app: Express): void {
             name: "Slack",
             description:
               "Internal channels and decision capture for the Empyrean Studios team.",
-            state: "not_configured",
-            health: "not_connected",
-            configured: false,
-            connected: false,
-            providerType: "oauth",
+            state: slackCompanyConnection ? "connected" : slackSetupAuthorization.configured ? "available" : "not_configured",
+            health: slackCompanyConnection ? "healthy" : "not_connected",
+            configured: slackSetupAuthorization.configured,
+            connected: Boolean(slackCompanyConnection),
+            authorizationAvailable: slackSetupAuthorization.connected,
+            providerType: "company_managed_communications",
             authority: "provider_execution_after_local_approval",
             risk: "consequential_write",
             services: ["Internal channels", "Thread replies", "Decision links"],
             serviceHealth: {
-              "Internal channels": false,
-              "Thread replies": false,
-              "Decision links": false,
+              "Internal channels": Boolean(slackCompanyConnection),
+              "Thread replies": Boolean(slackCompanyConnection),
+              "Decision links": Boolean(slackCompanyConnection),
             },
-            operations: [],
+            operations: slackCompanyConnection ? slack.SLACK_TOOLS : [],
             requiredScopes: [
-              "Empyrean Studios workspace OAuth",
-              "Approved internal channel metadata",
-              "Message draft/send only after local approval",
+              "chat:write",
+              "channels:read",
+              "groups:read",
             ],
-            executionAdapter: "EOS Slack adapter not configured",
+            grantedScopes: slackCompanyConnection?.grantedPermissions || [],
+            accountReference: slackCompanyConnection?.providerAccountReference || null,
+            connectionScope: "This is a company workspace connection. Its bot credential remains with the authorized custodian; EOS still requires a role/seat entitlement and an exact channel-specific grant before it can send a message. Decisions remain canonical in Notion.",
+            executionAdapter: "EOS-owned Slack OAuth adapter",
             manualFallback:
               "Route communication through EOS hierarchy and record the decision in the governed Work Packet.",
-            actions: [],
+            actions: slackCompanyConnection
+              ? ["verify", ...(slackSetupAuthorization.connected ? ["reconnect"] : [])]
+              : slackSetupAuthorization.connected
+                ? ["reconnect"]
+                : slackSetupAuthorization.configured
+                  ? ["connect"]
+                  : [],
           },
           {
             id: "umh",

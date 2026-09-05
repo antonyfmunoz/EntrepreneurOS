@@ -8,10 +8,14 @@ import {
   quickbooksCompanyVerifyRequestSchema,
   quickbooksCreateInvoiceRequestSchema,
   quickbooksOpenInvoicesRequestSchema,
+  slackConversationsListRequestSchema,
+  slackMessageSendRequestSchema,
+  slackWorkspaceVerifyRequestSchema,
 } from "@shared/integration-operations";
 import * as gmail from "./gmail";
 import * as notion from "./notion";
 import * as quickbooks from "./quickbooks";
+import * as slack from "./slack";
 
 export type AdapterDispatchResult = {
   authority: "provider_receipt";
@@ -24,9 +28,10 @@ export type AdapterDispatchClients = {
   gmail: Pick<typeof gmail, "isConnected" | "sendEmail">;
   notion: Pick<typeof notion, "connectionSummary" | "verifyConnection" | "searchWorkspace" | "readPageSnapshot">;
   quickbooks: Pick<typeof quickbooks, "connectionSummary" | "verifyConnection" | "listOpenInvoices" | "createInvoice">;
+  slack: Pick<typeof slack, "connectionSummary" | "verifyConnection" | "listConversations" | "sendMessage">;
 };
 
-const liveClients: AdapterDispatchClients = { gmail, notion, quickbooks };
+const liveClients: AdapterDispatchClients = { gmail, notion, quickbooks, slack };
 const operations = new Set<string>(executableAdapterOperations);
 
 export class AdapterDispatchError extends Error {
@@ -46,6 +51,7 @@ export function providerMatchesOperation(providerKey: string, operation: string)
   if (operation.startsWith("gmail.")) return ["gmail", "google", "google_workspace"].includes(provider);
   if (operation.startsWith("notion.")) return provider === "notion";
   if (operation.startsWith("quickbooks.")) return provider === "quickbooks";
+  if (operation.startsWith("slack.")) return provider === "slack";
   return false;
 }
 
@@ -57,6 +63,9 @@ export function validateAdapterOperationRequest(operation: string, requestShape:
   if (operation === "quickbooks.company.verify") return quickbooksCompanyVerifyRequestSchema.parse(requestShape);
   if (operation === "quickbooks.invoice.list_open") return quickbooksOpenInvoicesRequestSchema.parse(requestShape);
   if (operation === "quickbooks.invoice.create") return quickbooksCreateInvoiceRequestSchema.parse(requestShape);
+  if (operation === "slack.workspace.verify") return slackWorkspaceVerifyRequestSchema.parse(requestShape);
+  if (operation === "slack.conversations.list") return slackConversationsListRequestSchema.parse(requestShape);
+  if (operation === "slack.message.send") return slackMessageSendRequestSchema.parse(requestShape);
   throw new AdapterDispatchError("adapter_operation_not_executable", "This operation has no audited native dispatcher.");
 }
 
@@ -65,7 +74,7 @@ function providerFailure(error: unknown, operation: string): AdapterDispatchErro
   const value = error as any;
   const status = Number(value?.code || value?.status || value?.response?.status || 0);
   const message = error instanceof Error ? error.message : "Provider request failed.";
-  const mutating = operation === "gmail.send" || operation === "quickbooks.invoice.create";
+  const mutating = operation === "gmail.send" || operation === "quickbooks.invoice.create" || operation === "slack.message.send";
   const uncertain = mutating && (!status || status === 408 || status === 409 || status === 425 || status === 429 || status >= 500 || value?.name === "AbortError");
   return new AdapterDispatchError(uncertain ? "provider_outcome_uncertain" : "provider_request_failed", message.slice(0, 1000), uncertain ? "uncertain" : "failed");
 }
@@ -118,6 +127,23 @@ export async function dispatchAllowlistedAdapterOperation(input: {
       const request = quickbooksCreateInvoiceRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
       const result = await clients.quickbooks.createInvoice(input.userId, request);
       return { authority: "provider_receipt", externalReference: `quickbooks:invoice:${result.invoice.id}`, summary: "QuickBooks created the approved invoice and returned its durable invoice reference.", responseShape: { realmId: result.company.realmId, companyName: result.company.companyName || null, invoice: result.invoice } };
+    }
+    if (input.operation === "slack.workspace.verify") {
+      slackWorkspaceVerifyRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
+      const result = await clients.slack.verifyConnection(input.userId);
+      if (!result.connected || !result.healthy || !result.workspace?.teamId) throw new AdapterDispatchError("slack_authorization_unhealthy", "Slack authorization is unavailable or unhealthy.");
+      return { authority: "provider_receipt", externalReference: `slack:workspace:${result.workspace.teamId}`, summary: "Slack confirmed the connected company workspace authorization is healthy.", responseShape: { teamId: result.workspace.teamId, teamName: result.workspace.teamName || null, botUserId: result.workspace.botUserId || null } };
+    }
+    if (input.operation === "slack.conversations.list") {
+      const request = slackConversationsListRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
+      const result = await clients.slack.listConversations(input.userId, request.limit);
+      const responseSha256 = createHash("sha256").update(JSON.stringify(result.channels)).digest("hex");
+      return { authority: "provider_receipt", externalReference: `slack:conversations:${result.workspace.teamId}:${responseSha256}`, summary: `Slack returned ${result.channels.length} bounded channel metadata record${result.channels.length === 1 ? "" : "s"}.`, responseShape: { teamId: result.workspace.teamId, teamName: result.workspace.teamName || null, channelCount: result.channels.length, channels: result.channels, nextCursor: result.nextCursor, responseSha256 } };
+    }
+    if (input.operation === "slack.message.send") {
+      const request = slackMessageSendRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
+      const result = await clients.slack.sendMessage(input.userId, request);
+      return { authority: "provider_receipt", externalReference: `slack:message:${result.message.channelId}:${result.message.ts}`, summary: "Slack accepted the approved company message and returned its durable message reference.", responseShape: { teamId: result.workspace.teamId, teamName: result.workspace.teamName || null, message: result.message } };
     }
     const request = notionPageReadSnapshotRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
     const connection = await clients.notion.connectionSummary(input.userId);

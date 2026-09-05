@@ -1036,6 +1036,14 @@ export default function EosOverlayPage() {
       (contextQuery.data?.principalContext?.allowedSurfaces || []).includes("systems"),
     ),
   });
+  const slackProviderConnectionsQuery = useQuery<JsonRecord>({
+    queryKey: [root, roleScopeKey, "slack-provider-connections"],
+    queryFn: () => requestJson("GET", `${root}/integrations/slack/connections`),
+    enabled: Boolean(
+      companyId &&
+      (contextQuery.data?.principalContext?.allowedSurfaces || []).includes("systems"),
+    ),
+  });
   const systemsStateQuery = useQuery<JsonRecord>({
     queryKey: [root, roleScopeKey, "systems-state"],
     queryFn: () => requestJson("GET", `${root}/systems-state`),
@@ -2703,6 +2711,7 @@ export default function EosOverlayPage() {
         googleProviderConnectionsQuery.refetch(),
         notionProviderConnectionsQuery.refetch(),
         quickbooksProviderConnectionsQuery.refetch(),
+        slackProviderConnectionsQuery.refetch(),
       ]);
       const current = new URL(window.location.href);
       current.searchParams.delete(integration.id);
@@ -2739,6 +2748,7 @@ export default function EosOverlayPage() {
         googleProviderConnectionsQuery.refetch(),
         notionProviderConnectionsQuery.refetch(),
         quickbooksProviderConnectionsQuery.refetch(),
+        slackProviderConnectionsQuery.refetch(),
       ]);
       const integration = variables.integration;
       if (variables.connection?.id) {
@@ -2788,6 +2798,7 @@ export default function EosOverlayPage() {
         googleProviderConnectionsQuery.refetch(),
         notionProviderConnectionsQuery.refetch(),
         quickbooksProviderConnectionsQuery.refetch(),
+        slackProviderConnectionsQuery.refetch(),
       ]);
       const integration = variables.integration;
       toast({
@@ -2808,6 +2819,8 @@ export default function EosOverlayPage() {
         ? "notion"
         : query.get("quickbooks") === "authorized"
           ? "quickbooks"
+          : query.get("slack") === "authorized"
+            ? "slack"
         : null;
     if (!providerId || attachIntegrationMutation.isPending) return;
     const integration = integrationsQuery.data?.find((item) => item.id === providerId);
@@ -12090,6 +12103,8 @@ export default function EosOverlayPage() {
                       ? notionProviderConnectionsQuery.data?.connections || []
                       : integration.id === "quickbooks"
                         ? quickbooksProviderConnectionsQuery.data?.connections || []
+                        : integration.id === "slack"
+                          ? slackProviderConnectionsQuery.data?.connections || []
                         : []
                 }
                 pending={
@@ -12571,6 +12586,9 @@ function IntegrationControlCard({
   );
   const activeCompanyConnection = activeConnections[0];
   const scopeLabels: Record<string, string> = {
+    "chat:write": "Send an approved message as the company workspace bot",
+    "channels:read": "List approved public-channel metadata",
+    "groups:read": "List approved private-channel metadata",
     "com.intuit.quickbooks.accounting": "Read accounting records and create approved invoices",
     "https://www.googleapis.com/auth/gmail.send": "Send approved email",
     "https://www.googleapis.com/auth/calendar.readonly": "Read calendars",
@@ -12619,7 +12637,7 @@ function IntegrationControlCard({
           />
         </div>
 
-        {(integration.id === "google_workspace" || integration.id === "notion" || integration.id === "quickbooks") && (
+        {(integration.id === "google_workspace" || integration.id === "notion" || integration.id === "quickbooks" || integration.id === "slack") && (
           <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
             <p className="eos-label">Company connection</p>
             {activeCompanyConnection ? (
@@ -12750,7 +12768,7 @@ function IntegrationControlCard({
                 : `Connect ${integration.name}`}
             </Button>
           )}
-          {integration.authorizationAvailable && !activeCompanyConnection && (integration.id === "google_workspace" || integration.id === "notion" || integration.id === "quickbooks") && (
+          {integration.authorizationAvailable && !activeCompanyConnection && (integration.id === "google_workspace" || integration.id === "notion" || integration.id === "quickbooks" || integration.id === "slack") && (
             <Button onClick={onAttach} disabled={pending}>
               <Link2 className="mr-2 h-4 w-4" />
               Use in this company

@@ -208,6 +208,17 @@ export const quickbooksCreateInvoiceRequestSchema = z.object({
   privateNote: z.string().trim().max(4_000).optional(),
 }).strict();
 
+const slackChannelId = z.string().trim().regex(/^[CG][A-Z0-9]{8,32}$/, "Slack channel IDs must be canonical conversation identifiers.");
+export const slackWorkspaceVerifyRequestSchema = z.object({}).strict();
+export const slackConversationsListRequestSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+}).strict();
+export const slackMessageSendRequestSchema = z.object({
+  channelId: slackChannelId,
+  text: bounded(1, 12_000),
+  threadTs: z.string().trim().regex(/^\d{1,20}\.\d{1,9}$/, "Slack thread timestamp is invalid.").optional(),
+}).strict();
+
 export const executableAdapterOperations = [
   "gmail.send",
   "notion.workspace.verify",
@@ -216,6 +227,9 @@ export const executableAdapterOperations = [
   "quickbooks.company.verify",
   "quickbooks.invoice.list_open",
   "quickbooks.invoice.create",
+  "slack.workspace.verify",
+  "slack.conversations.list",
+  "slack.message.send",
 ] as const;
 
 export function providerExecutionEnabled(env: Record<string, string | undefined> = process.env) {

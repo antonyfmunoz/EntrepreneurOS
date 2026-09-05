@@ -29,6 +29,15 @@ const quickbooksAdapter = vi.hoisted(() => ({
   verifyConnection: vi.fn(async () => ({ configured: true, connected: true, healthy: true, company: { realmId: "9130354812345678", companyName: "Empyrean Studios" } })),
   disconnect: vi.fn(async () => ({ success: true, providerRevoked: false })),
 }));
+const slackAdapter = vi.hoisted(() => ({
+  isConfigured: vi.fn(() => true),
+  getAuthUrl: vi.fn(() => "https://slack.com/oauth/v2/authorize?state=signed"),
+  readOAuthState: vi.fn(),
+  exchangeCode: vi.fn(),
+  connectionSummary: vi.fn(async () => ({ configured: true, connected: true, workspace: { teamId: "T12345678", teamName: "Empyrean Studios" } })),
+  verifyConnection: vi.fn(async () => ({ configured: true, connected: true, healthy: true, workspace: { teamId: "T12345678", teamName: "Empyrean Studios" } })),
+  disconnect: vi.fn(async () => ({ success: true, providerRevoked: true })),
+}));
 const storageAdapter = vi.hoisted(() => ({
   upsertOauthToken: vi.fn(),
   deleteOauthToken: vi.fn(),
@@ -54,6 +63,7 @@ const eosAccess = vi.hoisted(() => ({
 vi.mock("../../server/integrations/notion", () => notionAdapter);
 vi.mock("../../server/integrations/gmail", () => gmailAdapter);
 vi.mock("../../server/integrations/quickbooks", () => quickbooksAdapter);
+vi.mock("../../server/integrations/slack", () => slackAdapter);
 vi.mock("../../server/integrations/stripe-health", () => stripeHealthAdapter);
 vi.mock("../../server/storage", () => ({ storage: storageAdapter }));
 vi.mock("../../server/db", () => ({ db: dbAdapter }));
@@ -76,6 +86,7 @@ describe("Notion integration HTTP controls", () => {
     for (const mock of Object.values(notionAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
     for (const mock of Object.values(gmailAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
     for (const mock of Object.values(quickbooksAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
+    for (const mock of Object.values(slackAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
     storageAdapter.upsertOauthToken.mockReset();
     stripeHealthAdapter.verifyStripeConnection.mockClear();
     dbAdapter.bindings = [];
@@ -145,6 +156,22 @@ describe("Notion integration HTTP controls", () => {
     const stored = storageAdapter.upsertOauthToken.mock.calls[0][0];
     expect(stored.accessToken).toMatch(/^enc:v1:/); expect(stored.refreshToken).toMatch(/^enc:v1:/);
     expect(JSON.stringify(stored)).not.toContain("quickbooks-access-plaintext");
+    delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
+  });
+
+  it("starts and stores a company Slack workspace authorization without exposing the bot token", async () => {
+    const start = await api.get("/api/eos/companies/12/integrations/slack/auth").expect(200);
+    expect(start.body.authUrl).toContain("slack.com");
+    expect(slackAdapter.getAuthUrl).toHaveBeenCalledWith(userId, "/company/12#systems");
+    process.env.EOS_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 23).toString("base64");
+    slackAdapter.readOAuthState.mockResolvedValue({ userId, expiresAt: Date.now() + 60_000, nonce: "nonce", returnTo: "/company/12#systems" });
+    slackAdapter.exchangeCode.mockResolvedValue({ accessToken: "slack-bot-token-plaintext", tokenType: "bot", scope: "chat:write,channels:read,groups:read", metadata: { teamId: "T12345678", teamName: "Empyrean Studios" } });
+    const response = await api.get("/api/auth/slack/callback?code=provider-code&state=signed-state").expect(302);
+    expect(response.headers.location).toBe("/company/12?slack=authorized#systems");
+    const stored = storageAdapter.upsertOauthToken.mock.calls.at(-1)[0];
+    expect(stored).toEqual(expect.objectContaining({ userId, provider: "slack", metadata: { teamId: "T12345678", teamName: "Empyrean Studios" } }));
+    expect(stored.accessToken).toMatch(/^enc:v1:/);
+    expect(JSON.stringify(stored)).not.toContain("slack-bot-token-plaintext");
     delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
   });
 
