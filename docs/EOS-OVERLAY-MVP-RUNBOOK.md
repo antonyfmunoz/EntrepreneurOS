@@ -171,6 +171,8 @@ Optional QuickBooks Online OAuth:
 - `QUICKBOOKS_REDIRECT_URI`
 - `QUICKBOOKS_ENVIRONMENT` (`production` or `sandbox`)
 
+The Fly release process treats this as an all-or-nothing optional provider group: leave every value absent until the company is ready to enable it, or supply all four together. The same release-custody rule applies to Slack and GoHighLevel below.
+
 QuickBooks is a company-owned finance capability, not a per-seat plug-in. The
 human who grants OAuth is the credential custodian; EOS must attach the
 verified QuickBooks realm to exactly one company, require a matching entitled

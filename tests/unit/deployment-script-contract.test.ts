@@ -118,6 +118,20 @@ describe("production deployment script contract", () => {
     expect(deployScript).toContain('Import-FlySecretsFromEnvironment -App $app -Names @("OPENAI_API_KEY")');
   });
 
+  it("stages complete optional company-provider OAuth groups but rejects partial custody", () => {
+    expect(deployScript).toContain("Resolve-OptionalProviderSecretNames");
+    expect(deployScript).toContain("QuickBooks Online OAuth");
+    expect(deployScript).toContain("Slack OAuth");
+    expect(deployScript).toContain("GoHighLevel OAuth");
+    for (const name of [
+      "QUICKBOOKS_CLIENT_ID", "QUICKBOOKS_CLIENT_SECRET", "QUICKBOOKS_REDIRECT_URI", "QUICKBOOKS_ENVIRONMENT",
+      "SLACK_CLIENT_ID", "SLACK_CLIENT_SECRET", "SLACK_REDIRECT_URI",
+      "GOHIGHLEVEL_CLIENT_ID", "GOHIGHLEVEL_CLIENT_SECRET", "GOHIGHLEVEL_INSTALLATION_URL", "GOHIGHLEVEL_REDIRECT_URI",
+    ]) expect(deployScript).toContain(name);
+    expect(deployScript).toContain("partially configured");
+    expect(deployScript).toContain("$runtimeSecretNames += $optionalProviderSecretNames");
+  });
+
   it("carries provider-ingress and dispatch-recovery worker timing into production", () => {
     for (const name of [
       "EOS_PROVIDER_INGRESS_WORKER_INTERVAL_MS",
