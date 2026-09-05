@@ -25,6 +25,12 @@ GOOGLE_REDIRECT_URI=https://entrepreneuros.net/api/auth/google/callback
 NOTION_CLIENT_ID=op://EntrepreneurOS/Development/NOTION_CLIENT_ID
 NOTION_CLIENT_SECRET=op://EntrepreneurOS/Development/NOTION_CLIENT_SECRET
 NOTION_REDIRECT_URI=https://entrepreneuros.net/api/auth/notion/callback
+# Optional company-owned QuickBooks Online OAuth. Do not enable a company
+# connection until the Intuit app has this exact callback URL registered.
+# QUICKBOOKS_CLIENT_ID=op://EntrepreneurOS/Development/QUICKBOOKS_CLIENT_ID
+# QUICKBOOKS_CLIENT_SECRET=op://EntrepreneurOS/Development/QUICKBOOKS_CLIENT_SECRET
+# QUICKBOOKS_REDIRECT_URI=https://entrepreneuros.net/api/auth/quickbooks/callback
+# QUICKBOOKS_ENVIRONMENT=sandbox
 # Projection-owned UMH federation. Leave UMH_FEDERATION_ENABLED false until a
 # local installation row and the corresponding UMH public signing key exist.
 UMH_FEDERATION_ENABLED=false
@@ -50,8 +56,8 @@ EOS_EVENT_PRIVATE_KEY_PEM=
 # counsel authority, exact accounts, callbacks, and recovery drills are qualified.
 EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED=false
 # Generic Systems control-center dispatch remains separately kill-switched.
-# When enabled, EOS still executes only the audited Gmail/Notion allowlist and
-# requires each operator's encrypted OAuth authorization.
+# When enabled, EOS executes only the audited Gmail, Notion, and QuickBooks
+# allowlists and requires each operator's encrypted OAuth authorization.
 EOS_INTEGRATION_PROVIDER_EFFECTS_ENABLED=false
 EOS_PROVIDER_INGRESS_WORKER_INTERVAL_MS=60000
 EOS_INTEGRATION_DISPATCH_RECOVERY_AFTER_MS=300000

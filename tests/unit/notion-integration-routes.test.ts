@@ -20,6 +20,15 @@ const gmailAdapter = vi.hoisted(() => ({
   verifyConnection: vi.fn(async () => ({ configured: true, connected: true, healthy: true, services: { Gmail: true, Calendar: true, Drive: true }, grantedScopes: ["https://www.googleapis.com/auth/gmail.send"], accountEmail: "operator@example.test" })),
   disconnect: vi.fn(async () => ({ success: true, providerRevoked: true })),
 }));
+const quickbooksAdapter = vi.hoisted(() => ({
+  isConfigured: vi.fn(() => true),
+  getAuthUrl: vi.fn(() => "https://appcenter.intuit.com/connect/oauth2?state=signed"),
+  readOAuthState: vi.fn(),
+  exchangeCode: vi.fn(),
+  connectionSummary: vi.fn(async () => ({ configured: true, connected: true, company: { realmId: "9130354812345678", companyName: "Empyrean Studios" } })),
+  verifyConnection: vi.fn(async () => ({ configured: true, connected: true, healthy: true, company: { realmId: "9130354812345678", companyName: "Empyrean Studios" } })),
+  disconnect: vi.fn(async () => ({ success: true, providerRevoked: false })),
+}));
 const storageAdapter = vi.hoisted(() => ({
   upsertOauthToken: vi.fn(),
   deleteOauthToken: vi.fn(),
@@ -44,6 +53,7 @@ const eosAccess = vi.hoisted(() => ({
 
 vi.mock("../../server/integrations/notion", () => notionAdapter);
 vi.mock("../../server/integrations/gmail", () => gmailAdapter);
+vi.mock("../../server/integrations/quickbooks", () => quickbooksAdapter);
 vi.mock("../../server/integrations/stripe-health", () => stripeHealthAdapter);
 vi.mock("../../server/storage", () => ({ storage: storageAdapter }));
 vi.mock("../../server/db", () => ({ db: dbAdapter }));
@@ -65,6 +75,7 @@ describe("Notion integration HTTP controls", () => {
   beforeEach(() => {
     for (const mock of Object.values(notionAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
     for (const mock of Object.values(gmailAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
+    for (const mock of Object.values(quickbooksAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
     storageAdapter.upsertOauthToken.mockReset();
     stripeHealthAdapter.verifyStripeConnection.mockClear();
     dbAdapter.bindings = [];
@@ -116,6 +127,25 @@ describe("Notion integration HTTP controls", () => {
       grantedScopes: ["https://www.googleapis.com/auth/gmail.send"],
     }));
     expect(gmailAdapter.verifyConnection).toHaveBeenCalledWith(userId);
+  });
+
+  it("starts a QuickBooks authorization bound to the selected company", async () => {
+    const response = await api.get("/api/eos/companies/12/integrations/quickbooks/auth").expect(200);
+    expect(response.body.authUrl).toContain("appcenter.intuit.com");
+    expect(quickbooksAdapter.getAuthUrl).toHaveBeenCalledWith(userId, "/company/12#systems");
+  });
+
+  it("stores encrypted QuickBooks OAuth credentials and the selected accounting company realm", async () => {
+    process.env.EOS_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 17).toString("base64");
+    quickbooksAdapter.readOAuthState.mockReturnValue({ userId, expiresAt: Date.now() + 60_000, nonce: "nonce", returnTo: "/company/12#systems" });
+    quickbooksAdapter.exchangeCode.mockResolvedValue({ accessToken: "quickbooks-access-plaintext", refreshToken: "quickbooks-refresh-plaintext", tokenType: "Bearer", expiresAt: new Date("2026-10-01T00:00:00.000Z"), metadata: { realmId: "9130354812345678", environment: "production" } });
+    const response = await api.get("/api/auth/quickbooks/callback?code=provider-code&realmId=9130354812345678&state=signed-state").expect(302);
+    expect(response.headers.location).toBe("/company/12?quickbooks=authorized#systems");
+    expect(storageAdapter.upsertOauthToken).toHaveBeenCalledWith(expect.objectContaining({ userId, provider: "quickbooks", metadata: { realmId: "9130354812345678", environment: "production" } }));
+    const stored = storageAdapter.upsertOauthToken.mock.calls[0][0];
+    expect(stored.accessToken).toMatch(/^enc:v1:/); expect(stored.refreshToken).toMatch(/^enc:v1:/);
+    expect(JSON.stringify(stored)).not.toContain("quickbooks-access-plaintext");
+    delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
   });
 
   it("verifies a company-managed Stripe connection without exposing credentials", async () => {

@@ -190,11 +190,32 @@ export const notionPageReadSnapshotRequestSchema = z.object({
   maxBlocks: z.coerce.number().int().min(1).max(500).default(200),
 }).strict();
 
+export const quickbooksCompanyVerifyRequestSchema = z.object({}).strict();
+export const quickbooksOpenInvoicesRequestSchema = z.object({
+  maxResults: z.coerce.number().int().min(1).max(100).default(25),
+}).strict();
+export const quickbooksCreateInvoiceRequestSchema = z.object({
+  customerId: bounded(1, 100),
+  lineItems: z.array(z.object({
+    itemId: bounded(1, 100),
+    amount: z.coerce.number().positive().max(10_000_000),
+    description: z.string().trim().max(4_000).optional(),
+    quantity: z.coerce.number().positive().max(1_000_000).optional(),
+    unitPrice: z.coerce.number().positive().max(10_000_000).optional(),
+  }).strict()).min(1).max(100),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Due date must be YYYY-MM-DD.").optional(),
+  docNumber: z.string().trim().min(1).max(21).optional(),
+  privateNote: z.string().trim().max(4_000).optional(),
+}).strict();
+
 export const executableAdapterOperations = [
   "gmail.send",
   "notion.workspace.verify",
   "notion.workspace.search",
   "notion.page.read_snapshot",
+  "quickbooks.company.verify",
+  "quickbooks.invoice.list_open",
+  "quickbooks.invoice.create",
 ] as const;
 
 export function providerExecutionEnabled(env: Record<string, string | undefined> = process.env) {

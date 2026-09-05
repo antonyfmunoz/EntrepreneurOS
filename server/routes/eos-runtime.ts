@@ -11,6 +11,7 @@ import {
 } from "../ai/cost-control";
 import * as gmail from "../integrations/gmail";
 import * as notion from "../integrations/notion";
+import * as quickbooks from "../integrations/quickbooks";
 import { verifyStripeConnection } from "../integrations/stripe-health";
 import {
   executeRecoveryCommercialEffect,
@@ -19953,6 +19954,30 @@ export function registerEosRuntimeRoutes(app: Express): void {
               ? "degraded"
               : "unavailable";
           externalReference = "provider:notion:server_verified";
+        } else if (provider === "quickbooks") {
+          const companyConnection = await db.query.eosProviderConnections.findFirst({
+            where: and(
+              eq(eosProviderConnections.companyId, access.company.id),
+              eq(eosProviderConnections.providerKey, "quickbooks"),
+              eq(eosProviderConnections.providerAccountReference, binding.providerAccountReference),
+              eq(eosProviderConnections.connectionState, "connected"),
+            ),
+          });
+          if (!companyConnection)
+            throw new EosRouteError(
+              409,
+              "quickbooks_company_connection_required",
+              "Attach the selected QuickBooks Online company to this EOS company before recording provider-backed health.",
+            );
+          const checked = await quickbooks.verifyConnection(companyConnection.authorizationUserId);
+          if (checked.company?.realmId && checked.company.realmId !== companyConnection.providerAccountReference)
+            throw new EosRouteError(
+              409,
+              "quickbooks_company_connection_account_mismatch",
+              "The verified QuickBooks Online company does not match the company attached to this integration binding.",
+            );
+          observedHealthState = checked.healthy ? "healthy" : checked.connected ? "degraded" : "unavailable";
+          externalReference = "provider:quickbooks:server_verified";
         } else if (provider === "stripe") {
           const checked = await verifyStripeConnection(binding);
           observedHealthState = checked.healthy
@@ -20581,9 +20606,10 @@ export function registerEosRuntimeRoutes(app: Express): void {
         purpose: "administer_systems_registry",
         classification: "confidential",
       });
-      const [googleSetupAuthorization, notionSetupAuthorization, companyBindings, providerConnections] = await Promise.all([
+      const [googleSetupAuthorization, notionSetupAuthorization, quickbooksSetupAuthorization, companyBindings, providerConnections] = await Promise.all([
         gmail.connectionSummary(req.user.id),
         notion.connectionSummary(req.user.id),
+        quickbooks.connectionSummary(req.user.id),
         db.select().from(eosIntegrationBindings).where(eq(eosIntegrationBindings.companyId, access.company.id)),
         db.select().from(eosProviderConnections).where(eq(eosProviderConnections.companyId, access.company.id)),
       ]);
@@ -20592,6 +20618,9 @@ export function registerEosRuntimeRoutes(app: Express): void {
       ) || null;
       const notionCompanyConnection = providerConnections.find((connection) =>
         connection.providerKey === "notion" && connection.connectionState === "connected" && connection.healthState === "healthy",
+      ) || null;
+      const quickbooksCompanyConnection = providerConnections.find((connection) =>
+        connection.providerKey === "quickbooks" && connection.connectionState === "connected" && connection.healthState === "healthy",
       ) || null;
       const stripeBinding = companyBindings.find((item) => item.providerKey === "stripe" && item.lifecycleState === "active")
         || companyBindings.find((item) => item.providerKey === "stripe")
@@ -20777,29 +20806,37 @@ export function registerEosRuntimeRoutes(app: Express): void {
             name: "QuickBooks Online",
             description:
               "Authoritative accounting ledger, invoicing, reconciliation, and financial reporting.",
-            state: "not_configured",
-            health: "not_connected",
-            configured: false,
-            connected: false,
-            providerType: "oauth",
-            authority: "external_accounting_provider",
+            state: quickbooksCompanyConnection ? "connected" : quickbooksSetupAuthorization.configured ? "available" : "not_configured",
+            health: quickbooksCompanyConnection ? "healthy" : "not_connected",
+            configured: quickbooksSetupAuthorization.configured,
+            connected: Boolean(quickbooksCompanyConnection),
+            authorizationAvailable: quickbooksSetupAuthorization.connected,
+            providerType: "company_managed_accounting",
+            authority: "provider_execution_after_local_approval",
             risk: "consequential_write",
             services: ["Accounting ledger", "Invoicing", "Reconciliation"],
             serviceHealth: {
-              "Accounting ledger": false,
-              Invoicing: false,
-              Reconciliation: false,
+              "Accounting ledger": Boolean(quickbooksCompanyConnection),
+              Invoicing: Boolean(quickbooksCompanyConnection),
+              Reconciliation: Boolean(quickbooksCompanyConnection),
             },
-            operations: [],
+            operations: quickbooksCompanyConnection ? quickbooks.QUICKBOOKS_TOOLS : [],
             requiredScopes: [
-              "QuickBooks company-file OAuth",
-              "Read ledger and invoice data",
-              "Read reconciliation and period-close state",
+              "com.intuit.quickbooks.accounting",
             ],
-            executionAdapter: "EOS QuickBooks adapter not configured",
+            grantedScopes: quickbooksCompanyConnection?.grantedPermissions || [],
+            accountReference: quickbooksCompanyConnection?.providerAccountReference || null,
+            connectionScope: "This is a company accounting connection. Finance roles receive only the explicitly entitled capabilities, while the OAuth custodian remains a credential custodian rather than the business owner.",
+            executionAdapter: "EOS-owned QuickBooks Online OAuth adapter",
             manualFallback:
               "Operate the governed EOS work packet and reconcile accounting facts manually in QuickBooks.",
-            actions: [],
+            actions: quickbooksCompanyConnection
+              ? ["verify", ...(quickbooksSetupAuthorization.connected ? ["reconnect"] : [])]
+              : quickbooksSetupAuthorization.connected
+                ? ["reconnect"]
+                : quickbooksSetupAuthorization.configured
+                  ? ["connect"]
+                  : [],
           },
           {
             id: "slack",

@@ -17,6 +17,12 @@ const clients = {
     searchWorkspace: vi.fn(async () => [{ id: "page-1", object: "page", title: "Operating Brief", url: "https://notion.so/page-1", lastEditedTime: "2026-08-25T00:00:00.000Z" }]),
     readPageSnapshot: vi.fn(async () => ({ pageId: "11111111-1111-1111-1111-111111111111", url: "https://notion.so/page", title: "Operating Brief", lastEditedTime: "2026-08-25T00:00:00.000Z", boundedText: "Canonical bounded text", truncated: false })),
   },
+  quickbooks: {
+    connectionSummary: vi.fn(async () => ({ configured: true, connected: true, company: { realmId: "9130354812345678", companyName: "Empyrean Studios" } })),
+    verifyConnection: vi.fn(async () => ({ configured: true, connected: true, healthy: true, company: { realmId: "9130354812345678", companyName: "Empyrean Studios" } })),
+    listOpenInvoices: vi.fn(async () => ({ company: { realmId: "9130354812345678", companyName: "Empyrean Studios" }, invoices: [{ id: "invoice-1", docNumber: "1001", balance: 1500, totalAmount: 1500, dueDate: "2026-09-15", txnDate: "2026-09-01", customer: { value: "customer-1" } }] })),
+    createInvoice: vi.fn(async () => ({ company: { realmId: "9130354812345678", companyName: "Empyrean Studios" }, invoice: { id: "invoice-2", docNumber: "1002", totalAmount: 2500, balance: 2500, txnDate: "2026-09-04", dueDate: "2026-09-18", customer: { value: "customer-1" } } })),
+  },
 };
 
 describe("allowlisted adapter dispatch", () => {
@@ -32,6 +38,14 @@ describe("allowlisted adapter dispatch", () => {
     const page = await dispatchAllowlistedAdapterOperation({ userId: "founder", providerKey: "notion", operation: "notion.page.read_snapshot", requestShape: { pageId: "11111111-1111-1111-1111-111111111111", maxBlocks: 100 } }, clients);
     expect(page.responseShape).toHaveProperty("boundedTextSha256");
     expect(JSON.stringify(page.responseShape)).not.toContain("Canonical bounded text");
+  });
+
+  it("reads an accounting-company invoice projection and creates an approved invoice through the company custodian", async () => {
+    const open = await dispatchAllowlistedAdapterOperation({ userId: "finance-owner", providerKey: "quickbooks", operation: "quickbooks.invoice.list_open", requestShape: { maxResults: 10 } }, clients);
+    expect(open).toMatchObject({ authority: "provider_receipt", responseShape: { realmId: "9130354812345678", invoiceCount: 1 } });
+    const created = await dispatchAllowlistedAdapterOperation({ userId: "finance-owner", providerKey: "quickbooks", operation: "quickbooks.invoice.create", requestShape: { customerId: "customer-1", lineItems: [{ itemId: "service-1", amount: 2500, description: "Approved recovery service" }], dueDate: "2026-09-18" } }, clients);
+    expect(created).toMatchObject({ externalReference: "quickbooks:invoice:invoice-2", responseShape: { invoice: { id: "invoice-2" } } });
+    expect(clients.quickbooks.createInvoice).toHaveBeenCalledWith("finance-owner", expect.objectContaining({ customerId: "customer-1" }));
   });
 
   it("rejects undeclared operation namespaces and provider mismatches", async () => {
