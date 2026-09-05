@@ -27,6 +27,12 @@ NOTION_REDIRECT_URI=https://entrepreneuros.net/api/auth/notion/callback
 # SLACK_CLIENT_ID=op://EntrepreneurOS/Production/SLACK_CLIENT_ID
 # SLACK_CLIENT_SECRET=op://EntrepreneurOS/Production/SLACK_CLIENT_SECRET
 # SLACK_REDIRECT_URI=https://entrepreneuros.net/api/auth/slack/callback
+# Optional company-owned GoHighLevel OAuth. The HighLevel private app must
+# register this exact callback and grant only the contact/pipeline scopes EOS uses.
+# GOHIGHLEVEL_CLIENT_ID=op://EntrepreneurOS/Production/GOHIGHLEVEL_CLIENT_ID
+# GOHIGHLEVEL_CLIENT_SECRET=op://EntrepreneurOS/Production/GOHIGHLEVEL_CLIENT_SECRET
+# GOHIGHLEVEL_INSTALLATION_URL=op://EntrepreneurOS/Production/GOHIGHLEVEL_INSTALLATION_URL
+# GOHIGHLEVEL_REDIRECT_URI=https://entrepreneuros.net/api/auth/gohighlevel/callback
 EOS_PUBLIC_ORIGIN=https://entrepreneuros.net
 EOS_PRODUCTION_ENVIRONMENT_SUBJECT=environment:entrepreneuros-production
 EOS_PRODUCTION_RELEASE_BRANCH=feature/company-system
