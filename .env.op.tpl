@@ -36,6 +36,12 @@ NOTION_REDIRECT_URI=https://entrepreneuros.net/api/auth/notion/callback
 # SLACK_CLIENT_ID=op://EntrepreneurOS/Development/SLACK_CLIENT_ID
 # SLACK_CLIENT_SECRET=op://EntrepreneurOS/Development/SLACK_CLIENT_SECRET
 # SLACK_REDIRECT_URI=https://entrepreneuros.net/api/auth/slack/callback
+# Optional company-owned GoHighLevel OAuth. Configure a private Marketplace app
+# for the exact company sub-account/location and use its generated install URL.
+# GOHIGHLEVEL_CLIENT_ID=op://EntrepreneurOS/Development/GOHIGHLEVEL_CLIENT_ID
+# GOHIGHLEVEL_CLIENT_SECRET=op://EntrepreneurOS/Development/GOHIGHLEVEL_CLIENT_SECRET
+# GOHIGHLEVEL_INSTALLATION_URL=https://marketplace.gohighlevel.com/oauth/chooselocation?...
+# GOHIGHLEVEL_REDIRECT_URI=https://localhost:5000/api/auth/gohighlevel/callback
 # Projection-owned UMH federation. Leave UMH_FEDERATION_ENABLED false until a
 # local installation row and the corresponding UMH public signing key exist.
 UMH_FEDERATION_ENABLED=false
@@ -61,7 +67,8 @@ EOS_EVENT_PRIVATE_KEY_PEM=
 # counsel authority, exact accounts, callbacks, and recovery drills are qualified.
 EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED=false
 # Generic Systems control-center dispatch remains separately kill-switched.
-# When enabled, EOS executes only the audited Gmail, Notion, and QuickBooks
+# When enabled, EOS executes only audited Gmail, Notion, QuickBooks, and
+# GoHighLevel operations attached to an entitled company provider binding.
 # allowlists and requires each operator's encrypted OAuth authorization.
 EOS_INTEGRATION_PROVIDER_EFFECTS_ENABLED=false
 EOS_PROVIDER_INGRESS_WORKER_INTERVAL_MS=60000

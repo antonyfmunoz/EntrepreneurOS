@@ -13,6 +13,7 @@ import * as gmail from "../integrations/gmail";
 import * as notion from "../integrations/notion";
 import * as quickbooks from "../integrations/quickbooks";
 import * as slack from "../integrations/slack";
+import * as gohighlevel from "../integrations/gohighlevel";
 import { verifyStripeConnection } from "../integrations/stripe-health";
 import {
   executeRecoveryCommercialEffect,
@@ -19995,6 +19996,15 @@ export function registerEosRuntimeRoutes(app: Express): void {
             throw new EosRouteError(409, "slack_company_connection_account_mismatch", "The verified Slack workspace does not match the workspace attached to this integration binding.");
           observedHealthState = checked.healthy ? "healthy" : checked.connected ? "degraded" : "unavailable";
           externalReference = "provider:slack:server_verified";
+        } else if (provider === "gohighlevel") {
+          const companyConnection = await db.query.eosProviderConnections.findFirst({
+            where: and(eq(eosProviderConnections.companyId, access.company.id), eq(eosProviderConnections.providerKey, "gohighlevel"), eq(eosProviderConnections.providerAccountReference, binding.providerAccountReference), eq(eosProviderConnections.connectionState, "connected")),
+          });
+          if (!companyConnection) throw new EosRouteError(409, "gohighlevel_company_connection_required", "Attach the selected GoHighLevel location to this EOS company before recording provider-backed health.");
+          const checked = await gohighlevel.verifyConnection(companyConnection.authorizationUserId);
+          if (checked.location?.locationId && checked.location.locationId !== companyConnection.providerAccountReference) throw new EosRouteError(409, "gohighlevel_company_connection_account_mismatch", "The verified GoHighLevel location does not match the location attached to this company integration binding.");
+          observedHealthState = checked.healthy ? "healthy" : checked.connected ? "degraded" : "unavailable";
+          externalReference = "provider:gohighlevel:server_verified";
         } else if (provider === "stripe") {
           const checked = await verifyStripeConnection(binding);
           observedHealthState = checked.healthy
@@ -20623,11 +20633,12 @@ export function registerEosRuntimeRoutes(app: Express): void {
         purpose: "administer_systems_registry",
         classification: "confidential",
       });
-      const [googleSetupAuthorization, notionSetupAuthorization, quickbooksSetupAuthorization, slackSetupAuthorization, companyBindings, providerConnections] = await Promise.all([
+      const [googleSetupAuthorization, notionSetupAuthorization, quickbooksSetupAuthorization, slackSetupAuthorization, gohighlevelSetupAuthorization, companyBindings, providerConnections] = await Promise.all([
         gmail.connectionSummary(req.user.id),
         notion.connectionSummary(req.user.id),
         quickbooks.connectionSummary(req.user.id),
         slack.connectionSummary(req.user.id),
+        gohighlevel.connectionSummary(req.user.id),
         db.select().from(eosIntegrationBindings).where(eq(eosIntegrationBindings.companyId, access.company.id)),
         db.select().from(eosProviderConnections).where(eq(eosProviderConnections.companyId, access.company.id)),
       ]);
@@ -20642,6 +20653,9 @@ export function registerEosRuntimeRoutes(app: Express): void {
       ) || null;
       const slackCompanyConnection = providerConnections.find((connection) =>
         connection.providerKey === "slack" && connection.connectionState === "connected" && connection.healthState === "healthy",
+      ) || null;
+      const gohighlevelCompanyConnection = providerConnections.find((connection) =>
+        connection.providerKey === "gohighlevel" && connection.connectionState === "connected" && connection.healthState === "healthy",
       ) || null;
       const stripeBinding = companyBindings.find((item) => item.providerKey === "stripe" && item.lifecycleState === "active")
         || companyBindings.find((item) => item.providerKey === "stripe")
@@ -20768,30 +20782,28 @@ export function registerEosRuntimeRoutes(app: Express): void {
             name: "GoHighLevel",
             description:
               "CRM, forms, calendars, and workflow automation for the Empyrean Studios pipeline.",
-            state: "not_configured",
-            health: "not_connected",
-            configured: false,
-            connected: false,
-            providerType: "oauth",
-            authority: "external_crm_provider",
+            state: gohighlevelCompanyConnection ? "connected" : gohighlevelSetupAuthorization.configured ? "available" : "not_configured",
+            health: gohighlevelCompanyConnection ? "healthy" : "not_connected",
+            configured: gohighlevelSetupAuthorization.configured,
+            connected: Boolean(gohighlevelCompanyConnection),
+            authorizationAvailable: gohighlevelSetupAuthorization.connected,
+            providerType: "company_managed_crm",
+            authority: "provider_execution_after_local_approval",
             risk: "consequential_write",
-            services: ["CRM", "Forms", "Calendar", "Workflow"],
+            services: ["CRM contacts", "Revenue pipeline"],
             serviceHealth: {
-              CRM: false,
-              Forms: false,
-              Calendar: false,
-              Workflow: false,
+              "CRM contacts": Boolean(gohighlevelCompanyConnection),
+              "Revenue pipeline": Boolean(gohighlevelCompanyConnection),
             },
-            operations: [],
-            requiredScopes: [
-              "Exact GoHighLevel location OAuth",
-              "Pipeline and contact access",
-              "Calendar and workflow access",
-            ],
-            executionAdapter: "EOS GoHighLevel adapter not configured",
+            operations: gohighlevelCompanyConnection ? gohighlevel.GOHIGHLEVEL_TOOLS : [],
+            requiredScopes: gohighlevel.GOHIGHLEVEL_REQUIRED_SCOPES,
+            grantedScopes: gohighlevelCompanyConnection?.grantedPermissions || [],
+            accountReference: gohighlevelCompanyConnection?.providerAccountReference || null,
+            connectionScope: "This is a company CRM location connection. Revenue roles receive only explicitly entitled capabilities, while the OAuth custodian remains a credential custodian rather than the business owner.",
+            executionAdapter: "EOS-owned GoHighLevel location OAuth adapter",
             manualFallback:
               "Operate the governed EOS work packet and update the authorized GoHighLevel location manually.",
-            actions: [],
+            actions: gohighlevelCompanyConnection ? ["verify", ...(gohighlevelSetupAuthorization.connected ? ["reconnect"] : [])] : gohighlevelSetupAuthorization.connected ? ["reconnect"] : gohighlevelSetupAuthorization.configured ? ["connect"] : [],
           },
           {
             id: "docusign",
