@@ -22,6 +22,11 @@ NOTION_REDIRECT_URI=https://entrepreneuros.net/api/auth/notion/callback
 # QUICKBOOKS_CLIENT_SECRET=op://EntrepreneurOS/Production/QUICKBOOKS_CLIENT_SECRET
 # QUICKBOOKS_REDIRECT_URI=https://entrepreneuros.net/api/auth/quickbooks/callback
 # QUICKBOOKS_ENVIRONMENT=production
+# Slack is optional until the company workspace is ready to connect. The OAuth
+# app must register the exact callback before these vault references are added.
+# SLACK_CLIENT_ID=op://EntrepreneurOS/Production/SLACK_CLIENT_ID
+# SLACK_CLIENT_SECRET=op://EntrepreneurOS/Production/SLACK_CLIENT_SECRET
+# SLACK_REDIRECT_URI=https://entrepreneuros.net/api/auth/slack/callback
 EOS_PUBLIC_ORIGIN=https://entrepreneuros.net
 EOS_PRODUCTION_ENVIRONMENT_SUBJECT=environment:entrepreneuros-production
 EOS_PRODUCTION_RELEASE_BRANCH=feature/company-system

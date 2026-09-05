@@ -118,6 +118,7 @@ async function requireOperatorProviderEntitlement(input: {
   binding: typeof eosIntegrationBindings.$inferSelect;
   access: Access;
   operation: string;
+  requestShape: unknown;
 }) {
   const now = new Date();
   const entitlements = await db.select().from(eosToolEntitlements).where(and(
@@ -126,13 +127,19 @@ async function requireOperatorProviderEntitlement(input: {
     eq(eosToolEntitlements.granteeSeatId, input.access.seat.id),
     eq(eosToolEntitlements.state, "active"),
   ));
+  // Slack channel delivery is narrower than workspace ownership. The workspace
+  // credential is company-owned, while every send grant is bound to one
+  // canonical channel ID. Read-only workspace discovery remains workspace-scoped.
+  const requestedResource = input.operation === "slack.message.send"
+    ? `${input.binding.providerAccountReference}:channel:${(input.requestShape as { channelId: string }).channelId}`
+    : input.binding.providerAccountReference;
   const entitlement = entitlements.find((item) =>
-    item.providerResourceReference === input.binding.providerAccountReference &&
+    item.providerResourceReference === requestedResource &&
     Array.isArray(item.nativePermissions) && item.nativePermissions.includes(input.operation) &&
     item.effectiveFrom <= now && (!item.effectiveUntil || item.effectiveUntil > now),
   );
   if (!entitlement) {
-    throw new EosRouteError(403, "provider_capability_not_entitled", "This seat does not hold an active entitlement for this company provider capability. Assign and activate the required role entitlement before requesting the external action.");
+    throw new EosRouteError(403, "provider_capability_not_entitled", "This seat does not hold an active entitlement for this company provider capability and exact provider resource. Assign and activate the required role entitlement before requesting the external action.");
   }
   return entitlement;
 }
@@ -410,7 +417,7 @@ export function registerIntegrationOperationsRoutes(app: Express): void {
     if (!adapterOperationIsExecutable(run.operation) || !providerMatchesOperation(binding.providerKey, run.operation)) throw new EosRouteError(409, "integration_dispatch_unsupported", "This binding and operation do not map to an audited native dispatcher.");
     try { validateAdapterOperationRequest(run.operation, run.requestShape); } catch (error) { throw new EosRouteError(409, "integration_dispatch_request_invalid", error instanceof Error ? error.message : "The adapter request is invalid."); }
     if (binding.lifecycleState !== "active" || binding.connectionState !== "connected") throw new EosRouteError(409, "integration_binding_not_execution_ready", "Provider execution requires an active, connected integration binding.");
-    const operatorEntitlement = await requireOperatorProviderEntitlement({ companyId, binding, access: initial, operation: run.operation });
+    const operatorEntitlement = await requireOperatorProviderEntitlement({ companyId, binding, access: initial, operation: run.operation, requestShape: run.requestShape });
     const companyConnection = await requireCurrentOperatorCompanyConnection({ companyId, providerKey: binding.providerKey, providerAccountReference: binding.providerAccountReference });
     const manifest = await db.query.eosAdapterCapabilityManifests.findFirst({ where: eq(eosAdapterCapabilityManifests.id, run.manifestId) });
     if (!manifest || manifest.bindingConfigurationVersion !== binding.configurationVersion) throw new EosRouteError(409, "integration_dispatch_manifest_stale", "The run no longer references the current frozen binding configuration.");

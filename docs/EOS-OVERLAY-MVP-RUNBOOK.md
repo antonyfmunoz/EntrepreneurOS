@@ -182,6 +182,24 @@ Intuit callback before enabling it. Disconnecting removes the encrypted EOS
 credential; an Intuit revocation endpoint is not assumed where none is called,
 so EOS truthfully reports `providerRevoked: false`.
 
+Optional Slack OAuth:
+
+- `SLACK_CLIENT_ID`
+- `SLACK_CLIENT_SECRET`
+- `SLACK_REDIRECT_URI`
+
+Slack is a company-owned communications capability, not a personal plug-in.
+The OAuth installer is the workspace credential custodian, while EOS controls
+actual use by company role, approval, audit, and active seat entitlement. The
+initial adapter requests only `chat:write`, `channels:read`, and `groups:read`;
+it can verify the workspace, list bounded channel metadata, and send an
+approved message. A Slack send entitlement must name the exact provider
+resource as `<workspace-team-id>:channel:<channel-id>`—a workspace-level grant
+does not authorize messages to every channel. Register
+`https://entrepreneuros.net/api/auth/slack/callback` in the Slack app before
+enabling this optional provider. EOS keeps canonical decisions in Notion; Slack
+is the internal communication and decision-link projection.
+
 Optional intelligence and product analytics:
 
 - `ANTHROPIC_API_KEY`

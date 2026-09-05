@@ -31,6 +31,11 @@ NOTION_REDIRECT_URI=https://entrepreneuros.net/api/auth/notion/callback
 # QUICKBOOKS_CLIENT_SECRET=op://EntrepreneurOS/Development/QUICKBOOKS_CLIENT_SECRET
 # QUICKBOOKS_REDIRECT_URI=https://entrepreneuros.net/api/auth/quickbooks/callback
 # QUICKBOOKS_ENVIRONMENT=sandbox
+# Slack is optional until the company workspace is ready to connect. The OAuth
+# app must register the exact callback before these vault references are added.
+# SLACK_CLIENT_ID=op://EntrepreneurOS/Development/SLACK_CLIENT_ID
+# SLACK_CLIENT_SECRET=op://EntrepreneurOS/Development/SLACK_CLIENT_SECRET
+# SLACK_REDIRECT_URI=https://entrepreneuros.net/api/auth/slack/callback
 # Projection-owned UMH federation. Leave UMH_FEDERATION_ENABLED false until a
 # local installation row and the corresponding UMH public signing key exist.
 UMH_FEDERATION_ENABLED=false
