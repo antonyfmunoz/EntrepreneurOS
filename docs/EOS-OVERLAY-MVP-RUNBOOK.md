@@ -164,6 +164,24 @@ deployment API token must not be used for tenant workspace access.
 
 Disconnecting Notion uses the public integration revocation endpoint before removing the encrypted EOS credential and returns the same truthful `providerRevoked` outcome. An already-invalid grant is treated as revoked so reconnect/disconnect remains idempotent.
 
+Optional QuickBooks Online OAuth:
+
+- `QUICKBOOKS_CLIENT_ID`
+- `QUICKBOOKS_CLIENT_SECRET`
+- `QUICKBOOKS_REDIRECT_URI`
+- `QUICKBOOKS_ENVIRONMENT` (`production` or `sandbox`)
+
+QuickBooks is a company-owned finance capability, not a per-seat plug-in. The
+human who grants OAuth is the credential custodian; EOS must attach the
+verified QuickBooks realm to exactly one company, require a matching entitled
+finance operator and approval before an external effect, and retain the
+provider receipt. The current approved adapter surface is limited to company
+verification, bounded open-invoice reads, and creating an invoice. Register
+`https://entrepreneuros.net/api/auth/quickbooks/callback` as the production
+Intuit callback before enabling it. Disconnecting removes the encrypted EOS
+credential; an Intuit revocation endpoint is not assumed where none is called,
+so EOS truthfully reports `providerRevoked: false`.
+
 Optional intelligence and product analytics:
 
 - `ANTHROPIC_API_KEY`

@@ -7,14 +7,15 @@ import { storage } from "../storage";
 import { db } from "../db";
 import * as gmail from "../integrations/gmail";
 import * as notion from "../integrations/notion";
+import * as quickbooks from "../integrations/quickbooks";
 import { verifyStripeConnection } from "../integrations/stripe-health";
 import { credentialEncryptionConfigured, encryptCredential } from "../security/credential-encryption";
 import { allowedSurfacesFor } from "@shared/eos-runtime";
 import { authorizeAction, companyAccess, EosRouteError, visibleSeatIds } from "./eos-runtime";
 
-type SupportedProvider = "gmail" | "notion" | "stripe";
+type SupportedProvider = "gmail" | "notion" | "quickbooks" | "stripe";
 type OAuthProvider = Exclude<SupportedProvider, "stripe">;
-type CompanyProviderKey = "google_workspace" | "notion";
+type CompanyProviderKey = "google_workspace" | "notion" | "quickbooks";
 
 const attachConnectionSchema = z.object({
   ownerSeatId: z.string().uuid().optional(),
@@ -22,7 +23,7 @@ const attachConnectionSchema = z.object({
 }).strict();
 
 function providerFrom(req: Request): SupportedProvider {
-  if (["gmail", "notion", "stripe"].includes(req.params.provider)) return req.params.provider as SupportedProvider;
+  if (["gmail", "notion", "quickbooks", "stripe"].includes(req.params.provider)) return req.params.provider as SupportedProvider;
   throw new EosRouteError(404, "integration_provider_not_found", "This provider is not available in the EOS integration registry.");
 }
 
@@ -60,11 +61,11 @@ function oauthProvider(provider: SupportedProvider): OAuthProvider {
 }
 
 function companyProviderKey(provider: OAuthProvider): CompanyProviderKey {
-  return provider === "gmail" ? "google_workspace" : "notion";
+  return provider === "gmail" ? "google_workspace" : provider;
 }
 
 function providerLabel(provider: SupportedProvider): string {
-  return provider === "gmail" ? "Google Workspace" : provider === "notion" ? "Notion" : "Stripe";
+  return provider === "gmail" ? "Google Workspace" : provider === "notion" ? "Notion" : provider === "quickbooks" ? "QuickBooks Online" : "Stripe";
 }
 
 async function integrationAccess(req: Request, authorityClass: "view" | "execute" | "decide", actionKey: string) {
@@ -104,6 +105,21 @@ async function providerIdentity(provider: OAuthProvider, userId: string): Promis
         : "",
       grantedPermissions: result.grantedScopes,
       providerMetadata: result.accountEmail ? { accountEmail: result.accountEmail, services: result.services } : { services: result.services },
+    };
+  }
+
+  if (provider === "quickbooks") {
+    const result = await quickbooks.verifyConnection(userId);
+    const company = result.company;
+    return {
+      connected: result.connected,
+      healthy: result.healthy,
+      accountReference: company?.realmId || null,
+      accountScope: company?.companyName
+        ? `QuickBooks Online company: ${company.companyName}; accounting records remain governed by company finance roles and approvals.`
+        : "",
+      grantedPermissions: ["com.intuit.quickbooks.accounting"],
+      providerMetadata: company ? { realmId: company.realmId || null, companyName: company.companyName || null, legalName: company.legalName || null, environment: company.environment || null } : {},
     };
   }
 
@@ -168,10 +184,10 @@ export function registerIntegrationRoutes(app: Express): void {
     try {
       await integrationAccess(req, "execute", "integration_provider_authorization.request");
       const provider = oauthProvider(providerFrom(req));
-      const adapter = provider === "gmail" ? gmail : notion;
+      const adapter = provider === "gmail" ? gmail : provider === "notion" ? notion : quickbooks;
       if (!adapter.isConfigured()) return res.status(400).json({ code: "integration_provider_not_configured", message: `${providerLabel(provider)} OAuth or EOS credential encryption is not configured.` });
       const returnTo = `/company/${encodeURIComponent(req.params.companyId)}#systems`;
-      return res.json({ authUrl: adapter.getAuthUrl(req.user.id, returnTo) });
+      return res.json({ authUrl: await adapter.getAuthUrl(req.user.id, returnTo) });
     } catch (error) { return providerError(res, error); }
   });
 
@@ -183,7 +199,7 @@ export function registerIntegrationRoutes(app: Express): void {
         return res.json(await stripeConnectionStatus(Number(req.params.companyId)));
       }
       const provider = oauthProvider(requestedProvider);
-      const adapter = provider === "gmail" ? gmail : notion;
+      const adapter = provider === "gmail" ? gmail : provider === "notion" ? notion : quickbooks;
       return res.json(req.query.verify === "true" ? await adapter.verifyConnection(req.user.id) : await adapter.connectionSummary(req.user.id));
     } catch (error) { return providerError(res, error); }
   });
@@ -321,7 +337,7 @@ export function registerIntegrationRoutes(app: Express): void {
       if (otherConnections.some((connection) => connection.companyId !== access.company.id)) {
         throw new EosRouteError(409, "provider_authorization_shared_across_companies", "This provider authorization is still attached to another company. Revoke the company-specific connection there first; EOS will not break another tenant's provider access.");
       }
-      return res.json(provider === "gmail" ? await gmail.disconnect(req.user.id) : await notion.disconnect(req.user.id));
+      return res.json(provider === "gmail" ? await gmail.disconnect(req.user.id) : provider === "notion" ? await notion.disconnect(req.user.id) : await quickbooks.disconnect(req.user.id));
     } catch (error) { return providerError(res, error); }
   });
 
@@ -365,6 +381,29 @@ export function registerIntegrationRoutes(app: Express): void {
       res.redirect(redirectWith("notion", "authorized"));
     } catch (error: any) {
       console.error("Notion OAuth callback error:", error);
+      res.redirect("/portfolios?integration_error=oauth_callback_failed");
+    }
+  });
+
+  app.get("/api/auth/quickbooks/callback", async (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect("/portfolios?integration_error=not_authenticated");
+    try {
+      const code = typeof req.query.code === "string" ? req.query.code : "";
+      const state = typeof req.query.state === "string" ? req.query.state : "";
+      const realmId = typeof req.query.realmId === "string" ? req.query.realmId : "";
+      const oauthState = state ? await quickbooks.readOAuthState(state, req.user.id) : null;
+      if (!code || !realmId) return res.redirect("/portfolios?integration_error=no_code");
+      if (!oauthState) return res.redirect("/portfolios?integration_error=invalid_oauth_state");
+      const redirectWith = (key: string, value: string) => {
+        const [path, hash] = oauthState.returnTo.split("#");
+        return `${path}?${key}=${encodeURIComponent(value)}${hash ? `#${hash}` : ""}`;
+      };
+      if (!credentialEncryptionConfigured()) return res.redirect(redirectWith("integration_error", "credential_encryption_not_configured"));
+      const tokens = await quickbooks.exchangeCode(code, realmId);
+      await storage.upsertOauthToken({ userId: req.user.id, provider: "quickbooks", accessToken: encryptCredential(tokens.accessToken), refreshToken: tokens.refreshToken ? encryptCredential(tokens.refreshToken) : undefined, tokenType: tokens.tokenType, expiresAt: tokens.expiresAt, scope: "com.intuit.quickbooks.accounting", metadata: tokens.metadata });
+      res.redirect(redirectWith("quickbooks", "authorized"));
+    } catch (error: any) {
+      console.error("QuickBooks OAuth callback error:", error);
       res.redirect("/portfolios?integration_error=oauth_callback_failed");
     }
   });

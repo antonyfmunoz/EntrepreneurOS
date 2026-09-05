@@ -1028,6 +1028,14 @@ export default function EosOverlayPage() {
       (contextQuery.data?.principalContext?.allowedSurfaces || []).includes("systems"),
     ),
   });
+  const quickbooksProviderConnectionsQuery = useQuery<JsonRecord>({
+    queryKey: [root, roleScopeKey, "quickbooks-provider-connections"],
+    queryFn: () => requestJson("GET", `${root}/integrations/quickbooks/connections`),
+    enabled: Boolean(
+      companyId &&
+      (contextQuery.data?.principalContext?.allowedSurfaces || []).includes("systems"),
+    ),
+  });
   const systemsStateQuery = useQuery<JsonRecord>({
     queryKey: [root, roleScopeKey, "systems-state"],
     queryFn: () => requestJson("GET", `${root}/systems-state`),
@@ -2694,6 +2702,7 @@ export default function EosOverlayPage() {
         integrationsQuery.refetch(),
         googleProviderConnectionsQuery.refetch(),
         notionProviderConnectionsQuery.refetch(),
+        quickbooksProviderConnectionsQuery.refetch(),
       ]);
       const current = new URL(window.location.href);
       current.searchParams.delete(integration.id);
@@ -2729,6 +2738,7 @@ export default function EosOverlayPage() {
         integrationsQuery.refetch(),
         googleProviderConnectionsQuery.refetch(),
         notionProviderConnectionsQuery.refetch(),
+        quickbooksProviderConnectionsQuery.refetch(),
       ]);
       const integration = variables.integration;
       if (variables.connection?.id) {
@@ -2777,6 +2787,7 @@ export default function EosOverlayPage() {
         integrationsQuery.refetch(),
         googleProviderConnectionsQuery.refetch(),
         notionProviderConnectionsQuery.refetch(),
+        quickbooksProviderConnectionsQuery.refetch(),
       ]);
       const integration = variables.integration;
       toast({
@@ -2795,6 +2806,8 @@ export default function EosOverlayPage() {
       ? "google_workspace"
       : query.get("notion") === "authorized"
         ? "notion"
+        : query.get("quickbooks") === "authorized"
+          ? "quickbooks"
         : null;
     if (!providerId || attachIntegrationMutation.isPending) return;
     const integration = integrationsQuery.data?.find((item) => item.id === providerId);
@@ -12075,7 +12088,9 @@ export default function EosOverlayPage() {
                     ? googleProviderConnectionsQuery.data?.connections || []
                     : integration.id === "notion"
                       ? notionProviderConnectionsQuery.data?.connections || []
-                      : []
+                      : integration.id === "quickbooks"
+                        ? quickbooksProviderConnectionsQuery.data?.connections || []
+                        : []
                 }
                 pending={
                   connectIntegrationMutation.isPending ||
@@ -12556,6 +12571,7 @@ function IntegrationControlCard({
   );
   const activeCompanyConnection = activeConnections[0];
   const scopeLabels: Record<string, string> = {
+    "com.intuit.quickbooks.accounting": "Read accounting records and create approved invoices",
     "https://www.googleapis.com/auth/gmail.send": "Send approved email",
     "https://www.googleapis.com/auth/calendar.readonly": "Read calendars",
     "https://www.googleapis.com/auth/calendar.events":
@@ -12603,7 +12619,7 @@ function IntegrationControlCard({
           />
         </div>
 
-        {(integration.id === "google_workspace" || integration.id === "notion") && (
+        {(integration.id === "google_workspace" || integration.id === "notion" || integration.id === "quickbooks") && (
           <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
             <p className="eos-label">Company connection</p>
             {activeCompanyConnection ? (
@@ -12664,10 +12680,12 @@ function IntegrationControlCard({
         )}
         {integration.accountReference && (
           <div className="rounded-xl border border-border/70 p-4">
-            <p className="eos-label">Merchant account</p>
+            <p className="eos-label">{integration.id === "stripe" ? "Merchant account" : "Provider account"}</p>
             <p className="mt-1 break-all font-medium">{integration.accountReference}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              This reference identifies the company&apos;s selected payment account; its credentials stay in the deployment vault.
+              {integration.id === "stripe"
+                ? "This reference identifies the company’s selected payment account; its credentials stay in the deployment vault."
+                : "This reference identifies the company-managed provider account; its credentials remain encrypted and are never exposed to seats."}
             </p>
           </div>
         )}
@@ -12732,7 +12750,7 @@ function IntegrationControlCard({
                 : `Connect ${integration.name}`}
             </Button>
           )}
-          {integration.authorizationAvailable && !activeCompanyConnection && (integration.id === "google_workspace" || integration.id === "notion") && (
+          {integration.authorizationAvailable && !activeCompanyConnection && (integration.id === "google_workspace" || integration.id === "notion" || integration.id === "quickbooks") && (
             <Button onClick={onAttach} disabled={pending}>
               <Link2 className="mr-2 h-4 w-4" />
               Use in this company

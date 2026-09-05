@@ -16,6 +16,12 @@ GOOGLE_REDIRECT_URI=https://entrepreneuros.net/api/auth/google/callback
 NOTION_CLIENT_ID=op://EntrepreneurOS/Production/NOTION_CLIENT_ID
 NOTION_CLIENT_SECRET=op://EntrepreneurOS/Production/NOTION_CLIENT_SECRET
 NOTION_REDIRECT_URI=https://entrepreneuros.net/api/auth/notion/callback
+# Optional company-owned QuickBooks Online OAuth. Register this exact callback
+# in the Intuit app before adding these vault fields and enabling the connection.
+# QUICKBOOKS_CLIENT_ID=op://EntrepreneurOS/Production/QUICKBOOKS_CLIENT_ID
+# QUICKBOOKS_CLIENT_SECRET=op://EntrepreneurOS/Production/QUICKBOOKS_CLIENT_SECRET
+# QUICKBOOKS_REDIRECT_URI=https://entrepreneuros.net/api/auth/quickbooks/callback
+# QUICKBOOKS_ENVIRONMENT=production
 EOS_PUBLIC_ORIGIN=https://entrepreneuros.net
 EOS_PRODUCTION_ENVIRONMENT_SUBJECT=environment:entrepreneuros-production
 EOS_PRODUCTION_RELEASE_BRANCH=feature/company-system

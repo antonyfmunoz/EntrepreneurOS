@@ -5,9 +5,13 @@ import {
   notionPageReadSnapshotRequestSchema,
   notionWorkspaceSearchRequestSchema,
   notionWorkspaceVerifyRequestSchema,
+  quickbooksCompanyVerifyRequestSchema,
+  quickbooksCreateInvoiceRequestSchema,
+  quickbooksOpenInvoicesRequestSchema,
 } from "@shared/integration-operations";
 import * as gmail from "./gmail";
 import * as notion from "./notion";
+import * as quickbooks from "./quickbooks";
 
 export type AdapterDispatchResult = {
   authority: "provider_receipt";
@@ -19,9 +23,10 @@ export type AdapterDispatchResult = {
 export type AdapterDispatchClients = {
   gmail: Pick<typeof gmail, "isConnected" | "sendEmail">;
   notion: Pick<typeof notion, "connectionSummary" | "verifyConnection" | "searchWorkspace" | "readPageSnapshot">;
+  quickbooks: Pick<typeof quickbooks, "connectionSummary" | "verifyConnection" | "listOpenInvoices" | "createInvoice">;
 };
 
-const liveClients: AdapterDispatchClients = { gmail, notion };
+const liveClients: AdapterDispatchClients = { gmail, notion, quickbooks };
 const operations = new Set<string>(executableAdapterOperations);
 
 export class AdapterDispatchError extends Error {
@@ -40,6 +45,7 @@ export function providerMatchesOperation(providerKey: string, operation: string)
   const provider = providerKey.trim().toLowerCase().replaceAll("-", "_");
   if (operation.startsWith("gmail.")) return ["gmail", "google", "google_workspace"].includes(provider);
   if (operation.startsWith("notion.")) return provider === "notion";
+  if (operation.startsWith("quickbooks.")) return provider === "quickbooks";
   return false;
 }
 
@@ -48,6 +54,9 @@ export function validateAdapterOperationRequest(operation: string, requestShape:
   if (operation === "notion.workspace.verify") return notionWorkspaceVerifyRequestSchema.parse(requestShape);
   if (operation === "notion.workspace.search") return notionWorkspaceSearchRequestSchema.parse(requestShape);
   if (operation === "notion.page.read_snapshot") return notionPageReadSnapshotRequestSchema.parse(requestShape);
+  if (operation === "quickbooks.company.verify") return quickbooksCompanyVerifyRequestSchema.parse(requestShape);
+  if (operation === "quickbooks.invoice.list_open") return quickbooksOpenInvoicesRequestSchema.parse(requestShape);
+  if (operation === "quickbooks.invoice.create") return quickbooksCreateInvoiceRequestSchema.parse(requestShape);
   throw new AdapterDispatchError("adapter_operation_not_executable", "This operation has no audited native dispatcher.");
 }
 
@@ -56,7 +65,7 @@ function providerFailure(error: unknown, operation: string): AdapterDispatchErro
   const value = error as any;
   const status = Number(value?.code || value?.status || value?.response?.status || 0);
   const message = error instanceof Error ? error.message : "Provider request failed.";
-  const mutating = operation === "gmail.send";
+  const mutating = operation === "gmail.send" || operation === "quickbooks.invoice.create";
   const uncertain = mutating && (!status || status === 408 || status === 409 || status === 425 || status === 429 || status >= 500 || value?.name === "AbortError");
   return new AdapterDispatchError(uncertain ? "provider_outcome_uncertain" : "provider_request_failed", message.slice(0, 1000), uncertain ? "uncertain" : "failed");
 }
@@ -92,6 +101,23 @@ export async function dispatchAllowlistedAdapterOperation(input: {
       const results = await clients.notion.searchWorkspace(input.userId, request.query, request.pageSize);
       const responseSha256 = createHash("sha256").update(JSON.stringify(results)).digest("hex");
       return { authority: "provider_receipt", externalReference: `notion:search:${responseSha256}`, summary: `Notion returned ${results.length} bounded workspace search result${results.length === 1 ? "" : "s"}.`, responseShape: { resultCount: results.length, results, responseSha256 } };
+    }
+    if (input.operation === "quickbooks.company.verify") {
+      quickbooksCompanyVerifyRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
+      const result = await clients.quickbooks.verifyConnection(input.userId);
+      if (!result.connected || !result.healthy || !result.company?.realmId) throw new AdapterDispatchError("quickbooks_authorization_unhealthy", "QuickBooks authorization is unavailable or unhealthy.");
+      return { authority: "provider_receipt", externalReference: `quickbooks:company:${result.company.realmId}`, summary: "QuickBooks Online confirmed the company accounting authorization is healthy.", responseShape: { realmId: result.company.realmId, companyName: result.company.companyName || null } };
+    }
+    if (input.operation === "quickbooks.invoice.list_open") {
+      const request = quickbooksOpenInvoicesRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
+      const result = await clients.quickbooks.listOpenInvoices(input.userId, request.maxResults);
+      const responseSha256 = createHash("sha256").update(JSON.stringify(result.invoices)).digest("hex");
+      return { authority: "provider_receipt", externalReference: `quickbooks:open-invoices:${responseSha256}`, summary: `QuickBooks returned ${result.invoices.length} bounded open invoice record${result.invoices.length === 1 ? "" : "s"}.`, responseShape: { realmId: result.company.realmId, companyName: result.company.companyName || null, invoiceCount: result.invoices.length, invoices: result.invoices, responseSha256 } };
+    }
+    if (input.operation === "quickbooks.invoice.create") {
+      const request = quickbooksCreateInvoiceRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
+      const result = await clients.quickbooks.createInvoice(input.userId, request);
+      return { authority: "provider_receipt", externalReference: `quickbooks:invoice:${result.invoice.id}`, summary: "QuickBooks created the approved invoice and returned its durable invoice reference.", responseShape: { realmId: result.company.realmId, companyName: result.company.companyName || null, invoice: result.invoice } };
     }
     const request = notionPageReadSnapshotRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
     const connection = await clients.notion.connectionSummary(input.userId);
