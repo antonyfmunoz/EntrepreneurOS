@@ -217,6 +217,7 @@ vi.mock("../../server/integrations/notion", async (importOriginal) => {
 
 vi.mock("../../server/integrations/recovery-commercial", () => ({
   recoveryCommercialEffectsConfigured: () => true,
+  recoveryCommercialBindingCredentialConfigured: () => true,
   executeRecoveryCommercialEffect: recoveryProviderLifecycle.execute,
 }));
 
