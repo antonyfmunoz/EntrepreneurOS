@@ -112,6 +112,33 @@ function Import-FlySecretsFromEnvironment([string]$App, [string[]]$Names) {
   }
 }
 
+# These are company capability adapters, not universal launch prerequisites.
+# A provider is either completely absent or supplied as an exact complete
+# configuration; a partial group is unsafe because it can make a live-looking
+# Systems card fail only after an operator begins OAuth.
+$optionalProviderSecretGroups = @(
+  [pscustomobject]@{ Name = "QuickBooks Online OAuth"; Names = @("QUICKBOOKS_CLIENT_ID", "QUICKBOOKS_CLIENT_SECRET", "QUICKBOOKS_REDIRECT_URI", "QUICKBOOKS_ENVIRONMENT") },
+  [pscustomobject]@{ Name = "Slack OAuth"; Names = @("SLACK_CLIENT_ID", "SLACK_CLIENT_SECRET", "SLACK_REDIRECT_URI") },
+  [pscustomobject]@{ Name = "GoHighLevel OAuth"; Names = @("GOHIGHLEVEL_CLIENT_ID", "GOHIGHLEVEL_CLIENT_SECRET", "GOHIGHLEVEL_INSTALLATION_URL", "GOHIGHLEVEL_REDIRECT_URI") }
+)
+
+function Resolve-OptionalProviderSecretNames {
+  $selected = [System.Collections.Generic.List[string]]::new()
+  foreach ($group in $optionalProviderSecretGroups) {
+    $present = @($group.Names | Where-Object { -not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) })
+    if ($present.Count -ne 0 -and $present.Count -ne $group.Names.Count) {
+      $missing = @($group.Names | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) })
+      throw "$($group.Name) is partially configured. Supply every required value together or remove the partial local values before release. Missing: $($missing -join ', ')"
+    }
+    if ($present.Count -eq $group.Names.Count) {
+      foreach ($name in $group.Names) { $selected.Add($name) }
+    }
+  }
+  return @($selected)
+}
+
+$optionalProviderSecretNames = @(Resolve-OptionalProviderSecretNames)
+
 if (-not $env:MIGRATION_DATABASE_URL) {
   throw "MIGRATION_DATABASE_URL is required in the local release process and is never staged into the Fly runtime."
 }
@@ -254,6 +281,7 @@ try {
     "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "NOTION_CLIENT_ID", "NOTION_CLIENT_SECRET",
     "NOTION_REDIRECT_URI"
   )
+  $runtimeSecretNames += $optionalProviderSecretNames
   Import-FlySecretsFromEnvironment -App $app -Names $runtimeSecretNames
 
   if ($env:EOS_CANDIDATE_STT_ENABLED -eq "true") {
