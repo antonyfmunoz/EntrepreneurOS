@@ -27,7 +27,7 @@ function configuration() {
   return { clientId, clientSecret, installationUrl: parsed, redirectUri } as const;
 }
 function expiry(seconds?: number) { return typeof seconds === "number" && Number.isFinite(seconds) ? new Date(Date.now() + Math.max(1, seconds) * 1000) : undefined; }
-function scopes(value?: string) { return [...new Set((value || "").split(/[\s,]+/).map((item) => item.trim()).filter(Boolean))]; }
+function scopes(value?: string) { return Array.from(new Set((value || "").split(/[\s,]+/).map((item) => item.trim()).filter(Boolean))); }
 function metadata(value: unknown): Metadata { if (!value || typeof value !== "object" || Array.isArray(value)) return {}; const input = value as Record<string, unknown>; return { locationId: typeof input.locationId === "string" ? input.locationId : undefined, companyId: typeof input.companyId === "string" ? input.companyId : undefined, userId: typeof input.userId === "string" ? input.userId : undefined, userType: typeof input.userType === "string" ? input.userType : undefined, grantedScopes: Array.isArray(input.grantedScopes) ? input.grantedScopes.filter((item): item is string => typeof item === "string") : [] }; }
 function nextMetadata(result: TokenResponse): Metadata { return { locationId: result.locationId || result.location_id, companyId: result.companyId || result.company_id, userId: result.userId || result.user_id, userType: result.userType || result.user_type, grantedScopes: scopes(result.scope) }; }
 

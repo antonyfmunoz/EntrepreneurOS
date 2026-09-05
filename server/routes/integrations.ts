@@ -448,7 +448,10 @@ export function registerIntegrationRoutes(app: Express): void {
       const oauthState = state ? await slack.readOAuthState(state, req.user.id) : null;
       if (!code) return res.redirect("/portfolios?integration_error=no_code");
       if (!oauthState) return res.redirect("/portfolios?integration_error=invalid_oauth_state");
-      const redirectWith = (key: string, value: string) => { const [path, hash] = oauthState.returnTo.split("#"); return `${path}?${key}=${encodeURIComponent(value)}${hash ? `#${hash}` : ""}`; };
+      const redirectWith = (key: string, value: string) => {
+        const [path, hash] = oauthState.returnTo.split("#");
+        return `${path}?${key}=${encodeURIComponent(value)}${hash ? `#${hash}` : ""}`;
+      };
       if (!credentialEncryptionConfigured()) return res.redirect(redirectWith("integration_error", "credential_encryption_not_configured"));
       const tokens = await slack.exchangeCode(code);
       await storage.upsertOauthToken({ userId: req.user.id, provider: "slack", accessToken: encryptCredential(tokens.accessToken), tokenType: tokens.tokenType, scope: tokens.scope, metadata: tokens.metadata });
