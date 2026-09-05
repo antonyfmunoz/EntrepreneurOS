@@ -9,14 +9,15 @@ import * as gmail from "../integrations/gmail";
 import * as notion from "../integrations/notion";
 import * as quickbooks from "../integrations/quickbooks";
 import * as slack from "../integrations/slack";
+import * as gohighlevel from "../integrations/gohighlevel";
 import { verifyStripeConnection } from "../integrations/stripe-health";
 import { credentialEncryptionConfigured, encryptCredential } from "../security/credential-encryption";
 import { allowedSurfacesFor } from "@shared/eos-runtime";
 import { authorizeAction, companyAccess, EosRouteError, visibleSeatIds } from "./eos-runtime";
 
-type SupportedProvider = "gmail" | "notion" | "quickbooks" | "slack" | "stripe";
+type SupportedProvider = "gmail" | "notion" | "quickbooks" | "slack" | "gohighlevel" | "stripe";
 type OAuthProvider = Exclude<SupportedProvider, "stripe">;
-type CompanyProviderKey = "google_workspace" | "notion" | "quickbooks" | "slack";
+type CompanyProviderKey = "google_workspace" | "notion" | "quickbooks" | "slack" | "gohighlevel";
 
 const attachConnectionSchema = z.object({
   ownerSeatId: z.string().uuid().optional(),
@@ -24,7 +25,7 @@ const attachConnectionSchema = z.object({
 }).strict();
 
 function providerFrom(req: Request): SupportedProvider {
-  if (["gmail", "notion", "quickbooks", "slack", "stripe"].includes(req.params.provider)) return req.params.provider as SupportedProvider;
+  if (["gmail", "notion", "quickbooks", "slack", "gohighlevel", "stripe"].includes(req.params.provider)) return req.params.provider as SupportedProvider;
   throw new EosRouteError(404, "integration_provider_not_found", "This provider is not available in the EOS integration registry.");
 }
 
@@ -66,7 +67,7 @@ function companyProviderKey(provider: OAuthProvider): CompanyProviderKey {
 }
 
 function providerLabel(provider: SupportedProvider): string {
-  return provider === "gmail" ? "Google Workspace" : provider === "notion" ? "Notion" : provider === "quickbooks" ? "QuickBooks Online" : provider === "slack" ? "Slack" : "Stripe";
+  return provider === "gmail" ? "Google Workspace" : provider === "notion" ? "Notion" : provider === "quickbooks" ? "QuickBooks Online" : provider === "slack" ? "Slack" : provider === "gohighlevel" ? "GoHighLevel" : "Stripe";
 }
 
 async function integrationAccess(req: Request, authorityClass: "view" | "execute" | "decide", actionKey: string) {
@@ -139,6 +140,21 @@ async function providerIdentity(provider: OAuthProvider, userId: string): Promis
     };
   }
 
+  if (provider === "gohighlevel") {
+    const result = await gohighlevel.verifyConnection(userId);
+    const location = result.location;
+    return {
+      connected: result.connected,
+      healthy: result.healthy,
+      accountReference: location?.locationId || null,
+      accountScope: location?.locationId
+        ? `GoHighLevel location: ${location.locationId}; CRM records and pipeline moves remain governed by company revenue roles and approvals.`
+        : "",
+      grantedPermissions: result.grantedScopes,
+      providerMetadata: location ? { locationId: location.locationId || null, companyId: location.companyId || null, userType: location.userType || null } : {},
+    };
+  }
+
   const result = await notion.verifyConnection(userId);
   const workspace = result.workspace;
   return {
@@ -200,7 +216,7 @@ export function registerIntegrationRoutes(app: Express): void {
     try {
       await integrationAccess(req, "execute", "integration_provider_authorization.request");
       const provider = oauthProvider(providerFrom(req));
-      const adapter = provider === "gmail" ? gmail : provider === "notion" ? notion : provider === "quickbooks" ? quickbooks : slack;
+      const adapter = provider === "gmail" ? gmail : provider === "notion" ? notion : provider === "quickbooks" ? quickbooks : provider === "slack" ? slack : gohighlevel;
       if (!adapter.isConfigured()) return res.status(400).json({ code: "integration_provider_not_configured", message: `${providerLabel(provider)} OAuth or EOS credential encryption is not configured.` });
       const returnTo = `/company/${encodeURIComponent(req.params.companyId)}#systems`;
       return res.json({ authUrl: await adapter.getAuthUrl(req.user.id, returnTo) });
@@ -215,7 +231,7 @@ export function registerIntegrationRoutes(app: Express): void {
         return res.json(await stripeConnectionStatus(Number(req.params.companyId)));
       }
       const provider = oauthProvider(requestedProvider);
-      const adapter = provider === "gmail" ? gmail : provider === "notion" ? notion : provider === "quickbooks" ? quickbooks : slack;
+      const adapter = provider === "gmail" ? gmail : provider === "notion" ? notion : provider === "quickbooks" ? quickbooks : provider === "slack" ? slack : gohighlevel;
       return res.json(req.query.verify === "true" ? await adapter.verifyConnection(req.user.id) : await adapter.connectionSummary(req.user.id));
     } catch (error) { return providerError(res, error); }
   });
@@ -353,7 +369,7 @@ export function registerIntegrationRoutes(app: Express): void {
       if (otherConnections.some((connection) => connection.companyId !== access.company.id)) {
         throw new EosRouteError(409, "provider_authorization_shared_across_companies", "This provider authorization is still attached to another company. Revoke the company-specific connection there first; EOS will not break another tenant's provider access.");
       }
-      return res.json(provider === "gmail" ? await gmail.disconnect(req.user.id) : provider === "notion" ? await notion.disconnect(req.user.id) : provider === "quickbooks" ? await quickbooks.disconnect(req.user.id) : await slack.disconnect(req.user.id));
+      return res.json(provider === "gmail" ? await gmail.disconnect(req.user.id) : provider === "notion" ? await notion.disconnect(req.user.id) : provider === "quickbooks" ? await quickbooks.disconnect(req.user.id) : provider === "slack" ? await slack.disconnect(req.user.id) : await gohighlevel.disconnect(req.user.id));
     } catch (error) { return providerError(res, error); }
   });
 
@@ -432,16 +448,32 @@ export function registerIntegrationRoutes(app: Express): void {
       const oauthState = state ? await slack.readOAuthState(state, req.user.id) : null;
       if (!code) return res.redirect("/portfolios?integration_error=no_code");
       if (!oauthState) return res.redirect("/portfolios?integration_error=invalid_oauth_state");
-      const redirectWith = (key: string, value: string) => {
-        const [path, hash] = oauthState.returnTo.split("#");
-        return `${path}?${key}=${encodeURIComponent(value)}${hash ? `#${hash}` : ""}`;
-      };
+      const redirectWith = (key: string, value: string) => { const [path, hash] = oauthState.returnTo.split("#"); return `${path}?${key}=${encodeURIComponent(value)}${hash ? `#${hash}` : ""}`; };
       if (!credentialEncryptionConfigured()) return res.redirect(redirectWith("integration_error", "credential_encryption_not_configured"));
       const tokens = await slack.exchangeCode(code);
       await storage.upsertOauthToken({ userId: req.user.id, provider: "slack", accessToken: encryptCredential(tokens.accessToken), tokenType: tokens.tokenType, scope: tokens.scope, metadata: tokens.metadata });
       res.redirect(redirectWith("slack", "authorized"));
     } catch (error: any) {
       console.error("Slack OAuth callback error:", error);
+      res.redirect("/portfolios?integration_error=oauth_callback_failed");
+    }
+  });
+
+  app.get("/api/auth/gohighlevel/callback", async (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect("/portfolios?integration_error=not_authenticated");
+    try {
+      const code = typeof req.query.code === "string" ? req.query.code : "";
+      const state = typeof req.query.state === "string" ? req.query.state : "";
+      const oauthState = state ? await gohighlevel.readOAuthState(state, req.user.id) : null;
+      if (!code) return res.redirect("/portfolios?integration_error=no_code");
+      if (!oauthState) return res.redirect("/portfolios?integration_error=invalid_oauth_state");
+      const redirectWith = (key: string, value: string) => { const [path, hash] = oauthState.returnTo.split("#"); return `${path}?${key}=${encodeURIComponent(value)}${hash ? `#${hash}` : ""}`; };
+      if (!credentialEncryptionConfigured()) return res.redirect(redirectWith("integration_error", "credential_encryption_not_configured"));
+      const tokens = await gohighlevel.exchangeCode(code);
+      await storage.upsertOauthToken({ userId: req.user.id, provider: "gohighlevel", accessToken: encryptCredential(tokens.accessToken), refreshToken: tokens.refreshToken ? encryptCredential(tokens.refreshToken) : undefined, tokenType: tokens.tokenType, expiresAt: tokens.expiresAt, scope: tokens.scope, metadata: tokens.metadata });
+      res.redirect(redirectWith("gohighlevel", "authorized"));
+    } catch (error: any) {
+      console.error("GoHighLevel OAuth callback error:", error);
       res.redirect("/portfolios?integration_error=oauth_callback_failed");
     }
   });

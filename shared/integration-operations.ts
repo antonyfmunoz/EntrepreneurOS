@@ -218,6 +218,25 @@ export const slackMessageSendRequestSchema = z.object({
   text: bounded(1, 12_000),
   threadTs: z.string().trim().regex(/^\d{1,20}\.\d{1,9}$/, "Slack thread timestamp is invalid.").optional(),
 }).strict();
+export const gohighlevelLocationVerifyRequestSchema = z.object({}).strict();
+export const gohighlevelContactLookupRequestSchema = z.object({
+  email: z.string().trim().email().max(320).optional(),
+  phone: z.string().trim().min(3).max(50).optional(),
+  limit: z.coerce.number().int().min(1).max(20).default(10),
+}).strict().refine((value) => Boolean(value.email) !== Boolean(value.phone), "Provide exactly one contact email or phone number.");
+export const gohighlevelContactUpsertRequestSchema = z.object({
+  email: z.string().trim().email().max(320).optional(), phone: z.string().trim().min(3).max(50).optional(),
+  firstName: z.string().trim().max(200).optional(), lastName: z.string().trim().max(200).optional(), name: z.string().trim().max(400).optional(),
+  source: z.string().trim().max(200).optional(), tags: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
+}).strict().refine((value) => Boolean(value.email || value.phone), "A contact email or phone number is required.");
+export const gohighlevelOpportunitySearchRequestSchema = z.object({
+  query: z.string().trim().max(75).optional(), pipelineId: bounded(1, 100).optional(), pipelineStageId: bounded(1, 100).optional(),
+  status: z.enum(["open", "won", "lost", "abandoned", "all"]).default("all"), limit: z.coerce.number().int().min(1).max(100).default(25),
+}).strict();
+export const gohighlevelOpportunityCreateRequestSchema = z.object({
+  pipelineId: bounded(1, 100), pipelineStageId: bounded(1, 100).optional(), contactId: bounded(1, 100), name: bounded(1, 500),
+  status: z.enum(["open", "won", "lost", "abandoned"]), monetaryValue: z.coerce.number().nonnegative().max(10_000_000).optional(), assignedTo: bounded(1, 100).optional(),
+}).strict();
 
 export const executableAdapterOperations = [
   "gmail.send",
@@ -230,6 +249,11 @@ export const executableAdapterOperations = [
   "slack.workspace.verify",
   "slack.conversations.list",
   "slack.message.send",
+  "gohighlevel.location.verify",
+  "gohighlevel.contact.lookup",
+  "gohighlevel.contact.upsert",
+  "gohighlevel.opportunity.search",
+  "gohighlevel.opportunity.create",
 ] as const;
 
 export function providerExecutionEnabled(env: Record<string, string | undefined> = process.env) {

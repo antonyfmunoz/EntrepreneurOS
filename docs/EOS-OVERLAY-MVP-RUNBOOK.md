@@ -178,6 +178,22 @@ finance operator and approval before an external effect, and retain the
 provider receipt. The current approved adapter surface is limited to company
 verification, bounded open-invoice reads, and creating an invoice. Register
 `https://entrepreneuros.net/api/auth/quickbooks/callback` as the production
+
+Optional GoHighLevel OAuth:
+
+- `GOHIGHLEVEL_CLIENT_ID`
+- `GOHIGHLEVEL_CLIENT_SECRET`
+- `GOHIGHLEVEL_INSTALLATION_URL`
+- `GOHIGHLEVEL_REDIRECT_URI`
+
+GoHighLevel is a company-owned CRM location, never a per-seat plug-in. Create a
+private Marketplace app, choose the intended **Location** during installation,
+and register `https://entrepreneuros.net/api/auth/gohighlevel/callback` as its
+production callback. EOS stores the returned exact location identifier on the
+company connection, then requires a matching entitled company binding, local
+policy, approval, and immutable receipt before it can search or create CRM
+contacts or pipeline opportunities. The OAuth grantor remains a credential
+custodian; it does not expand that person's business authority.
 Intuit callback before enabling it. Disconnecting removes the encrypted EOS
 credential; an Intuit revocation endpoint is not assumed where none is called,
 so EOS truthfully reports `providerRevoked: false`.

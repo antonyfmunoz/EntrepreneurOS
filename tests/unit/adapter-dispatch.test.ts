@@ -29,6 +29,14 @@ const clients = {
     listConversations: vi.fn(async () => ({ workspace: { teamId: "T12345678", teamName: "Empyrean Studios" }, channels: [{ id: "C12345678", name: "operations", isPrivate: false, isMember: true }], nextCursor: null })),
     sendMessage: vi.fn(async () => ({ workspace: { teamId: "T12345678", teamName: "Empyrean Studios" }, message: { channelId: "C12345678", ts: "1735689600.000100", threadTs: null } })),
   },
+  gohighlevel: {
+    connectionSummary: vi.fn(async () => ({ configured: true, connected: true, location: { locationId: "location-1" } })),
+    verifyConnection: vi.fn(async () => ({ configured: true, connected: true, healthy: true, location: { locationId: "location-1", companyId: "company-1" }, grantedScopes: ["contacts.readonly", "contacts.write", "opportunities.readonly", "opportunities.write"] })),
+    lookupContact: vi.fn(async () => ({ locationId: "location-1", contacts: [{ id: "contact-1", email: "client@example.test" }] })),
+    upsertContact: vi.fn(async () => ({ locationId: "location-1", contact: { id: "contact-1", email: "client@example.test" } })),
+    searchOpportunities: vi.fn(async () => ({ locationId: "location-1", opportunities: [{ id: "opportunity-1", name: "Recovery offer", status: "open" }] })),
+    createOpportunity: vi.fn(async () => ({ locationId: "location-1", opportunity: { id: "opportunity-2", name: "Approved recovery offer", status: "open" } })),
+  },
 };
 
 describe("allowlisted adapter dispatch", () => {
@@ -60,6 +68,12 @@ describe("allowlisted adapter dispatch", () => {
     const sent = await dispatchAllowlistedAdapterOperation({ userId: "operations-owner", providerKey: "slack", operation: "slack.message.send", requestShape: { channelId: "C12345678", text: "Approved operating update." } }, clients);
     expect(sent).toMatchObject({ externalReference: "slack:message:C12345678:1735689600.000100" });
     expect(clients.slack.sendMessage).toHaveBeenCalledWith("operations-owner", expect.objectContaining({ channelId: "C12345678" }));
+  });
+  it("keeps CRM reads and approved CRM writes in the attached company location", async () => {
+    const lookup = await dispatchAllowlistedAdapterOperation({ userId: "revenue-owner", providerKey: "gohighlevel", operation: "gohighlevel.contact.lookup", requestShape: { email: "client@example.test" } }, clients);
+    expect(lookup).toMatchObject({ responseShape: { locationId: "location-1", contactCount: 1 } });
+    const opportunity = await dispatchAllowlistedAdapterOperation({ userId: "revenue-owner", providerKey: "gohighlevel", operation: "gohighlevel.opportunity.create", requestShape: { pipelineId: "pipeline-1", contactId: "contact-1", name: "Approved recovery offer", status: "open", monetaryValue: 2500 } }, clients);
+    expect(opportunity).toMatchObject({ externalReference: "gohighlevel:opportunity:opportunity-2", responseShape: { locationId: "location-1" } });
   });
 
   it("rejects undeclared operation namespaces and provider mismatches", async () => {

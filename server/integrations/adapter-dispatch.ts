@@ -11,11 +11,17 @@ import {
   slackConversationsListRequestSchema,
   slackMessageSendRequestSchema,
   slackWorkspaceVerifyRequestSchema,
+  gohighlevelLocationVerifyRequestSchema,
+  gohighlevelContactLookupRequestSchema,
+  gohighlevelContactUpsertRequestSchema,
+  gohighlevelOpportunitySearchRequestSchema,
+  gohighlevelOpportunityCreateRequestSchema,
 } from "@shared/integration-operations";
 import * as gmail from "./gmail";
 import * as notion from "./notion";
 import * as quickbooks from "./quickbooks";
 import * as slack from "./slack";
+import * as gohighlevel from "./gohighlevel";
 
 export type AdapterDispatchResult = {
   authority: "provider_receipt";
@@ -29,9 +35,10 @@ export type AdapterDispatchClients = {
   notion: Pick<typeof notion, "connectionSummary" | "verifyConnection" | "searchWorkspace" | "readPageSnapshot">;
   quickbooks: Pick<typeof quickbooks, "connectionSummary" | "verifyConnection" | "listOpenInvoices" | "createInvoice">;
   slack: Pick<typeof slack, "connectionSummary" | "verifyConnection" | "listConversations" | "sendMessage">;
+  gohighlevel: Pick<typeof gohighlevel, "connectionSummary" | "verifyConnection" | "lookupContact" | "upsertContact" | "searchOpportunities" | "createOpportunity">;
 };
 
-const liveClients: AdapterDispatchClients = { gmail, notion, quickbooks, slack };
+const liveClients: AdapterDispatchClients = { gmail, notion, quickbooks, slack, gohighlevel };
 const operations = new Set<string>(executableAdapterOperations);
 
 export class AdapterDispatchError extends Error {
@@ -52,6 +59,7 @@ export function providerMatchesOperation(providerKey: string, operation: string)
   if (operation.startsWith("notion.")) return provider === "notion";
   if (operation.startsWith("quickbooks.")) return provider === "quickbooks";
   if (operation.startsWith("slack.")) return provider === "slack";
+  if (operation.startsWith("gohighlevel.")) return provider === "gohighlevel";
   return false;
 }
 
@@ -66,6 +74,11 @@ export function validateAdapterOperationRequest(operation: string, requestShape:
   if (operation === "slack.workspace.verify") return slackWorkspaceVerifyRequestSchema.parse(requestShape);
   if (operation === "slack.conversations.list") return slackConversationsListRequestSchema.parse(requestShape);
   if (operation === "slack.message.send") return slackMessageSendRequestSchema.parse(requestShape);
+  if (operation === "gohighlevel.location.verify") return gohighlevelLocationVerifyRequestSchema.parse(requestShape);
+  if (operation === "gohighlevel.contact.lookup") return gohighlevelContactLookupRequestSchema.parse(requestShape);
+  if (operation === "gohighlevel.contact.upsert") return gohighlevelContactUpsertRequestSchema.parse(requestShape);
+  if (operation === "gohighlevel.opportunity.search") return gohighlevelOpportunitySearchRequestSchema.parse(requestShape);
+  if (operation === "gohighlevel.opportunity.create") return gohighlevelOpportunityCreateRequestSchema.parse(requestShape);
   throw new AdapterDispatchError("adapter_operation_not_executable", "This operation has no audited native dispatcher.");
 }
 
@@ -74,7 +87,7 @@ function providerFailure(error: unknown, operation: string): AdapterDispatchErro
   const value = error as any;
   const status = Number(value?.code || value?.status || value?.response?.status || 0);
   const message = error instanceof Error ? error.message : "Provider request failed.";
-  const mutating = operation === "gmail.send" || operation === "quickbooks.invoice.create" || operation === "slack.message.send";
+  const mutating = operation === "gmail.send" || operation === "quickbooks.invoice.create" || operation === "slack.message.send" || operation === "gohighlevel.contact.upsert" || operation === "gohighlevel.opportunity.create";
   const uncertain = mutating && (!status || status === 408 || status === 409 || status === 425 || status === 429 || status >= 500 || value?.name === "AbortError");
   return new AdapterDispatchError(uncertain ? "provider_outcome_uncertain" : "provider_request_failed", message.slice(0, 1000), uncertain ? "uncertain" : "failed");
 }
@@ -144,6 +157,34 @@ export async function dispatchAllowlistedAdapterOperation(input: {
       const request = slackMessageSendRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
       const result = await clients.slack.sendMessage(input.userId, request);
       return { authority: "provider_receipt", externalReference: `slack:message:${result.message.channelId}:${result.message.ts}`, summary: "Slack accepted the approved company message and returned its durable message reference.", responseShape: { teamId: result.workspace.teamId, teamName: result.workspace.teamName || null, message: result.message } };
+    }
+    if (input.operation === "gohighlevel.location.verify") {
+      gohighlevelLocationVerifyRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
+      const result = await clients.gohighlevel.verifyConnection(input.userId);
+      if (!result.connected || !result.healthy || !result.location?.locationId) throw new AdapterDispatchError("gohighlevel_authorization_unhealthy", "GoHighLevel location authorization is unavailable or unhealthy.");
+      return { authority: "provider_receipt", externalReference: `gohighlevel:location:${result.location.locationId}`, summary: "GoHighLevel confirmed the company CRM location authorization is healthy.", responseShape: { locationId: result.location.locationId, companyId: result.location.companyId || null } };
+    }
+    if (input.operation === "gohighlevel.contact.lookup") {
+      const request = gohighlevelContactLookupRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
+      const result = await clients.gohighlevel.lookupContact(input.userId, request);
+      const responseSha256 = createHash("sha256").update(JSON.stringify(result.contacts)).digest("hex");
+      return { authority: "provider_receipt", externalReference: `gohighlevel:contacts:${responseSha256}`, summary: `GoHighLevel returned ${result.contacts.length} bounded CRM contact record${result.contacts.length === 1 ? "" : "s"}.`, responseShape: { locationId: result.locationId, contactCount: result.contacts.length, contacts: result.contacts, responseSha256 } };
+    }
+    if (input.operation === "gohighlevel.contact.upsert") {
+      const request = gohighlevelContactUpsertRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
+      const result = await clients.gohighlevel.upsertContact(input.userId, request);
+      return { authority: "provider_receipt", externalReference: `gohighlevel:contact:${result.contact.id}`, summary: "GoHighLevel created or updated the approved CRM contact and returned its durable reference.", responseShape: { locationId: result.locationId, contact: result.contact } };
+    }
+    if (input.operation === "gohighlevel.opportunity.search") {
+      const request = gohighlevelOpportunitySearchRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
+      const result = await clients.gohighlevel.searchOpportunities(input.userId, request);
+      const responseSha256 = createHash("sha256").update(JSON.stringify(result.opportunities)).digest("hex");
+      return { authority: "provider_receipt", externalReference: `gohighlevel:opportunities:${responseSha256}`, summary: `GoHighLevel returned ${result.opportunities.length} bounded pipeline record${result.opportunities.length === 1 ? "" : "s"}.`, responseShape: { locationId: result.locationId, opportunityCount: result.opportunities.length, opportunities: result.opportunities, responseSha256 } };
+    }
+    if (input.operation === "gohighlevel.opportunity.create") {
+      const request = gohighlevelOpportunityCreateRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
+      const result = await clients.gohighlevel.createOpportunity(input.userId, request);
+      return { authority: "provider_receipt", externalReference: `gohighlevel:opportunity:${result.opportunity.id}`, summary: "GoHighLevel created the approved pipeline opportunity and returned its durable reference.", responseShape: { locationId: result.locationId, opportunity: result.opportunity } };
     }
     const request = notionPageReadSnapshotRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
     const connection = await clients.notion.connectionSummary(input.userId);
