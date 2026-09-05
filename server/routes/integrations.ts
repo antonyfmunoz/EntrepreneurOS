@@ -70,6 +70,30 @@ function providerLabel(provider: SupportedProvider): string {
   return provider === "gmail" ? "Google Workspace" : provider === "notion" ? "Notion" : provider === "quickbooks" ? "QuickBooks Online" : provider === "slack" ? "Slack" : provider === "gohighlevel" ? "GoHighLevel" : "Stripe";
 }
 
+/**
+ * OAuth state carries only one of EOS's internal Systems destinations. Rebuild
+ * it from a validated numeric identifier instead of redirecting to state data.
+ */
+function internalOAuthReturnPath(returnTo: string): string {
+  const companyMatch = /^\/company\/([1-9]\d*)#systems$/.exec(returnTo);
+  if (companyMatch) {
+    const companyId = Number(companyMatch[1]);
+    if (Number.isSafeInteger(companyId) && companyId > 0) return `/company/${companyId}#systems`;
+  }
+
+  const portfolioMatch = /^\/portfolios(?:\/([1-9]\d*))?$/.exec(returnTo);
+  if (portfolioMatch?.[1]) {
+    const portfolioId = Number(portfolioMatch[1]);
+    if (Number.isSafeInteger(portfolioId) && portfolioId > 0) return `/portfolios/${portfolioId}`;
+  }
+  return "/portfolios";
+}
+
+function oauthResultRedirect(internalPath: string, key: string, value: string): string {
+  const [path, hash] = internalPath.split("#");
+  return `${path}?${key}=${encodeURIComponent(value)}${hash ? `#${hash}` : ""}`;
+}
+
 async function integrationAccess(req: Request, authorityClass: "view" | "execute" | "decide", actionKey: string) {
   const access = await companyAccess(req);
   if (!allowedSurfacesFor(access.role).includes("systems")) {
@@ -470,11 +494,11 @@ export function registerIntegrationRoutes(app: Express): void {
       const oauthState = state ? await gohighlevel.readOAuthState(state, req.user.id) : null;
       if (!code) return res.redirect("/portfolios?integration_error=no_code");
       if (!oauthState) return res.redirect("/portfolios?integration_error=invalid_oauth_state");
-      const redirectWith = (key: string, value: string) => { const [path, hash] = oauthState.returnTo.split("#"); return `${path}?${key}=${encodeURIComponent(value)}${hash ? `#${hash}` : ""}`; };
-      if (!credentialEncryptionConfigured()) return res.redirect(redirectWith("integration_error", "credential_encryption_not_configured"));
+      const returnPath = internalOAuthReturnPath(oauthState.returnTo);
+      if (!credentialEncryptionConfigured()) return res.redirect(oauthResultRedirect(returnPath, "integration_error", "credential_encryption_not_configured"));
       const tokens = await gohighlevel.exchangeCode(code);
       await storage.upsertOauthToken({ userId: req.user.id, provider: "gohighlevel", accessToken: encryptCredential(tokens.accessToken), refreshToken: tokens.refreshToken ? encryptCredential(tokens.refreshToken) : undefined, tokenType: tokens.tokenType, expiresAt: tokens.expiresAt, scope: tokens.scope, metadata: tokens.metadata });
-      res.redirect(redirectWith("gohighlevel", "authorized"));
+      res.redirect(oauthResultRedirect(returnPath, "gohighlevel", "authorized"));
     } catch (error: any) {
       console.error("GoHighLevel OAuth callback error:", error);
       res.redirect("/portfolios?integration_error=oauth_callback_failed");
