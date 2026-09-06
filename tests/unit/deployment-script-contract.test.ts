@@ -143,11 +143,11 @@ describe("production deployment script contract", () => {
     }
   });
 
-  it("redirects a BOM-free ephemeral secret file to Fly without exposing values in process arguments", () => {
-    expect(deployScript).toContain("$payloadBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($payload)");
-    expect(deployScript).toContain("[IO.File]::WriteAllBytes($payloadFile, $payloadBytes)");
-    expect(deployScript).toContain("flyctl.exe secrets import --app");
-    expect(deployScript).toContain("Remove-Item -LiteralPath $payloadFile -Force -ErrorAction SilentlyContinue");
+  it("pipes Fly secrets as raw Node UTF-8 bytes without exposing values in process arguments", () => {
+    expect(deployScript).toContain("child.stdin.end(Buffer.from(payload, \"utf8\"));");
+    expect(deployScript).toContain("$env:EOS_FLY_SECRET_PAYLOAD = $payload");
+    expect(deployScript).toContain("Remove-Item Env:EOS_FLY_SECRET_PAYLOAD -ErrorAction SilentlyContinue");
+    expect(deployScript).toContain('spawn("flyctl.exe", ["secrets", "import", "--app", app, "--stage"]');
     expect(deployScript).not.toContain("$processInfo.RedirectStandardInput = $true");
     expect(deployScript).not.toContain("flyctl secrets set --app $app --stage");
     expect(deployScript).not.toMatch(/flyctl secrets (?:set|import)[^\r\n]*\$env:/);
