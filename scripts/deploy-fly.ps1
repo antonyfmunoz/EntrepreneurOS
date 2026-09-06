@@ -105,24 +105,22 @@ function Import-FlySecretsFromEnvironment([string]$App, [string[]]$Names) {
   $payload = $lines -join "`n"
   try {
     # Windows PowerShell's native-command pipeline can prepend a UTF-8 BOM.
-    # Fly parses that marker as part of the first dotenv key, so write raw
-    # BOM-free UTF-8 bytes to the redirected process stream. Do not use
-    # ProcessStartInfo.StandardInputEncoding here: that member is unavailable
-    # in Windows PowerShell's .NET runtime.
+    # Fly parses that marker as part of the first dotenv key. Stage the payload
+    # in a short-lived, BOM-free file and let cmd.exe redirect the raw bytes to
+    # Fly; Process.StandardInput can still introduce an encoding preamble on
+    # the Windows PowerShell .NET runtime even when its BaseStream is used.
+    $payloadBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($payload)
+    $payloadFile = Join-Path ([IO.Path]::GetTempPath()) ("eos-fly-secrets-{0}.dotenv" -f [Guid]::NewGuid().ToString("N"))
+    [IO.File]::WriteAllBytes($payloadFile, $payloadBytes)
     $processInfo = [System.Diagnostics.ProcessStartInfo]::new()
-    $processInfo.FileName = "flyctl.exe"
-    $processInfo.Arguments = "secrets import --app `"$App`" --stage"
+    $processInfo.FileName = $env:ComSpec
+    $processInfo.Arguments = "/d /s /c `"flyctl.exe secrets import --app `"`"$App`"`" --stage < `"`"$payloadFile`"`"`""
     $processInfo.UseShellExecute = $false
-    $processInfo.RedirectStandardInput = $true
     $processInfo.RedirectStandardOutput = $true
     $processInfo.RedirectStandardError = $true
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $processInfo
     if (-not $process.Start()) { throw "Could not start Fly secret staging." }
-    $payloadBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($payload)
-    $process.StandardInput.BaseStream.Write($payloadBytes, 0, $payloadBytes.Length)
-    $process.StandardInput.BaseStream.Flush()
-    $process.StandardInput.Close()
     $stdout = $process.StandardOutput.ReadToEnd()
     $stderr = $process.StandardError.ReadToEnd()
     $process.WaitForExit()
@@ -132,6 +130,10 @@ function Import-FlySecretsFromEnvironment([string]$App, [string[]]$Names) {
       throw "Fly rejected the staged production secret set."
     }
   } finally {
+    if ($payloadFile -and (Test-Path -LiteralPath $payloadFile)) {
+      Remove-Item -LiteralPath $payloadFile -Force -ErrorAction SilentlyContinue
+    }
+    $payloadFile = $null
     $payloadBytes = $null
     $payload = $null
     $lines = $null
