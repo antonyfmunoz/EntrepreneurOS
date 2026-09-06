@@ -242,6 +242,22 @@ if ($pendingSecrets.Count -gt 0) {
   throw "Fly already has secrets outside the Deployed state ($pendingNames). Resolve that pending cutover before starting another release."
 }
 
+# Release identity is deployment metadata, not credential material. A legacy
+# Fly secret with this name wins over --env at runtime and can therefore make a
+# newly promoted image report an older identity. Remove it *staged* so the
+# following deploy atomically applies the exact immutable subject in machine
+# configuration without restarting the incumbent.
+$legacyReleaseIdentitySecret = @($secretsBeforeRelease | Where-Object { $_.name -eq "EOS_RELEASE_SUBJECT" })
+if ($legacyReleaseIdentitySecret.Count -gt 0) {
+  Write-Output "Removing legacy Fly secret that shadows deployment release identity."
+  flyctl secrets unset EOS_RELEASE_SUBJECT --app $app --stage
+  if ($LASTEXITCODE -ne 0) { throw "Could not stage removal of the legacy EOS_RELEASE_SUBJECT Fly secret." }
+  $secretsAfterIdentityCleanup = @(Get-FlySecrets -App $app)
+  if (@($secretsAfterIdentityCleanup | Where-Object { $_.name -eq "EOS_RELEASE_SUBJECT" }).Count -gt 0) {
+    throw "Fly retained the legacy EOS_RELEASE_SUBJECT secret after staged removal."
+  }
+}
+
 npm run release:verify
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
