@@ -103,16 +103,32 @@ function Import-FlySecretsFromEnvironment([string]$App, [string[]]$Names) {
     "$name=$value"
   }
   $payload = $lines -join "`n"
-  $previousOutputEncoding = $OutputEncoding
   try {
-    # Windows PowerShell can prepend a UTF-8 BOM when it serializes pipeline
-    # input for a native process. Fly treats that marker as part of the first
-    # dotenv key, so force BOM-free UTF-8 for this stdin-only credential path.
-    $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-    $payload | flyctl secrets import --app $App --stage
-    if ($LASTEXITCODE -ne 0) { throw "Fly rejected the staged production secret set." }
+    # Windows PowerShell's native-command pipeline can prepend a UTF-8 BOM.
+    # Fly parses that marker as part of the first dotenv key, so write the
+    # credential payload to the process stdin with an explicit BOM-free encoder.
+    $processInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $processInfo.FileName = "flyctl.exe"
+    $processInfo.Arguments = "secrets import --app `"$App`" --stage"
+    $processInfo.UseShellExecute = $false
+    $processInfo.RedirectStandardInput = $true
+    $processInfo.RedirectStandardOutput = $true
+    $processInfo.RedirectStandardError = $true
+    $processInfo.StandardInputEncoding = [System.Text.UTF8Encoding]::new($false)
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $processInfo
+    if (-not $process.Start()) { throw "Could not start Fly secret staging." }
+    $process.StandardInput.Write($payload)
+    $process.StandardInput.Close()
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+    if ($stdout) { Write-Output $stdout }
+    if ($process.ExitCode -ne 0) {
+      if ($stderr) { Write-Error $stderr }
+      throw "Fly rejected the staged production secret set."
+    }
   } finally {
-    $OutputEncoding = $previousOutputEncoding
     $payload = $null
     $lines = $null
   }

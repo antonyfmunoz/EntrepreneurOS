@@ -143,8 +143,10 @@ describe("production deployment script contract", () => {
     }
   });
 
-  it("streams Fly secrets over stdin instead of exposing values in process arguments", () => {
-    expect(deployScript).toContain("$payload | flyctl secrets import --app $App --stage");
+  it("streams Fly secrets as BOM-free stdin instead of exposing values in process arguments", () => {
+    expect(deployScript).toContain("$processInfo.RedirectStandardInput = $true");
+    expect(deployScript).toContain("$processInfo.StandardInputEncoding = [System.Text.UTF8Encoding]::new($false)");
+    expect(deployScript).toContain("$process.StandardInput.Write($payload)");
     expect(deployScript).not.toContain("flyctl secrets set --app $app --stage");
     expect(deployScript).not.toMatch(/flyctl secrets (?:set|import)[^\r\n]*\$env:/);
   });
