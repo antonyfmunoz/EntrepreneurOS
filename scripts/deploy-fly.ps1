@@ -103,10 +103,16 @@ function Import-FlySecretsFromEnvironment([string]$App, [string[]]$Names) {
     "$name=$value"
   }
   $payload = $lines -join "`n"
+  $previousOutputEncoding = $OutputEncoding
   try {
+    # Windows PowerShell can prepend a UTF-8 BOM when it serializes pipeline
+    # input for a native process. Fly treats that marker as part of the first
+    # dotenv key, so force BOM-free UTF-8 for this stdin-only credential path.
+    $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
     $payload | flyctl secrets import --app $App --stage
     if ($LASTEXITCODE -ne 0) { throw "Fly rejected the staged production secret set." }
   } finally {
+    $OutputEncoding = $previousOutputEncoding
     $payload = $null
     $lines = $null
   }
