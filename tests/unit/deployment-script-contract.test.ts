@@ -144,10 +144,9 @@ describe("production deployment script contract", () => {
   });
 
   it("pipes Fly secrets as raw Node UTF-8 bytes without exposing values in process arguments", () => {
-    expect(deployScript).toContain("child.stdin.end(Buffer.from(payload, \"utf8\"));");
     expect(deployScript).toContain("$env:EOS_FLY_SECRET_PAYLOAD = $payload");
+    expect(deployScript).toContain("& node scripts/import-fly-secrets.cjs 2>&1");
     expect(deployScript).toContain("Remove-Item Env:EOS_FLY_SECRET_PAYLOAD -ErrorAction SilentlyContinue");
-    expect(deployScript).toContain('spawn("flyctl.exe", ["secrets", "import", "--app", app, "--stage"]');
     expect(deployScript).not.toContain("$processInfo.RedirectStandardInput = $true");
     expect(deployScript).not.toContain("flyctl secrets set --app $app --stage");
     expect(deployScript).not.toMatch(/flyctl secrets (?:set|import)[^\r\n]*\$env:/);

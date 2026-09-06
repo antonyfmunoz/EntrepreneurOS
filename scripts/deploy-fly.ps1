@@ -108,31 +108,15 @@ function Import-FlySecretsFromEnvironment([string]$App, [string[]]$Names) {
     # treats it as part of the first dotenv key. Use Node's byte-oriented pipe
     # instead: it passes Buffer bytes directly to flyctl without a shell or an
     # encoding preamble, and the payload never becomes a process argument.
-    $nodeSecretImporter = @'
-const { spawn } = require("node:child_process");
-const payload = process.env.EOS_FLY_SECRET_PAYLOAD;
-const app = process.env.EOS_FLY_SECRET_APP;
-if (!payload || !app) process.exit(64);
-const child = spawn("flyctl.exe", ["secrets", "import", "--app", app, "--stage"], {
-  stdio: ["pipe", "pipe", "pipe"],
-  windowsHide: true,
-});
-child.stdout.on("data", (chunk) => process.stdout.write(chunk));
-child.stderr.on("data", (chunk) => process.stderr.write(chunk));
-child.once("error", () => process.exit(1));
-child.once("close", (code) => process.exit(code ?? 1));
-child.stdin.end(Buffer.from(payload, "utf8"));
-'@
     $env:EOS_FLY_SECRET_PAYLOAD = $payload
     $env:EOS_FLY_SECRET_APP = $App
-    $stdout = & node -e $nodeSecretImporter 2>&1
+    $stdout = & node scripts/import-fly-secrets.cjs 2>&1
     $flyExitCode = $LASTEXITCODE
     if ($stdout) { Write-Output $stdout }
     if ($flyExitCode -ne 0) { throw "Fly rejected the staged production secret set." }
   } finally {
     Remove-Item Env:EOS_FLY_SECRET_PAYLOAD -ErrorAction SilentlyContinue
     Remove-Item Env:EOS_FLY_SECRET_APP -ErrorAction SilentlyContinue
-    $nodeSecretImporter = $null
     $payload = $null
     $lines = $null
   }
