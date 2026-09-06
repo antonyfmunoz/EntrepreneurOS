@@ -143,10 +143,12 @@ describe("production deployment script contract", () => {
     }
   });
 
-  it("streams Fly secrets as BOM-free stdin instead of exposing values in process arguments", () => {
-    expect(deployScript).toContain("$processInfo.RedirectStandardInput = $true");
+  it("redirects a BOM-free ephemeral secret file to Fly without exposing values in process arguments", () => {
     expect(deployScript).toContain("$payloadBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($payload)");
-    expect(deployScript).toContain("$process.StandardInput.BaseStream.Write($payloadBytes, 0, $payloadBytes.Length)");
+    expect(deployScript).toContain("[IO.File]::WriteAllBytes($payloadFile, $payloadBytes)");
+    expect(deployScript).toContain("flyctl.exe secrets import --app");
+    expect(deployScript).toContain("Remove-Item -LiteralPath $payloadFile -Force -ErrorAction SilentlyContinue");
+    expect(deployScript).not.toContain("$processInfo.RedirectStandardInput = $true");
     expect(deployScript).not.toContain("flyctl secrets set --app $app --stage");
     expect(deployScript).not.toMatch(/flyctl secrets (?:set|import)[^\r\n]*\$env:/);
   });
