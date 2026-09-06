@@ -104,37 +104,35 @@ function Import-FlySecretsFromEnvironment([string]$App, [string[]]$Names) {
   }
   $payload = $lines -join "`n"
   try {
-    # Windows PowerShell's native-command pipeline can prepend a UTF-8 BOM.
-    # Fly parses that marker as part of the first dotenv key. Stage the payload
-    # in a short-lived, BOM-free file and let cmd.exe redirect the raw bytes to
-    # Fly; Process.StandardInput can still introduce an encoding preamble on
-    # the Windows PowerShell .NET runtime even when its BaseStream is used.
-    $payloadBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($payload)
-    $payloadFile = Join-Path ([IO.Path]::GetTempPath()) ("eos-fly-secrets-{0}.dotenv" -f [Guid]::NewGuid().ToString("N"))
-    [IO.File]::WriteAllBytes($payloadFile, $payloadBytes)
-    $processInfo = [System.Diagnostics.ProcessStartInfo]::new()
-    $processInfo.FileName = $env:ComSpec
-    $processInfo.Arguments = "/d /s /c `"flyctl.exe secrets import --app `"`"$App`"`" --stage < `"`"$payloadFile`"`"`""
-    $processInfo.UseShellExecute = $false
-    $processInfo.RedirectStandardOutput = $true
-    $processInfo.RedirectStandardError = $true
-    $process = [System.Diagnostics.Process]::new()
-    $process.StartInfo = $processInfo
-    if (-not $process.Start()) { throw "Could not start Fly secret staging." }
-    $stdout = $process.StandardOutput.ReadToEnd()
-    $stderr = $process.StandardError.ReadToEnd()
-    $process.WaitForExit()
+    # Windows PowerShell native-command I/O can prepend a UTF-8 BOM. Fly then
+    # treats it as part of the first dotenv key. Use Node's byte-oriented pipe
+    # instead: it passes Buffer bytes directly to flyctl without a shell or an
+    # encoding preamble, and the payload never becomes a process argument.
+    $nodeSecretImporter = @'
+const { spawn } = require("node:child_process");
+const payload = process.env.EOS_FLY_SECRET_PAYLOAD;
+const app = process.env.EOS_FLY_SECRET_APP;
+if (!payload || !app) process.exit(64);
+const child = spawn("flyctl.exe", ["secrets", "import", "--app", app, "--stage"], {
+  stdio: ["pipe", "pipe", "pipe"],
+  windowsHide: true,
+});
+child.stdout.on("data", (chunk) => process.stdout.write(chunk));
+child.stderr.on("data", (chunk) => process.stderr.write(chunk));
+child.once("error", () => process.exit(1));
+child.once("close", (code) => process.exit(code ?? 1));
+child.stdin.end(Buffer.from(payload, "utf8"));
+'@
+    $env:EOS_FLY_SECRET_PAYLOAD = $payload
+    $env:EOS_FLY_SECRET_APP = $App
+    $stdout = & node -e $nodeSecretImporter 2>&1
+    $flyExitCode = $LASTEXITCODE
     if ($stdout) { Write-Output $stdout }
-    if ($process.ExitCode -ne 0) {
-      if ($stderr) { Write-Error $stderr }
-      throw "Fly rejected the staged production secret set."
-    }
+    if ($flyExitCode -ne 0) { throw "Fly rejected the staged production secret set." }
   } finally {
-    if ($payloadFile -and (Test-Path -LiteralPath $payloadFile)) {
-      Remove-Item -LiteralPath $payloadFile -Force -ErrorAction SilentlyContinue
-    }
-    $payloadFile = $null
-    $payloadBytes = $null
+    Remove-Item Env:EOS_FLY_SECRET_PAYLOAD -ErrorAction SilentlyContinue
+    Remove-Item Env:EOS_FLY_SECRET_APP -ErrorAction SilentlyContinue
+    $nodeSecretImporter = $null
     $payload = $null
     $lines = $null
   }
