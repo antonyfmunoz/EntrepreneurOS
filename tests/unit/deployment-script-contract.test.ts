@@ -55,6 +55,12 @@ describe("production deployment script contract", () => {
     expect(inspection).toBeLessThan(build);
   });
 
+  it("removes the legacy release-identity secret before promotion so machine metadata is authoritative", () => {
+    expect(deployScript).toContain('Where-Object { $_.name -eq "EOS_RELEASE_SUBJECT" }');
+    expect(deployScript).toContain("flyctl secrets unset EOS_RELEASE_SUBJECT --app $app --stage");
+    expect(deployScript).toContain("shadows deployment release identity");
+  });
+
   it("builds the immutable image before staging any credentials", () => {
     const build = deployScript.indexOf("--build-only --push");
     const secretStage = deployScript.indexOf("Import-FlySecretsFromEnvironment -App $app");
