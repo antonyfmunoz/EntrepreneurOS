@@ -11,7 +11,8 @@ describe("public legal routes", () => {
     const response = await supertest(app).get("/terms").expect(200);
     expect(response.headers["content-type"]).toContain("text/html");
     expect(response.headers["x-content-type-options"]).toBe("nosniff");
-    expect(response.text).toContain("Authorized Operator Terms");
+    expect(response.text).toContain("Internal Operator Terms");
+    expect(response.text).toContain("proprietary internal operating environment");
     expect(response.text).toContain("QuickBooks");
   });
 

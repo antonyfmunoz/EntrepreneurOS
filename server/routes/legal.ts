@@ -24,7 +24,7 @@ const publicLegalPage = (input: { title: string; summary: string; sections: Arra
   </head>
   <body>
     <main>
-      <p class="eyebrow">EntrepreneurOS · Effective September 7, 2026</p>
+      <p class="eyebrow">EntrepreneurOS · Internal use notice · Effective September 7, 2026</p>
       <h1>${input.title}</h1>
       <p class="summary">${input.summary}</p>
       ${input.sections.map((section) => `<section><h2>${section.heading}</h2><p>${section.body}</p></section>`).join("\n      ")}
@@ -43,23 +43,25 @@ export function registerPublicLegalRoutes(app: Express): void {
     res.send(html);
   };
   app.get("/terms", sendPublicLegalPage(publicLegalPage({
-    title: "Authorized Operator Terms",
-    summary: "These terms govern access to EntrepreneurOS by authorized operators, invited team members, and approved company administrators.",
+    title: "Internal Operator Terms",
+    summary: "EntrepreneurOS is a proprietary internal operating environment for Empyrean Creative LLC and its authorized portfolio companies. It is not currently offered as a public or customer-facing software service.",
     sections: [
-      { heading: "Authorized use", body: "EntrepreneurOS is an internal business operating environment. Access is limited to people and agents granted a role, seat, and company or portfolio scope. You must use only the authority assigned to your role and protect your account and connected-provider access." },
-      { heading: "Connected providers", body: "A company may connect services such as QuickBooks, Stripe, Google Workspace, Notion, or Slack. A connection is company-owned, scoped to the approved operating purpose, and may be disconnected or reauthorized by an authorized administrator. Provider terms continue to apply to the underlying service." },
-      { heading: "Approvals and professional judgment", body: "EOS records work, evidence, approvals, and audit history. It does not replace financial, legal, tax, employment, or other professional advice. People with the required authority remain responsible for decisions and for reviewing actions before they take effect." },
-      { heading: "Availability and changes", body: "EOS is operated for active portfolio and company work. Features, provider connections, and these terms may change as the operating environment evolves. Material updates will be reflected on this page with a new effective date." },
+      { heading: "Private, authorized use only", body: "Access is limited to people and agents given an authenticated role, seat, and company or portfolio scope. EOS is used to operate authorized businesses; it is not a public signup service, marketplace, or consumer application. Each person must use only the authority assigned to their role and protect their account and connected-provider access." },
+      { heading: "Company records and connected providers", body: "A company may connect systems such as QuickBooks, Stripe, Google Workspace, Notion, or Slack for an approved operating purpose. Connections are company-owned, subject to the company administrator's authority, and may be disconnected or reauthorized by an authorized administrator. Provider terms continue to govern the underlying service and data." },
+      { heading: "Human accountability", body: "EOS records work, evidence, approvals, and audit history. Agents assist within assigned authority; they do not replace the accountable human decision-maker. EOS is not financial, legal, tax, employment, investment, or other professional advice. People with the required authority remain responsible for decisions and for reviewing consequential actions before they take effect." },
+      { heading: "No external service commitment", body: "During this proprietary internal phase, EOS does not make a public software-service offer, customer support commitment, or commercial license offer. Any future external offering will have separately reviewed customer terms, privacy disclosures, and any required data-processing terms before launch." },
+      { heading: "Changes", body: "Features, provider connections, and this internal notice may change as the operating environment evolves. Material updates will be reflected on this page with a new effective date." },
     ],
   })));
   app.get("/privacy", sendPublicLegalPage(publicLegalPage({
     title: "Privacy Notice",
-    summary: "This notice explains how EntrepreneurOS handles information used to operate authorized companies and portfolios.",
+    summary: "This notice explains how EntrepreneurOS handles information used internally to operate Empyrean Creative LLC and authorized portfolio companies. EOS is not currently a public or customer-facing software service.",
     sections: [
-      { heading: "Information processed", body: "EOS may process account and role information, organization records, work and approval history, provider connection metadata, and the business records made available through an approved provider connection. The information processed depends on the company, role, and authorized workflow." },
-      { heading: "Purpose and access", body: "Information is used to provide the operating workspace, enforce company and role boundaries, coordinate approved work, maintain audit evidence, and operate connected-provider workflows. Access is limited by role, company, portfolio, and provider authorization rather than being shared broadly across users." },
-      { heading: "Service providers and security", body: "EOS uses infrastructure and identity providers to host the service, authenticate authorized users, and operate approved integrations. Provider credentials are handled as delegated connection material and are not displayed to ordinary workspace users. Reasonable technical and organizational safeguards are used, but no online service can guarantee absolute security." },
-      { heading: "Retention and requests", body: "Business records and audit evidence are retained for the applicable company operating purpose, continuity needs, and required recordkeeping. An authorized company administrator may request correction, export, disconnection, or deletion review through the contact below; some records may need to be retained for audit, security, or legal obligations." },
+      { heading: "Information processed", body: "EOS may process account and role information, organization records, work and approval history, provider connection metadata, and business records made available through an approved connection. The information processed depends on the company, role, and authorized workflow. Internal users and company administrators remain responsible for entering and connecting information they are authorized to use." },
+      { heading: "Purpose and access", body: "Information is used only to operate the internal workspace, enforce company and role boundaries, coordinate approved work, maintain audit evidence, and operate approved provider workflows. EOS is not designed as an advertising, data-broker, or public consumer service. Access is limited by role, company, portfolio, and provider authorization rather than being shared broadly across users." },
+      { heading: "Providers and safeguards", body: "EOS uses infrastructure, identity, and approved integration providers to host the service, authenticate authorized users, and operate workflows. Provider credentials are handled as delegated connection material and are not displayed to ordinary workspace users. Access controls, audit records, and provider-specific authorization are used to reduce inappropriate access; no online service can guarantee absolute security." },
+      { heading: "Retention and internal requests", body: "Business records and audit evidence are retained for the applicable company operating purpose, continuity needs, and required recordkeeping. An authorized company administrator may request correction, export, disconnection, or deletion review through the contact below; some records may need to be retained for audit, security, or legal obligations. A formal records-retention and external privacy-rights program will be finalized before any public launch." },
+      { heading: "Future public launch", body: "Before EOS is offered outside the authorized internal companies, Empyrean Creative LLC will publish reviewed customer-facing terms, privacy disclosures, and data-processing terms appropriate to the released product, jurisdictions, and data flows." },
     ],
   })));
   app.get("/api/legal/documents", async (_req, res, next) => {
