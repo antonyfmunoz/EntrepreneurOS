@@ -170,6 +170,27 @@ if (-not $env:MIGRATION_DATABASE_URL) {
 
 function Set-FreshProductionBearerToken {
   if ($env:EOS_NONINTERACTIVE_RELEASE -eq "true") {
+    if ($env:EOS_PRODUCTION_BROWSER_CLIPBOARD_HANDOFF -eq "true") {
+      $originalClipboard = Get-Clipboard -Raw -ErrorAction SilentlyContinue
+      $deadline = (Get-Date).AddSeconds(120)
+      $candidate = $null
+      Write-Output "Awaiting a fresh Clerk session through the approved local browser handoff."
+      try {
+        do {
+          $clipboard = Get-Clipboard -Raw -ErrorAction SilentlyContinue
+          if ($clipboard -is [string] -and $clipboard.Trim().Split('.').Count -eq 3 -and $clipboard.Trim().Length -lt 16_000 -and $clipboard -ne $originalClipboard) {
+            $candidate = $clipboard.Trim()
+            break
+          }
+          Start-Sleep -Milliseconds 250
+        } while ((Get-Date) -lt $deadline)
+      } finally {
+        if ($null -eq $originalClipboard) { Set-Clipboard -Value "" } else { Set-Clipboard -Value $originalClipboard }
+      }
+      if (-not $candidate) { throw "Timed out waiting for a fresh Clerk browser session handoff." }
+      $env:EOS_PRODUCTION_BEARER_TOKEN = $candidate
+      return
+    }
     if (-not $env:EOS_PRODUCTION_BEARER_TOKEN) {
       throw "EOS_PRODUCTION_BEARER_TOKEN is required for a noninteractive release. Supply a fresh short-lived Clerk session JWT only in the current process."
     }

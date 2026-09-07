@@ -181,4 +181,11 @@ describe("production deployment script contract", () => {
     expect(firstTokenPrompt).toBeGreaterThan(firstPublicSmoke);
     expect(firstTokenPrompt).toBeLessThan(firstAuthenticatedSmoke);
   });
+
+  it("can consume an explicitly approved, local-only browser handoff only at the authenticated smoke boundary", () => {
+    expect(deployScript).toContain('$env:EOS_PRODUCTION_BROWSER_CLIPBOARD_HANDOFF -eq "true"');
+    expect(deployScript).toContain("Awaiting a fresh Clerk session through the approved local browser handoff.");
+    expect(deployScript).toContain("Timed out waiting for a fresh Clerk browser session handoff.");
+    expect(deployScript).toContain("Set-Clipboard -Value $originalClipboard");
+  });
 });
