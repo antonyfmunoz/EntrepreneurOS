@@ -185,7 +185,7 @@ function Set-FreshProductionBearerToken {
       try {
         do {
           $clipboard = Get-Clipboard -Raw -ErrorAction SilentlyContinue
-          if ($clipboard -is [string] -and $clipboard.Trim().Split('.').Count -eq 3 -and $clipboard.Trim().Length -lt 16_000 -and $clipboard -ne $originalClipboard) {
+          if ($clipboard -is [string] -and $clipboard.Trim().Split('.').Count -eq 3 -and $clipboard.Trim().Length -lt 16000 -and $clipboard -ne $originalClipboard) {
             $candidate = $clipboard.Trim()
             break
           }

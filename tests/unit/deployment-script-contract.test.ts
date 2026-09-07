@@ -8,6 +8,10 @@ const deployScript = readFileSync(new URL("../../scripts/deploy-fly.ps1", import
 const rollbackScript = readFileSync(new URL("../../scripts/rollback-fly.ps1", import.meta.url), "utf8");
 
 describe("production deployment script contract", () => {
+  it("does not use JavaScript-style numeric separators in the Windows PowerShell release script", () => {
+    expect(deployScript).not.toMatch(/\b\d[\d_]*_\d[\d_]*\b/);
+  });
+
   it("archives LF configuration even when the operator's Git uses Windows CRLF conversion", () => {
     const directory = mkdtempSync(join(tmpdir(), "eos-archive-regression-"));
     const run = (args: string[]) => execFileSync("git", args, { cwd: directory, stdio: ["ignore", "pipe", "pipe"], timeout: 20_000 });
