@@ -11,6 +11,7 @@ import {
 } from "../ai/cost-control";
 import * as gmail from "../integrations/gmail";
 import * as notion from "../integrations/notion";
+import * as quickbooks from "../integrations/quickbooks";
 import { verifyStripeConnection } from "../integrations/stripe-health";
 import {
   executeRecoveryCommercialEffect,
@@ -20571,9 +20572,10 @@ export function registerEosRuntimeRoutes(app: Express): void {
         purpose: "administer_systems_registry",
         classification: "confidential",
       });
-      const [googleWorkspace, notionConnection] = await Promise.all([
+      const [googleWorkspace, notionConnection, quickbooksConnection] = await Promise.all([
         gmail.verifyConnection(req.user.id),
         notion.verifyConnection(req.user.id),
+        quickbooks.verifyConnection(req.user.id),
       ]);
       const umhConfigured = federationConfigured();
       return {
@@ -20711,29 +20713,42 @@ export function registerEosRuntimeRoutes(app: Express): void {
             name: "QuickBooks Online",
             description:
               "Authoritative accounting ledger, invoicing, reconciliation, and financial reporting.",
-            state: "not_configured",
-            health: "not_connected",
-            configured: false,
-            connected: false,
+            state: quickbooksConnection.connected
+              ? "connected"
+              : quickbooksConnection.configured
+                ? "available"
+                : "not_configured",
+            health: quickbooksConnection.healthy
+              ? "healthy"
+              : quickbooksConnection.connected
+                ? "degraded"
+                : "not_connected",
+            configured: quickbooksConnection.configured,
+            connected: quickbooksConnection.connected,
             providerType: "oauth",
             authority: "external_accounting_provider",
             risk: "consequential_write",
             services: ["Accounting ledger", "Invoicing", "Reconciliation"],
             serviceHealth: {
-              "Accounting ledger": false,
-              Invoicing: false,
-              Reconciliation: false,
+              "Company file": quickbooksConnection.healthy,
+              "Accounting ledger": quickbooksConnection.healthy,
+              Invoicing: quickbooksConnection.healthy,
             },
-            operations: [],
+            operations: quickbooks.QUICKBOOKS_ONLINE_TOOLS,
             requiredScopes: [
               "QuickBooks company-file OAuth",
               "Read ledger and invoice data",
               "Read reconciliation and period-close state",
             ],
-            executionAdapter: "EOS QuickBooks adapter not configured",
+            company: quickbooksConnection.company,
+            executionAdapter: "EOS-owned QuickBooks Online OAuth adapter",
             manualFallback:
               "Operate the governed EOS work packet and reconcile accounting facts manually in QuickBooks.",
-            actions: [],
+            actions: quickbooksConnection.connected
+              ? ["verify", "reconnect", "disconnect"]
+              : quickbooksConnection.configured
+                ? ["connect"]
+                : [],
           },
           {
             id: "slack",

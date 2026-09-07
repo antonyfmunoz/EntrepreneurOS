@@ -1028,6 +1028,14 @@ export default function EosOverlayPage() {
       (contextQuery.data?.principalContext?.allowedSurfaces || []).includes("systems"),
     ),
   });
+  const quickbooksProviderConnectionsQuery = useQuery<JsonRecord>({
+    queryKey: [root, roleScopeKey, "quickbooks-provider-connections"],
+    queryFn: () => requestJson("GET", `${root}/integrations/quickbooks/connections`),
+    enabled: Boolean(
+      companyId &&
+      (contextQuery.data?.principalContext?.allowedSurfaces || []).includes("systems"),
+    ),
+  });
   const systemsStateQuery = useQuery<JsonRecord>({
     queryKey: [root, roleScopeKey, "systems-state"],
     queryFn: () => requestJson("GET", `${root}/systems-state`),
@@ -2694,6 +2702,7 @@ export default function EosOverlayPage() {
         integrationsQuery.refetch(),
         googleProviderConnectionsQuery.refetch(),
         notionProviderConnectionsQuery.refetch(),
+        quickbooksProviderConnectionsQuery.refetch(),
       ]);
       const current = new URL(window.location.href);
       current.searchParams.delete(integration.id);
@@ -2729,6 +2738,7 @@ export default function EosOverlayPage() {
         integrationsQuery.refetch(),
         googleProviderConnectionsQuery.refetch(),
         notionProviderConnectionsQuery.refetch(),
+        quickbooksProviderConnectionsQuery.refetch(),
       ]);
       const integration = variables.integration;
       if (variables.connection?.id) {
@@ -2777,6 +2787,7 @@ export default function EosOverlayPage() {
         integrationsQuery.refetch(),
         googleProviderConnectionsQuery.refetch(),
         notionProviderConnectionsQuery.refetch(),
+        quickbooksProviderConnectionsQuery.refetch(),
       ]);
       const integration = variables.integration;
       toast({
@@ -2795,6 +2806,8 @@ export default function EosOverlayPage() {
       ? "google_workspace"
       : query.get("notion") === "authorized"
         ? "notion"
+        : query.get("quickbooks") === "authorized"
+          ? "quickbooks"
         : null;
     if (!providerId || attachIntegrationMutation.isPending) return;
     const integration = integrationsQuery.data?.find((item) => item.id === providerId);
@@ -12075,6 +12088,8 @@ export default function EosOverlayPage() {
                     ? googleProviderConnectionsQuery.data?.connections || []
                     : integration.id === "notion"
                       ? notionProviderConnectionsQuery.data?.connections || []
+                      : integration.id === "quickbooks"
+                        ? quickbooksProviderConnectionsQuery.data?.connections || []
                       : []
                 }
                 pending={

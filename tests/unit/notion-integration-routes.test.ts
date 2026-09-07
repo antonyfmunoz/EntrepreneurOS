@@ -24,6 +24,18 @@ const storageAdapter = vi.hoisted(() => ({
   upsertOauthToken: vi.fn(),
   deleteOauthToken: vi.fn(),
 }));
+const quickbooksAdapter = vi.hoisted(() => ({
+  isConfigured: vi.fn(() => true),
+  getAuthUrl: vi.fn(() => "https://appcenter.intuit.com/connect/oauth2?state=signed"),
+  readOAuthState: vi.fn(),
+  exchangeCode: vi.fn(),
+  connectionSummary: vi.fn(async () => ({ configured: true, connected: true, company: { realmId: "123456789012" } })),
+  verifyConnection: vi.fn(async () => ({ configured: true, connected: true, healthy: true, company: { realmId: "123456789012", companyName: "Empyrean Creative LLC" } })),
+  disconnect: vi.fn(async () => ({ success: true, providerRevoked: true })),
+}));
+const databaseAdapter = vi.hoisted(() => ({
+  select: vi.fn(),
+}));
 const eosAccess = vi.hoisted(() => ({
   companyAccess: vi.fn(async () => ({
     company: { id: 12 },
@@ -37,7 +49,9 @@ const eosAccess = vi.hoisted(() => ({
 
 vi.mock("../../server/integrations/notion", () => notionAdapter);
 vi.mock("../../server/integrations/gmail", () => gmailAdapter);
+vi.mock("../../server/integrations/quickbooks", () => quickbooksAdapter);
 vi.mock("../../server/storage", () => ({ storage: storageAdapter }));
+vi.mock("../../server/db", () => ({ db: databaseAdapter }));
 vi.mock("../../server/routes/eos-runtime", () => {
   class EosRouteError extends Error {
     constructor(public status: number, public code: string, message: string) {
@@ -56,7 +70,10 @@ describe("Notion integration HTTP controls", () => {
   beforeEach(() => {
     for (const mock of Object.values(notionAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
     for (const mock of Object.values(gmailAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
+    for (const mock of Object.values(quickbooksAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
     storageAdapter.upsertOauthToken.mockReset();
+    databaseAdapter.select.mockReset();
+    databaseAdapter.select.mockReturnValue({ from: () => ({ where: async () => [] }) });
     eosAccess.companyAccess.mockClear();
     eosAccess.authorizeAction.mockClear();
     const app = express();
@@ -85,6 +102,12 @@ describe("Notion integration HTTP controls", () => {
     const response = await api.get("/api/eos/companies/12/integrations/notion/status?verify=true").expect(200);
     expect(response.body).toEqual(expect.objectContaining({ healthy: true }));
     expect(notionAdapter.verifyConnection).toHaveBeenCalledWith(userId);
+  });
+
+  it("creates a company-file authorization request bound to the signed-in user", async () => {
+    const response = await api.get("/api/eos/companies/12/integrations/quickbooks/auth").expect(200);
+    expect(response.body.authUrl).toContain("appcenter.intuit.com");
+    expect(quickbooksAdapter.getAuthUrl).toHaveBeenCalledWith(userId, "/company/12#systems");
   });
 
   it("revokes and deletes only the signed-in user's connection", async () => {
@@ -120,13 +143,34 @@ describe("Notion integration HTTP controls", () => {
     });
 
     const response = await api.get("/api/auth/notion/callback?code=provider-code&state=signed-state").expect(302);
-    expect(response.headers.location).toBe("/company/12?notion=connected#systems");
+    expect(response.headers.location).toBe("/company/12?notion=authorized#systems");
     expect(storageAdapter.upsertOauthToken).toHaveBeenCalledWith(expect.objectContaining({ userId, provider: "notion", metadata: { workspaceId: "workspace-1", workspaceName: "Workspace One" } }));
     const stored = storageAdapter.upsertOauthToken.mock.calls[0][0];
     expect(stored.accessToken).toMatch(/^enc:v1:/);
     expect(stored.refreshToken).toMatch(/^enc:v1:/);
     expect(JSON.stringify(stored)).not.toContain("notion-access-plaintext");
     expect(JSON.stringify(stored)).not.toContain("notion-refresh-plaintext");
+    delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
+  });
+
+  it("stores a verified QuickBooks company-file credential only after the exact realm is returned", async () => {
+    process.env.EOS_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 19).toString("base64");
+    quickbooksAdapter.readOAuthState.mockReturnValue({ userId, expiresAt: Date.now() + 60_000, nonce: "nonce", returnTo: "/company/12#systems" });
+    quickbooksAdapter.exchangeCode.mockResolvedValue({
+      accessToken: "quickbooks-access-plaintext", refreshToken: "quickbooks-refresh-plaintext", tokenType: "Bearer",
+      expiresAt: new Date(Date.now() + 60_000), scope: "com.intuit.quickbooks.accounting", metadata: { realmId: "123456789012" },
+    });
+    quickbooksAdapter.verifyConnection.mockResolvedValue({ configured: true, connected: true, healthy: true, company: { realmId: "123456789012", companyName: "Empyrean Creative LLC" } });
+
+    const response = await api.get("/api/auth/quickbooks/callback?code=provider-code&realmId=123456789012&state=signed-state").expect(302);
+    expect(response.headers.location).toBe("/company/12?quickbooks=authorized#systems");
+    expect(storageAdapter.upsertOauthToken).toHaveBeenCalledWith(expect.objectContaining({ userId, provider: "quickbooks", metadata: { realmId: "123456789012" } }));
+    const stored = storageAdapter.upsertOauthToken.mock.calls[0][0];
+    expect(stored.accessToken).toMatch(/^enc:v1:/);
+    expect(stored.refreshToken).toMatch(/^enc:v1:/);
+    expect(JSON.stringify(stored)).not.toContain("quickbooks-access-plaintext");
+    expect(JSON.stringify(stored)).not.toContain("quickbooks-refresh-plaintext");
+    expect(quickbooksAdapter.verifyConnection).toHaveBeenCalledWith(userId);
     delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
   });
 });
