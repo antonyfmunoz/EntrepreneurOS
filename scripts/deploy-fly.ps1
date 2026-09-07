@@ -1,11 +1,21 @@
 $ErrorActionPreference = "Stop"
 
 function Get-FlyMachines([string]$App) {
-  $raw = flyctl machines list --app $App --json
-  if ($LASTEXITCODE -ne 0) { throw "Could not inspect Fly machines for $App." }
-  $items = @($raw | ConvertFrom-Json | ForEach-Object { $_ })
-  if (-not $items.Count) { throw "Fly returned no machines for $App." }
-  return $items
+  for ($attempt = 1; $attempt -le 5; $attempt++) {
+    $raw = flyctl machines list --app $App --json 2>&1
+    if ($LASTEXITCODE -eq 0) {
+      $items = @($raw | ConvertFrom-Json | ForEach-Object { $_ })
+      if (-not $items.Count) { throw "Fly returned no machines for $App." }
+      return $items
+    }
+    $detail = ($raw | Out-String).Trim()
+    if ($attempt -lt 5 -and $detail -match "(?i)rate limit") {
+      Start-Sleep -Seconds ([Math]::Min($attempt * 2, 10))
+      continue
+    }
+    throw "Could not inspect Fly machines for $App."
+  }
+  throw "Fly machine inventory remained rate limited for $App."
 }
 
 function Wait-FlyFleetConvergence([string]$App, [string]$ExpectedReleaseSubject, [int]$TimeoutSeconds = 180) {
