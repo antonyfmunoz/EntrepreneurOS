@@ -8,6 +8,21 @@ function Get-FlyMachines([string]$App) {
   return $items
 }
 
+function Wait-FlyFleetConvergence([string]$App, [string]$ExpectedReleaseSubject, [int]$TimeoutSeconds = 180) {
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  do {
+    $items = @(Get-FlyMachines -App $App)
+    $images = @($items | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
+    $subjects = @($items | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Where-Object { $_ } | Select-Object -Unique)
+    $allStarted = @($items | Where-Object { $_.state -ne "started" }).Count -eq 0
+    if ($allStarted -and $images.Count -eq 1 -and $subjects.Count -eq 1 -and $subjects[0] -eq $ExpectedReleaseSubject) {
+      return $items
+    }
+    Start-Sleep -Seconds 5
+  } while ((Get-Date) -lt $deadline)
+  throw "Fly fleet did not converge on the expected immutable release subject within $TimeoutSeconds seconds."
+}
+
 function Get-FlySecrets([string]$App) {
   $raw = flyctl secrets list --app $App --json
   if ($LASTEXITCODE -ne 0) { throw "Could not inspect Fly secret deployment state for $App." }
@@ -323,7 +338,10 @@ try {
       --env "EOS_SECRET_VAULT_VENDOR_NAME=$env:EOS_SECRET_VAULT_VENDOR_NAME" --yes
     if ($LASTEXITCODE -ne 0) { throw "Fly promotion did not complete successfully." }
 
-    $promotedMachines = @(Get-FlyMachines -App $app)
+    # A canary command returns after the first healthy replacement. Wait for
+    # the entire fleet rather than treating that expected transition as a
+    # mixed-image deployment failure and rolling back a healthy candidate.
+    $promotedMachines = @(Wait-FlyFleetConvergence -App $app -ExpectedReleaseSubject $env:EOS_RELEASE_SUBJECT)
     $promotedImages = @($promotedMachines | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
     $promotedSubjects = @($promotedMachines | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Select-Object -Unique)
     if ($promotedImages.Count -ne 1 -or $promotedImages[0] -notmatch '^registry\.fly\.io/[a-z0-9-]+@sha256:[a-f0-9]{64}$') { throw "Promoted machines do not share one immutable image digest." }
