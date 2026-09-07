@@ -12,11 +12,18 @@ function Wait-FlyFleetConvergence([string]$App, [string]$ExpectedReleaseSubject,
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
   do {
     $items = @(Get-FlyMachines -App $App)
-    $images = @($items | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
-    $subjects = @($items | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Where-Object { $_ } | Select-Object -Unique)
-    $allStarted = @($items | Where-Object { $_.state -ne "started" }).Count -eq 0
+    # Autostopped and destroyed Machines cannot receive traffic. Fly retains
+    # them as historical records, so only qualify the active serving fleet.
+    $activeItems = @($items | Where-Object { $_.state -notin @("stopped", "destroyed") })
+    if (-not $activeItems.Count) {
+      Start-Sleep -Seconds 5
+      continue
+    }
+    $images = @($activeItems | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
+    $subjects = @($activeItems | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Where-Object { $_ } | Select-Object -Unique)
+    $allStarted = @($activeItems | Where-Object { $_.state -ne "started" }).Count -eq 0
     if ($allStarted -and $images.Count -eq 1 -and $subjects.Count -eq 1 -and $subjects[0] -eq $ExpectedReleaseSubject) {
-      return $items
+      return $activeItems
     }
     Start-Sleep -Seconds 5
   } while ((Get-Date) -lt $deadline)

@@ -72,6 +72,7 @@ describe("production deployment script contract", () => {
 
   it("waits for every Fly machine to converge before qualifying the promoted image", () => {
     expect(deployScript).toContain("function Wait-FlyFleetConvergence");
+    expect(deployScript).toContain('$activeItems = @($items | Where-Object { $_.state -notin @("stopped", "destroyed") })');
     expect(deployScript).toContain("$promotedMachines = @(Wait-FlyFleetConvergence -App $app -ExpectedReleaseSubject $env:EOS_RELEASE_SUBJECT)");
     expect(deployScript).toContain("Fly fleet did not converge on the expected immutable release subject");
   });
