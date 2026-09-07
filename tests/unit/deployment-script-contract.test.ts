@@ -70,6 +70,12 @@ describe("production deployment script contract", () => {
     expect(promotion).toBeGreaterThan(secretStage);
   });
 
+  it("waits for every Fly machine to converge before qualifying the promoted image", () => {
+    expect(deployScript).toContain("function Wait-FlyFleetConvergence");
+    expect(deployScript).toContain("$promotedMachines = @(Wait-FlyFleetConvergence -App $app -ExpectedReleaseSubject $env:EOS_RELEASE_SUBJECT)");
+    expect(deployScript).toContain("Fly fleet did not converge on the expected immutable release subject");
+  });
+
   it("migrates through local owner authority but stages only the least-privilege runtime database credential", () => {
     expect(deployScript).toContain("MIGRATION_DATABASE_URL is required in the local release process");
     expect(deployScript).toContain('$env:DATABASE_URL = $env:MIGRATION_DATABASE_URL');
