@@ -361,7 +361,7 @@ export function registerIntegrationRoutes(app: Express): void {
       await storage.upsertOauthToken({
         userId: req.user.id, provider: "quickbooks", accessToken: encryptCredential(tokens.accessToken),
         refreshToken: tokens.refreshToken ? encryptCredential(tokens.refreshToken) : undefined,
-        tokenType: tokens.tokenType, expiresAt: tokens.expiresAt, scope: tokens.scope, metadata: tokens.metadata,
+        tokenType: tokens.tokenType, expiresAt: tokens.expiresAt, scope: tokens.scope, metadata: quickbooks.protectMetadata(tokens.metadata),
       });
       const verified = await quickbooks.verifyConnection(req.user.id);
       if (!verified.healthy || !verified.company?.realmId) return res.redirect(redirectWith("integration_error", "quickbooks_verification_failed"));

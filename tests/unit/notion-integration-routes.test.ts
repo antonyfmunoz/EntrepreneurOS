@@ -29,6 +29,7 @@ const quickbooksAdapter = vi.hoisted(() => ({
   getAuthUrl: vi.fn(() => "https://appcenter.intuit.com/connect/oauth2?state=signed"),
   readOAuthState: vi.fn(),
   exchangeCode: vi.fn(),
+  protectMetadata: vi.fn((metadata) => metadata),
   connectionSummary: vi.fn(async () => ({ configured: true, connected: true, company: { realmId: "123456789012" } })),
   verifyConnection: vi.fn(async () => ({ configured: true, connected: true, healthy: true, company: { realmId: "123456789012", companyName: "Empyrean Creative LLC" } })),
   disconnect: vi.fn(async () => ({ success: true, providerRevoked: true })),
