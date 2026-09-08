@@ -138,7 +138,7 @@ async function accessToken(userId: string): Promise<string> {
 async function request(userId: string, path: string, init: RequestInit = {}): Promise<Response> {
   const call = async (token: string) => {
     const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 10_000);
-    try { return await fetch(`${apiBase()}${path}`, { ...init, headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(init.body ? { "Content-Type": "application/json" } : {}), ...(init.headers || {}) }, signal: controller.signal }); }
+    try { return await fetch(`${apiBase()}${path}`, { ...init, redirect: "error", headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(init.body ? { "Content-Type": "application/json" } : {}), ...(init.headers || {}) }, signal: controller.signal }); }
     finally { clearTimeout(timeout); }
   };
   const first = await call(await accessToken(userId));
@@ -162,7 +162,13 @@ export async function verifyConnection(userId: string) {
     if (!response.ok) return { ...summary, healthy: false };
     const body = await response.json() as { CompanyInfo?: CompanyInfo };
     const company = body.CompanyInfo;
-    if (!company?.Id || company.Id !== realmId) return { ...summary, healthy: false };
+    /**
+     * The security boundary is Intuit's authenticated response to the exact
+     * realm-addressed endpoint above. Its CompanyInfo `Id` is an entity ID and
+     * can differ from the OAuth realm ID, so it must not reject an otherwise
+     * authorized company-file read.
+     */
+    if (!company || typeof company !== "object") return { ...summary, healthy: false };
     const next = { realmId, companyName: company.CompanyName || undefined, legalName: company.LegalName || undefined, environment: summary.company.environment };
     const token = await storage.getOauthToken(userId, "quickbooks");
     if (token) await storage.upsertOauthToken({ userId, provider: "quickbooks", accessToken: token.accessToken, refreshToken: token.refreshToken || undefined, tokenType: token.tokenType || undefined, expiresAt: token.expiresAt || undefined, scope: token.scope || ACCOUNTING_SCOPE, metadata: next });
