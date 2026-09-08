@@ -16,12 +16,13 @@ GOOGLE_REDIRECT_URI=https://entrepreneuros.net/api/auth/google/callback
 NOTION_CLIENT_ID=op://EntrepreneurOS/Production/NOTION_CLIENT_ID
 NOTION_CLIENT_SECRET=op://EntrepreneurOS/Production/NOTION_CLIENT_SECRET
 NOTION_REDIRECT_URI=https://entrepreneuros.net/api/auth/notion/callback
-# Optional company-owned QuickBooks Online OAuth. Register this exact callback
-# in the Intuit app before adding these vault fields and enabling the connection.
-# QUICKBOOKS_CLIENT_ID=op://EntrepreneurOS/Production/QUICKBOOKS_CLIENT_ID
-# QUICKBOOKS_CLIENT_SECRET=op://EntrepreneurOS/Production/QUICKBOOKS_CLIENT_SECRET
-# QUICKBOOKS_REDIRECT_URI=https://entrepreneuros.net/api/auth/quickbooks/callback
-# QUICKBOOKS_ENVIRONMENT=production
+# Company-owned QuickBooks Online OAuth. The client ID and secret remain in
+# 1Password; this exact callback is registered with Intuit for the production
+# application and the connection is activated only after valid values exist.
+QUICKBOOKS_CLIENT_ID=op://EntrepreneurOS/Production/QUICKBOOKS_CLIENT_ID
+QUICKBOOKS_CLIENT_SECRET=op://EntrepreneurOS/Production/QUICKBOOKS_CLIENT_SECRET
+QUICKBOOKS_REDIRECT_URI=op://EntrepreneurOS/Production/QUICKBOOKS_REDIRECT_URI
+QUICKBOOKS_ENVIRONMENT=op://EntrepreneurOS/Production/QUICKBOOKS_ENVIRONMENT
 # Slack is optional until the company workspace is ready to connect. The OAuth
 # app must register the exact callback before these vault references are added.
 # SLACK_CLIENT_ID=op://EntrepreneurOS/Production/SLACK_CLIENT_ID
