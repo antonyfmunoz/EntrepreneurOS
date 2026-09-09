@@ -2,7 +2,10 @@ $ErrorActionPreference = "Stop"
 
 function Get-FlyMachines([string]$App) {
   for ($attempt = 1; $attempt -le 5; $attempt++) {
-    $raw = flyctl machines list --app $App --json 2>&1
+    # Fly may emit an optional metrics-session warning on stderr while still
+    # returning valid machine JSON and exit code 0. Keep stdout parseable; the
+    # explicit exit-code handling below still rejects real Fly failures.
+    $raw = flyctl machines list --app $App --json 2>$null
     if ($LASTEXITCODE -eq 0) {
       $items = @($raw | ConvertFrom-Json | ForEach-Object { $_ })
       if (-not $items.Count) { throw "Fly returned no machines for $App." }
@@ -41,7 +44,7 @@ function Wait-FlyFleetConvergence([string]$App, [string]$ExpectedReleaseSubject,
 }
 
 function Get-FlySecrets([string]$App) {
-  $raw = flyctl secrets list --app $App --json
+  $raw = flyctl secrets list --app $App --json 2>$null
   if ($LASTEXITCODE -ne 0) { throw "Could not inspect Fly secret deployment state for $App." }
   return @($raw | ConvertFrom-Json | ForEach-Object { $_ })
 }
