@@ -14,6 +14,17 @@ function Get-FlyMachines([string]$App) {
   return $items
 }
 
+function Get-FlyMachineImageReference([object]$Machine) {
+  $imageRef = $Machine.PSObject.Properties["image_ref"].Value
+  $registry = [string](@($imageRef.PSObject.Properties["registry"].Value)[0])
+  $repository = [string](@($imageRef.PSObject.Properties["repository"].Value)[0])
+  $digest = [string](@($imageRef.PSObject.Properties["digest"].Value)[0])
+  if (-not $registry -or -not $repository -or $digest -notmatch "^sha256:[a-f0-9]{64}$") {
+    throw "Fly returned an invalid immutable image reference."
+  }
+  return "$registry/$repository@$digest"
+}
+
 $app = if ($env:EOS_FLY_APP) { $env:EOS_FLY_APP } else { "eos-app" }
 $image = $env:EOS_ROLLBACK_IMAGE
 $subject = $env:EOS_ROLLBACK_RELEASE_SUBJECT
@@ -47,7 +58,7 @@ $machines = @((Get-FlyMachines -App $app) | Where-Object { $_.state -notin @("st
 $machines = @($machines | Where-Object { $_.state -eq "started" })
 $machines = @($machines | Where-Object { $_.id })
 if (-not $machines.Count) { throw "Rollback returned without an active serving Fly machine." }
-$images = @($machines | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
+$images = @($machines | ForEach-Object { Get-FlyMachineImageReference $_ } | Select-Object -Unique)
 $subjects = @($machines | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Select-Object -Unique)
 if ($images.Count -ne 1 -or $images[0] -ne $image -or $subjects.Count -ne 1 -or $subjects[0] -ne $subject) { throw "Rollback returned without proving the requested immutable image and release subject." }
 

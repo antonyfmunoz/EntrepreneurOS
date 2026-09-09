@@ -76,6 +76,8 @@ describe("production deployment script contract", () => {
 
   it("waits for every Fly machine to converge before qualifying the promoted image", () => {
     expect(deployScript).toContain("function Wait-FlyFleetConvergence");
+    expect(deployScript).toContain("function Get-FlyMachineImageReference");
+    expect(deployScript).toContain("Fly returned an invalid immutable image reference.");
     expect(deployScript).toContain("$PSNativeCommandUseErrorActionPreference = $false");
     expect(deployScript).toContain('$activeItems = @($items | Where-Object { $_.state -notin @("stopped", "destroyed") })');
     expect(deployScript).toContain('$raw = cmd.exe /d /s /c "flyctl machines list --app $App --json 2>NUL"');
