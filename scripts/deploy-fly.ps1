@@ -151,6 +151,11 @@ function Import-FlySecretsFromEnvironment([string]$App, [string[]]$Names) {
   $lines = foreach ($name in $Names) {
     $value = [Environment]::GetEnvironmentVariable($name)
     if (-not $value) { throw "Missing required release variable while staging Fly secrets: $name" }
+    # Secret-manager copy flows can preserve a final CR/LF. It is not part of
+    # the credential value and Fly dotenv secrets must be single-line. Retain
+    # every other character and still reject embedded line breaks.
+    $value = $value.TrimEnd("`r", "`n")
+    if (-not $value) { throw "Release variable is empty after normalizing a trailing line ending: $name" }
     if ($value.Contains("`r") -or $value.Contains("`n")) {
       throw "Fly secret values must be single-line dotenv values: $name"
     }
