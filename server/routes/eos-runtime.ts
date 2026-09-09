@@ -12,6 +12,7 @@ import {
 import * as gmail from "../integrations/gmail";
 import * as notion from "../integrations/notion";
 import * as quickbooks from "../integrations/quickbooks";
+import * as slack from "../integrations/slack";
 import { verifyStripeConnection } from "../integrations/stripe-health";
 import {
   executeRecoveryCommercialEffect,
@@ -20572,10 +20573,11 @@ export function registerEosRuntimeRoutes(app: Express): void {
         purpose: "administer_systems_registry",
         classification: "confidential",
       });
-      const [googleWorkspace, notionConnection, quickbooksConnection] = await Promise.all([
+      const [googleWorkspace, notionConnection, quickbooksConnection, slackConnection] = await Promise.all([
         gmail.verifyConnection(req.user.id),
         notion.verifyConnection(req.user.id),
         quickbooks.verifyConnection(req.user.id),
+        slack.verifyConnection(req.user.id),
       ]);
       const umhConfigured = federationConfigured();
       return {
@@ -20755,29 +20757,42 @@ export function registerEosRuntimeRoutes(app: Express): void {
             name: "Slack",
             description:
               "Internal channels and decision capture for the Empyrean Studios team.",
-            state: "not_configured",
-            health: "not_connected",
-            configured: false,
-            connected: false,
+            state: slackConnection.connected
+              ? "connected"
+              : slackConnection.configured
+                ? "available"
+                : "not_configured",
+            health: slackConnection.healthy
+              ? "healthy"
+              : slackConnection.connected
+                ? "degraded"
+                : "not_connected",
+            configured: slackConnection.configured,
+            connected: slackConnection.connected,
             providerType: "oauth",
             authority: "provider_execution_after_local_approval",
             risk: "consequential_write",
             services: ["Internal channels", "Thread replies", "Decision links"],
             serviceHealth: {
-              "Internal channels": false,
-              "Thread replies": false,
-              "Decision links": false,
+              "Internal channels": slackConnection.healthy,
+              "Thread replies": slackConnection.healthy,
+              "Decision links": slackConnection.healthy,
             },
-            operations: [],
+            operations: slack.SLACK_TOOLS,
             requiredScopes: [
               "Empyrean Studios workspace OAuth",
               "Approved internal channel metadata",
               "Message draft/send only after local approval",
             ],
-            executionAdapter: "EOS Slack adapter not configured",
+            workspace: slackConnection.workspace,
+            executionAdapter: "EOS-owned Slack OAuth adapter",
             manualFallback:
               "Route communication through EOS hierarchy and record the decision in the governed Work Packet.",
-            actions: [],
+            actions: slackConnection.connected
+              ? ["verify", "reconnect", "disconnect"]
+              : slackConnection.configured
+                ? ["connect"]
+                : [],
           },
           {
             id: "umh",

@@ -8,12 +8,13 @@ import { db } from "../db";
 import * as gmail from "../integrations/gmail";
 import * as notion from "../integrations/notion";
 import * as quickbooks from "../integrations/quickbooks";
+import * as slack from "../integrations/slack";
 import { credentialEncryptionConfigured, encryptCredential } from "../security/credential-encryption";
 import { allowedSurfacesFor } from "@shared/eos-runtime";
 import { authorizeAction, companyAccess, EosRouteError, visibleSeatIds } from "./eos-runtime";
 
-type SupportedProvider = "gmail" | "notion" | "quickbooks";
-type CompanyProviderKey = "google_workspace" | "notion" | "quickbooks";
+type SupportedProvider = "gmail" | "notion" | "quickbooks" | "slack";
+type CompanyProviderKey = "google_workspace" | "notion" | "quickbooks" | "slack";
 
 const attachConnectionSchema = z.object({
   ownerSeatId: z.string().uuid().optional(),
@@ -21,7 +22,7 @@ const attachConnectionSchema = z.object({
 }).strict();
 
 function providerFrom(req: Request): SupportedProvider {
-  if (req.params.provider === "gmail" || req.params.provider === "notion" || req.params.provider === "quickbooks") return req.params.provider;
+  if (req.params.provider === "gmail" || req.params.provider === "notion" || req.params.provider === "quickbooks" || req.params.provider === "slack") return req.params.provider;
   throw new EosRouteError(404, "integration_provider_not_found", "This provider is not available in the EOS integration registry.");
 }
 
@@ -30,11 +31,11 @@ function companyProviderKey(provider: SupportedProvider): CompanyProviderKey {
 }
 
 function providerLabel(provider: SupportedProvider): string {
-  return provider === "gmail" ? "Google Workspace" : provider === "notion" ? "Notion" : "QuickBooks Online";
+  return provider === "gmail" ? "Google Workspace" : provider === "notion" ? "Notion" : provider === "quickbooks" ? "QuickBooks Online" : "Slack";
 }
 
 function providerAdapter(provider: SupportedProvider) {
-  return provider === "gmail" ? gmail : provider === "notion" ? notion : quickbooks;
+  return provider === "gmail" ? gmail : provider === "notion" ? notion : provider === "quickbooks" ? quickbooks : slack;
 }
 
 async function integrationAccess(req: Request, authorityClass: "view" | "execute" | "decide", actionKey: string) {
@@ -89,6 +90,19 @@ async function providerIdentity(provider: SupportedProvider, userId: string): Pr
         : "",
       grantedPermissions: ["Read company file", "Read accounting ledger and invoices"],
       providerMetadata: company || {},
+    };
+  }
+
+  if (provider === "slack") {
+    const result = await slack.verifyConnection(userId);
+    const workspace = result.workspace;
+    return {
+      connected: result.connected,
+      healthy: result.healthy,
+      accountReference: workspace?.teamId || null,
+      accountScope: workspace?.teamName ? `Slack workspace: ${workspace.teamName}; EOS is limited to its installed bot and approved internal channels.` : "",
+      grantedPermissions: ["Read approved internal channel metadata", "Draft or send a message only after EOS local approval"],
+      providerMetadata: workspace || {},
     };
   }
 
@@ -368,6 +382,30 @@ export function registerIntegrationRoutes(app: Express): void {
       res.redirect(redirectWith("quickbooks", "authorized"));
     } catch (error: any) {
       console.error("QuickBooks OAuth callback error:", error);
+      res.redirect("/portfolios?integration_error=oauth_callback_failed");
+    }
+  });
+
+  app.get("/api/auth/slack/callback", async (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect("/portfolios?integration_error=not_authenticated");
+    try {
+      const code = typeof req.query.code === "string" ? req.query.code : "";
+      const state = typeof req.query.state === "string" ? req.query.state : "";
+      const oauthState = state ? slack.readOAuthState(state, req.user.id) : null;
+      if (!code) return res.redirect("/portfolios?integration_error=no_code");
+      if (!oauthState) return res.redirect("/portfolios?integration_error=invalid_oauth_state");
+      const redirectWith = (key: string, value: string) => {
+        const [path, hash] = oauthState.returnTo.split("#");
+        return `${path}?${key}=${encodeURIComponent(value)}${hash ? `#${hash}` : ""}`;
+      };
+      if (!credentialEncryptionConfigured()) return res.redirect(redirectWith("integration_error", "credential_encryption_not_configured"));
+      const tokens = await slack.exchangeCode(code);
+      await storage.upsertOauthToken({ userId: req.user.id, provider: "slack", accessToken: encryptCredential(tokens.accessToken), tokenType: tokens.tokenType, scope: tokens.scope, metadata: tokens.metadata });
+      const verified = await slack.verifyConnection(req.user.id);
+      if (!verified.healthy || !verified.workspace?.teamId) return res.redirect(redirectWith("integration_error", "slack_verification_failed"));
+      res.redirect(redirectWith("slack", "authorized"));
+    } catch (error: any) {
+      console.error("Slack OAuth callback error:", error);
       res.redirect("/portfolios?integration_error=oauth_callback_failed");
     }
   });
