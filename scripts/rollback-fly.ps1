@@ -7,7 +7,7 @@ function Get-FlyMachines([string]$App) {
   # Fly may emit an optional metrics-session warning on stderr while still
   # returning valid machine JSON and exit code 0. Keep stdout parseable; the
   # explicit exit-code handling below still rejects real Fly failures.
-  $raw = flyctl machines list --app $App --json 2>$null
+  $raw = cmd.exe /d /s /c "flyctl machines list --app $App --json 2>NUL"
   if ($LASTEXITCODE -ne 0) { throw "Could not inspect Fly machines for $App." }
   $items = @($raw | ConvertFrom-Json | ForEach-Object { $_ })
   if (-not $items.Count) { throw "Fly returned no machines for $App." }

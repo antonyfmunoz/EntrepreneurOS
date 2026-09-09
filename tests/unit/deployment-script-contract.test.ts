@@ -78,7 +78,7 @@ describe("production deployment script contract", () => {
     expect(deployScript).toContain("function Wait-FlyFleetConvergence");
     expect(deployScript).toContain("$PSNativeCommandUseErrorActionPreference = $false");
     expect(deployScript).toContain('$activeItems = @($items | Where-Object { $_.state -notin @("stopped", "destroyed") })');
-    expect(deployScript).toContain("$raw = flyctl machines list --app $App --json 2>$null");
+    expect(deployScript).toContain('$raw = cmd.exe /d /s /c "flyctl machines list --app $App --json 2>NUL"');
     expect(deployScript).toContain('if ($attempt -lt 5 -and $detail -match "(?i)rate limit")');
     expect(deployScript).toContain("$promotedMachines = @(Wait-FlyFleetConvergence -App $app -ExpectedReleaseSubject $env:EOS_RELEASE_SUBJECT)");
     expect(deployScript).toContain("Fly fleet did not converge on the expected immutable release subject");
@@ -178,7 +178,7 @@ describe("production deployment script contract", () => {
     expect(rollbackScript).toContain("npm run test:e2e:production");
     expect(rollbackScript).toContain("npm run test:e2e:production:authenticated");
     expect(rollbackScript).toContain("$PSNativeCommandUseErrorActionPreference = $false");
-    expect(rollbackScript).toContain("$raw = flyctl machines list --app $App --json 2>$null");
+    expect(rollbackScript).toContain('$raw = cmd.exe /d /s /c "flyctl machines list --app $App --json 2>NUL"');
     expect(rollbackScript).toContain('Where-Object { $_.state -notin @("stopped", "destroyed") }');
     expect(rollbackScript).toContain('Rollback returned without an active serving Fly machine.');
   });
