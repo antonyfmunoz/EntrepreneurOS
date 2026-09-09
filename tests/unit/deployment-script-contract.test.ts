@@ -176,6 +176,9 @@ describe("production deployment script contract", () => {
     expect(deployScript.match(/npm run test:e2e:production:authenticated/g)).toHaveLength(2);
     expect(rollbackScript).toContain("npm run test:e2e:production");
     expect(rollbackScript).toContain("npm run test:e2e:production:authenticated");
+    expect(rollbackScript).toContain("$raw = flyctl machines list --app $App --json 2>$null");
+    expect(rollbackScript).toContain('Where-Object { $_.state -notin @("stopped", "destroyed") }');
+    expect(rollbackScript).toContain('Rollback returned without an active serving Fly machine.');
   });
 
   it("acquires short-lived Clerk smoke credentials only immediately before authenticated checks", () => {

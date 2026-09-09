@@ -1,7 +1,10 @@
 $ErrorActionPreference = "Stop"
 
 function Get-FlyMachines([string]$App) {
-  $raw = flyctl machines list --app $App --json
+  # Fly may emit an optional metrics-session warning on stderr while still
+  # returning valid machine JSON and exit code 0. Keep stdout parseable; the
+  # explicit exit-code handling below still rejects real Fly failures.
+  $raw = flyctl machines list --app $App --json 2>$null
   if ($LASTEXITCODE -ne 0) { throw "Could not inspect Fly machines for $App." }
   $items = @($raw | ConvertFrom-Json | ForEach-Object { $_ })
   if (-not $items.Count) { throw "Fly returned no machines for $App." }
@@ -37,7 +40,10 @@ flyctl deploy --app $app --image $image --strategy rolling `
   --env "EOS_SECRET_VAULT_VENDOR_NAME=$env:EOS_SECRET_VAULT_VENDOR_NAME" --yes
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-$machines = @(Get-FlyMachines -App $app)
+$machines = @((Get-FlyMachines -App $app) | Where-Object { $_.state -notin @("stopped", "destroyed") })
+$machines = @($machines | Where-Object { $_.state -eq "started" })
+$machines = @($machines | Where-Object { $_.id })
+if (-not $machines.Count) { throw "Rollback returned without an active serving Fly machine." }
 $images = @($machines | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
 $subjects = @($machines | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Select-Object -Unique)
 if ($images.Count -ne 1 -or $images[0] -ne $image -or $subjects.Count -ne 1 -or $subjects[0] -ne $subject) { throw "Rollback returned without proving the requested immutable image and release subject." }
