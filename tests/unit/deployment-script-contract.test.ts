@@ -166,6 +166,8 @@ describe("production deployment script contract", () => {
   });
 
   it("pipes Fly secrets as raw Node UTF-8 bytes without exposing values in process arguments", () => {
+    expect(deployScript).toContain('$value = $value.TrimEnd("`r", "`n")');
+    expect(deployScript).toContain("Release variable is empty after normalizing a trailing line ending");
     expect(deployScript).toContain("$env:EOS_FLY_SECRET_PAYLOAD = $payload");
     expect(deployScript).toContain("& node scripts/import-fly-secrets.cjs 2>&1");
     expect(deployScript).toContain("Remove-Item Env:EOS_FLY_SECRET_PAYLOAD -ErrorAction SilentlyContinue");
