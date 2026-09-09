@@ -1,4 +1,9 @@
 $ErrorActionPreference = "Stop"
+# Fly can issue a non-fatal telemetry warning on stderr with an exit code of
+# zero. The explicit `$LASTEXITCODE` checks in this script are the authority
+# for native-command failures, so do not let PowerShell convert that warning
+# into an exception before those checks run.
+$PSNativeCommandUseErrorActionPreference = $false
 
 function Get-FlyMachines([string]$App) {
   for ($attempt = 1; $attempt -le 5; $attempt++) {

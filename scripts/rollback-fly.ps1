@@ -1,4 +1,7 @@
 $ErrorActionPreference = "Stop"
+# See deploy-fly.ps1: Fly telemetry warnings on stderr are not release
+# failures; this script verifies every Fly exit code explicitly.
+$PSNativeCommandUseErrorActionPreference = $false
 
 function Get-FlyMachines([string]$App) {
   # Fly may emit an optional metrics-session warning on stderr while still
