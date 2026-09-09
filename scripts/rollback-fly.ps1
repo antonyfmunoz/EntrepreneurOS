@@ -1,11 +1,28 @@
 $ErrorActionPreference = "Stop"
+# See deploy-fly.ps1: Fly telemetry warnings on stderr are not release
+# failures; this script verifies every Fly exit code explicitly.
+$PSNativeCommandUseErrorActionPreference = $false
 
 function Get-FlyMachines([string]$App) {
-  $raw = flyctl machines list --app $App --json
+  # Fly may emit an optional metrics-session warning on stderr while still
+  # returning valid machine JSON and exit code 0. Keep stdout parseable; the
+  # explicit exit-code handling below still rejects real Fly failures.
+  $raw = cmd.exe /d /s /c "flyctl machines list --app $App --json 2>NUL"
   if ($LASTEXITCODE -ne 0) { throw "Could not inspect Fly machines for $App." }
   $items = @($raw | ConvertFrom-Json | ForEach-Object { $_ })
   if (-not $items.Count) { throw "Fly returned no machines for $App." }
   return $items
+}
+
+function Get-FlyMachineImageReference([object]$Machine) {
+  $imageRef = $Machine.PSObject.Properties["image_ref"].Value
+  $registry = [string](@($imageRef.PSObject.Properties["registry"].Value)[0])
+  $repository = [string](@($imageRef.PSObject.Properties["repository"].Value)[0])
+  $digest = [string](@($imageRef.PSObject.Properties["digest"].Value)[0])
+  if (-not $registry -or -not $repository -or $digest -notmatch "^sha256:[a-f0-9]{64}$") {
+    throw "Fly returned an invalid immutable image reference."
+  }
+  return "$registry/$repository@$digest"
 }
 
 $app = if ($env:EOS_FLY_APP) { $env:EOS_FLY_APP } else { "eos-app" }
@@ -37,8 +54,11 @@ flyctl deploy --app $app --image $image --strategy rolling `
   --env "EOS_SECRET_VAULT_VENDOR_NAME=$env:EOS_SECRET_VAULT_VENDOR_NAME" --yes
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-$machines = @(Get-FlyMachines -App $app)
-$images = @($machines | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
+$machines = @((Get-FlyMachines -App $app) | Where-Object { $_.state -notin @("stopped", "destroyed") })
+$machines = @($machines | Where-Object { $_.state -eq "started" })
+$machines = @($machines | Where-Object { $_.id })
+if (-not $machines.Count) { throw "Rollback returned without an active serving Fly machine." }
+$images = @($machines | ForEach-Object { Get-FlyMachineImageReference $_ } | Select-Object -Unique)
 $subjects = @($machines | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Select-Object -Unique)
 if ($images.Count -ne 1 -or $images[0] -ne $image -or $subjects.Count -ne 1 -or $subjects[0] -ne $subject) { throw "Rollback returned without proving the requested immutable image and release subject." }
 

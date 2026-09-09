@@ -1,8 +1,16 @@
 $ErrorActionPreference = "Stop"
+# Fly can issue a non-fatal telemetry warning on stderr with an exit code of
+# zero. The explicit `$LASTEXITCODE` checks in this script are the authority
+# for native-command failures, so do not let PowerShell convert that warning
+# into an exception before those checks run.
+$PSNativeCommandUseErrorActionPreference = $false
 
 function Get-FlyMachines([string]$App) {
   for ($attempt = 1; $attempt -le 5; $attempt++) {
-    $raw = flyctl machines list --app $App --json 2>&1
+    # Fly may emit an optional metrics-session warning on stderr while still
+    # returning valid machine JSON and exit code 0. Keep stdout parseable; the
+    # explicit exit-code handling below still rejects real Fly failures.
+    $raw = cmd.exe /d /s /c "flyctl machines list --app $App --json 2>NUL"
     if ($LASTEXITCODE -eq 0) {
       $items = @($raw | ConvertFrom-Json | ForEach-Object { $_ })
       if (-not $items.Count) { throw "Fly returned no machines for $App." }
@@ -18,6 +26,17 @@ function Get-FlyMachines([string]$App) {
   throw "Fly machine inventory remained rate limited for $App."
 }
 
+function Get-FlyMachineImageReference([object]$Machine) {
+  $imageRef = $Machine.PSObject.Properties["image_ref"].Value
+  $registry = [string](@($imageRef.PSObject.Properties["registry"].Value)[0])
+  $repository = [string](@($imageRef.PSObject.Properties["repository"].Value)[0])
+  $digest = [string](@($imageRef.PSObject.Properties["digest"].Value)[0])
+  if (-not $registry -or -not $repository -or $digest -notmatch "^sha256:[a-f0-9]{64}$") {
+    throw "Fly returned an invalid immutable image reference."
+  }
+  return "$registry/$repository@$digest"
+}
+
 function Wait-FlyFleetConvergence([string]$App, [string]$ExpectedReleaseSubject, [int]$TimeoutSeconds = 180) {
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
   do {
@@ -29,7 +48,7 @@ function Wait-FlyFleetConvergence([string]$App, [string]$ExpectedReleaseSubject,
       Start-Sleep -Seconds 5
       continue
     }
-    $images = @($activeItems | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
+    $images = @($activeItems | ForEach-Object { Get-FlyMachineImageReference $_ } | Select-Object -Unique)
     $subjects = @($activeItems | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Where-Object { $_ } | Select-Object -Unique)
     $allStarted = @($activeItems | Where-Object { $_.state -ne "started" }).Count -eq 0
     if ($allStarted -and $images.Count -eq 1 -and $subjects.Count -eq 1 -and $subjects[0] -eq $ExpectedReleaseSubject) {
@@ -41,7 +60,7 @@ function Wait-FlyFleetConvergence([string]$App, [string]$ExpectedReleaseSubject,
 }
 
 function Get-FlySecrets([string]$App) {
-  $raw = flyctl secrets list --app $App --json
+  $raw = cmd.exe /d /s /c "flyctl secrets list --app $App --json 2>NUL"
   if ($LASTEXITCODE -ne 0) { throw "Could not inspect Fly secret deployment state for $App." }
   return @($raw | ConvertFrom-Json | ForEach-Object { $_ })
 }
@@ -262,7 +281,7 @@ $imageLabel = "eos-$releaseCommit"
 $imageReference = "registry.fly.io/${app}:$imageLabel"
 
 $machines = @(Get-FlyMachines -App $app)
-$rollbackImages = @($machines | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
+$rollbackImages = @($machines | ForEach-Object { Get-FlyMachineImageReference $_ } | Select-Object -Unique)
 if ($rollbackImages.Count -ne 1 -or $rollbackImages[0] -notmatch '^registry\.fly\.io/[a-z0-9-]+@sha256:[a-f0-9]{64}$') { throw "Production machines do not share one immutable rollback image." }
 $rollbackImage = $rollbackImages[0]
 $rollbackSubjects = @($machines | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Where-Object { $_ } | Select-Object -Unique)
@@ -383,7 +402,7 @@ try {
     # the entire fleet rather than treating that expected transition as a
     # mixed-image deployment failure and rolling back a healthy candidate.
     $promotedMachines = @(Wait-FlyFleetConvergence -App $app -ExpectedReleaseSubject $env:EOS_RELEASE_SUBJECT)
-    $promotedImages = @($promotedMachines | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
+    $promotedImages = @($promotedMachines | ForEach-Object { Get-FlyMachineImageReference $_ } | Select-Object -Unique)
     $promotedSubjects = @($promotedMachines | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Select-Object -Unique)
     if ($promotedImages.Count -ne 1 -or $promotedImages[0] -notmatch '^registry\.fly\.io/[a-z0-9-]+@sha256:[a-f0-9]{64}$') { throw "Promoted machines do not share one immutable image digest." }
     if ($promotedSubjects.Count -ne 1 -or $promotedSubjects[0] -ne $env:EOS_RELEASE_SUBJECT) { throw "Promoted machines do not report the exact release subject." }
@@ -407,7 +426,7 @@ try {
       --env "EOS_SECRET_VAULT_VENDOR_NAME=$env:EOS_SECRET_VAULT_VENDOR_NAME" --yes
     if ($LASTEXITCODE -ne 0) { throw "Promotion failed and automatic rollback also failed. Escalate immediately." }
     $restoredMachines = @(Get-FlyMachines -App $app)
-    $restoredImages = @($restoredMachines | ForEach-Object { "$($_.image_ref.registry)/$($_.image_ref.repository)@$($_.image_ref.digest)" } | Select-Object -Unique)
+    $restoredImages = @($restoredMachines | ForEach-Object { Get-FlyMachineImageReference $_ } | Select-Object -Unique)
     $restoredSubjects = @($restoredMachines | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Select-Object -Unique)
     if ($restoredImages.Count -ne 1 -or $restoredImages[0] -ne $rollbackImage -or $restoredSubjects.Count -ne 1 -or $restoredSubjects[0] -ne $rollbackSubject) { throw "Promotion failed and rollback returned without proving the prior immutable image and subject. Escalate immediately." }
     $env:EOS_EXPECTED_RELEASE_SUBJECT = $rollbackSubject

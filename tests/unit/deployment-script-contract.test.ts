@@ -76,8 +76,11 @@ describe("production deployment script contract", () => {
 
   it("waits for every Fly machine to converge before qualifying the promoted image", () => {
     expect(deployScript).toContain("function Wait-FlyFleetConvergence");
+    expect(deployScript).toContain("function Get-FlyMachineImageReference");
+    expect(deployScript).toContain("Fly returned an invalid immutable image reference.");
+    expect(deployScript).toContain("$PSNativeCommandUseErrorActionPreference = $false");
     expect(deployScript).toContain('$activeItems = @($items | Where-Object { $_.state -notin @("stopped", "destroyed") })');
-    expect(deployScript).toContain("$raw = flyctl machines list --app $App --json 2>&1");
+    expect(deployScript).toContain('$raw = cmd.exe /d /s /c "flyctl machines list --app $App --json 2>NUL"');
     expect(deployScript).toContain('if ($attempt -lt 5 -and $detail -match "(?i)rate limit")');
     expect(deployScript).toContain("$promotedMachines = @(Wait-FlyFleetConvergence -App $app -ExpectedReleaseSubject $env:EOS_RELEASE_SUBJECT)");
     expect(deployScript).toContain("Fly fleet did not converge on the expected immutable release subject");
@@ -176,6 +179,10 @@ describe("production deployment script contract", () => {
     expect(deployScript.match(/npm run test:e2e:production:authenticated/g)).toHaveLength(2);
     expect(rollbackScript).toContain("npm run test:e2e:production");
     expect(rollbackScript).toContain("npm run test:e2e:production:authenticated");
+    expect(rollbackScript).toContain("$PSNativeCommandUseErrorActionPreference = $false");
+    expect(rollbackScript).toContain('$raw = cmd.exe /d /s /c "flyctl machines list --app $App --json 2>NUL"');
+    expect(rollbackScript).toContain('Where-Object { $_.state -notin @("stopped", "destroyed") }');
+    expect(rollbackScript).toContain('Rollback returned without an active serving Fly machine.');
   });
 
   it("acquires short-lived Clerk smoke credentials only immediately before authenticated checks", () => {
