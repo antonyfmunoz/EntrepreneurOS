@@ -23,11 +23,11 @@ QUICKBOOKS_CLIENT_ID=op://EntrepreneurOS/Production/QUICKBOOKS_CLIENT_ID
 QUICKBOOKS_CLIENT_SECRET=op://EntrepreneurOS/Production/QUICKBOOKS_CLIENT_SECRET
 QUICKBOOKS_REDIRECT_URI=op://EntrepreneurOS/Production/QUICKBOOKS_REDIRECT_URI
 QUICKBOOKS_ENVIRONMENT=op://EntrepreneurOS/Production/QUICKBOOKS_ENVIRONMENT
-# Slack is optional until the company workspace is ready to connect. The OAuth
-# app must register the exact callback before these vault references are added.
-# SLACK_CLIENT_ID=op://EntrepreneurOS/Production/SLACK_CLIENT_ID
-# SLACK_CLIENT_SECRET=op://EntrepreneurOS/Production/SLACK_CLIENT_SECRET
-# SLACK_REDIRECT_URI=https://entrepreneuros.net/api/auth/slack/callback
+# Slack is company-scoped and becomes usable only after a company administrator
+# installs the internal EOS bot into the selected workspace.
+SLACK_CLIENT_ID=op://EntrepreneurOS/Production/SLACK_CLIENT_ID
+SLACK_CLIENT_SECRET=op://EntrepreneurOS/Production/SLACK_CLIENT_SECRET
+SLACK_REDIRECT_URI=https://entrepreneuros.net/api/auth/slack/callback
 # Optional company-owned GoHighLevel OAuth. The HighLevel private app must
 # register this exact callback and grant only the contact/pipeline scopes EOS uses.
 # GOHIGHLEVEL_CLIENT_ID=op://EntrepreneurOS/Production/GOHIGHLEVEL_CLIENT_ID
