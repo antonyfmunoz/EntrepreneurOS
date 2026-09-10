@@ -24,6 +24,40 @@ const attachConnectionSchema = z.object({
   recoveryOwnerSeatId: z.string().uuid().optional(),
 }).strict();
 
+// HighLevel's private-app installation redirect can omit `state`.  Retain the
+// signed state only in a short-lived, same-site browser cookie so that the
+// callback remains bound to the person and company that started it in EOS.
+// A supplied (but invalid) state is never allowed to fall back to this cookie.
+const goHighLevelOAuthStateCookie = "eos_gohighlevel_oauth_state";
+const goHighLevelOAuthStateCookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  maxAge: 10 * 60 * 1000,
+  path: "/api/auth",
+};
+const goHighLevelOAuthStateCookieClearOptions = {
+  httpOnly: goHighLevelOAuthStateCookieOptions.httpOnly,
+  secure: goHighLevelOAuthStateCookieOptions.secure,
+  sameSite: goHighLevelOAuthStateCookieOptions.sameSite,
+  path: goHighLevelOAuthStateCookieOptions.path,
+};
+
+function requestCookie(req: Request, name: string): string | null {
+  const header = req.headers.cookie;
+  if (!header) return null;
+  for (const entry of header.split(";")) {
+    const separator = entry.indexOf("=");
+    if (separator < 0 || entry.slice(0, separator).trim() !== name) continue;
+    try {
+      return decodeURIComponent(entry.slice(separator + 1).trim());
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 function providerFrom(req: Request): SupportedProvider {
   if (["gmail", "notion", "quickbooks", "slack", "gohighlevel", "stripe"].includes(req.params.provider)) return req.params.provider as SupportedProvider;
   throw new EosRouteError(404, "integration_provider_not_found", "This provider is not available in the EOS integration registry.");
@@ -243,7 +277,13 @@ export function registerIntegrationRoutes(app: Express): void {
       const adapter = provider === "gmail" ? gmail : provider === "notion" ? notion : provider === "quickbooks" ? quickbooks : provider === "slack" ? slack : gohighlevel;
       if (!adapter.isConfigured()) return res.status(400).json({ code: "integration_provider_not_configured", message: `${providerLabel(provider)} OAuth or EOS credential encryption is not configured.` });
       const returnTo = `/company/${encodeURIComponent(req.params.companyId)}#systems`;
-      return res.json({ authUrl: await adapter.getAuthUrl(req.user.id, returnTo) });
+      const authUrl = await adapter.getAuthUrl(req.user.id, returnTo);
+      if (provider === "gohighlevel") {
+        const state = new URL(authUrl).searchParams.get("state");
+        if (!state) throw new EosRouteError(500, "gohighlevel_oauth_state_missing", "GoHighLevel authorization could not be safely initialized.");
+        res.cookie(goHighLevelOAuthStateCookie, state, goHighLevelOAuthStateCookieOptions);
+      }
+      return res.json({ authUrl });
     } catch (error) { return providerError(res, error); }
   });
 
@@ -491,7 +531,12 @@ export function registerIntegrationRoutes(app: Express): void {
     try {
       const code = typeof req.query.code === "string" ? req.query.code : "";
       const state = typeof req.query.state === "string" ? req.query.state : "";
-      const oauthState = state ? await gohighlevel.readOAuthState(state, req.user.id) : null;
+      const cookieState = requestCookie(req, goHighLevelOAuthStateCookie);
+      const stateToValidate = state || cookieState || "";
+      // Clear a consumed or rejected fallback immediately. Do not use it to
+      // recover from a malformed query state, which would permit state tampering.
+      if (cookieState) res.clearCookie(goHighLevelOAuthStateCookie, goHighLevelOAuthStateCookieClearOptions);
+      const oauthState = stateToValidate ? await gohighlevel.readOAuthState(stateToValidate, req.user.id) : null;
       if (!code) return res.redirect("/portfolios?integration_error=no_code");
       if (!oauthState) return res.redirect("/portfolios?integration_error=invalid_oauth_state");
       const returnPath = internalOAuthReturnPath(oauthState.returnTo);

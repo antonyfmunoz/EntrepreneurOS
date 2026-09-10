@@ -157,6 +157,15 @@ describe("Notion integration HTTP controls", () => {
     expect(quickbooksAdapter.getAuthUrl).toHaveBeenCalledWith(userId, "/company/12#systems");
   });
 
+  it("keeps the signed GoHighLevel authorization state in a short-lived secure cookie", async () => {
+    const response = await api.get("/api/eos/companies/12/integrations/gohighlevel/auth").expect(200);
+    expect(response.body.authUrl).toContain("marketplace.gohighlevel.com");
+    expect(response.headers["set-cookie"]?.join(";")).toContain("eos_gohighlevel_oauth_state=");
+    expect(response.headers["set-cookie"]?.join(";")).toContain("HttpOnly");
+    expect(response.headers["set-cookie"]?.join(";")).toContain("SameSite=Lax");
+    expect(gohighlevelAdapter.getAuthUrl).toHaveBeenCalledWith(userId, "/company/12#systems");
+  });
+
   it("stores encrypted QuickBooks OAuth credentials and the selected accounting company realm", async () => {
     process.env.EOS_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 17).toString("base64");
     quickbooksAdapter.readOAuthState.mockReturnValue({ userId, expiresAt: Date.now() + 60_000, nonce: "nonce", returnTo: "/company/12#systems" });
@@ -196,6 +205,28 @@ describe("Notion integration HTTP controls", () => {
     expect(JSON.stringify(stored)).not.toContain("gohighlevel-access-plaintext");
     const legacy = await api.get("/api/auth/gohighlevel/callback?code=provider-code&state=signed-state").expect(302);
     expect(legacy.headers.location).toBe("/company/12?gohighlevel=authorized#systems");
+    delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
+  });
+
+  it("accepts a GoHighLevel private-app callback without query state only when it has the initiating signed cookie", async () => {
+    process.env.EOS_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 23).toString("base64");
+    gohighlevelAdapter.readOAuthState.mockResolvedValue({ userId, expiresAt: Date.now() + 60_000, nonce: "nonce", returnTo: "/company/12#systems" });
+    gohighlevelAdapter.exchangeCode.mockResolvedValue({ accessToken: "gohighlevel-access-plaintext", refreshToken: "gohighlevel-refresh-plaintext", tokenType: "Bearer", expiresAt: new Date("2026-10-01T00:00:00.000Z"), scope: "contacts.readonly", metadata: { locationId: "location-1", companyId: "company-1" } });
+    const response = await api.get("/api/auth/crm/callback?code=provider-code").set("Cookie", "eos_gohighlevel_oauth_state=signed-cookie-state").expect(302);
+    expect(response.headers.location).toBe("/company/12?gohighlevel=authorized#systems");
+    expect(gohighlevelAdapter.readOAuthState).toHaveBeenCalledWith("signed-cookie-state", userId);
+    expect(gohighlevelAdapter.exchangeCode).toHaveBeenCalledWith("provider-code");
+    expect(response.headers["set-cookie"]?.join(";")).toContain("eos_gohighlevel_oauth_state=");
+    delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
+  });
+
+  it("does not let an invalid query state fall back to a valid GoHighLevel cookie", async () => {
+    process.env.EOS_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 23).toString("base64");
+    gohighlevelAdapter.readOAuthState.mockResolvedValue(null);
+    const response = await api.get("/api/auth/crm/callback?code=provider-code&state=invalid-query-state").set("Cookie", "eos_gohighlevel_oauth_state=signed-cookie-state").expect(302);
+    expect(response.headers.location).toBe("/portfolios?integration_error=invalid_oauth_state");
+    expect(gohighlevelAdapter.readOAuthState).toHaveBeenCalledWith("invalid-query-state", userId);
+    expect(gohighlevelAdapter.exchangeCode).not.toHaveBeenCalled();
     delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
   });
 
