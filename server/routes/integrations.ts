@@ -486,7 +486,7 @@ export function registerIntegrationRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/auth/gohighlevel/callback", async (req, res) => {
+  const handleGoHighLevelCallback = async (req: Request, res: Response) => {
     if (!req.isAuthenticated()) return res.redirect("/portfolios?integration_error=not_authenticated");
     try {
       const code = typeof req.query.code === "string" ? req.query.code : "";
@@ -503,5 +503,11 @@ export function registerIntegrationRoutes(app: Express): void {
       console.error("GoHighLevel OAuth callback error:", error);
       res.redirect("/portfolios?integration_error=oauth_callback_failed");
     }
-  });
+  };
+
+  // The neutral public callback is the canonical registered URL. Retain the
+  // former route so an already-issued installation link cannot strand a
+  // company connection during the migration.
+  app.get("/api/auth/crm/callback", handleGoHighLevelCallback);
+  app.get("/api/auth/gohighlevel/callback", handleGoHighLevelCallback);
 }

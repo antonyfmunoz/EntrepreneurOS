@@ -20,7 +20,10 @@ function configuration() {
   const clientId = process.env.GOHIGHLEVEL_CLIENT_ID?.trim();
   const clientSecret = process.env.GOHIGHLEVEL_CLIENT_SECRET?.trim();
   const installationUrl = process.env.GOHIGHLEVEL_INSTALLATION_URL?.trim();
-  const redirectUri = process.env.GOHIGHLEVEL_REDIRECT_URI?.trim() || "http://localhost:5000/api/auth/gohighlevel/callback";
+  // HighLevel rejects redirect URLs containing its brand name. Keep the
+  // externally registered URL neutral while the internal provider key remains
+  // explicit everywhere else.
+  const redirectUri = process.env.GOHIGHLEVEL_REDIRECT_URI?.trim() || "http://localhost:5000/api/auth/crm/callback";
   if (!clientId || !clientSecret || !installationUrl) throw new Error("GoHighLevel OAuth credentials or installation URL are not configured.");
   let parsed: URL; try { parsed = new URL(installationUrl); } catch { throw new Error("GOHIGHLEVEL_INSTALLATION_URL must be a valid HTTPS URL."); }
   if (parsed.protocol !== "https:") throw new Error("GOHIGHLEVEL_INSTALLATION_URL must use HTTPS.");

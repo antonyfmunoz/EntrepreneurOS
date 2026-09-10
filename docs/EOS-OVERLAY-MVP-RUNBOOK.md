@@ -190,7 +190,7 @@ Optional GoHighLevel OAuth:
 
 GoHighLevel is a company-owned CRM location, never a per-seat plug-in. Create a
 private Marketplace app, choose the intended **Location** during installation,
-and register `https://entrepreneuros.net/api/auth/gohighlevel/callback` as its
+and register `https://entrepreneuros.net/api/auth/crm/callback` as its
 production callback. EOS stores the returned exact location identifier on the
 company connection, then requires a matching entitled company binding, local
 policy, approval, and immutable receipt before it can search or create CRM
