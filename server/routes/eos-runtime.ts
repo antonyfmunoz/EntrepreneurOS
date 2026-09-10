@@ -12612,19 +12612,44 @@ export function registerEosRuntimeRoutes(app: Express): void {
           "approval_not_found",
           "Approval not found in this authority scope.",
         );
+      const linkedCustomerValueCycle = await db.query.eosCustomerValueCycles.findFirst({
+        where: and(
+          eq(eosCustomerValueCycles.approvalId, approval.id),
+          eq(eosCustomerValueCycles.companyId, company.id),
+        ),
+      });
+      // A pre-live customer-value rehearsal is constrained by its persisted
+      // synthetic mode and cannot dispatch a provider effect or enter a real
+      // metric. A single-seat founder must be able to authorize that bounded
+      // test. All other approvals retain the initiator as a duty participant,
+      // so the normal independent-approval policy remains in force.
+      const isNoEffectPreliveFixture = Boolean(
+        linkedCustomerValueCycle &&
+          linkedCustomerValueCycle.mode === "prelive_fixture" &&
+          linkedCustomerValueCycle.syntheticLabel ===
+            "Synthetic / Non-Production" &&
+          linkedCustomerValueCycle.externalEffectsExecuted === false &&
+          linkedCustomerValueCycle.excludedFromMetrics === true,
+      );
       await authorizeAction(req, access, {
         authorityClass: "approve",
         resource: "approval",
-        actionKey: "approval.decide",
-        purpose: "decide_assigned_approval",
+        actionKey: isNoEffectPreliveFixture
+          ? "approval.decide_prelive_fixture"
+          : "approval.decide",
+        purpose: isNoEffectPreliveFixture
+          ? "decide_synthetic_prelive_fixture"
+          : "decide_assigned_approval",
         classification: approvalPacket.classification,
-        consequence: "material",
-        participants: {
-          initiator: {
-            principalKey: approval.requestedByUserId,
-            seatId: approvalPacket.accountableSeatId || access.seat.id,
-          },
-        },
+        consequence: isNoEffectPreliveFixture ? "routine" : "material",
+        participants: isNoEffectPreliveFixture
+          ? {}
+          : {
+              initiator: {
+                principalKey: approval.requestedByUserId,
+                seatId: approvalPacket.accountableSeatId || access.seat.id,
+              },
+            },
       });
       if (approval.status !== "pending")
         throw new EosRouteError(
@@ -12648,12 +12673,6 @@ export function registerEosRuntimeRoutes(app: Express): void {
         where: and(
           eq(eosSharedServiceEngagements.beneficiaryApprovalId, approval.id),
           eq(eosSharedServiceEngagements.beneficiaryCompanyId, company.id),
-        ),
-      });
-      const linkedCustomerValueCycle = await db.query.eosCustomerValueCycles.findFirst({
-        where: and(
-          eq(eosCustomerValueCycles.approvalId, approval.id),
-          eq(eosCustomerValueCycles.companyId, company.id),
         ),
       });
       const now = new Date();
