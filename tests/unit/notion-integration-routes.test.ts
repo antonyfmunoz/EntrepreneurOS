@@ -188,12 +188,14 @@ describe("Notion integration HTTP controls", () => {
     process.env.EOS_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 23).toString("base64");
     gohighlevelAdapter.readOAuthState.mockResolvedValue({ userId, expiresAt: Date.now() + 60_000, nonce: "nonce", returnTo: "/company/12#systems" });
     gohighlevelAdapter.exchangeCode.mockResolvedValue({ accessToken: "gohighlevel-access-plaintext", refreshToken: "gohighlevel-refresh-plaintext", tokenType: "Bearer", expiresAt: new Date("2026-10-01T00:00:00.000Z"), scope: "contacts.readonly", metadata: { locationId: "location-1", companyId: "company-1" } });
-    const response = await api.get("/api/auth/gohighlevel/callback?code=provider-code&state=signed-state").expect(302);
+    const response = await api.get("/api/auth/crm/callback?code=provider-code&state=signed-state").expect(302);
     expect(response.headers.location).toBe("/company/12?gohighlevel=authorized#systems");
     expect(storageAdapter.upsertOauthToken).toHaveBeenCalledWith(expect.objectContaining({ userId, provider: "gohighlevel", metadata: { locationId: "location-1", companyId: "company-1" } }));
-    const stored = storageAdapter.upsertOauthToken.mock.calls[0][0];
+    const stored = storageAdapter.upsertOauthToken.mock.calls.at(-1)[0];
     expect(stored.accessToken).toMatch(/^enc:v1:/); expect(stored.refreshToken).toMatch(/^enc:v1:/);
     expect(JSON.stringify(stored)).not.toContain("gohighlevel-access-plaintext");
+    const legacy = await api.get("/api/auth/gohighlevel/callback?code=provider-code&state=signed-state").expect(302);
+    expect(legacy.headers.location).toBe("/company/12?gohighlevel=authorized#systems");
     delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
   });
 
