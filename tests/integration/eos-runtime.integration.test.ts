@@ -4798,7 +4798,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
           "No customer contact, production access, spending, or delegated authority",
         ],
         observationPoints: ["Midpoint review and final evidence review"],
-        reviewAt: "2026-09-10T17:00:00.000Z",
+        reviewAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
         outcomeCriteria: {
           pass: "Meets the scorecard and produces all required outputs.",
           redirect: "Evidence supports a different bounded seat.",

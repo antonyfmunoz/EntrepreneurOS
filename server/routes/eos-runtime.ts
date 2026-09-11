@@ -20695,6 +20695,8 @@ export function registerEosRuntimeRoutes(app: Express): void {
         ? recoveryCommercialBindingCredentialConfigured(docusignBinding)
         : false;
       const docusignExecutionReady = docusignConnectionHealthy && docusignCredentialConfigured;
+      const docusignDemoValidation =
+        docusignBinding?.adapterReference === "docusign-jwt-demo-v1";
       const umhConfigured = federationConfigured();
       return {
         body: [
@@ -20865,22 +20867,38 @@ export function registerEosRuntimeRoutes(app: Express): void {
               "Signature events": docusignConnectionHealthy,
               Certificates: docusignConnectionHealthy,
             },
-            operations: docusignBinding
+            operations: docusignDemoValidation
+              ? ["Demo JWT authentication validation (non-sending)"]
+              : docusignBinding
               ? ["docusign.send_recovery_agreement_with_local_approval", "docusign.void_recovery_agreement_with_local_approval"]
               : [],
             requiredScopes: [
-              "Binding-specific managed DocuSign credential",
-              "Template and sender authority",
-              "Envelope and Connect HMAC callback access",
+              ...(docusignDemoValidation
+                ? [
+                    "DocuSign Demo JWT consent",
+                    "Vault-managed Demo credential reference",
+                    "Separate production binding and fresh provider health before dispatch",
+                  ]
+                : [
+                    "Binding-specific managed DocuSign credential",
+                    "Template and sender authority",
+                    "Envelope and Connect HMAC callback access",
+                  ]),
             ],
             grantedScopes: docusignExecutionReady
               ? ["Binding-specific managed DocuSign credential", "Template and sender authority", "Envelope and Connect HMAC callback access"]
               : [],
             accountReference: docusignBinding?.providerAccountReference || null,
-            connectionScope: "This is a company agreement binding. EOS executes only an exact, locally approved agreement action through the selected binding; the managed credential remains in the vault and is never shared across companies.",
-            executionAdapter: "EOS-owned DocuSign agreement and receipt-reconciliation adapter",
+            connectionScope: docusignDemoValidation
+              ? docusignBinding?.accountScope || "Company-scoped Demo validation only; agreement dispatch remains blocked."
+              : "This is a company agreement binding. EOS executes only an exact, locally approved agreement action through the selected binding; the managed credential remains in the vault and is never shared across companies.",
+            executionAdapter: docusignDemoValidation
+              ? "EOS-owned DocuSign JWT adapter — Demo validation only"
+              : "EOS-owned DocuSign agreement and receipt-reconciliation adapter",
             manualFallback:
-              "Prepare the agreement in EOS and send it from the authorized DocuSign workspace manually.",
+              docusignBinding
+                ? "Prepare and review the agreement in EOS. Keep dispatch blocked until a separate production binding is approved and verified."
+                : "Prepare the agreement in EOS and send it from the authorized DocuSign workspace manually.",
             actions: [],
           },
           {
