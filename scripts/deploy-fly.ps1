@@ -400,7 +400,10 @@ try {
     # even when the candidate becomes healthy seconds later. Rolling promotion
     # retains health-gated, one-machine-at-a-time replacement and works with the
     # exact immutable rollback below.
-    flyctl deploy $releaseContext --app $app --image $imageReference --strategy rolling `
+    # An autostopped spare is expected for this cost-controlled fleet. Give
+    # Fly enough time to observe a sequential replacement and its health check
+    # instead of applying the CLI's short default transition window.
+    flyctl deploy $releaseContext --app $app --image $imageReference --strategy rolling --wait-timeout 5m `
       --env "EOS_RELEASE_SUBJECT=$env:EOS_RELEASE_SUBJECT" `
       --env "EOS_PRODUCTION_ENVIRONMENT_SUBJECT=$env:EOS_PRODUCTION_ENVIRONMENT_SUBJECT" `
       --env "EOS_DATABASE_VENDOR_NAME=$env:EOS_DATABASE_VENDOR_NAME" `
