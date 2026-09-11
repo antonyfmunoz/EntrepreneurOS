@@ -281,8 +281,11 @@ if ($remoteReleaseCommit -ne $releaseCommit) { throw "The release commit is not 
 # A protected-branch push is preferred. An operator may also explicitly
 # dispatch this same immutable workflow when GitHub has not retained the
 # merge-triggered run; both paths must be for this exact commit and pass.
-$qualificationRuns = @(gh run list --repo $env:EOS_GITHUB_REPOSITORY --workflow "Production qualification" --commit $releaseCommit --limit 10 --json status,conclusion,headSha,url,event | ConvertFrom-Json)
-$qualifiedRun = $qualificationRuns | Where-Object { $_.headSha -eq $releaseCommit -and $_.status -eq "completed" -and $_.conclusion -eq "success" -and $_.event -in @("push", "workflow_dispatch") } | Select-Object -First 1
+# Query runs directly by immutable commit rather than asking the CLI to first
+# enumerate every repository workflow. The latter can be throttled separately
+# by GitHub even while the exact qualification run is available.
+$qualificationRuns = @(gh api "repos/$env:EOS_GITHUB_REPOSITORY/actions/runs?head_sha=$releaseCommit&per_page=50" --jq '.workflow_runs' | ConvertFrom-Json)
+$qualifiedRun = $qualificationRuns | Where-Object { $_.name -eq "Production qualification" -and $_.head_sha -eq $releaseCommit -and $_.status -eq "completed" -and $_.conclusion -eq "success" -and $_.event -in @("push", "workflow_dispatch") } | Select-Object -First 1
 if (-not $qualifiedRun) { throw "The exact release commit does not have a successful push- or explicitly dispatched production qualification run." }
 $env:EOS_RELEASE_SUBJECT = "git:$releaseCommit"
 $imageLabel = "eos-$releaseCommit"
@@ -467,7 +470,7 @@ try {
     incumbentImage = $incumbentImage
     incumbentSubject = $incumbentSubject
     rollbackManifestSha256 = $rollbackManifestSha256
-    qualificationRun = $qualifiedRun.url
+    qualificationRun = $qualifiedRun.html_url
     publicSmoke = $true
     authenticatedSmoke = $true
     finalReadinessPending = $true
