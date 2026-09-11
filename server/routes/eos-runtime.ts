@@ -15,6 +15,8 @@ import * as quickbooks from "../integrations/quickbooks";
 import * as slack from "../integrations/slack";
 import * as gohighlevel from "../integrations/gohighlevel";
 import { verifyStripeConnection } from "../integrations/stripe-health";
+import { integrationCatalogEntry, integrationReadiness } from "@shared/eos-integration-catalog";
+import { providerExecutionEnabled } from "@shared/integration-operations";
 import {
   executeRecoveryCommercialEffect,
   recoveryCommercialBindingCredentialConfigured,
@@ -20698,8 +20700,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
       const docusignDemoValidation =
         docusignBinding?.adapterReference === "docusign-jwt-demo-v1";
       const umhConfigured = federationConfigured();
-      return {
-        body: [
+      const integrationItems = [
           {
             id: "google_workspace",
             name: "Google Workspace",
@@ -21002,7 +21003,45 @@ export function registerEosRuntimeRoutes(app: Express): void {
               "Operate EOS work, approvals, audit, and evidence directly.",
             actions: ["view_manifest"],
           },
-        ],
+      ];
+      // Every external provider is projected through one explicit readiness
+      // contract.  The provider cards retain their domain-specific services,
+      // but an OAuth token or a saved binding alone never claims that live
+      // execution, inbound evidence, or recovery is ready.
+      return {
+        body: integrationItems.map((integration) => {
+          const catalog = integrationCatalogEntry(integration.id);
+          if (!catalog) return integration;
+          const serviceHealth = "serviceHealth" in integration && integration.serviceHealth
+            ? integration.serviceHealth
+            : {};
+          const inboundConfigured = Object.entries(serviceHealth).some(([name, healthy]) =>
+            /(webhook|event|certificate|decision)/i.test(name) && healthy === true,
+          );
+          return {
+            ...integration,
+            governance: {
+              function: catalog.function,
+              credentialCustody: catalog.custody,
+              expectedControlPlanes: catalog.expectedControlPlanes,
+              executionBoundary: catalog.executionBoundary,
+              operatorBoundary: catalog.operatorBoundary,
+            },
+            readiness: integrationReadiness({
+              catalog,
+              configured: Boolean(integration.configured),
+              connected: Boolean(integration.connected),
+              healthy: integration.health === "healthy",
+              operationCount: Array.isArray(integration.operations) ? integration.operations.length : 0,
+              inboundConfigured,
+              executionEnabled: integration.id === "stripe"
+                ? recoveryCommercialEffectsConfigured()
+                : integration.id === "docusign"
+                  ? docusignExecutionReady && recoveryCommercialEffectsConfigured()
+                  : providerExecutionEnabled(),
+            }),
+          };
+        }),
       };
     }),
   );
