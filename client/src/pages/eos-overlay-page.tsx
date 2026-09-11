@@ -12596,7 +12596,16 @@ function IntegrationControlCard({
   const activeConnections = companyConnections.filter(
     (connection) => connection.connectionState === "connected",
   );
-  const activeCompanyConnection = activeConnections[0];
+  const activeCompanyConnection = activeConnections.find(
+    (connection) => connection.authorizedForCurrentUser,
+  ) || activeConnections[0];
+  const configuredProviderBinding = integration.accountReference
+    ? {
+        providerAccountReference: integration.accountReference,
+        accountScope: integration.connectionScope,
+      }
+    : undefined;
+  const displayedCompanyConnection = activeCompanyConnection || configuredProviderBinding;
   const scopeLabels: Record<string, string> = {
     "chat:write": "Send an approved message as the company workspace bot",
     "channels:read": "List approved public-channel metadata",
@@ -12653,24 +12662,26 @@ function IntegrationControlCard({
           />
         </div>
 
-        {(integration.id === "google_workspace" || integration.id === "notion" || integration.id === "quickbooks" || integration.id === "slack" || integration.id === "gohighlevel") && (
+        {(integration.id === "google_workspace" || integration.id === "notion" || integration.id === "quickbooks" || integration.id === "slack" || integration.id === "gohighlevel" || integration.id === "docusign") && (
           <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
             <p className="eos-label">Company connection</p>
-            {activeCompanyConnection ? (
+            {displayedCompanyConnection ? (
               <div className="mt-2 space-y-2">
-                <p className="font-medium">{activeCompanyConnection.providerAccountReference}</p>
+                <p className="font-medium">{displayedCompanyConnection.providerAccountReference}</p>
                 <p className="text-sm text-muted-foreground">
-                  Connected to this company · owner seat {String(activeCompanyConnection.ownerSeatId).slice(0, 8)} · recovery seat {String(activeCompanyConnection.recoveryOwnerSeatId).slice(0, 8)}
+                  {activeCompanyConnection
+                    ? `Connected to this company · owner seat ${String(activeCompanyConnection.ownerSeatId).slice(0, 8)} · recovery seat ${String(activeCompanyConnection.recoveryOwnerSeatId).slice(0, 8)}`
+                    : "Configured for company-scoped Demo validation · agreement dispatch remains blocked"}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {activeCompanyConnection.accountScope || "Provider scope is recorded with this company connection."}
+                  {displayedCompanyConnection.accountScope || "Provider scope is recorded with this company connection."}
                 </p>
-                {!activeCompanyConnection.authorizedForCurrentUser && (
+                {activeCompanyConnection && !activeCompanyConnection.authorizedForCurrentUser && (
                   <p className="text-xs text-muted-foreground">
                     This is a company-managed connection. EOS grants use through role policy and approval controls; its credential custodian is not exposed as a business owner.
                   </p>
                 )}
-                {activeCompanyConnection.lastHealthAt && (
+                {activeCompanyConnection?.lastHealthAt && (
                   <p className="text-xs text-muted-foreground">
                     Last verified {new Date(activeCompanyConnection.lastHealthAt).toLocaleString()}
                   </p>

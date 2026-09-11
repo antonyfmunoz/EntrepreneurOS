@@ -35,6 +35,7 @@ import { blockLegacyUnscopedApis, requireLocalApiAuth } from "./middleware/api-s
 import { federationCommandRateLimit, localApiRateLimit } from "./middleware/rate-limit";
 import { untrustedArtifactIngressMode } from "./security/release-configuration";
 import { registerAlertEmailReceiver, registerAlertEmailReceiptRoutes } from "./routes/alert-email";
+import { registerDocusignConsentRoutes } from "./routes/docusign-consent";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   registerAlertEmailReceiver(app);
@@ -57,6 +58,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerPublicRecoveryCalculatorRoutes(app);
   registerPublicNativeEsignRoutes(app);
   registerPublicStakeholderPortalRoutes(app);
+  registerDocusignConsentRoutes(app);
 
   // Signed federation ingress is authenticated by the projection-owned UMH
   // adapter. Register it before the Clerk gate; every remaining API route
