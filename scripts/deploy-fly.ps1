@@ -395,7 +395,12 @@ try {
   }
 
   try {
-    flyctl deploy $releaseContext --app $app --image $imageReference --strategy canary `
+    # The app fleet autostarts on demand. Fly's canary coordinator can rate-limit
+    # those startup requests before the candidate's own health check is observed,
+    # even when the candidate becomes healthy seconds later. Rolling promotion
+    # retains health-gated, one-machine-at-a-time replacement and works with the
+    # exact immutable rollback below.
+    flyctl deploy $releaseContext --app $app --image $imageReference --strategy rolling `
       --env "EOS_RELEASE_SUBJECT=$env:EOS_RELEASE_SUBJECT" `
       --env "EOS_PRODUCTION_ENVIRONMENT_SUBJECT=$env:EOS_PRODUCTION_ENVIRONMENT_SUBJECT" `
       --env "EOS_DATABASE_VENDOR_NAME=$env:EOS_DATABASE_VENDOR_NAME" `
@@ -403,9 +408,8 @@ try {
       --env "EOS_SECRET_VAULT_VENDOR_NAME=$env:EOS_SECRET_VAULT_VENDOR_NAME" --yes
     if ($LASTEXITCODE -ne 0) { throw "Fly promotion did not complete successfully." }
 
-    # A canary command returns after the first healthy replacement. Wait for
-    # the entire fleet rather than treating that expected transition as a
-    # mixed-image deployment failure and rolling back a healthy candidate.
+    # Wait for the entire rolling fleet rather than treating the expected
+    # in-flight transition as a mixed-image deployment failure.
     $promotedMachines = @(Wait-FlyFleetConvergence -App $app -ExpectedReleaseSubject $env:EOS_RELEASE_SUBJECT)
     $promotedImages = @($promotedMachines | ForEach-Object { Get-FlyMachineImageReference $_ } | Select-Object -Unique)
     $promotedSubjects = @($promotedMachines | ForEach-Object { $_.config.env.EOS_RELEASE_SUBJECT } | Select-Object -Unique)
