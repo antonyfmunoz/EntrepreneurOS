@@ -14,7 +14,7 @@ describe("internal release boundary wiring", () => {
 
   it("retains independent qualification, evidence, approval, migration and smoke gates", () => {
     const deploy = source("scripts/deploy-fly.ps1");
-    for (const boundary of ["--event push --commit $releaseCommit", "EOS_SECRET_CUTOVER_APPROVAL", "npm run release:evidence:verify",
+    for (const boundary of ["--commit $releaseCommit --limit 10 --json status,conclusion,headSha,url,event", '$_.event', "EOS_SECRET_CUTOVER_APPROVAL", "npm run release:evidence:verify",
       "npm run release:verify", "npm run db:migrate", "npm run db:migrations:verify", "npm run test:e2e:production",
       "npm run test:e2e:production:authenticated", "Set-FreshProductionBearerToken", "$rollbackImage"])
       expect(deploy).toContain(boundary);

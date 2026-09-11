@@ -278,9 +278,12 @@ $escapedReleaseBranch = [Uri]::EscapeDataString($releaseBranch)
 $remoteReleaseCommit = (gh api "repos/$env:EOS_GITHUB_REPOSITORY/commits/$escapedReleaseBranch" --jq '.sha').Trim().ToLowerInvariant()
 if ($LASTEXITCODE -ne 0 -or $remoteReleaseCommit -notmatch '^[a-f0-9]{40}$') { throw "Could not resolve the configured GitHub release-branch head." }
 if ($remoteReleaseCommit -ne $releaseCommit) { throw "The release commit is not the current remote release-branch head." }
-$qualificationRuns = @(gh run list --repo $env:EOS_GITHUB_REPOSITORY --workflow "Production qualification" --event push --commit $releaseCommit --limit 10 --json status,conclusion,headSha,url | ConvertFrom-Json)
-$qualifiedRun = $qualificationRuns | Where-Object { $_.headSha -eq $releaseCommit -and $_.status -eq "completed" -and $_.conclusion -eq "success" } | Select-Object -First 1
-if (-not $qualifiedRun) { throw "The exact release commit does not have a successful push-triggered production qualification run." }
+# A protected-branch push is preferred. An operator may also explicitly
+# dispatch this same immutable workflow when GitHub has not retained the
+# merge-triggered run; both paths must be for this exact commit and pass.
+$qualificationRuns = @(gh run list --repo $env:EOS_GITHUB_REPOSITORY --workflow "Production qualification" --commit $releaseCommit --limit 10 --json status,conclusion,headSha,url,event | ConvertFrom-Json)
+$qualifiedRun = $qualificationRuns | Where-Object { $_.headSha -eq $releaseCommit -and $_.status -eq "completed" -and $_.conclusion -eq "success" -and $_.event -in @("push", "workflow_dispatch") } | Select-Object -First 1
+if (-not $qualifiedRun) { throw "The exact release commit does not have a successful push- or explicitly dispatched production qualification run." }
 $env:EOS_RELEASE_SUBJECT = "git:$releaseCommit"
 $imageLabel = "eos-$releaseCommit"
 $imageReference = "registry.fly.io/${app}:$imageLabel"
