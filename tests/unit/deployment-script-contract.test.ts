@@ -68,7 +68,7 @@ describe("production deployment script contract", () => {
   it("builds the immutable image before staging any credentials", () => {
     const build = deployScript.indexOf("--build-only --push");
     const secretStage = deployScript.indexOf("Import-FlySecretsFromEnvironment -App $app");
-    const promotion = deployScript.indexOf("--image $imageReference --strategy canary");
+    const promotion = deployScript.indexOf("--image $imageReference --strategy rolling");
     expect(build).toBeGreaterThan(-1);
     expect(secretStage).toBeGreaterThan(build);
     expect(promotion).toBeGreaterThan(secretStage);
