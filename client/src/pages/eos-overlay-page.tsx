@@ -12606,6 +12606,12 @@ function IntegrationControlCard({
       }
     : undefined;
   const displayedCompanyConnection = activeCompanyConnection || configuredProviderBinding;
+  const readiness = integration.readiness && typeof integration.readiness === "object"
+    ? integration.readiness as JsonRecord
+    : null;
+  const governance = integration.governance && typeof integration.governance === "object"
+    ? integration.governance as JsonRecord
+    : null;
   const scopeLabels: Record<string, string> = {
     "chat:write": "Send an approved message as the company workspace bot",
     "channels:read": "List approved public-channel metadata",
@@ -12661,6 +12667,43 @@ function IntegrationControlCard({
             value={integration.executionAdapter || "Not configured"}
           />
         </div>
+
+        {readiness && (
+          <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="eos-label">Governed readiness</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Connection is only one gate. EOS also checks company scope, provider identity, health, execution controls, evidence, and recovery.
+                </p>
+              </div>
+              {governance?.credentialCustody && (
+                <Badge variant="outline">
+                  {String(governance.credentialCustody).replaceAll("_", " ")}
+                </Badge>
+              )}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {[
+                ["Company scope", readiness.companyScope],
+                ["Provider identity", readiness.providerIdentity],
+                ["Health", readiness.health],
+                ["Execution", readiness.execution],
+                ["Inbound evidence", readiness.inboundEvidence],
+                ["Recovery", readiness.recovery],
+              ].map(([label, state]) => (
+                <Badge key={String(label)} variant={state === "ready" ? "default" : "outline"}>
+                  {label}: {String(state).replaceAll("_", " ")}
+                </Badge>
+              ))}
+            </div>
+            {governance?.executionBoundary && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                {String(governance.executionBoundary)}
+              </p>
+            )}
+          </div>
+        )}
 
         {(integration.id === "google_workspace" || integration.id === "notion" || integration.id === "quickbooks" || integration.id === "slack" || integration.id === "gohighlevel" || integration.id === "docusign") && (
           <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
