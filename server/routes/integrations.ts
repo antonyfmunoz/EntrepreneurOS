@@ -527,7 +527,6 @@ export function registerIntegrationRoutes(app: Express): void {
   });
 
   const handleGoHighLevelCallback = async (req: Request, res: Response) => {
-    if (!req.isAuthenticated()) return res.redirect("/portfolios?integration_error=not_authenticated");
     try {
       const code = typeof req.query.code === "string" ? req.query.code : "";
       const state = typeof req.query.state === "string" ? req.query.state : "";
@@ -536,7 +535,14 @@ export function registerIntegrationRoutes(app: Express): void {
       // Clear a consumed or rejected fallback immediately. Do not use it to
       // recover from a malformed query state, which would permit state tampering.
       if (cookieState) res.clearCookie(goHighLevelOAuthStateCookie, goHighLevelOAuthStateCookieClearOptions);
-      const oauthState = stateToValidate ? await gohighlevel.readOAuthState(stateToValidate, req.user.id) : null;
+      // A valid EOS session remains the normal path. HighLevel's consent page
+      // can need to run in a separately signed-in external browser; in that
+      // case the signed, short-lived state remains the callback binding.
+      const oauthState = stateToValidate
+        ? req.isAuthenticated()
+          ? await gohighlevel.readOAuthState(stateToValidate, req.user.id)
+          : await gohighlevel.readOAuthStateFromCallback(stateToValidate)
+        : null;
       if (!code) return res.redirect("/portfolios?integration_error=no_code");
       if (!oauthState) return res.redirect("/portfolios?integration_error=invalid_oauth_state");
       const returnPath = internalOAuthReturnPath(oauthState.returnTo);

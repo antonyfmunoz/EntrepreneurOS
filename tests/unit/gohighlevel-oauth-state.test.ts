@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createOAuthState, readOAuthState } from "../../server/integrations/gohighlevel";
+import { createOAuthState, readOAuthState, readOAuthStateFromCallback } from "../../server/integrations/gohighlevel";
 
 describe("GoHighLevel OAuth state", () => {
   it("binds authorization to the initiating EOS user and company Systems return path", async () => {
@@ -9,6 +9,9 @@ describe("GoHighLevel OAuth state", () => {
     await expect(readOAuthState(state, "operator-a", 2_000)).resolves.toMatchObject({ returnTo: "/company/12#systems" });
     await expect(readOAuthState(state, "operator-b", 2_000)).resolves.toBeNull();
     await expect(readOAuthState(state, "operator-a", 700_001)).resolves.toBeNull();
+    await expect(readOAuthStateFromCallback(state, 2_000)).resolves.toMatchObject({ userId: "operator-a", returnTo: "/company/12#systems" });
+    await expect(readOAuthStateFromCallback(`${state}.tampered`, 2_000)).resolves.toBeNull();
+    await expect(readOAuthStateFromCallback(state, 700_001)).resolves.toBeNull();
     if (original === undefined) delete process.env.SESSION_SECRET; else process.env.SESSION_SECRET = original;
   });
 });
