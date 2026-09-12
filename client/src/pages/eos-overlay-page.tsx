@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import {
@@ -2693,7 +2693,10 @@ export default function EosOverlayPage() {
     onError: (error) => showMutationError("Evidence recording", error),
   });
 
-  const goHighLevelConnectionWindow = useRef<Window | null>(null);
+  // GoHighLevel's Marketplace location picker cannot be rendered by several
+  // embedded mobile web views. Keep EOS on its Systems page and hand the
+  // short-lived authorization URL to an actual browser only after it is made.
+  const [goHighLevelAuthorizationUrl, setGoHighLevelAuthorizationUrl] = useState<string | null>(null);
 
   const connectIntegrationMutation = useMutation({
     mutationFn: (integration: JsonRecord) => {
@@ -2705,29 +2708,17 @@ export default function EosOverlayPage() {
       );
     },
     onSuccess: ({ authUrl }, integration) => {
-      const providerWindow = goHighLevelConnectionWindow.current;
-      if (
-        integration.id === "gohighlevel" &&
-        providerWindow &&
-        !providerWindow.closed
-      ) {
-        goHighLevelConnectionWindow.current = null;
-        providerWindow.location.replace(authUrl);
+      if (integration.id === "gohighlevel") {
+        setGoHighLevelAuthorizationUrl(authUrl);
         toast({
-          title: "GoHighLevel location chooser opened",
-          description: "Choose the company location there. This Systems page will remain open while GoHighLevel completes its approval.",
+          title: "GoHighLevel location chooser is ready",
+          description: "Open it in your browser, select the company location, then return here. EOS will stay open.",
         });
         return;
       }
       window.location.assign(authUrl);
     },
-    onError: (error, integration) => {
-      if (integration.id === "gohighlevel") {
-        goHighLevelConnectionWindow.current?.close();
-        goHighLevelConnectionWindow.current = null;
-      }
-      showMutationError(`${integration.name} connection`, error);
-    },
+    onError: (error, integration) => showMutationError(`${integration.name} connection`, error),
   });
 
   const attachIntegrationMutation = useMutation({
@@ -2879,8 +2870,11 @@ export default function EosOverlayPage() {
           }
         : {
             adapterKind: "service_account",
-            adapterReference: "eos-docusign-agreement-adapter",
-            transport: "HTTPS + DocuSign API + signed Connect callback",
+            // This existing private company integration is intentionally a
+            // Demo-only JWT identity check. It proves account reachability but
+            // never enables dispatch, sends, or changes an envelope.
+            adapterReference: "docusign-jwt-demo-v1",
+            transport: "HTTPS + DocuSign Demo API + read-only account identity check",
             nativePermissions: ["envelope.send", "envelope.read", "connect.verify"],
             operations: ["envelope.create", "envelope.send", "envelope.receipt.reconcile"],
             expectedEvents: ["envelope.sent", "envelope.completed", "envelope.voided"],
@@ -2890,6 +2884,9 @@ export default function EosOverlayPage() {
       const common = {
         providerKey,
         providerAccountReference: draft.providerAccountReference.trim(),
+        ...(providerKey === "docusign"
+          ? { credentialReference: "docusign:empyrean-studios-demo" }
+          : {}),
         ...providerDefaults,
       };
       const existing = integration.providerBinding as JsonRecord | null | undefined;
@@ -2905,7 +2902,7 @@ export default function EosOverlayPage() {
             ...(draft.accountScope.trim()
               ? { accountScope: draft.accountScope.trim() }
               : {}),
-            ...(draft.credentialReference.trim()
+            ...(providerKey !== "docusign" && draft.credentialReference.trim()
               ? { credentialReference: draft.credentialReference.trim() }
               : {}),
             expectedConfigurationVersion: Number(existing.configurationVersion),
@@ -2937,7 +2934,10 @@ export default function EosOverlayPage() {
         ...common,
         administratorReference: draft.administratorReference.trim(),
         accountScope: draft.accountScope.trim(),
-        credentialReference: draft.credentialReference.trim(),
+        credentialReference:
+          providerKey === "docusign"
+            ? "docusign:empyrean-studios-demo"
+            : draft.credentialReference.trim(),
         connectionState: "configured",
         lifecycleState: "proposed",
         evidenceIds: [],
@@ -12313,20 +12313,7 @@ export default function EosOverlayPage() {
                   companyVaultBindingMutation.isPending ||
                   retireCompanyVaultBindingMutation.isPending
                 }
-                onConnect={() => {
-                  if (integration.id === "gohighlevel") {
-                    // The Marketplace location chooser does not render reliably
-                    // inside embedded browsers. Open a separate user-initiated
-                    // window first so EOS itself is never replaced by a blank
-                    // provider page, then navigate it when the signed URL arrives.
-                    goHighLevelConnectionWindow.current = window.open(
-                      "about:blank",
-                      "eos-gohighlevel-connection",
-                      "popup=yes,width=1120,height=820",
-                    );
-                  }
-                  connectIntegrationMutation.mutate(integration);
-                }}
+                onConnect={() => connectIntegrationMutation.mutate(integration)}
                 onAttach={() => attachIntegrationMutation.mutate(integration)}
                 onDisconnect={(connection) =>
                   disconnectIntegrationMutation.mutate({
@@ -12351,6 +12338,36 @@ export default function EosOverlayPage() {
                 }
               />
             ))}
+            <AlertDialog
+              open={Boolean(goHighLevelAuthorizationUrl)}
+              onOpenChange={(open) => {
+                if (!open) setGoHighLevelAuthorizationUrl(null);
+              }}
+            >
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Continue GoHighLevel in your browser</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    GoHighLevel’s location chooser does not support this embedded browser. EOS will remain on this Systems page while you choose the authorized company location in a regular browser window.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  {goHighLevelAuthorizationUrl && (
+                    <Button asChild>
+                      <a
+                        href={goHighLevelAuthorizationUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        Open location chooser
+                      </a>
+                    </Button>
+                  )}
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             {notionConnected && (
               <Card>
                 <CardHeader>
@@ -12807,12 +12824,17 @@ function IntegrationControlCard({
   onRetireCompanyBinding: (binding: JsonRecord) => void;
 }) {
   const actions = new Set<string>(integration.actions || []);
-  const isCompanyVaultProvider =
+  const isCompanyManagedCredentialProvider =
     integration.id === "stripe" || integration.id === "docusign";
+  const isStripeManagedProvider = integration.id === "stripe";
+  const isDocusignManagedProvider = integration.id === "docusign";
+  const docusignPreset = integration.connectionPreset as JsonRecord | null | undefined;
   const [companySetupOpen, setCompanySetupOpen] = useState(false);
   const [companyVaultDraft, setCompanyVaultDraft] =
     useState<CompanyVaultConnectionDraft>({
-      providerAccountReference: String(integration.accountReference || ""),
+      providerAccountReference: String(
+        integration.accountReference || docusignPreset?.providerAccountReference || "",
+      ),
       credentialReference: "",
       administratorReference: String(integration.providerBinding?.administratorReference || ""),
       accountScope: String(integration.providerBinding?.accountScope || ""),
@@ -12829,7 +12851,7 @@ function IntegrationControlCard({
     | undefined;
   const displayedCompanyConnection = activeCompanyConnection || configuredProviderBinding;
   const companyBindingConnected =
-    isCompanyVaultProvider &&
+    isCompanyManagedCredentialProvider &&
     Boolean(configuredProviderBinding) &&
     Boolean(integration.connected);
   // Company-managed providers use server-owned, read-only identity probes.
@@ -12945,7 +12967,7 @@ function IntegrationControlCard({
                 <p className="text-sm text-muted-foreground">
                   {activeCompanyConnection
                     ? `Connected to this company · owner seat ${String(activeCompanyConnection.ownerSeatId).slice(0, 8)} · recovery seat ${String(activeCompanyConnection.recoveryOwnerSeatId).slice(0, 8)}`
-                    : isCompanyVaultProvider
+                    : isCompanyManagedCredentialProvider
                       ? companyBindingConnected
                         ? "Connected to this company through its managed company connection. Provider execution remains governed by separate approval, evidence, and recovery gates."
                         : "Connection setup is recorded for this company. Complete the provider connection and verification before EOS can use it here."
@@ -13065,7 +13087,29 @@ function IntegrationControlCard({
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-          {isCompanyVaultProvider && actions.has("configure_company") && (
+          {isDocusignManagedProvider && actions.has("configure_company") && (
+            <Button
+              onClick={() =>
+                onConfigureCompany({
+                  providerAccountReference: String(
+                    docusignPreset?.providerAccountReference || integration.accountReference || "",
+                  ),
+                  credentialReference: "docusign:empyrean-studios-demo",
+                  administratorReference: String(
+                    docusignPreset?.administratorReference || integration.providerBinding?.administratorReference || "",
+                  ),
+                  accountScope: String(
+                    docusignPreset?.accountScope || integration.providerBinding?.accountScope || "",
+                  ),
+                })
+              }
+              disabled={pending || !String(docusignPreset?.providerAccountReference || integration.accountReference || "").trim()}
+            >
+              <Plug className="mr-2 h-4 w-4" />
+              {companyBindingConnected ? "Reconnect DocuSign" : "Connect DocuSign"}
+            </Button>
+          )}
+          {isStripeManagedProvider && actions.has("configure_company") && (
             <Button
               onClick={() => {
                 setCompanyVaultDraft((current) => ({
@@ -13120,7 +13164,7 @@ function IntegrationControlCard({
               Remove from this company
             </Button>
           )}
-          {companyBindingConnected && configuredProviderBinding && (
+          {isCompanyManagedCredentialProvider && configuredProviderBinding && (
             <Button
               variant="outline"
               onClick={() => onRetireCompanyBinding(configuredProviderBinding)}
@@ -13144,7 +13188,7 @@ function IntegrationControlCard({
           )}
         </div>
 
-        {isCompanyVaultProvider && companySetupOpen && (
+        {isStripeManagedProvider && companySetupOpen && (
           <div className="space-y-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
             <div>
               <p className="font-medium">
