@@ -214,6 +214,30 @@ if (-not $env:MIGRATION_DATABASE_URL) {
 
 function Set-FreshProductionBearerToken {
   if ($env:EOS_NONINTERACTIVE_RELEASE -eq "true") {
+    if ($env:EOS_PRODUCTION_ACTIVE_ADMIN_SESSION_SMOKE -eq "true") {
+      $mintTokenScript = @'
+const { createClerkClient } = require("@clerk/backend");
+(async () => {
+  const administratorIds = [...new Set((process.env.EOS_PLATFORM_ADMIN_USER_IDS || "").split(",").map((value) => value.trim()).filter(Boolean))];
+  if (!administratorIds.length) throw new Error("No platform administrator is available for the authenticated release smoke.");
+  const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+  const activeSessions = (await Promise.all(administratorIds.map(async (userId) =>
+    (await clerk.sessions.getSessionList({ userId, status: "active", limit: 100 })).data,
+  ))).flat();
+  const session = activeSessions.sort((left, right) => (right.lastActiveAt || 0) - (left.lastActiveAt || 0))[0];
+  if (!session) throw new Error("No active platform-administrator session is available for the authenticated release smoke.");
+  const token = await clerk.sessions.getToken(session.id, undefined, 120);
+  if (!token?.jwt || token.jwt.split(".").length !== 3) throw new Error("Clerk did not issue a valid short-lived release-smoke token.");
+  process.stdout.write(token.jwt);
+})().catch((error) => { console.error(error.message); process.exit(1); });
+'@
+      $freshToken = & node -e $mintTokenScript
+      if ($LASTEXITCODE -ne 0 -or -not $freshToken -or $freshToken.Trim().Split('.').Count -ne 3) {
+        throw "Could not mint a fresh active-administrator session for the authenticated release smoke."
+      }
+      $env:EOS_PRODUCTION_BEARER_TOKEN = $freshToken.Trim()
+      return
+    }
     if ($env:EOS_PRODUCTION_BROWSER_CLIPBOARD_HANDOFF -eq "true") {
       $originalClipboard = Get-Clipboard -Raw -ErrorAction SilentlyContinue
       $deadline = (Get-Date).AddSeconds(120)
