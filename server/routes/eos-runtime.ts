@@ -20686,6 +20686,18 @@ export function registerEosRuntimeRoutes(app: Express): void {
       const docusignBinding = companyBindings.find((item) => item.providerKey === "docusign" && item.lifecycleState === "active")
         || companyBindings.find((item) => item.providerKey === "docusign" && item.lifecycleState !== "retired")
         || null;
+      // This is a private, company-owned Demo connection used to validate the
+      // EOS adapter against the actual provider account. The account identifier
+      // is supplied only by deployment configuration; no key, token, or vault
+      // reference is ever returned to the browser.
+      const docusignDemoAccountReference = process.env.DOCUSIGN_DEMO_ACCOUNT_ID?.trim() || null;
+      const docusignConnectionPreset = docusignDemoAccountReference
+        ? {
+            providerAccountReference: docusignDemoAccountReference,
+            administratorReference: "Empyrean Studios DocuSign Demo administrator",
+            accountScope: "Empyrean Studios · DocuSign Demo · read-only identity validation; agreement dispatch remains blocked.",
+          }
+        : null;
       const docusignConnectionHealthy = Boolean(
         docusignBinding
         && docusignBinding.connectionState === "connected"
@@ -20866,12 +20878,14 @@ export function registerEosRuntimeRoutes(app: Express): void {
             description:
               "Company-bound agreement dispatch, signature status, and certificate evidence.",
             state: !docusignBinding
-              ? "not_configured"
+              ? docusignConnectionPreset
+                ? "available"
+                : "not_configured"
               : docusignConnectionHealthy
                 ? "connected"
                 : "available",
             health: docusignConnectionHealthy ? "healthy" : "not_connected",
-            configured: Boolean(docusignBinding),
+            configured: Boolean(docusignBinding || docusignConnectionPreset),
             connected: docusignConnectionHealthy,
             providerType: "company_managed_signature",
             authority: "company_agreement_execution_after_local_approval",
@@ -20904,6 +20918,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
               ? ["Binding-specific managed DocuSign credential", "Verified DocuSign account identity"]
               : [],
             accountReference: docusignBinding?.providerAccountReference || null,
+            connectionPreset: docusignConnectionPreset,
             connectionScope: docusignDemoValidation
               ? docusignBinding?.accountScope || "Company-scoped Demo validation only; agreement dispatch remains blocked."
               : "This is a company agreement binding. EOS executes only an exact, locally approved agreement action through the selected binding; the managed credential remains in the vault and is never shared across companies.",
@@ -20926,9 +20941,10 @@ export function registerEosRuntimeRoutes(app: Express): void {
               docusignBinding
                 ? "Prepare and review the agreement in EOS. Keep dispatch blocked until a separate production binding is approved and verified."
                 : "Prepare the agreement in EOS and send it from the authorized DocuSign workspace manually.",
-            // DocuSign is also company-vault managed.  Its action creates or
-            // updates a safe binding reference; it never exposes a JWT or
-            // represents a demo authorization as production dispatch.
+            // The same visible provider lifecycle as every other company
+            // integration: Connect, then read-only Verify, and Remove. The
+            // credential remains server-managed and Demo verification never
+            // represents production agreement dispatch.
             actions: ["configure_company"],
           },
           {

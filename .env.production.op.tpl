@@ -34,6 +34,15 @@ GOHIGHLEVEL_CLIENT_ID=op://EntrepreneurOS/Production/GOHIGHLEVEL_CLIENT_ID
 GOHIGHLEVEL_CLIENT_SECRET=op://EntrepreneurOS/Production/GOHIGHLEVEL_CLIENT_SECRET
 GOHIGHLEVEL_INSTALLATION_URL=op://EntrepreneurOS/Production/GOHIGHLEVEL_INSTALLATION_URL
 GOHIGHLEVEL_REDIRECT_URI=https://entrepreneuros.net/api/auth/crm/callback
+# Private company DocuSign Demo identity. These values are composed into the
+# encrypted runtime credential map only during release; they are never shown
+# in the Systems UI and never enable envelope dispatch.
+DOCUSIGN_DEMO_PRIVATE_KEY=op://EntrepreneurOS/Production/DOCUSIGN_DEMO_PRIVATE_KEY
+DOCUSIGN_DEMO_USER_ID=op://EntrepreneurOS/Production/DOCUSIGN_DEMO_USER_ID
+DOCUSIGN_DEMO_ACCOUNT_ID=op://EntrepreneurOS/Production/DOCUSIGN_DEMO_ACCOUNT_ID
+DOCUSIGN_DEMO_INTEGRATION_KEY=op://EntrepreneurOS/Production/DOCUSIGN_DEMO_INTEGRATION_KEY
+DOCUSIGN_DEMO_OAUTH_BASE_URL=op://EntrepreneurOS/Production/DOCUSIGN_DEMO_OAUTH_BASE_URL
+DOCUSIGN_DEMO_API_BASE_URL=op://EntrepreneurOS/Production/DOCUSIGN_DEMO_API_BASE_URL
 EOS_PUBLIC_ORIGIN=https://entrepreneuros.net
 EOS_PRODUCTION_ENVIRONMENT_SUBJECT=environment:entrepreneuros-production
 EOS_PRODUCTION_RELEASE_BRANCH=feature/company-system
