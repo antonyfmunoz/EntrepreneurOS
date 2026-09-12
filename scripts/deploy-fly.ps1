@@ -214,6 +214,7 @@ $optionalProviderSecretNames = @(Resolve-OptionalProviderSecretNames)
 # map. Consequential effects stay disabled by EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED.
 $docusignDemoNames = @(
   "DOCUSIGN_DEMO_PRIVATE_KEY",
+  "DOCUSIGN_DEMO_PRIVATE_KEY_B64",
   "DOCUSIGN_DEMO_USER_ID",
   "DOCUSIGN_DEMO_ACCOUNT_ID",
   "DOCUSIGN_DEMO_INTEGRATION_KEY",
@@ -234,11 +235,22 @@ function Add-DocusignDemoCredentialToRuntimeMap {
   } catch {
     throw "EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS is not valid JSON."
   }
+  $privateKey = $env:DOCUSIGN_DEMO_PRIVATE_KEY
+  if ($privateKey -notmatch "-----BEGIN (?:RSA )?PRIVATE KEY-----") {
+    try {
+      $privateKey = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:DOCUSIGN_DEMO_PRIVATE_KEY_B64))
+    } catch {
+      throw "DOCUSIGN_DEMO_PRIVATE_KEY_B64 is not a valid base64-encoded private key."
+    }
+  }
+  if ($privateKey -notmatch "-----BEGIN (?:RSA )?PRIVATE KEY-----") {
+    throw "The managed DocuSign Demo private key is not a supported PEM key."
+  }
   $map["op://EntrepreneurOS/Production/DOCUSIGN_DEMO_INTEGRATION_KEY"] = @{
     provider = "docusign"
     integrationKey = $env:DOCUSIGN_DEMO_INTEGRATION_KEY
     userId = $env:DOCUSIGN_DEMO_USER_ID
-    privateKey = $env:DOCUSIGN_DEMO_PRIVATE_KEY
+    privateKey = $privateKey
     oauthBaseUrl = $env:DOCUSIGN_DEMO_OAUTH_BASE_URL
     apiBaseUrl = $env:DOCUSIGN_DEMO_API_BASE_URL
   }
