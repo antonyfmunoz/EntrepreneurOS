@@ -20680,11 +20680,11 @@ export function registerEosRuntimeRoutes(app: Express): void {
         connection.providerKey === "gohighlevel" && connection.connectionState === "connected" && connection.healthState === "healthy",
       ) || null;
       const stripeBinding = companyBindings.find((item) => item.providerKey === "stripe" && item.lifecycleState === "active")
-        || companyBindings.find((item) => item.providerKey === "stripe")
+        || companyBindings.find((item) => item.providerKey === "stripe" && item.lifecycleState !== "retired")
         || null;
       const stripeConnection = stripeBinding ? await verifyStripeConnection(stripeBinding) : null;
       const docusignBinding = companyBindings.find((item) => item.providerKey === "docusign" && item.lifecycleState === "active")
-        || companyBindings.find((item) => item.providerKey === "docusign")
+        || companyBindings.find((item) => item.providerKey === "docusign" && item.lifecycleState !== "retired")
         || null;
       const docusignConnectionHealthy = Boolean(
         docusignBinding

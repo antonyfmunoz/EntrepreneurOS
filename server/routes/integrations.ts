@@ -68,7 +68,7 @@ async function stripeConnectionStatus(companyId: number) {
     eq(eosIntegrationBindings.companyId, companyId),
   );
   const binding = bindings.find((item) => item.providerKey === "stripe" && item.lifecycleState === "active")
-    || bindings.find((item) => item.providerKey === "stripe")
+    || bindings.find((item) => item.providerKey === "stripe" && item.lifecycleState !== "retired")
     || null;
   if (!binding) {
     return {
