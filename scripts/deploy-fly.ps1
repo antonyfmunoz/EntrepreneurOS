@@ -284,7 +284,11 @@ if ($remoteReleaseCommit -ne $releaseCommit) { throw "The release commit is not 
 # Query runs directly by immutable commit rather than asking the CLI to first
 # enumerate every repository workflow. The latter can be throttled separately
 # by GitHub even while the exact qualification run is available.
-$qualificationRuns = @(gh api "repos/$env:EOS_GITHUB_REPOSITORY/actions/runs?head_sha=$releaseCommit&per_page=50" --jq '.workflow_runs' | ConvertFrom-Json)
+$qualificationRuns = @(
+  gh api "repos/$env:EOS_GITHUB_REPOSITORY/actions/runs?head_sha=$releaseCommit&per_page=50" --jq '.workflow_runs' |
+    ConvertFrom-Json |
+    ForEach-Object { $_ }
+)
 $qualifiedRun = $qualificationRuns | Where-Object { $_.name -eq "Production qualification" -and $_.head_sha -eq $releaseCommit -and $_.status -eq "completed" -and $_.conclusion -eq "success" -and $_.event -in @("push", "workflow_dispatch") } | Select-Object -First 1
 if (-not $qualifiedRun) { throw "The exact release commit does not have a successful push- or explicitly dispatched production qualification run." }
 $env:EOS_RELEASE_SUBJECT = "git:$releaseCommit"
