@@ -38,6 +38,7 @@ GOHIGHLEVEL_REDIRECT_URI=https://entrepreneuros.net/api/auth/crm/callback
 # encrypted runtime credential map only during release; they are never shown
 # in the Systems UI and never enable envelope dispatch.
 DOCUSIGN_DEMO_PRIVATE_KEY=op://EntrepreneurOS/Production/DOCUSIGN_DEMO_PRIVATE_KEY
+DOCUSIGN_DEMO_PRIVATE_KEY_B64=op://EntrepreneurOS/Production/DOCUSIGN_DEMO_PRIVATE_KEY_B64
 DOCUSIGN_DEMO_USER_ID=op://EntrepreneurOS/Production/DOCUSIGN_DEMO_USER_ID
 DOCUSIGN_DEMO_ACCOUNT_ID=op://EntrepreneurOS/Production/DOCUSIGN_DEMO_ACCOUNT_ID
 DOCUSIGN_DEMO_INTEGRATION_KEY=op://EntrepreneurOS/Production/DOCUSIGN_DEMO_INTEGRATION_KEY
