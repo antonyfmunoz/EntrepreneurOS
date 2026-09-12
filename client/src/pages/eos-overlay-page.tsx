@@ -2885,7 +2885,7 @@ export default function EosOverlayPage() {
         providerKey,
         providerAccountReference: draft.providerAccountReference.trim(),
         ...(providerKey === "docusign"
-          ? { credentialReference: "docusign:empyrean-studios-demo" }
+          ? { credentialReference: String(draft.credentialReference || "") }
           : {}),
         ...providerDefaults,
       };
@@ -2936,7 +2936,7 @@ export default function EosOverlayPage() {
         accountScope: draft.accountScope.trim(),
         credentialReference:
           providerKey === "docusign"
-            ? "docusign:empyrean-studios-demo"
+            ? draft.credentialReference.trim()
             : draft.credentialReference.trim(),
         connectionState: "configured",
         lifecycleState: "proposed",
@@ -13094,7 +13094,7 @@ function IntegrationControlCard({
                   providerAccountReference: String(
                     docusignPreset?.providerAccountReference || integration.accountReference || "",
                   ),
-                  credentialReference: "docusign:empyrean-studios-demo",
+                  credentialReference: String(docusignPreset?.credentialReference || ""),
                   administratorReference: String(
                     docusignPreset?.administratorReference || integration.providerBinding?.administratorReference || "",
                   ),

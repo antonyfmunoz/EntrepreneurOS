@@ -20694,6 +20694,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
       const docusignConnectionPreset = docusignDemoAccountReference
         ? {
             providerAccountReference: docusignDemoAccountReference,
+            credentialReference: "op://EntrepreneurOS/Production/DOCUSIGN_DEMO_INTEGRATION_KEY",
             administratorReference: "Empyrean Studios DocuSign Demo administrator",
             accountScope: "Empyrean Studios · DocuSign Demo · read-only identity validation; agreement dispatch remains blocked.",
           }

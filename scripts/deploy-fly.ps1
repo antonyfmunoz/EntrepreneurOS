@@ -234,7 +234,7 @@ function Add-DocusignDemoCredentialToRuntimeMap {
   } catch {
     throw "EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS is not valid JSON."
   }
-  $map["docusign:empyrean-studios-demo"] = @{
+  $map["op://EntrepreneurOS/Production/DOCUSIGN_DEMO_INTEGRATION_KEY"] = @{
     provider = "docusign"
     integrationKey = $env:DOCUSIGN_DEMO_INTEGRATION_KEY
     userId = $env:DOCUSIGN_DEMO_USER_ID
