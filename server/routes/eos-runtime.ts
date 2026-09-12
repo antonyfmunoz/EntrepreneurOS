@@ -20688,15 +20688,18 @@ export function registerEosRuntimeRoutes(app: Express): void {
         || null;
       const docusignConnectionHealthy = Boolean(
         docusignBinding
-        && docusignBinding.lifecycleState === "active"
         && docusignBinding.connectionState === "connected"
         && docusignBinding.healthState === "healthy"
-        && docusignBinding.parityState === "passing",
       );
       const docusignCredentialConfigured = docusignBinding
         ? recoveryCommercialBindingCredentialConfigured(docusignBinding)
         : false;
-      const docusignExecutionReady = docusignConnectionHealthy && docusignCredentialConfigured;
+      const docusignExecutionReady = Boolean(
+        docusignConnectionHealthy
+        && docusignCredentialConfigured
+        && docusignBinding?.lifecycleState === "active"
+        && docusignBinding.parityState === "passing",
+      );
       const docusignDemoValidation =
         docusignBinding?.adapterReference === "docusign-jwt-demo-v1";
       const umhConfigured = federationConfigured();
@@ -20864,16 +20867,12 @@ export function registerEosRuntimeRoutes(app: Express): void {
               "Company-bound agreement dispatch, signature status, and certificate evidence.",
             state: !docusignBinding
               ? "not_configured"
-              : docusignExecutionReady
+              : docusignConnectionHealthy
                 ? "connected"
                 : "available",
-            health: docusignExecutionReady
-              ? "healthy"
-              : docusignConnectionHealthy
-                ? "degraded"
-                : "not_connected",
+            health: docusignConnectionHealthy ? "healthy" : "not_connected",
             configured: Boolean(docusignBinding),
-            connected: docusignExecutionReady,
+            connected: docusignConnectionHealthy,
             providerType: "company_managed_signature",
             authority: "company_agreement_execution_after_local_approval",
             risk: "consequential_write",
@@ -20901,8 +20900,8 @@ export function registerEosRuntimeRoutes(app: Express): void {
                     "Envelope and Connect HMAC callback access",
                   ]),
             ],
-            grantedScopes: docusignExecutionReady
-              ? ["Binding-specific managed DocuSign credential", "Template and sender authority", "Envelope and Connect HMAC callback access"]
+            grantedScopes: docusignConnectionHealthy
+              ? ["Binding-specific managed DocuSign credential", "Verified DocuSign account identity"]
               : [],
             accountReference: docusignBinding?.providerAccountReference || null,
             connectionScope: docusignDemoValidation

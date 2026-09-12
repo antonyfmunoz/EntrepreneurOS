@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import {
@@ -2693,6 +2693,8 @@ export default function EosOverlayPage() {
     onError: (error) => showMutationError("Evidence recording", error),
   });
 
+  const goHighLevelConnectionWindow = useRef<Window | null>(null);
+
   const connectIntegrationMutation = useMutation({
     mutationFn: (integration: JsonRecord) => {
       const provider =
@@ -2702,9 +2704,30 @@ export default function EosOverlayPage() {
         `${root}/integrations/${provider}/auth`,
       );
     },
-    onSuccess: ({ authUrl }) => window.location.assign(authUrl),
-    onError: (error, integration) =>
-      showMutationError(`${integration.name} connection`, error),
+    onSuccess: ({ authUrl }, integration) => {
+      const providerWindow = goHighLevelConnectionWindow.current;
+      if (
+        integration.id === "gohighlevel" &&
+        providerWindow &&
+        !providerWindow.closed
+      ) {
+        goHighLevelConnectionWindow.current = null;
+        providerWindow.location.replace(authUrl);
+        toast({
+          title: "GoHighLevel location chooser opened",
+          description: "Choose the company location there. This Systems page will remain open while GoHighLevel completes its approval.",
+        });
+        return;
+      }
+      window.location.assign(authUrl);
+    },
+    onError: (error, integration) => {
+      if (integration.id === "gohighlevel") {
+        goHighLevelConnectionWindow.current?.close();
+        goHighLevelConnectionWindow.current = null;
+      }
+      showMutationError(`${integration.name} connection`, error);
+    },
   });
 
   const attachIntegrationMutation = useMutation({
@@ -2787,6 +2810,13 @@ export default function EosOverlayPage() {
     mutationFn: async ({ integration, connection }: { integration: JsonRecord; connection?: JsonRecord }) => {
       const provider =
         integration.id === "google_workspace" ? "gmail" : integration.id;
+      if (integration.id === "docusign" && connection?.id) {
+        return requestJson<JsonRecord>(
+          "POST",
+          `${root}/integrations/docusign/bindings/${connection.id}/verify`,
+          {},
+        );
+      }
       if (connection?.id) {
         return requestJson<JsonRecord>(
           "POST",
@@ -2835,7 +2865,7 @@ export default function EosOverlayPage() {
     }) => {
       const providerKey = String(integration.id || "");
       if (providerKey !== "stripe" && providerKey !== "docusign")
-        throw new Error("This provider is not configured through a company vault binding.");
+        throw new Error("This provider is not configured through a managed company connection.");
       const providerDefaults = providerKey === "stripe"
         ? {
             adapterKind: "api_key",
@@ -2879,7 +2909,7 @@ export default function EosOverlayPage() {
               ? { credentialReference: draft.credentialReference.trim() }
               : {}),
             expectedConfigurationVersion: Number(existing.configurationVersion),
-            changeSummary: `${integration.name} company-vault connection reviewed and updated.`,
+            changeSummary: `${integration.name} managed company connection reviewed and updated.`,
           },
         );
       }
@@ -2913,8 +2943,30 @@ export default function EosOverlayPage() {
         evidenceIds: [],
       });
     },
-    onSuccess: async (_result, variables) => {
+    onSuccess: async (result, variables) => {
       await Promise.all([integrationsQuery.refetch(), systemsStateQuery.refetch()]);
+      if (variables.integration.id === "docusign") {
+        try {
+          const verification = await verifyIntegrationMutation.mutateAsync({
+            integration: variables.integration,
+            connection: result,
+          });
+          await integrationsQuery.refetch();
+          toast({
+            title: verification.verification?.healthy
+              ? "DocuSign connected and verified"
+              : "DocuSign connection saved",
+            description: verification.verification?.healthy
+              ? "EOS verified the exact company account without sending or changing an envelope."
+              : "EOS could not verify the company account yet. No agreement action was enabled.",
+          });
+          return;
+        } catch {
+          // The saved company connection remains available for correction. The
+          // verification mutation supplies the actionable error toast.
+          return;
+        }
+      }
       toast({
         title: `${variables.integration.name} company connection saved`,
         description: "The binding is recorded for this company. EOS will keep provider execution blocked until its separate health, approval, and evidence gates pass.",
@@ -12261,7 +12313,20 @@ export default function EosOverlayPage() {
                   companyVaultBindingMutation.isPending ||
                   retireCompanyVaultBindingMutation.isPending
                 }
-                onConnect={() => connectIntegrationMutation.mutate(integration)}
+                onConnect={() => {
+                  if (integration.id === "gohighlevel") {
+                    // The Marketplace location chooser does not render reliably
+                    // inside embedded browsers. Open a separate user-initiated
+                    // window first so EOS itself is never replaced by a blank
+                    // provider page, then navigate it when the signed URL arrives.
+                    goHighLevelConnectionWindow.current = window.open(
+                      "about:blank",
+                      "eos-gohighlevel-connection",
+                      "popup=yes,width=1120,height=820",
+                    );
+                  }
+                  connectIntegrationMutation.mutate(integration);
+                }}
                 onAttach={() => attachIntegrationMutation.mutate(integration)}
                 onDisconnect={(connection) =>
                   disconnectIntegrationMutation.mutate({
@@ -12767,10 +12832,11 @@ function IntegrationControlCard({
     isCompanyVaultProvider &&
     Boolean(configuredProviderBinding) &&
     Boolean(integration.connected);
-  // Stripe has a read-only, server-owned merchant identity probe. DocuSign is
-  // not shown as connected until its separate production verifier is present.
+  // Company-managed providers use server-owned, read-only identity probes.
+  // They never expose a credential to the browser or enable consequential effects.
   const companyBindingVerifiable =
-    companyBindingConnected && integration.id === "stripe";
+    (integration.id === "docusign" && Boolean(configuredProviderBinding)) ||
+    (integration.id === "stripe" && companyBindingConnected);
   const readiness = integration.readiness && typeof integration.readiness === "object"
     ? integration.readiness as JsonRecord
     : null;
@@ -12881,7 +12947,7 @@ function IntegrationControlCard({
                     ? `Connected to this company · owner seat ${String(activeCompanyConnection.ownerSeatId).slice(0, 8)} · recovery seat ${String(activeCompanyConnection.recoveryOwnerSeatId).slice(0, 8)}`
                     : isCompanyVaultProvider
                       ? companyBindingConnected
-                        ? "Connected to this company through its managed vault binding. Provider execution remains governed by separate approval, evidence, and recovery gates."
+                        ? "Connected to this company through its managed company connection. Provider execution remains governed by separate approval, evidence, and recovery gates."
                         : "Connection setup is recorded for this company. Complete the provider connection and verification before EOS can use it here."
                       : "Configured for this company and governed by its role, authority, approval, and audit controls."}
                 </p>
@@ -13037,7 +13103,11 @@ function IntegrationControlCard({
           )}
           {((actions.has("verify") && Boolean(activeCompanyConnection)) ||
             companyBindingVerifiable) && (
-            <Button variant="outline" onClick={() => onVerify(activeCompanyConnection)} disabled={pending}>
+            <Button
+              variant="outline"
+              onClick={() => onVerify(integration.id === "docusign" ? configuredProviderBinding || undefined : activeCompanyConnection)}
+              disabled={pending}
+            >
               <RefreshCw
                 className={`mr-2 h-4 w-4 ${pending ? "animate-spin" : ""}`}
               />
@@ -13083,7 +13153,9 @@ function IntegrationControlCard({
                   : `Connect ${integration.name} to this company`}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                This records a company-scoped vault binding only. Enter safe identifiers and a 1Password reference—never paste a key, token, password, signing secret, or private key into EOS.
+                {integration.id === "docusign"
+                  ? "EOS will match this company account to its managed DocuSign authorization and run a read-only identity check. No agreement is sent or changed during connection."
+                  : "Record the company account and its managed connection. Enter safe identifiers only—never paste a key, token, password, or signing secret into EOS."}
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -13100,19 +13172,21 @@ function IntegrationControlCard({
                   placeholder={integration.id === "stripe" ? "acct_…" : "DocuSign account or sender reference"}
                 />
               </label>
-              <label className="space-y-1 text-xs font-medium">
-                <span>1Password credential reference</span>
-                <Input
-                  value={companyVaultDraft.credentialReference}
-                  onChange={(event) =>
-                    setCompanyVaultDraft((draft) => ({
-                      ...draft,
-                      credentialReference: event.target.value,
-                    }))
-                  }
-                  placeholder={integration.providerBinding ? "Leave blank to retain the existing reference" : "op://vault/item/field"}
-                />
-              </label>
+              {integration.id === "stripe" && (
+                <label className="space-y-1 text-xs font-medium">
+                  <span>Managed credential reference</span>
+                  <Input
+                    value={companyVaultDraft.credentialReference}
+                    onChange={(event) =>
+                      setCompanyVaultDraft((draft) => ({
+                        ...draft,
+                        credentialReference: event.target.value,
+                      }))
+                    }
+                    placeholder={integration.providerBinding ? "Leave blank to retain the existing secure connection" : "Administrator-provided secure reference"}
+                  />
+                </label>
+              )}
               <label className="space-y-1 text-xs font-medium">
                 <span>Account administrator reference</span>
                 <Input
@@ -13149,7 +13223,8 @@ function IntegrationControlCard({
                 disabled={
                   pending ||
                   !companyVaultDraft.providerAccountReference.trim() ||
-                  (!integration.providerBinding &&
+                  (integration.id === "stripe" &&
+                    !integration.providerBinding &&
                     !companyVaultDraft.credentialReference.trim())
                 }
                 onClick={() => onConfigureCompany(companyVaultDraft)}
