@@ -11,12 +11,13 @@ import * as quickbooks from "../integrations/quickbooks";
 import * as slack from "../integrations/slack";
 import * as gohighlevel from "../integrations/gohighlevel";
 import { verifyStripeConnection } from "../integrations/stripe-health";
+import { verifyDocusignConnection } from "../integrations/recovery-commercial";
 import { credentialEncryptionConfigured, encryptCredential } from "../security/credential-encryption";
 import { allowedSurfacesFor } from "@shared/eos-runtime";
 import { authorizeAction, companyAccess, EosRouteError, visibleSeatIds } from "./eos-runtime";
 
-type SupportedProvider = "gmail" | "notion" | "quickbooks" | "slack" | "gohighlevel" | "stripe";
-type OAuthProvider = Exclude<SupportedProvider, "stripe">;
+type SupportedProvider = "gmail" | "notion" | "quickbooks" | "slack" | "gohighlevel" | "stripe" | "docusign";
+type OAuthProvider = Exclude<SupportedProvider, "stripe" | "docusign">;
 type CompanyProviderKey = "google_workspace" | "notion" | "quickbooks" | "slack" | "gohighlevel";
 
 const attachConnectionSchema = z.object({
@@ -59,7 +60,7 @@ function requestCookie(req: Request, name: string): string | null {
 }
 
 function providerFrom(req: Request): SupportedProvider {
-  if (["gmail", "notion", "quickbooks", "slack", "gohighlevel", "stripe"].includes(req.params.provider)) return req.params.provider as SupportedProvider;
+  if (["gmail", "notion", "quickbooks", "slack", "gohighlevel", "stripe", "docusign"].includes(req.params.provider)) return req.params.provider as SupportedProvider;
   throw new EosRouteError(404, "integration_provider_not_found", "This provider is not available in the EOS integration registry.");
 }
 
@@ -89,9 +90,35 @@ async function stripeConnectionStatus(companyId: number) {
   };
 }
 
+async function docusignConnectionStatus(companyId: number) {
+  const bindings = await db.select().from(eosIntegrationBindings).where(
+    eq(eosIntegrationBindings.companyId, companyId),
+  );
+  const binding = bindings.find((item) => item.providerKey === "docusign" && item.lifecycleState === "active")
+    || bindings.find((item) => item.providerKey === "docusign" && item.lifecycleState !== "retired")
+    || null;
+  if (!binding) {
+    return {
+      configured: false,
+      connected: false,
+      healthy: false,
+      reason: "binding_invalid" as const,
+      accountReference: null,
+      bindingId: null,
+    };
+  }
+  const health = await verifyDocusignConnection(binding);
+  return {
+    configured: true,
+    ...health,
+    accountReference: binding.providerAccountReference,
+    bindingId: binding.id,
+  };
+}
+
 function oauthProvider(provider: SupportedProvider): OAuthProvider {
-  if (provider === "stripe") {
-    throw new EosRouteError(409, "integration_provider_managed_connection", "Stripe is a company-managed merchant connection. Configure its binding and vaulted restricted key through the Systems registry.");
+  if (provider === "stripe" || provider === "docusign") {
+    throw new EosRouteError(409, "integration_provider_managed_connection", `${provider === "stripe" ? "Stripe" : "DocuSign"} is a company-managed connection. Configure its binding and managed vault credential through the Systems registry.`);
   }
   return provider;
 }
@@ -294,9 +321,70 @@ export function registerIntegrationRoutes(app: Express): void {
       if (requestedProvider === "stripe") {
         return res.json(await stripeConnectionStatus(Number(req.params.companyId)));
       }
+      if (requestedProvider === "docusign") {
+        return res.json(await docusignConnectionStatus(Number(req.params.companyId)));
+      }
       const provider = oauthProvider(requestedProvider);
       const adapter = provider === "gmail" ? gmail : provider === "notion" ? notion : provider === "quickbooks" ? quickbooks : provider === "slack" ? slack : gohighlevel;
       return res.json(req.query.verify === "true" ? await adapter.verifyConnection(req.user.id) : await adapter.connectionSummary(req.user.id));
+    } catch (error) { return providerError(res, error); }
+  });
+
+  // DocuSign is a company-managed service credential, not a person-owned
+  // OAuth connection. Verify only the exact binding with a read-only account
+  // identity request; never send or alter an envelope from Systems.
+  app.post("/api/eos/companies/:companyId/integrations/docusign/bindings/:bindingId/verify", async (req, res) => {
+    try {
+      const { access, policy } = await integrationAccess(req, "execute", "integration_provider_connection.verify");
+      const binding = await db.query.eosIntegrationBindings.findFirst({
+        where: and(
+          eq(eosIntegrationBindings.id, req.params.bindingId),
+          eq(eosIntegrationBindings.companyId, access.company.id),
+        ),
+      });
+      const visible = await visibleSeatIds(access.company.id, access.seat.id, access.role);
+      if (!binding || binding.providerKey !== "docusign" || binding.lifecycleState === "retired" || !visible.has(binding.ownerSeatId)) {
+        throw new EosRouteError(404, "docusign_binding_not_found", "DocuSign company binding not found in this authority scope.");
+      }
+      const verified = await verifyDocusignConnection(binding);
+      const now = new Date();
+      const [updated] = await db.update(eosIntegrationBindings).set({
+        connectionState: verified.healthy ? "connected" : "failed",
+        healthState: verified.healthy ? "healthy" : verified.connected ? "degraded" : "unavailable",
+        lastHealthAt: now,
+        updatedAt: now,
+      }).where(eq(eosIntegrationBindings.id, binding.id)).returning();
+      await db.insert(eosAuditRecords).values({
+        id: randomUUID(),
+        companyId: access.company.id,
+        actorUserId: req.user.id,
+        action: "integration_binding.provider_identity_verified",
+        targetType: "integration_binding",
+        targetId: updated.id,
+        traceId: policy.traceId,
+        correlationId: policy.correlationId,
+        result: verified.reason,
+        details: {
+          providerKey: "docusign",
+          externalReference: verified.externalReference,
+          policyDecisionId: policy.decisionId,
+          readOnly: true,
+        },
+        createdAt: now,
+      });
+      return res.json({
+        id: updated.id,
+        connectionState: updated.connectionState,
+        healthState: updated.healthState,
+        lastHealthAt: updated.lastHealthAt,
+        verification: {
+          connected: verified.connected,
+          healthy: verified.healthy,
+          reason: verified.reason,
+          externalReference: verified.externalReference,
+          deliveryVerified: false,
+        },
+      });
     } catch (error) { return providerError(res, error); }
   });
 

@@ -39,6 +39,23 @@ export type RecoveryCommercialProviderReceipt = Record<string, unknown> & {
   id: string;
 };
 
+export type DocusignConnectionHealth = {
+  connected: boolean;
+  healthy: boolean;
+  reason:
+    | "ready"
+    | "binding_invalid"
+    | "credential_missing"
+    | "authorization_failed"
+    | "account_mismatch"
+    | "provider_unavailable";
+  scope: "account_identity_and_managed_credential";
+  // A read-only identity probe does not prove a Connect callback or authorize
+  // envelope creation. Those remain separately governed execution gates.
+  deliveryVerified: false;
+  externalReference: string;
+};
+
 export type RecoveryCommercialEffect =
   | {
       kind: "stripe_checkout";
@@ -99,6 +116,23 @@ function credentialFor(binding: Binding): Credential {
       : undefined);
   if (!credential || credential.provider !== binding.providerKey)
     throw new Error("The exact Integration Binding has no execution credential.");
+  return credential;
+}
+
+/**
+ * Retrieves only the credential that belongs to this exact binding. Unlike
+ * credentialFor, this is intentionally usable while consequential provider
+ * effects remain disabled: it is used solely for read-only identity health.
+ */
+function readOnlyCredentialFor(binding: Binding): Credential {
+  const credentials = credentialMap();
+  const credential =
+    credentials[binding.id] ||
+    (binding.credentialReference
+      ? credentials[binding.credentialReference]
+      : undefined);
+  if (!credential || credential.provider !== binding.providerKey)
+    throw new Error("The exact Integration Binding has no managed credential.");
   return credential;
 }
 
@@ -196,6 +230,72 @@ async function docusignRequest(
   });
   if (!response.ok) throw new Error("DocuSign rejected the approved operation.");
   return (await response.json()) as Record<string, unknown>;
+}
+
+/**
+ * A server-owned, read-only DocuSign account identity probe. It never creates,
+ * sends, changes, or voids an envelope and is permitted while effects are off.
+ */
+export async function verifyDocusignConnection(
+  binding: Binding,
+): Promise<DocusignConnectionHealth> {
+  const result = (
+    reason: DocusignConnectionHealth["reason"],
+    connected = false,
+  ): DocusignConnectionHealth => ({
+    connected,
+    healthy: reason === "ready",
+    reason,
+    scope: "account_identity_and_managed_credential",
+    deliveryVerified: false,
+    externalReference:
+      reason === "ready"
+        ? `provider:docusign:${binding.providerAccountReference}:account_identity_verified`
+        : `provider:docusign:account_identity_check:${reason}`,
+  });
+  if (
+    binding.providerKey !== "docusign" ||
+    !binding.id ||
+    !binding.credentialReference ||
+    !binding.providerAccountReference.trim()
+  )
+    return result("binding_invalid");
+
+  let credential: DocusignCredential;
+  try {
+    const candidate = readOnlyCredentialFor(binding);
+    if (candidate.provider !== "docusign") return result("credential_missing");
+    credential = candidate;
+  } catch {
+    return result("credential_missing");
+  }
+
+  try {
+    const token = await docusignToken(credential);
+    const url = new URL(
+      `/restapi/v2.1/accounts/${encodeURIComponent(binding.providerAccountReference)}`,
+      credential.apiBaseUrl,
+    );
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (response.status === 401 || response.status === 403)
+      return result("authorization_failed");
+    if (!response.ok) return result("provider_unavailable");
+    const account = (await response.json()) as { accountId?: unknown };
+    if (
+      typeof account.accountId === "string" &&
+      account.accountId !== binding.providerAccountReference
+    )
+      return result("account_mismatch");
+    return result("ready", true);
+  } catch {
+    // Never surface provider response bodies; they can contain sensitive
+    // operational metadata. The card gets a safe, actionable reason instead.
+    return result("provider_unavailable");
+  }
 }
 
 export async function executeRecoveryCommercialEffect(input: {
