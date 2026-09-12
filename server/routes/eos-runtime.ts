@@ -20812,7 +20812,22 @@ export function registerEosRuntimeRoutes(app: Express): void {
             grantedScopes: stripeConnection?.healthy ? ["Company-specific restricted Stripe key", "Binding-specific webhook signing secret"] : [],
             executionAdapter: "EOS-owned Stripe commercial adapter",
             manualFallback: "Issue or reconcile the approved payment directly in the selected company's Stripe dashboard.",
-            actions: stripeBinding ? ["verify"] : [],
+            providerBinding: stripeBinding
+              ? {
+                  id: stripeBinding.id,
+                  configurationVersion: stripeBinding.configurationVersion,
+                  providerAccountReference: stripeBinding.providerAccountReference,
+                  administratorReference: stripeBinding.administratorReference,
+                  accountScope: stripeBinding.accountScope,
+                  lifecycleState: stripeBinding.lifecycleState,
+                  connectionState: stripeBinding.connectionState,
+                  credentialReferenceConfigured: Boolean(stripeBinding.credentialReference),
+                }
+              : null,
+            // Stripe is a company-vault provider, not a user OAuth flow.  The
+            // action opens the governed binding setup rather than implying
+            // that a person can attach a merchant credential to their seat.
+            actions: ["configure_company"],
           },
           {
             id: "gohighlevel",
@@ -20896,11 +20911,26 @@ export function registerEosRuntimeRoutes(app: Express): void {
             executionAdapter: docusignDemoValidation
               ? "EOS-owned DocuSign JWT adapter — Demo validation only"
               : "EOS-owned DocuSign agreement and receipt-reconciliation adapter",
+            providerBinding: docusignBinding
+              ? {
+                  id: docusignBinding.id,
+                  configurationVersion: docusignBinding.configurationVersion,
+                  providerAccountReference: docusignBinding.providerAccountReference,
+                  administratorReference: docusignBinding.administratorReference,
+                  accountScope: docusignBinding.accountScope,
+                  lifecycleState: docusignBinding.lifecycleState,
+                  connectionState: docusignBinding.connectionState,
+                  credentialReferenceConfigured: Boolean(docusignBinding.credentialReference),
+                }
+              : null,
             manualFallback:
               docusignBinding
                 ? "Prepare and review the agreement in EOS. Keep dispatch blocked until a separate production binding is approved and verified."
                 : "Prepare the agreement in EOS and send it from the authorized DocuSign workspace manually.",
-            actions: [],
+            // DocuSign is also company-vault managed.  Its action creates or
+            // updates a safe binding reference; it never exposes a JWT or
+            // represents a demo authorization as production dispatch.
+            actions: ["configure_company"],
           },
           {
             id: "quickbooks",
