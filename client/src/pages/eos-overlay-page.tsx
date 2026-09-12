@@ -2885,8 +2885,10 @@ export default function EosOverlayPage() {
       }
       const systems = (systemsStateQuery.data?.systems || []) as JsonRecord[];
       const normalizedName = String(integration.name || "").toLowerCase();
-      let targetSystem = systems.find(
-        (system) => String(system.name || "").toLowerCase() === normalizedName,
+      let targetSystem = systems.find((system) =>
+        [normalizedName, `${normalizedName} company provider`].includes(
+          String(system.name || "").toLowerCase(),
+        ),
       );
       if (!targetSystem) {
         targetSystem = await requestJson<JsonRecord>("POST", `${root}/systems`, {
@@ -2920,6 +2922,35 @@ export default function EosOverlayPage() {
     },
     onError: (error, variables) =>
       showMutationError(`${variables.integration.name} company connection`, error),
+  });
+
+  const retireCompanyVaultBindingMutation = useMutation({
+    mutationFn: ({
+      integration,
+      binding,
+    }: {
+      integration: JsonRecord;
+      binding: JsonRecord;
+    }) =>
+      requestJson<JsonRecord>(
+        "PATCH",
+        `${root}/integration-bindings/${binding.id}`,
+        {
+          lifecycleState: "retired",
+          expectedConfigurationVersion: Number(binding.configurationVersion),
+          changeSummary: `${integration.name} company connection removed by an authorized company administrator.`,
+        },
+      ),
+    onSuccess: async (_result, variables) => {
+      await Promise.all([integrationsQuery.refetch(), systemsStateQuery.refetch()]);
+      toast({
+        title: `${variables.integration.name} removed from this company`,
+        description:
+          "EOS retired this company binding. The provider account and its vault record were not changed.",
+      });
+    },
+    onError: (error, variables) =>
+      showMutationError(`${variables.integration.name} removal`, error),
   });
 
   useEffect(() => {
@@ -12227,7 +12258,8 @@ export default function EosOverlayPage() {
                   attachIntegrationMutation.isPending ||
                   disconnectIntegrationMutation.isPending ||
                   verifyIntegrationMutation.isPending ||
-                  companyVaultBindingMutation.isPending
+                  companyVaultBindingMutation.isPending ||
+                  retireCompanyVaultBindingMutation.isPending
                 }
                 onConnect={() => connectIntegrationMutation.mutate(integration)}
                 onAttach={() => attachIntegrationMutation.mutate(integration)}
@@ -12245,6 +12277,12 @@ export default function EosOverlayPage() {
                 }
                 onConfigureCompany={(draft) =>
                   companyVaultBindingMutation.mutate({ integration, draft })
+                }
+                onRetireCompanyBinding={(binding) =>
+                  retireCompanyVaultBindingMutation.mutate({
+                    integration,
+                    binding,
+                  })
                 }
               />
             ))}
@@ -12691,6 +12729,7 @@ function IntegrationControlCard({
   onDisconnect,
   onVerify,
   onConfigureCompany,
+  onRetireCompanyBinding,
 }: {
   integration: JsonRecord;
   companyConnections: JsonRecord[];
@@ -12700,6 +12739,7 @@ function IntegrationControlCard({
   onDisconnect: (connection?: JsonRecord) => void;
   onVerify: (connection?: JsonRecord) => void;
   onConfigureCompany: (draft: CompanyVaultConnectionDraft) => void;
+  onRetireCompanyBinding: (binding: JsonRecord) => void;
 }) {
   const actions = new Set<string>(integration.actions || []);
   const isCompanyVaultProvider =
@@ -12718,13 +12758,19 @@ function IntegrationControlCard({
   const activeCompanyConnection = activeConnections.find(
     (connection) => connection.authorizedForCurrentUser,
   ) || activeConnections[0];
-  const configuredProviderBinding = integration.accountReference
-    ? {
-        providerAccountReference: integration.accountReference,
-        accountScope: integration.connectionScope,
-      }
-    : undefined;
+  const configuredProviderBinding = integration.providerBinding as
+    | JsonRecord
+    | null
+    | undefined;
   const displayedCompanyConnection = activeCompanyConnection || configuredProviderBinding;
+  const companyBindingConnected =
+    isCompanyVaultProvider &&
+    Boolean(configuredProviderBinding) &&
+    Boolean(integration.connected);
+  // Stripe has a read-only, server-owned merchant identity probe. DocuSign is
+  // not shown as connected until its separate production verifier is present.
+  const companyBindingVerifiable =
+    companyBindingConnected && integration.id === "stripe";
   const readiness = integration.readiness && typeof integration.readiness === "object"
     ? integration.readiness as JsonRecord
     : null;
@@ -12834,7 +12880,9 @@ function IntegrationControlCard({
                   {activeCompanyConnection
                     ? `Connected to this company · owner seat ${String(activeCompanyConnection.ownerSeatId).slice(0, 8)} · recovery seat ${String(activeCompanyConnection.recoveryOwnerSeatId).slice(0, 8)}`
                     : isCompanyVaultProvider
-                      ? "Recorded as this company’s managed provider binding. Provider execution remains blocked until the separate health, approval, evidence, and recovery gates pass."
+                      ? companyBindingConnected
+                        ? "Connected to this company through its managed vault binding. Provider execution remains governed by separate approval, evidence, and recovery gates."
+                        : "Connection setup is recorded for this company. Complete the provider connection and verification before EOS can use it here."
                       : "Configured for this company and governed by its role, authority, approval, and audit controls."}
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -12968,7 +13016,7 @@ function IntegrationControlCard({
               disabled={pending}
             >
               <Plug className="mr-2 h-4 w-4" />
-              {integration.providerBinding
+              {companyBindingConnected
                 ? `Reconnect ${integration.name}`
                 : `Connect ${integration.name}`}
             </Button>
@@ -12987,7 +13035,8 @@ function IntegrationControlCard({
               Use in this company
             </Button>
           )}
-          {actions.has("verify") && Boolean(activeCompanyConnection) && (
+          {((actions.has("verify") && Boolean(activeCompanyConnection)) ||
+            companyBindingVerifiable) && (
             <Button variant="outline" onClick={() => onVerify(activeCompanyConnection)} disabled={pending}>
               <RefreshCw
                 className={`mr-2 h-4 w-4 ${pending ? "animate-spin" : ""}`}
@@ -12997,6 +13046,16 @@ function IntegrationControlCard({
           )}
           {activeCompanyConnection && (
             <Button variant="outline" onClick={() => onDisconnect(activeCompanyConnection)} disabled={pending}>
+              <Unplug className="mr-2 h-4 w-4" />
+              Remove from this company
+            </Button>
+          )}
+          {companyBindingConnected && configuredProviderBinding && (
+            <Button
+              variant="outline"
+              onClick={() => onRetireCompanyBinding(configuredProviderBinding)}
+              disabled={pending}
+            >
               <Unplug className="mr-2 h-4 w-4" />
               Remove from this company
             </Button>
@@ -13019,7 +13078,7 @@ function IntegrationControlCard({
           <div className="space-y-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
             <div>
               <p className="font-medium">
-                {integration.providerBinding
+                {companyBindingConnected
                   ? `Reconnect ${integration.name} to this company`
                   : `Connect ${integration.name} to this company`}
               </p>
