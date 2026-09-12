@@ -12967,10 +12967,10 @@ function IntegrationControlCard({
               }}
               disabled={pending}
             >
-              <ShieldCheck className="mr-2 h-4 w-4" />
+              <Plug className="mr-2 h-4 w-4" />
               {integration.providerBinding
-                ? `Manage ${integration.name} connection`
-                : `Configure ${integration.name}`}
+                ? `Reconnect ${integration.name}`
+                : `Connect ${integration.name}`}
             </Button>
           )}
           {(actions.has("connect") || actions.has("reconnect")) && (
@@ -13020,8 +13020,8 @@ function IntegrationControlCard({
             <div>
               <p className="font-medium">
                 {integration.providerBinding
-                  ? `Update ${integration.name} company connection`
-                  : `Configure ${integration.name} for this company`}
+                  ? `Reconnect ${integration.name} to this company`
+                  : `Connect ${integration.name} to this company`}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 This records a company-scoped vault binding only. Enter safe identifiers and a 1Password reference—never paste a key, token, password, signing secret, or private key into EOS.
