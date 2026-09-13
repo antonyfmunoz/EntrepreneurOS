@@ -225,6 +225,15 @@ describe("Notion integration HTTP controls", () => {
     delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
   });
 
+  it("returns a completed GoHighLevel callback failure to its initiating Systems view", async () => {
+    process.env.EOS_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 23).toString("base64");
+    gohighlevelAdapter.readOAuthState.mockResolvedValue({ userId, expiresAt: Date.now() + 60_000, nonce: "nonce", returnTo: "/company/12#systems" });
+    gohighlevelAdapter.exchangeCode.mockRejectedValueOnce(new Error("location unresolved"));
+    const response = await api.get("/api/auth/crm/callback?code=provider-code&state=signed-state").expect(302);
+    expect(response.headers.location).toBe("/company/12?integration_error=gohighlevel_oauth_failed#systems");
+    delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
+  });
+
   it("accepts a GoHighLevel private-app callback without query state only when it has the initiating signed cookie", async () => {
     process.env.EOS_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 23).toString("base64");
     gohighlevelAdapter.readOAuthState.mockResolvedValue({ userId, expiresAt: Date.now() + 60_000, nonce: "nonce", returnTo: "/company/12#systems" });

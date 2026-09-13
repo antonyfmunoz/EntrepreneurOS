@@ -8,7 +8,7 @@ const API_VERSION = "2021-07-28";
 const REQUIRED_SCOPES = ["contacts.readonly", "contacts.write", "opportunities.readonly", "opportunities.write"] as const;
 
 type OAuthState = { userId: string; expiresAt: number; nonce: string; returnTo: string };
-type TokenResponse = { access_token?: string; refresh_token?: string; token_type?: string; expires_in?: number; scope?: string; userType?: string; user_type?: string; companyId?: string; company_id?: string; locationId?: string; location_id?: string; userId?: string; user_id?: string };
+type TokenResponse = { access_token?: string; refresh_token?: string; token_type?: string; expires_in?: number; scope?: string; userType?: string; user_type?: string; companyId?: string; company_id?: string; locationId?: string; location_id?: string; approvedLocations?: unknown; approved_locations?: unknown; userId?: string; user_id?: string };
 type Metadata = { locationId?: string; companyId?: string; userId?: string; userType?: string; grantedScopes?: string[] };
 
 function safeReturnTo(value?: string) { return value && (/^\/company\/[1-9]\d*(?:#systems)?$/.test(value) || /^\/portfolios(?:\/[1-9]\d*)?$/.test(value)) ? value : "/portfolios"; }
@@ -32,7 +32,28 @@ function configuration() {
 function expiry(seconds?: number) { return typeof seconds === "number" && Number.isFinite(seconds) ? new Date(Date.now() + Math.max(1, seconds) * 1000) : undefined; }
 function scopes(value?: string) { return Array.from(new Set((value || "").split(/[\s,]+/).map((item) => item.trim()).filter(Boolean))); }
 function metadata(value: unknown): Metadata { if (!value || typeof value !== "object" || Array.isArray(value)) return {}; const input = value as Record<string, unknown>; return { locationId: typeof input.locationId === "string" ? input.locationId : undefined, companyId: typeof input.companyId === "string" ? input.companyId : undefined, userId: typeof input.userId === "string" ? input.userId : undefined, userType: typeof input.userType === "string" ? input.userType : undefined, grantedScopes: Array.isArray(input.grantedScopes) ? input.grantedScopes.filter((item): item is string => typeof item === "string") : [] }; }
-function nextMetadata(result: TokenResponse): Metadata { return { locationId: result.locationId || result.location_id, companyId: result.companyId || result.company_id, userId: result.userId || result.user_id, userType: result.userType || result.user_type, grantedScopes: scopes(result.scope) }; }
+function approvedLocationIds(result: TokenResponse) {
+  const value = result.approvedLocations || result.approved_locations;
+  return Array.isArray(value) ? Array.from(new Set(value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim()))) : [];
+}
+function nextMetadata(result: TokenResponse): Metadata {
+  const approvedLocations = approvedLocationIds(result);
+  // HighLevel documents `locationId` only for location tokens, while an
+  // installation can instead identify its selected sub-account through the
+  // single approved location on the OAuth response. Never guess when several
+  // locations were approved.
+  const locationId = result.locationId || result.location_id || (approvedLocations.length === 1 ? approvedLocations[0] : undefined);
+  return { locationId, companyId: result.companyId || result.company_id, userId: result.userId || result.user_id, userType: result.userType || result.user_type, grantedScopes: scopes(result.scope) };
+}
+function mergeMetadata(current: Metadata, update: Metadata): Metadata {
+  return {
+    locationId: update.locationId || current.locationId,
+    companyId: update.companyId || current.companyId,
+    userId: update.userId || current.userId,
+    userType: update.userType || current.userType,
+    grantedScopes: update.grantedScopes?.length ? update.grantedScopes : current.grantedScopes,
+  };
+}
 
 async function tokenRequest(body: Record<string, string>): Promise<TokenResponse> {
   const { clientId, clientSecret, redirectUri } = configuration(); const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 10_000);
@@ -78,8 +99,8 @@ export async function readOAuthState(state: string, userId: string, now = Date.n
 }
 export function isConfigured() { try { stateSecret(); configuration(); return credentialEncryptionConfigured(); } catch { return false; } }
 export async function getAuthUrl(userId: string, returnTo?: string) { const { clientId, installationUrl, redirectUri } = configuration(); const url = new URL(installationUrl); url.searchParams.set("client_id", clientId); url.searchParams.set("redirect_uri", redirectUri); url.searchParams.set("state", await createOAuthState(userId, Date.now(), returnTo)); return url.toString(); }
-export async function exchangeCode(code: string) { if (!code.trim() || code.length > 10_000) throw new Error("GoHighLevel authorization returned an invalid authorization code."); const result = await tokenRequest({ grant_type: "authorization_code", code, user_type: "Location" }); const next = nextMetadata(result); if (!next.locationId) throw new Error("GoHighLevel did not return a location identifier. Install the private app into the intended sub-account."); return { accessToken: result.access_token!, refreshToken: result.refresh_token, tokenType: result.token_type || "Bearer", expiresAt: expiry(result.expires_in), scope: result.scope || "", metadata: next }; }
-async function refreshAccessToken(userId: string) { const token = await storage.getOauthToken(userId, "gohighlevel"); if (!token?.refreshToken) throw new Error("GoHighLevel authorization expired. Reconnect the company location in Systems."); const result = await tokenRequest({ grant_type: "refresh_token", refresh_token: decryptCredential(token.refreshToken), user_type: "Location" }); const next = { ...metadata(token.metadata), ...nextMetadata(result), grantedScopes: scopes(result.scope || token.scope || "") }; await storage.upsertOauthToken({ userId, provider: "gohighlevel", accessToken: encryptCredential(result.access_token!), refreshToken: result.refresh_token ? encryptCredential(result.refresh_token) : token.refreshToken, tokenType: result.token_type || token.tokenType || "Bearer", expiresAt: expiry(result.expires_in), scope: result.scope || token.scope || "", metadata: next }); return result.access_token!; }
+export async function exchangeCode(code: string) { if (!code.trim() || code.length > 10_000) throw new Error("GoHighLevel authorization returned an invalid authorization code."); const result = await tokenRequest({ grant_type: "authorization_code", code, user_type: "Location" }); const next = nextMetadata(result); if (!next.locationId) throw new Error("GoHighLevel did not identify one selected sub-account. Reconnect and select exactly one location."); return { accessToken: result.access_token!, refreshToken: result.refresh_token, tokenType: result.token_type || "Bearer", expiresAt: expiry(result.expires_in), scope: result.scope || "", metadata: next }; }
+async function refreshAccessToken(userId: string) { const token = await storage.getOauthToken(userId, "gohighlevel"); if (!token?.refreshToken) throw new Error("GoHighLevel authorization expired. Reconnect the company location in Systems."); const result = await tokenRequest({ grant_type: "refresh_token", refresh_token: decryptCredential(token.refreshToken), user_type: "Location" }); const next = { ...mergeMetadata(metadata(token.metadata), nextMetadata(result)), grantedScopes: scopes(result.scope || token.scope || "") }; await storage.upsertOauthToken({ userId, provider: "gohighlevel", accessToken: encryptCredential(result.access_token!), refreshToken: result.refresh_token ? encryptCredential(result.refresh_token) : token.refreshToken, tokenType: result.token_type || token.tokenType || "Bearer", expiresAt: expiry(result.expires_in), scope: result.scope || token.scope || "", metadata: next }); return result.access_token!; }
 async function accessToken(userId: string) { const token = await storage.getOauthToken(userId, "gohighlevel"); if (!token) throw new Error("GoHighLevel is not connected. Connect the CRM location first."); if (token.expiresAt && new Date(token.expiresAt) <= new Date()) return refreshAccessToken(userId); return decryptCredential(token.accessToken); }
 async function request(userId: string, path: string, init: RequestInit = {}) { const call = async (token: string) => { const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 10_000); try { return await fetch(`${API_BASE}${path}`, { ...init, headers: { Authorization: `Bearer ${token}`, Accept: "application/json", Version: API_VERSION, ...(init.body ? { "Content-Type": "application/json" } : {}), ...(init.headers || {}) }, signal: controller.signal }); } finally { clearTimeout(timeout); } }; const first = await call(await accessToken(userId)); return first.status === 401 ? call(await refreshAccessToken(userId)) : first; }
 export async function connectionSummary(userId: string) { if (!isConfigured()) return { configured: false, connected: false, location: null, grantedScopes: [] as string[] }; const token = await storage.getOauthToken(userId, "gohighlevel"); if (!token) return { configured: true, connected: false, location: null, grantedScopes: [] as string[] }; try { decryptCredential(token.accessToken); const current = metadata(token.metadata); return { configured: true, connected: Boolean(current.locationId), location: current.locationId ? current : null, grantedScopes: current.grantedScopes || scopes(token.scope || "") }; } catch { return { configured: true, connected: false, location: null, grantedScopes: [] as string[] }; } }
