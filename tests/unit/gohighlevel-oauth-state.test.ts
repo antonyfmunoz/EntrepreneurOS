@@ -100,4 +100,31 @@ describe("GoHighLevel OAuth state", () => {
       if (previous.installationUrl === undefined) delete process.env.GOHIGHLEVEL_INSTALLATION_URL; else process.env.GOHIGHLEVEL_INSTALLATION_URL = previous.installationUrl;
     }
   });
+
+  it("resolves one installed location for a company token that omits location metadata", async () => {
+    const previous = {
+      clientId: process.env.GOHIGHLEVEL_CLIENT_ID,
+      clientSecret: process.env.GOHIGHLEVEL_CLIENT_SECRET,
+      installationUrl: process.env.GOHIGHLEVEL_INSTALLATION_URL,
+      fetch: globalThis.fetch,
+    };
+    process.env.GOHIGHLEVEL_CLIENT_ID = "registered-app-id-suffix";
+    process.env.GOHIGHLEVEL_CLIENT_SECRET = "registered-client-secret";
+    process.env.GOHIGHLEVEL_INSTALLATION_URL = "https://marketplace.gohighlevel.com/v2/oauth/chooselocation?version_id=registered-version";
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: "access-token", companyId: "company-1" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ locations: [{ _id: "installed-location", isInstalled: true }] }), { status: 200 }));
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    try {
+      await expect(exchangeCode("provider-code")).resolves.toMatchObject({ metadata: { locationId: "installed-location", companyId: "company-1" } });
+      expect(String(fetchMock.mock.calls[1][0])).toBe("https://services.leadconnectorhq.com/oauth/installedLocations?companyId=company-1&appId=registered&isInstalled=true&limit=100&versionId=registered-version");
+      expect(fetchMock.mock.calls[1][1].headers).toEqual(expect.objectContaining({ Authorization: "Bearer access-token", Version: "2021-07-28" }));
+    } finally {
+      globalThis.fetch = previous.fetch;
+      if (previous.clientId === undefined) delete process.env.GOHIGHLEVEL_CLIENT_ID; else process.env.GOHIGHLEVEL_CLIENT_ID = previous.clientId;
+      if (previous.clientSecret === undefined) delete process.env.GOHIGHLEVEL_CLIENT_SECRET; else process.env.GOHIGHLEVEL_CLIENT_SECRET = previous.clientSecret;
+      if (previous.installationUrl === undefined) delete process.env.GOHIGHLEVEL_INSTALLATION_URL; else process.env.GOHIGHLEVEL_INSTALLATION_URL = previous.installationUrl;
+    }
+  });
 });
