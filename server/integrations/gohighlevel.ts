@@ -11,6 +11,26 @@ type OAuthCompletion = "redirect" | "popup";
 type OAuthState = { userId: string; expiresAt: number; nonce: string; returnTo: string; completion: OAuthCompletion };
 type TokenResponse = { access_token?: string; refresh_token?: string; token_type?: string; expires_in?: number; scope?: string; userType?: string; user_type?: string; companyId?: string; company_id?: string; locationId?: string; location_id?: string; userId?: string; user_id?: string };
 type Metadata = { locationId?: string; companyId?: string; userId?: string; userType?: string; grantedScopes?: string[] };
+export type GoHighLevelCompanyBinding = {
+  id: string;
+  providerKey: string;
+  providerAccountReference: string;
+  credentialReference: string | null;
+  adapterReference?: string;
+};
+type PrivateIntegrationCredential = {
+  provider?: unknown;
+  privateIntegrationToken?: unknown;
+  locationId?: unknown;
+};
+export type GoHighLevelCompanyConnectionHealth = {
+  connected: boolean;
+  healthy: boolean;
+  reason: "ready" | "binding_invalid" | "credential_missing" | "authorization_failed" | "account_mismatch" | "provider_unavailable";
+  scope: "location_identity_and_managed_credential";
+  deliveryVerified: false;
+  externalReference: string;
+};
 
 function safeReturnTo(value?: string) { return value && (/^\/company\/[1-9]\d*(?:#systems)?$/.test(value) || /^\/portfolios(?:\/[1-9]\d*)?$/.test(value)) ? value : "/portfolios"; }
 function stateSecret() { const value = process.env.SESSION_SECRET?.trim(); if (!value || value.length < 32) throw new Error("SESSION_SECRET must be at least 32 characters for GoHighLevel OAuth state signing."); return value; }
@@ -70,7 +90,46 @@ export async function getAuthUrl(userId: string, returnTo?: string, completion: 
 export async function exchangeCode(code: string) { if (!code.trim() || code.length > 10_000) throw new Error("GoHighLevel authorization returned an invalid authorization code."); const result = await tokenRequest({ grant_type: "authorization_code", code, user_type: "Location" }); const next = nextMetadata(result); if (!next.locationId) throw new Error("GoHighLevel did not return a location identifier. Install the private app into the intended sub-account."); return { accessToken: result.access_token!, refreshToken: result.refresh_token, tokenType: result.token_type || "Bearer", expiresAt: expiry(result.expires_in), scope: result.scope || "", metadata: next }; }
 async function refreshAccessToken(userId: string) { const token = await storage.getOauthToken(userId, "gohighlevel"); if (!token?.refreshToken) throw new Error("GoHighLevel authorization expired. Reconnect the company location in Systems."); const result = await tokenRequest({ grant_type: "refresh_token", refresh_token: decryptCredential(token.refreshToken), user_type: "Location" }); const next = { ...metadata(token.metadata), ...nextMetadata(result), grantedScopes: scopes(result.scope || token.scope || "") }; await storage.upsertOauthToken({ userId, provider: "gohighlevel", accessToken: encryptCredential(result.access_token!), refreshToken: result.refresh_token ? encryptCredential(result.refresh_token) : token.refreshToken, tokenType: result.token_type || token.tokenType || "Bearer", expiresAt: expiry(result.expires_in), scope: result.scope || token.scope || "", metadata: next }); return result.access_token!; }
 async function accessToken(userId: string) { const token = await storage.getOauthToken(userId, "gohighlevel"); if (!token) throw new Error("GoHighLevel is not connected. Connect the CRM location first."); if (token.expiresAt && new Date(token.expiresAt) <= new Date()) return refreshAccessToken(userId); return decryptCredential(token.accessToken); }
-async function request(userId: string, path: string, init: RequestInit = {}) { const call = async (token: string) => { const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 10_000); try { return await fetch(`${API_BASE}${path}`, { ...init, headers: { Authorization: `Bearer ${token}`, Accept: "application/json", Version: API_VERSION, ...(init.body ? { "Content-Type": "application/json" } : {}), ...(init.headers || {}) }, signal: controller.signal }); } finally { clearTimeout(timeout); } }; const first = await call(await accessToken(userId)); return first.status === 401 ? call(await refreshAccessToken(userId)) : first; }
+async function providerRequest(token: string, path: string, init: RequestInit = {}) { const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 10_000); try { return await fetch(`${API_BASE}${path}`, { ...init, headers: { Authorization: `Bearer ${token}`, Accept: "application/json", Version: API_VERSION, ...(init.body ? { "Content-Type": "application/json" } : {}), ...(init.headers || {}) }, signal: controller.signal }); } finally { clearTimeout(timeout); } }
+async function request(userId: string, path: string, init: RequestInit = {}) { const first = await providerRequest(await accessToken(userId), path, init); return first.status === 401 ? providerRequest(await refreshAccessToken(userId), path, init) : first; }
+
+function privateCredentialFor(binding: GoHighLevelCompanyBinding): PrivateIntegrationCredential | null {
+  if (binding.providerKey !== "gohighlevel" || binding.adapterReference !== "gohighlevel-private-integration-v1" || !binding.id || !binding.credentialReference || !binding.providerAccountReference.trim()) return null;
+  try {
+    const parsed: unknown = JSON.parse(process.env.EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS || "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const candidate = (parsed as Record<string, unknown>)[binding.id];
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
+    const credential = candidate as PrivateIntegrationCredential;
+    if (credential.provider !== "gohighlevel" || typeof credential.privateIntegrationToken !== "string" || credential.privateIntegrationToken.trim().length < 20 || typeof credential.locationId !== "string" || !credential.locationId.trim()) return null;
+    return credential;
+  } catch { return null; }
+}
+
+async function companyRequest(binding: GoHighLevelCompanyBinding, path: string, init: RequestInit = {}) {
+  const credential = privateCredentialFor(binding);
+  if (!credential || typeof credential.privateIntegrationToken !== "string") throw new Error("GoHighLevel company credential is unavailable.");
+  return providerRequest(credential.privateIntegrationToken, path, init);
+}
+
+export async function verifyCompanyConnection(binding: GoHighLevelCompanyBinding): Promise<GoHighLevelCompanyConnectionHealth> {
+  const result = (reason: GoHighLevelCompanyConnectionHealth["reason"], connected = false): GoHighLevelCompanyConnectionHealth => ({
+    connected, healthy: reason === "ready", reason, scope: "location_identity_and_managed_credential", deliveryVerified: false,
+    externalReference: reason === "ready" ? `provider:gohighlevel:${binding.providerAccountReference}:location_identity_verified` : `provider:gohighlevel:location_identity_check:${reason}`,
+  });
+  if (binding.providerKey !== "gohighlevel" || binding.adapterReference !== "gohighlevel-private-integration-v1" || !binding.id || !binding.credentialReference || !binding.providerAccountReference.trim()) return result("binding_invalid");
+  const credential = privateCredentialFor(binding);
+  if (!credential) return result("credential_missing");
+  if (credential.locationId !== binding.providerAccountReference) return result("account_mismatch", true);
+  try {
+    // This deliberately reads no customer record into EOS. A one-item bounded
+    // pipeline request only proves the exact company location can be reached.
+    const response = await companyRequest(binding, `/opportunities/search?locationId=${encodeURIComponent(binding.providerAccountReference)}&status=all&limit=1`);
+    if (response.status === 401 || response.status === 403) return result("authorization_failed");
+    if (!response.ok) return result("provider_unavailable");
+    return result("ready", true);
+  } catch { return result("provider_unavailable"); }
+}
 export async function connectionSummary(userId: string) { if (!isConfigured()) return { configured: false, connected: false, location: null, grantedScopes: [] as string[] }; const token = await storage.getOauthToken(userId, "gohighlevel"); if (!token) return { configured: true, connected: false, location: null, grantedScopes: [] as string[] }; try { decryptCredential(token.accessToken); const current = metadata(token.metadata); return { configured: true, connected: Boolean(current.locationId), location: current.locationId ? current : null, grantedScopes: current.grantedScopes || scopes(token.scope || "") }; } catch { return { configured: true, connected: false, location: null, grantedScopes: [] as string[] }; } }
 export async function verifyConnection(userId: string) { const summary = await connectionSummary(userId); if (!summary.connected || !summary.location?.locationId) return { ...summary, healthy: false }; try { const response = await request(userId, `/opportunities/search?locationId=${encodeURIComponent(summary.location.locationId)}&status=all&limit=1`); if (!response.ok) return { ...summary, healthy: false }; return { ...summary, healthy: true }; } catch { return { ...summary, healthy: false }; } }
 function ensureLocation(result: Awaited<ReturnType<typeof verifyConnection>>) { if (!result.healthy || !result.location?.locationId) throw new Error("GoHighLevel location authorization is unavailable or unhealthy."); return result.location.locationId; }
@@ -80,4 +139,10 @@ export async function upsertContact(userId: string, input: { email?: string; pho
 export async function searchOpportunities(userId: string, input: { query?: string; pipelineId?: string; pipelineStageId?: string; status?: string; limit?: number }) { const locationId = ensureLocation(await verifyConnection(userId)); const params = new URLSearchParams({ locationId, status: input.status || "all", limit: String(Math.min(100, Math.max(1, Math.trunc(input.limit || 25)))) }); if (input.query) params.set("q", input.query); if (input.pipelineId) params.set("pipelineId", input.pipelineId); if (input.pipelineStageId) params.set("pipelineStageId", input.pipelineStageId); const response = await request(userId, `/opportunities/search?${params}`); if (!response.ok) throw new Error(`GoHighLevel opportunity search failed with ${response.status}.`); const body = await response.json() as { opportunities?: Array<Record<string, unknown>> }; return { locationId, opportunities: (body.opportunities || []).map(opportunityProjection) }; }
 function opportunityProjection(value: Record<string, unknown>) { return { id: typeof value.id === "string" ? value.id : "", name: typeof value.name === "string" ? value.name : null, status: typeof value.status === "string" ? value.status : null, pipelineId: typeof value.pipelineId === "string" ? value.pipelineId : null, pipelineStageId: typeof value.pipelineStageId === "string" ? value.pipelineStageId : null, contactId: typeof value.contactId === "string" ? value.contactId : null, monetaryValue: typeof value.monetaryValue === "number" ? value.monetaryValue : null }; }
 export async function createOpportunity(userId: string, input: { pipelineId: string; pipelineStageId?: string; contactId: string; name: string; status: "open" | "won" | "lost" | "abandoned"; monetaryValue?: number; assignedTo?: string }) { const locationId = ensureLocation(await verifyConnection(userId)); const response = await request(userId, "/opportunities/", { method: "POST", body: JSON.stringify({ locationId, ...input }) }); if (!response.ok) throw new Error(`GoHighLevel opportunity creation failed with ${response.status}.`); const body = await response.json() as { opportunity?: Record<string, unknown> }; if (!body.opportunity?.id) throw new Error("GoHighLevel opportunity creation returned no durable opportunity reference."); return { locationId, opportunity: opportunityProjection(body.opportunity) }; }
+
+function ensureCompanyLocation(result: GoHighLevelCompanyConnectionHealth, binding: GoHighLevelCompanyBinding) { if (!result.healthy) throw new Error("GoHighLevel company location authorization is unavailable or unhealthy."); return binding.providerAccountReference; }
+export async function lookupCompanyContact(binding: GoHighLevelCompanyBinding, input: { email?: string; phone?: string; limit?: number }) { const locationId = ensureCompanyLocation(await verifyCompanyConnection(binding), binding); const key = input.email ? "email" : "phone"; const value = input.email || input.phone; if (!value) throw new Error("Provide one contact email or phone number."); const response = await companyRequest(binding, `/contacts/lookup?locationId=${encodeURIComponent(locationId)}&${key}=${encodeURIComponent(value)}&limit=${Math.min(20, Math.max(1, Math.trunc(input.limit || 10)))}`); if (!response.ok) throw new Error(`GoHighLevel contact lookup failed with ${response.status}.`); const body = await response.json() as { contacts?: Array<Record<string, unknown>> }; return { locationId, contacts: (body.contacts || []).map(contactProjection) }; }
+export async function upsertCompanyContact(binding: GoHighLevelCompanyBinding, input: { email?: string; phone?: string; firstName?: string; lastName?: string; name?: string; source?: string; tags?: string[] }) { const locationId = ensureCompanyLocation(await verifyCompanyConnection(binding), binding); const response = await companyRequest(binding, "/contacts/upsert", { method: "POST", body: JSON.stringify({ locationId, email: input.email, phone: input.phone, firstName: input.firstName, lastName: input.lastName, name: input.name, source: input.source, tags: input.tags }) }); if (!response.ok) throw new Error(`GoHighLevel contact upsert failed with ${response.status}.`); const body = await response.json() as { contact?: Record<string, unknown> }; if (!body.contact?.id) throw new Error("GoHighLevel contact upsert returned no durable contact reference."); return { locationId, contact: contactProjection(body.contact) }; }
+export async function searchCompanyOpportunities(binding: GoHighLevelCompanyBinding, input: { query?: string; pipelineId?: string; pipelineStageId?: string; status?: string; limit?: number }) { const locationId = ensureCompanyLocation(await verifyCompanyConnection(binding), binding); const params = new URLSearchParams({ locationId, status: input.status || "all", limit: String(Math.min(100, Math.max(1, Math.trunc(input.limit || 25)))) }); if (input.query) params.set("q", input.query); if (input.pipelineId) params.set("pipelineId", input.pipelineId); if (input.pipelineStageId) params.set("pipelineStageId", input.pipelineStageId); const response = await companyRequest(binding, `/opportunities/search?${params}`); if (!response.ok) throw new Error(`GoHighLevel opportunity search failed with ${response.status}.`); const body = await response.json() as { opportunities?: Array<Record<string, unknown>> }; return { locationId, opportunities: (body.opportunities || []).map(opportunityProjection) }; }
+export async function createCompanyOpportunity(binding: GoHighLevelCompanyBinding, input: { pipelineId: string; pipelineStageId?: string; contactId: string; name: string; status: "open" | "won" | "lost" | "abandoned"; monetaryValue?: number; assignedTo?: string }) { const locationId = ensureCompanyLocation(await verifyCompanyConnection(binding), binding); const response = await companyRequest(binding, "/opportunities/", { method: "POST", body: JSON.stringify({ locationId, ...input }) }); if (!response.ok) throw new Error(`GoHighLevel opportunity creation failed with ${response.status}.`); const body = await response.json() as { opportunity?: Record<string, unknown> }; if (!body.opportunity?.id) throw new Error("GoHighLevel opportunity creation returned no durable opportunity reference."); return { locationId, opportunity: opportunityProjection(body.opportunity) }; }
 export async function disconnect(userId: string) { await storage.deleteOauthToken(userId, "gohighlevel"); return { success: true, providerRevoked: false }; }

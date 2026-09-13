@@ -418,7 +418,10 @@ export function registerIntegrationOperationsRoutes(app: Express): void {
     try { validateAdapterOperationRequest(run.operation, run.requestShape); } catch (error) { throw new EosRouteError(409, "integration_dispatch_request_invalid", error instanceof Error ? error.message : "The adapter request is invalid."); }
     if (binding.lifecycleState !== "active" || binding.connectionState !== "connected") throw new EosRouteError(409, "integration_binding_not_execution_ready", "Provider execution requires an active, connected integration binding.");
     const operatorEntitlement = await requireOperatorProviderEntitlement({ companyId, binding, access: initial, operation: run.operation, requestShape: run.requestShape });
-    const companyConnection = await requireCurrentOperatorCompanyConnection({ companyId, providerKey: binding.providerKey, providerAccountReference: binding.providerAccountReference });
+    const usesCompanyManagedGoHighLevel = binding.providerKey === "gohighlevel" && binding.adapterReference === "gohighlevel-private-integration-v1";
+    const companyConnection = usesCompanyManagedGoHighLevel
+      ? null
+      : await requireCurrentOperatorCompanyConnection({ companyId, providerKey: binding.providerKey, providerAccountReference: binding.providerAccountReference });
     const manifest = await db.query.eosAdapterCapabilityManifests.findFirst({ where: eq(eosAdapterCapabilityManifests.id, run.manifestId) });
     if (!manifest || manifest.bindingConfigurationVersion !== binding.configurationVersion) throw new EosRouteError(409, "integration_dispatch_manifest_stale", "The run no longer references the current frozen binding configuration.");
     const now = new Date(); const operational = await db.query.eosIntegrationOperationalStates.findFirst({ where: eq(eosIntegrationOperationalStates.integrationBindingId, binding.id) });
@@ -426,7 +429,7 @@ export function registerIntegrationOperationsRoutes(app: Express): void {
     // Approval and provider credentials are separate principals. The person
     // who set up a company connection is its custodian; EOS never switches to
     // the approver's personal OAuth authorization merely because they acted.
-    const credentialOwnerUserId = companyConnection.authorizationUserId;
+    const credentialOwnerUserId = companyConnection?.authorizationUserId || req.user.id;
     const executionId = randomUUID(); const executionKey = `${run.idempotencyKey}:attempt:${run.attemptCount + 1}`;
     const claimed = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`integration-run:${run.id}`}))`);
@@ -441,7 +444,7 @@ export function registerIntegrationOperationsRoutes(app: Express): void {
     });
 
     const startedAt = Date.now(); let dispatchResult: Awaited<ReturnType<typeof dispatchAllowlistedAdapterOperation>> | null = null; let dispatchError: AdapterDispatchError | null = null;
-    try { dispatchResult = await dispatchAllowlistedAdapterOperation({ userId: credentialOwnerUserId, providerKey: binding.providerKey, operation: run.operation, requestShape: run.requestShape }); }
+    try { dispatchResult = await dispatchAllowlistedAdapterOperation({ userId: credentialOwnerUserId, providerKey: binding.providerKey, operation: run.operation, requestShape: run.requestShape, companyBinding: usesCompanyManagedGoHighLevel ? binding : undefined }); }
     catch (error) { dispatchError = error instanceof AdapterDispatchError ? error : new AdapterDispatchError("provider_outcome_uncertain", error instanceof Error ? error.message : "Provider outcome is uncertain.", "uncertain"); }
     const completedAt = new Date(); const outcome = dispatchResult ? "succeeded" : dispatchError!.outcome; const authority = dispatchResult ? dispatchResult.authority : "provider_observation"; const externalReference = dispatchResult?.externalReference || `provider-execution:${executionId}`; const summary = dispatchResult?.summary || dispatchError!.message; const responseShape = dispatchResult?.responseShape || { code: dispatchError!.code, outcomeBoundary: dispatchError!.outcome, providerReferenceObserved: false };
     const result = await db.transaction(async (tx) => {

@@ -97,6 +97,7 @@ export async function dispatchAllowlistedAdapterOperation(input: {
   providerKey: string;
   operation: string;
   requestShape: unknown;
+  companyBinding?: gohighlevel.GoHighLevelCompanyBinding;
 }, clients: AdapterDispatchClients = liveClients): Promise<AdapterDispatchResult> {
   if (!adapterOperationIsExecutable(input.operation)) throw new AdapterDispatchError("adapter_operation_not_executable", "This operation has no audited native dispatcher.");
   if (!providerMatchesOperation(input.providerKey, input.operation)) throw new AdapterDispatchError("adapter_provider_mismatch", "The integration provider does not own the requested operation namespace.");
@@ -160,30 +161,35 @@ export async function dispatchAllowlistedAdapterOperation(input: {
     }
     if (input.operation === "gohighlevel.location.verify") {
       gohighlevelLocationVerifyRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
+      if (input.companyBinding) {
+        const result = await gohighlevel.verifyCompanyConnection(input.companyBinding);
+        if (!result.connected || !result.healthy) throw new AdapterDispatchError("gohighlevel_authorization_unhealthy", "GoHighLevel location authorization is unavailable or unhealthy.");
+        return { authority: "provider_receipt", externalReference: `gohighlevel:location:${input.companyBinding.providerAccountReference}`, summary: "GoHighLevel confirmed the company CRM location authorization is healthy.", responseShape: { locationId: input.companyBinding.providerAccountReference, companyId: null } };
+      }
       const result = await clients.gohighlevel.verifyConnection(input.userId);
       if (!result.connected || !result.healthy || !result.location?.locationId) throw new AdapterDispatchError("gohighlevel_authorization_unhealthy", "GoHighLevel location authorization is unavailable or unhealthy.");
       return { authority: "provider_receipt", externalReference: `gohighlevel:location:${result.location.locationId}`, summary: "GoHighLevel confirmed the company CRM location authorization is healthy.", responseShape: { locationId: result.location.locationId, companyId: result.location.companyId || null } };
     }
     if (input.operation === "gohighlevel.contact.lookup") {
       const request = gohighlevelContactLookupRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
-      const result = await clients.gohighlevel.lookupContact(input.userId, request);
+      const result = input.companyBinding ? await gohighlevel.lookupCompanyContact(input.companyBinding, request) : await clients.gohighlevel.lookupContact(input.userId, request);
       const responseSha256 = createHash("sha256").update(JSON.stringify(result.contacts)).digest("hex");
       return { authority: "provider_receipt", externalReference: `gohighlevel:contacts:${responseSha256}`, summary: `GoHighLevel returned ${result.contacts.length} bounded CRM contact record${result.contacts.length === 1 ? "" : "s"}.`, responseShape: { locationId: result.locationId, contactCount: result.contacts.length, contacts: result.contacts, responseSha256 } };
     }
     if (input.operation === "gohighlevel.contact.upsert") {
       const request = gohighlevelContactUpsertRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
-      const result = await clients.gohighlevel.upsertContact(input.userId, request);
+      const result = input.companyBinding ? await gohighlevel.upsertCompanyContact(input.companyBinding, request) : await clients.gohighlevel.upsertContact(input.userId, request);
       return { authority: "provider_receipt", externalReference: `gohighlevel:contact:${result.contact.id}`, summary: "GoHighLevel created or updated the approved CRM contact and returned its durable reference.", responseShape: { locationId: result.locationId, contact: result.contact } };
     }
     if (input.operation === "gohighlevel.opportunity.search") {
       const request = gohighlevelOpportunitySearchRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
-      const result = await clients.gohighlevel.searchOpportunities(input.userId, request);
+      const result = input.companyBinding ? await gohighlevel.searchCompanyOpportunities(input.companyBinding, request) : await clients.gohighlevel.searchOpportunities(input.userId, request);
       const responseSha256 = createHash("sha256").update(JSON.stringify(result.opportunities)).digest("hex");
       return { authority: "provider_receipt", externalReference: `gohighlevel:opportunities:${responseSha256}`, summary: `GoHighLevel returned ${result.opportunities.length} bounded pipeline record${result.opportunities.length === 1 ? "" : "s"}.`, responseShape: { locationId: result.locationId, opportunityCount: result.opportunities.length, opportunities: result.opportunities, responseSha256 } };
     }
     if (input.operation === "gohighlevel.opportunity.create") {
       const request = gohighlevelOpportunityCreateRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
-      const result = await clients.gohighlevel.createOpportunity(input.userId, request);
+      const result = input.companyBinding ? await gohighlevel.createCompanyOpportunity(input.companyBinding, request) : await clients.gohighlevel.createOpportunity(input.userId, request);
       return { authority: "provider_receipt", externalReference: `gohighlevel:opportunity:${result.opportunity.id}`, summary: "GoHighLevel created the approved pipeline opportunity and returned its durable reference.", responseShape: { locationId: result.locationId, opportunity: result.opportunity } };
     }
     const request = notionPageReadSnapshotRequestSchema.parse(validateAdapterOperationRequest(input.operation, input.requestShape));
