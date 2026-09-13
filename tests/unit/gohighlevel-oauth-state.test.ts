@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { createOAuthState, getAuthUrl, readOAuthState, readOAuthStateFromCallback } from "../../server/integrations/gohighlevel";
+import { describe, expect, it, vi } from "vitest";
+import { createOAuthState, exchangeCode, getAuthUrl, readOAuthState, readOAuthStateFromCallback } from "../../server/integrations/gohighlevel";
 
 describe("GoHighLevel OAuth state", () => {
   it("binds authorization to the initiating EOS user and company Systems return path", async () => {
@@ -40,5 +40,40 @@ describe("GoHighLevel OAuth state", () => {
     if (previous.clientSecret === undefined) delete process.env.GOHIGHLEVEL_CLIENT_SECRET; else process.env.GOHIGHLEVEL_CLIENT_SECRET = previous.clientSecret;
     if (previous.installationUrl === undefined) delete process.env.GOHIGHLEVEL_INSTALLATION_URL; else process.env.GOHIGHLEVEL_INSTALLATION_URL = previous.installationUrl;
     if (previous.redirectUri === undefined) delete process.env.GOHIGHLEVEL_REDIRECT_URI; else process.env.GOHIGHLEVEL_REDIRECT_URI = previous.redirectUri;
+  });
+
+  it("exchanges a returned code using HighLevel's form-encoded token contract", async () => {
+    const previous = {
+      clientId: process.env.GOHIGHLEVEL_CLIENT_ID,
+      clientSecret: process.env.GOHIGHLEVEL_CLIENT_SECRET,
+      installationUrl: process.env.GOHIGHLEVEL_INSTALLATION_URL,
+      redirectUri: process.env.GOHIGHLEVEL_REDIRECT_URI,
+      fetch: globalThis.fetch,
+    };
+    process.env.GOHIGHLEVEL_CLIENT_ID = "registered-client-id";
+    process.env.GOHIGHLEVEL_CLIENT_SECRET = "registered-client-secret";
+    process.env.GOHIGHLEVEL_INSTALLATION_URL = "https://marketplace.gohighlevel.com/v2/oauth/chooselocation?version_id=app-version";
+    process.env.GOHIGHLEVEL_REDIRECT_URI = "https://entrepreneuros.net/api/auth/crm/callback";
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      access_token: "access-token", refresh_token: "refresh-token", expires_in: 3600, locationId: "location-1", scope: "contacts.readonly",
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    try {
+      await expect(exchangeCode("provider-code")).resolves.toMatchObject({ accessToken: "access-token", metadata: { locationId: "location-1" } });
+      const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(request.headers).toEqual(expect.objectContaining({
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+        Version: "2021-07-28",
+      }));
+      expect(request.body).toBe("client_id=registered-client-id&client_secret=registered-client-secret&redirect_uri=https%3A%2F%2Fentrepreneuros.net%2Fapi%2Fauth%2Fcrm%2Fcallback&grant_type=authorization_code&code=provider-code&user_type=Location");
+    } finally {
+      globalThis.fetch = previous.fetch;
+      if (previous.clientId === undefined) delete process.env.GOHIGHLEVEL_CLIENT_ID; else process.env.GOHIGHLEVEL_CLIENT_ID = previous.clientId;
+      if (previous.clientSecret === undefined) delete process.env.GOHIGHLEVEL_CLIENT_SECRET; else process.env.GOHIGHLEVEL_CLIENT_SECRET = previous.clientSecret;
+      if (previous.installationUrl === undefined) delete process.env.GOHIGHLEVEL_INSTALLATION_URL; else process.env.GOHIGHLEVEL_INSTALLATION_URL = previous.installationUrl;
+      if (previous.redirectUri === undefined) delete process.env.GOHIGHLEVEL_REDIRECT_URI; else process.env.GOHIGHLEVEL_REDIRECT_URI = previous.redirectUri;
+    }
   });
 });

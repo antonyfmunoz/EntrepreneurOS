@@ -36,7 +36,19 @@ function nextMetadata(result: TokenResponse): Metadata { return { locationId: re
 
 async function tokenRequest(body: Record<string, string>): Promise<TokenResponse> {
   const { clientId, clientSecret, redirectUri } = configuration(); const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 10_000);
-  try { const response = await fetch(TOKEN_URL, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, ...body }), signal: controller.signal }); if (!response.ok) throw new Error(`GoHighLevel authorization failed with ${response.status}.`); const result = await response.json() as TokenResponse; if (!result.access_token) throw new Error("GoHighLevel authorization returned no access token."); return result; } finally { clearTimeout(timeout); }
+  try {
+    const form = new URLSearchParams({ client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, ...body });
+    const response = await fetch(TOKEN_URL, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded", Version: API_VERSION },
+      body: form.toString(),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`GoHighLevel authorization failed with ${response.status}.`);
+    const result = await response.json() as TokenResponse;
+    if (!result.access_token) throw new Error("GoHighLevel authorization returned no access token.");
+    return result;
+  } finally { clearTimeout(timeout); }
 }
 
 export const GOHIGHLEVEL_TOOLS = ["gohighlevel.location.verify", "gohighlevel.contact.lookup", "gohighlevel.contact.upsert", "gohighlevel.opportunity.search", "gohighlevel.opportunity.create"] as const;
