@@ -168,10 +168,10 @@ describe("Notion integration HTTP controls", () => {
     expect(gohighlevelAdapter.getAuthUrl).toHaveBeenCalledWith(userId, "/company/12#systems");
   });
 
-  it("marks only the GoHighLevel browser-tab flow as a popup completion", async () => {
-    const response = await api.get("/api/eos/companies/12/integrations/gohighlevel/auth?popup=1").expect(200);
+  it("starts GoHighLevel authorization with the standard company return path", async () => {
+    const response = await api.get("/api/eos/companies/12/integrations/gohighlevel/auth").expect(200);
     expect(response.body.authUrl).toContain("marketplace.gohighlevel.com");
-    expect(gohighlevelAdapter.getAuthUrl).toHaveBeenCalledWith(userId, "/company/12#systems", "popup");
+    expect(gohighlevelAdapter.getAuthUrl).toHaveBeenCalledWith(userId, "/company/12#systems");
   });
 
   it("stores encrypted QuickBooks OAuth credentials and the selected accounting company realm", async () => {
@@ -216,12 +216,12 @@ describe("Notion integration HTTP controls", () => {
     delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
   });
 
-  it("returns popup OAuth completion to the originating EOS Systems tab", async () => {
+  it("returns GoHighLevel authorization to the originating EOS Systems view", async () => {
     process.env.EOS_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 23).toString("base64");
-    gohighlevelAdapter.readOAuthState.mockResolvedValue({ userId, expiresAt: Date.now() + 60_000, nonce: "nonce", returnTo: "/company/12#systems", completion: "popup" });
+    gohighlevelAdapter.readOAuthState.mockResolvedValue({ userId, expiresAt: Date.now() + 60_000, nonce: "nonce", returnTo: "/company/12#systems" });
     gohighlevelAdapter.exchangeCode.mockResolvedValue({ accessToken: "gohighlevel-access-plaintext", refreshToken: "gohighlevel-refresh-plaintext", tokenType: "Bearer", expiresAt: new Date("2026-10-01T00:00:00.000Z"), scope: "contacts.readonly", metadata: { locationId: "location-1", companyId: "company-1" } });
     const response = await api.get("/api/auth/crm/callback?code=provider-code&state=signed-state").expect(302);
-    expect(response.headers.location).toBe("/company/12?gohighlevel=authorized&oauth_popup=1#systems");
+    expect(response.headers.location).toBe("/company/12?gohighlevel=authorized#systems");
     delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
   });
 
