@@ -2694,19 +2694,43 @@ export default function EosOverlayPage() {
   });
 
   const connectIntegrationMutation = useMutation({
-    mutationFn: (integration: JsonRecord) => {
+    mutationFn: ({ integration }: { integration: JsonRecord; authorizationWindow?: Window | null }) => {
       const provider =
         integration.id === "google_workspace" ? "gmail" : integration.id;
       return requestJson<{ authUrl: string }>(
         "GET",
-        `${root}/integrations/${provider}/auth`,
+        `${root}/integrations/${provider}/auth${integration.id === "gohighlevel" ? "?popup=1" : ""}`,
       );
     },
-    onSuccess: ({ authUrl }) => {
+    onSuccess: ({ authUrl }, { authorizationWindow }) => {
+      if (authorizationWindow && !authorizationWindow.closed) {
+        // This is an OAuth browser surface, not an EOS confirmation dialog.
+        // Sever the opener before HighLevel loads; completion comes back through
+        // a same-origin BroadcastChannel after the signed callback.
+        try { authorizationWindow.opener = null; } catch {}
+        authorizationWindow.location.replace(authUrl);
+        return;
+      }
       window.location.assign(authUrl);
     },
-    onError: (error, integration) => showMutationError(`${integration.name} connection`, error),
+    onError: (error, { integration, authorizationWindow }) => {
+      try { authorizationWindow?.close(); } catch {}
+      showMutationError(`${integration.name} connection`, error);
+    },
   });
+
+  const startIntegrationConnection = (integration: JsonRecord) => {
+    if (integration.id !== "gohighlevel") {
+      connectIntegrationMutation.mutate({ integration });
+      return;
+    }
+    const authorizationWindow = window.open("about:blank", "eos-gohighlevel-oauth");
+    if (!authorizationWindow) {
+      toast({ title: "Allow the GoHighLevel authorization tab", description: "Your browser blocked the provider authorization tab. Allow it, then connect again.", variant: "destructive" });
+      return;
+    }
+    connectIntegrationMutation.mutate({ integration, authorizationWindow });
+  };
 
   const attachIntegrationMutation = useMutation({
     mutationFn: (integration: JsonRecord) => {
@@ -2994,6 +3018,37 @@ export default function EosOverlayPage() {
 
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
+    const isGoHighLevelPopupCompletion =
+      query.get("oauth_popup") === "1" &&
+      query.get("gohighlevel") === "authorized";
+
+    // HighLevel rejects its marketplace authorization experience when it is
+    // rendered in the embedded EOS browser. The provider callback uses this
+    // one-shot same-origin signal to return ownership to the Systems tab
+    // without retaining a cross-origin opener reference.
+    if (isGoHighLevelPopupCompletion && typeof BroadcastChannel !== "undefined") {
+      const channel = new BroadcastChannel("eos-gohighlevel-oauth");
+      channel.postMessage({ type: "authorized" });
+      channel.close();
+      window.setTimeout(() => window.close(), 50);
+      return;
+    }
+
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel("eos-gohighlevel-oauth");
+    channel.onmessage = (event) => {
+      if (event.data?.type !== "authorized") return;
+      const target = new URL(window.location.href);
+      target.searchParams.set("gohighlevel", "authorized");
+      target.searchParams.delete("oauth_popup");
+      window.location.assign(`${target.pathname}${target.search}${target.hash}`);
+    };
+    return () => channel.close();
+  }, []);
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("oauth_popup") === "1") return;
     const providerId = query.get("google_workspace") === "authorized"
       ? "google_workspace"
       : query.get("notion") === "authorized"
@@ -12300,7 +12355,7 @@ export default function EosOverlayPage() {
                   companyVaultBindingMutation.isPending ||
                   retireCompanyVaultBindingMutation.isPending
                 }
-                onConnect={() => connectIntegrationMutation.mutate(integration)}
+                onConnect={() => startIntegrationConnection(integration)}
                 onAttach={() => attachIntegrationMutation.mutate(integration)}
                 onDisconnect={(connection) =>
                   disconnectIntegrationMutation.mutate({

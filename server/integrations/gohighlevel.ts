@@ -7,7 +7,8 @@ const API_BASE = "https://services.leadconnectorhq.com";
 const API_VERSION = "2021-07-28";
 const REQUIRED_SCOPES = ["contacts.readonly", "contacts.write", "opportunities.readonly", "opportunities.write"] as const;
 
-type OAuthState = { userId: string; expiresAt: number; nonce: string; returnTo: string };
+type OAuthCompletion = "redirect" | "popup";
+type OAuthState = { userId: string; expiresAt: number; nonce: string; returnTo: string; completion: OAuthCompletion };
 type TokenResponse = { access_token?: string; refresh_token?: string; token_type?: string; expires_in?: number; scope?: string; userType?: string; user_type?: string; companyId?: string; company_id?: string; locationId?: string; location_id?: string; userId?: string; user_id?: string };
 type Metadata = { locationId?: string; companyId?: string; userId?: string; userType?: string; grantedScopes?: string[] };
 
@@ -41,7 +42,7 @@ async function tokenRequest(body: Record<string, string>): Promise<TokenResponse
 
 export const GOHIGHLEVEL_TOOLS = ["gohighlevel.location.verify", "gohighlevel.contact.lookup", "gohighlevel.contact.upsert", "gohighlevel.opportunity.search", "gohighlevel.opportunity.create"] as const;
 export const GOHIGHLEVEL_REQUIRED_SCOPES = REQUIRED_SCOPES;
-export async function createOAuthState(userId: string, now = Date.now(), returnTo = "/portfolios") { const payload = Buffer.from(JSON.stringify({ userId, expiresAt: now + 10 * 60_000, nonce: randomBytes(16).toString("base64url"), returnTo: safeReturnTo(returnTo) })).toString("base64url"); return `${payload}.${await signState(payload)}`; }
+export async function createOAuthState(userId: string, now = Date.now(), returnTo = "/portfolios", completion: OAuthCompletion = "redirect") { const payload = Buffer.from(JSON.stringify({ userId, expiresAt: now + 10 * 60_000, nonce: randomBytes(16).toString("base64url"), returnTo: safeReturnTo(returnTo), completion: completion === "popup" ? "popup" : "redirect" })).toString("base64url"); return `${payload}.${await signState(payload)}`; }
 
 /**
  * Validates the signed, short-lived state returned by GoHighLevel before a
@@ -56,7 +57,7 @@ export async function readOAuthStateFromCallback(state: string, now = Date.now()
     if (!payload || !signature || !(await webcrypto.subtle.verify("HMAC", await stateSigningKey(), Buffer.from(signature, "base64url"), stateMessage(payload)))) return null;
     const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Partial<OAuthState>;
     if (typeof decoded.userId !== "string" || !decoded.userId.trim() || decoded.userId.length > 200 || typeof decoded.expiresAt !== "number" || !Number.isFinite(decoded.expiresAt) || decoded.expiresAt < now || typeof decoded.nonce !== "string" || decoded.nonce.length < 16) return null;
-    return { userId: decoded.userId, expiresAt: decoded.expiresAt, nonce: decoded.nonce, returnTo: safeReturnTo(decoded.returnTo) };
+    return { userId: decoded.userId, expiresAt: decoded.expiresAt, nonce: decoded.nonce, returnTo: safeReturnTo(decoded.returnTo), completion: decoded.completion === "popup" ? "popup" : "redirect" };
   } catch { return null; }
 }
 
@@ -65,7 +66,7 @@ export async function readOAuthState(state: string, userId: string, now = Date.n
   return parsed?.userId === userId ? parsed : null;
 }
 export function isConfigured() { try { stateSecret(); configuration(); return credentialEncryptionConfigured(); } catch { return false; } }
-export async function getAuthUrl(userId: string, returnTo?: string) { const { clientId, installationUrl, redirectUri } = configuration(); const url = new URL(installationUrl); url.searchParams.set("client_id", clientId); url.searchParams.set("redirect_uri", redirectUri); url.searchParams.set("state", await createOAuthState(userId, Date.now(), returnTo)); return url.toString(); }
+export async function getAuthUrl(userId: string, returnTo?: string, completion: OAuthCompletion = "redirect") { const { clientId, installationUrl, redirectUri } = configuration(); const url = new URL(installationUrl); url.searchParams.set("client_id", clientId); url.searchParams.set("redirect_uri", redirectUri); url.searchParams.set("state", await createOAuthState(userId, Date.now(), returnTo, completion)); return url.toString(); }
 export async function exchangeCode(code: string) { if (!code.trim() || code.length > 10_000) throw new Error("GoHighLevel authorization returned an invalid authorization code."); const result = await tokenRequest({ grant_type: "authorization_code", code, user_type: "Location" }); const next = nextMetadata(result); if (!next.locationId) throw new Error("GoHighLevel did not return a location identifier. Install the private app into the intended sub-account."); return { accessToken: result.access_token!, refreshToken: result.refresh_token, tokenType: result.token_type || "Bearer", expiresAt: expiry(result.expires_in), scope: result.scope || "", metadata: next }; }
 async function refreshAccessToken(userId: string) { const token = await storage.getOauthToken(userId, "gohighlevel"); if (!token?.refreshToken) throw new Error("GoHighLevel authorization expired. Reconnect the company location in Systems."); const result = await tokenRequest({ grant_type: "refresh_token", refresh_token: decryptCredential(token.refreshToken), user_type: "Location" }); const next = { ...metadata(token.metadata), ...nextMetadata(result), grantedScopes: scopes(result.scope || token.scope || "") }; await storage.upsertOauthToken({ userId, provider: "gohighlevel", accessToken: encryptCredential(result.access_token!), refreshToken: result.refresh_token ? encryptCredential(result.refresh_token) : token.refreshToken, tokenType: result.token_type || token.tokenType || "Bearer", expiresAt: expiry(result.expires_in), scope: result.scope || token.scope || "", metadata: next }); return result.access_token!; }
 async function accessToken(userId: string) { const token = await storage.getOauthToken(userId, "gohighlevel"); if (!token) throw new Error("GoHighLevel is not connected. Connect the CRM location first."); if (token.expiresAt && new Date(token.expiresAt) <= new Date()) return refreshAccessToken(userId); return decryptCredential(token.accessToken); }

@@ -6,12 +6,14 @@ describe("GoHighLevel OAuth state", () => {
     const original = process.env.SESSION_SECRET;
     process.env.SESSION_SECRET = "x".repeat(48);
     const state = await createOAuthState("operator-a", 1_000, "/company/12#systems");
-    await expect(readOAuthState(state, "operator-a", 2_000)).resolves.toMatchObject({ returnTo: "/company/12#systems" });
+    await expect(readOAuthState(state, "operator-a", 2_000)).resolves.toMatchObject({ returnTo: "/company/12#systems", completion: "redirect" });
     await expect(readOAuthState(state, "operator-b", 2_000)).resolves.toBeNull();
     await expect(readOAuthState(state, "operator-a", 700_001)).resolves.toBeNull();
     await expect(readOAuthStateFromCallback(state, 2_000)).resolves.toMatchObject({ userId: "operator-a", returnTo: "/company/12#systems" });
     await expect(readOAuthStateFromCallback(`${state}.tampered`, 2_000)).resolves.toBeNull();
     await expect(readOAuthStateFromCallback(state, 700_001)).resolves.toBeNull();
+    const popupState = await createOAuthState("operator-a", 1_000, "/company/12#systems", "popup");
+    await expect(readOAuthStateFromCallback(popupState, 2_000)).resolves.toMatchObject({ completion: "popup" });
     if (original === undefined) delete process.env.SESSION_SECRET; else process.env.SESSION_SECRET = original;
   });
 
@@ -34,6 +36,10 @@ describe("GoHighLevel OAuth state", () => {
     expect(authorizationUrl.searchParams.get("version_id")).toBe("app-version");
     expect(authorizationUrl.searchParams.get("redirect_uri")).toBe("https://entrepreneuros.net/api/auth/crm/callback");
     expect(authorizationUrl.searchParams.get("state")).toBeTruthy();
+
+    const popupAuthorizationUrl = new URL(await getAuthUrl("operator-a", "/company/12#systems", "popup"));
+    const popupState = await readOAuthStateFromCallback(popupAuthorizationUrl.searchParams.get("state")!, Date.now());
+    expect(popupState?.completion).toBe("popup");
 
     if (previous.sessionSecret === undefined) delete process.env.SESSION_SECRET; else process.env.SESSION_SECRET = previous.sessionSecret;
     if (previous.clientId === undefined) delete process.env.GOHIGHLEVEL_CLIENT_ID; else process.env.GOHIGHLEVEL_CLIENT_ID = previous.clientId;

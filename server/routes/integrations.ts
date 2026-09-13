@@ -155,6 +155,11 @@ function oauthResultRedirect(internalPath: string, key: string, value: string): 
   return `${path}?${key}=${encodeURIComponent(value)}${hash ? `#${hash}` : ""}`;
 }
 
+function oauthPopupResultRedirect(internalPath: string, key: string, value: string): string {
+  const [path, hash] = internalPath.split("#");
+  return `${path}?${key}=${encodeURIComponent(value)}&oauth_popup=1${hash ? `#${hash}` : ""}`;
+}
+
 async function integrationAccess(req: Request, authorityClass: "view" | "execute" | "decide", actionKey: string) {
   const access = await companyAccess(req);
   if (!allowedSurfacesFor(access.role).includes("systems")) {
@@ -304,7 +309,11 @@ export function registerIntegrationRoutes(app: Express): void {
       const adapter = provider === "gmail" ? gmail : provider === "notion" ? notion : provider === "quickbooks" ? quickbooks : provider === "slack" ? slack : gohighlevel;
       if (!adapter.isConfigured()) return res.status(400).json({ code: "integration_provider_not_configured", message: `${providerLabel(provider)} OAuth or EOS credential encryption is not configured.` });
       const returnTo = `/company/${encodeURIComponent(req.params.companyId)}#systems`;
-      const authUrl = await adapter.getAuthUrl(req.user.id, returnTo);
+      const authUrl = provider === "gohighlevel"
+        ? req.query.popup === "1"
+          ? await gohighlevel.getAuthUrl(req.user.id, returnTo, "popup")
+          : await gohighlevel.getAuthUrl(req.user.id, returnTo)
+        : await adapter.getAuthUrl(req.user.id, returnTo);
       if (provider === "gohighlevel") {
         const state = new URL(authUrl).searchParams.get("state");
         if (!state) throw new EosRouteError(500, "gohighlevel_oauth_state_missing", "GoHighLevel authorization could not be safely initialized.");
@@ -637,7 +646,9 @@ export function registerIntegrationRoutes(app: Express): void {
       if (!credentialEncryptionConfigured()) return res.redirect(oauthResultRedirect(returnPath, "integration_error", "credential_encryption_not_configured"));
       const tokens = await gohighlevel.exchangeCode(code);
       await storage.upsertOauthToken({ userId: oauthState.userId, provider: "gohighlevel", accessToken: encryptCredential(tokens.accessToken), refreshToken: tokens.refreshToken ? encryptCredential(tokens.refreshToken) : undefined, tokenType: tokens.tokenType, expiresAt: tokens.expiresAt, scope: tokens.scope, metadata: tokens.metadata });
-      res.redirect(oauthResultRedirect(returnPath, "gohighlevel", "authorized"));
+      res.redirect(oauthState.completion === "popup"
+        ? oauthPopupResultRedirect(returnPath, "gohighlevel", "authorized")
+        : oauthResultRedirect(returnPath, "gohighlevel", "authorized"));
     } catch (error: any) {
       console.error("GoHighLevel OAuth callback error:", error);
       res.redirect("/portfolios?integration_error=oauth_callback_failed");
