@@ -42,6 +42,7 @@ const gohighlevelAdapter = vi.hoisted(() => ({
   isConfigured: vi.fn(() => true),
   getAuthUrl: vi.fn(() => "https://marketplace.gohighlevel.com/install?state=signed"),
   readOAuthState: vi.fn(),
+  readOAuthStateFromCallback: vi.fn(),
   exchangeCode: vi.fn(),
   connectionSummary: vi.fn(async () => ({ configured: true, connected: true, location: { locationId: "location-1" }, grantedScopes: ["contacts.readonly"] })),
   verifyConnection: vi.fn(async () => ({ configured: true, connected: true, healthy: true, location: { locationId: "location-1" }, grantedScopes: ["contacts.readonly"] })),
@@ -106,8 +107,9 @@ describe("Notion integration HTTP controls", () => {
     const app = express();
     app.use(express.json());
     app.use((req, _res, next) => {
-      (req as any).user = { id: userId };
-      (req as any).isAuthenticated = () => true;
+      const externalOAuthCallback = req.headers["x-eos-external-oauth-callback"] === "true";
+      if (!externalOAuthCallback) (req as any).user = { id: userId };
+      (req as any).isAuthenticated = () => !externalOAuthCallback;
       next();
     });
     registerIntegrationRoutes(app);
@@ -217,6 +219,21 @@ describe("Notion integration HTTP controls", () => {
     expect(gohighlevelAdapter.readOAuthState).toHaveBeenCalledWith("signed-cookie-state", userId);
     expect(gohighlevelAdapter.exchangeCode).toHaveBeenCalledWith("provider-code");
     expect(response.headers["set-cookie"]?.join(";")).toContain("eos_gohighlevel_oauth_state=");
+    delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
+  });
+
+  it("stores a GoHighLevel authorization returned through a separately signed-in provider browser against the signed EOS state owner", async () => {
+    process.env.EOS_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 23).toString("base64");
+    gohighlevelAdapter.readOAuthStateFromCallback.mockResolvedValue({ userId: "external-browser-owner", expiresAt: Date.now() + 60_000, nonce: "nonce", returnTo: "/company/12#systems" });
+    gohighlevelAdapter.exchangeCode.mockResolvedValue({ accessToken: "gohighlevel-access-plaintext", refreshToken: "gohighlevel-refresh-plaintext", tokenType: "Bearer", expiresAt: new Date("2026-10-01T00:00:00.000Z"), scope: "contacts.readonly", metadata: { locationId: "location-1", companyId: "company-1" } });
+
+    const response = await api.get("/api/auth/crm/callback?code=provider-code&state=signed-state")
+      .set("x-eos-external-oauth-callback", "true")
+      .expect(302);
+
+    expect(response.headers.location).toBe("/company/12?gohighlevel=authorized#systems");
+    expect(gohighlevelAdapter.readOAuthStateFromCallback).toHaveBeenCalledWith("signed-state");
+    expect(storageAdapter.upsertOauthToken).toHaveBeenCalledWith(expect.objectContaining({ userId: "external-browser-owner", provider: "gohighlevel" }));
     delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
   });
 
