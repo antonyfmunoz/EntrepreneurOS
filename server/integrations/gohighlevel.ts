@@ -9,6 +9,7 @@ const REQUIRED_SCOPES = ["contacts.readonly", "contacts.write", "opportunities.r
 
 type OAuthState = { userId: string; expiresAt: number; nonce: string; returnTo: string };
 type TokenResponse = { access_token?: string; refresh_token?: string; token_type?: string; expires_in?: number; scope?: string; userType?: string; user_type?: string; companyId?: string; company_id?: string; locationId?: string; location_id?: string; approvedLocations?: unknown; approved_locations?: unknown; userId?: string; user_id?: string };
+type InstalledLocationsResponse = { locations?: Array<{ _id?: unknown; id?: unknown; isInstalled?: unknown }> };
 type Metadata = { locationId?: string; companyId?: string; userId?: string; userType?: string; grantedScopes?: string[] };
 
 function safeReturnTo(value?: string) { return value && (/^\/company\/[1-9]\d*(?:#systems)?$/.test(value) || /^\/portfolios(?:\/[1-9]\d*)?$/.test(value)) ? value : "/portfolios"; }
@@ -53,6 +54,41 @@ function mergeMetadata(current: Metadata, update: Metadata): Metadata {
     userType: update.userType || current.userType,
     grantedScopes: update.grantedScopes?.length ? update.grantedScopes : current.grantedScopes,
   };
+}
+async function resolveInstalledLocation(result: TokenResponse, initial: Metadata): Promise<Metadata> {
+  if (initial.locationId) return initial;
+  const companyId = initial.companyId;
+  if (!companyId || !result.access_token) return initial;
+
+  const { clientId, installationUrl } = configuration();
+  // Marketplace client IDs are suffixed, while the installed-locations API
+  // requires the stable application ID. The authenticated company identity
+  // comes only from this completed OAuth exchange.
+  const appId = clientId.split("-", 1)[0];
+  if (!appId) return initial;
+  const endpoint = new URL("/oauth/installedLocations", API_BASE);
+  endpoint.searchParams.set("companyId", companyId);
+  endpoint.searchParams.set("appId", appId);
+  endpoint.searchParams.set("isInstalled", "true");
+  endpoint.searchParams.set("limit", "100");
+  const versionId = installationUrl.searchParams.get("version_id");
+  if (versionId) endpoint.searchParams.set("versionId", versionId);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const response = await fetch(endpoint, {
+      headers: { Authorization: `Bearer ${result.access_token}`, Accept: "application/json", Version: API_VERSION },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`GoHighLevel could not resolve the installed location (${response.status}).`);
+    const body = await response.json() as InstalledLocationsResponse;
+    const locations = Array.from(new Set((body.locations || [])
+      .filter((location) => location.isInstalled !== false)
+      .map((location) => typeof location._id === "string" ? location._id : typeof location.id === "string" ? location.id : "")
+      .filter(Boolean)));
+    return locations.length === 1 ? { ...initial, locationId: locations[0] } : initial;
+  } finally { clearTimeout(timeout); }
 }
 
 async function tokenRequest(body: Record<string, string>): Promise<TokenResponse> {
@@ -99,7 +135,7 @@ export async function readOAuthState(state: string, userId: string, now = Date.n
 }
 export function isConfigured() { try { stateSecret(); configuration(); return credentialEncryptionConfigured(); } catch { return false; } }
 export async function getAuthUrl(userId: string, returnTo?: string) { const { clientId, installationUrl, redirectUri } = configuration(); const url = new URL(installationUrl); url.searchParams.set("client_id", clientId); url.searchParams.set("redirect_uri", redirectUri); url.searchParams.set("state", await createOAuthState(userId, Date.now(), returnTo)); return url.toString(); }
-export async function exchangeCode(code: string) { if (!code.trim() || code.length > 10_000) throw new Error("GoHighLevel authorization returned an invalid authorization code."); const result = await tokenRequest({ grant_type: "authorization_code", code, user_type: "Location" }); const next = nextMetadata(result); if (!next.locationId) throw new Error("GoHighLevel did not identify one selected sub-account. Reconnect and select exactly one location."); return { accessToken: result.access_token!, refreshToken: result.refresh_token, tokenType: result.token_type || "Bearer", expiresAt: expiry(result.expires_in), scope: result.scope || "", metadata: next }; }
+export async function exchangeCode(code: string) { if (!code.trim() || code.length > 10_000) throw new Error("GoHighLevel authorization returned an invalid authorization code."); const result = await tokenRequest({ grant_type: "authorization_code", code, user_type: "Location" }); const next = await resolveInstalledLocation(result, nextMetadata(result)); if (!next.locationId) throw new Error("GoHighLevel did not identify one selected sub-account. Reconnect and select exactly one location."); return { accessToken: result.access_token!, refreshToken: result.refresh_token, tokenType: result.token_type || "Bearer", expiresAt: expiry(result.expires_in), scope: result.scope || "", metadata: next }; }
 async function refreshAccessToken(userId: string) { const token = await storage.getOauthToken(userId, "gohighlevel"); if (!token?.refreshToken) throw new Error("GoHighLevel authorization expired. Reconnect the company location in Systems."); const result = await tokenRequest({ grant_type: "refresh_token", refresh_token: decryptCredential(token.refreshToken), user_type: "Location" }); const next = { ...mergeMetadata(metadata(token.metadata), nextMetadata(result)), grantedScopes: scopes(result.scope || token.scope || "") }; await storage.upsertOauthToken({ userId, provider: "gohighlevel", accessToken: encryptCredential(result.access_token!), refreshToken: result.refresh_token ? encryptCredential(result.refresh_token) : token.refreshToken, tokenType: result.token_type || token.tokenType || "Bearer", expiresAt: expiry(result.expires_in), scope: result.scope || token.scope || "", metadata: next }); return result.access_token!; }
 async function accessToken(userId: string) { const token = await storage.getOauthToken(userId, "gohighlevel"); if (!token) throw new Error("GoHighLevel is not connected. Connect the CRM location first."); if (token.expiresAt && new Date(token.expiresAt) <= new Date()) return refreshAccessToken(userId); return decryptCredential(token.accessToken); }
 async function request(userId: string, path: string, init: RequestInit = {}) { const call = async (token: string) => { const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 10_000); try { return await fetch(`${API_BASE}${path}`, { ...init, headers: { Authorization: `Bearer ${token}`, Accept: "application/json", Version: API_VERSION, ...(init.body ? { "Content-Type": "application/json" } : {}), ...(init.headers || {}) }, signal: controller.signal }); } finally { clearTimeout(timeout); } }; const first = await call(await accessToken(userId)); return first.status === 401 ? call(await refreshAccessToken(userId)) : first; }
