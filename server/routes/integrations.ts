@@ -116,32 +116,6 @@ async function docusignConnectionStatus(companyId: number) {
   };
 }
 
-async function gohighlevelConnectionStatus(companyId: number) {
-  const bindings = await db.select().from(eosIntegrationBindings).where(
-    eq(eosIntegrationBindings.companyId, companyId),
-  );
-  const binding = bindings.find((item) => item.providerKey === "gohighlevel" && item.adapterReference === "gohighlevel-private-integration-v1" && item.lifecycleState === "active")
-    || bindings.find((item) => item.providerKey === "gohighlevel" && item.adapterReference === "gohighlevel-private-integration-v1" && item.lifecycleState !== "retired")
-    || null;
-  if (!binding) {
-    return {
-      configured: false,
-      connected: false,
-      healthy: false,
-      reason: "binding_invalid" as const,
-      accountReference: null,
-      bindingId: null,
-    };
-  }
-  const health = await gohighlevel.verifyCompanyConnection(binding);
-  return {
-    configured: true,
-    ...health,
-    accountReference: binding.providerAccountReference,
-    bindingId: binding.id,
-  };
-}
-
 function oauthProvider(provider: SupportedProvider): OAuthProvider {
   if (provider === "stripe" || provider === "docusign") {
     throw new EosRouteError(409, "integration_provider_managed_connection", `${provider === "stripe" ? "Stripe" : "DocuSign"} is a company-managed connection. Configure its binding and managed vault credential through the Systems registry.`);
@@ -359,10 +333,6 @@ export function registerIntegrationRoutes(app: Express): void {
       if (requestedProvider === "docusign") {
         return res.json(await docusignConnectionStatus(Number(req.params.companyId)));
       }
-      if (requestedProvider === "gohighlevel") {
-        const managed = await gohighlevelConnectionStatus(Number(req.params.companyId));
-        if (managed.configured) return res.json(managed);
-      }
       const provider = oauthProvider(requestedProvider);
       const adapter = provider === "gmail" ? gmail : provider === "notion" ? notion : provider === "quickbooks" ? quickbooks : provider === "slack" ? slack : gohighlevel;
       return res.json(req.query.verify === "true" ? await adapter.verifyConnection(req.user.id) : await adapter.connectionSummary(req.user.id));
@@ -423,40 +393,6 @@ export function registerIntegrationRoutes(app: Express): void {
           externalReference: verified.externalReference,
           deliveryVerified: false,
         },
-      });
-    } catch (error) { return providerError(res, error); }
-  });
-
-  // An internal HighLevel location uses a company vault reference rather than
-  // a Marketplace install. This avoids making an employee or an agency OAuth
-  // session the owner of the company's CRM.
-  app.post("/api/eos/companies/:companyId/integrations/gohighlevel/bindings/:bindingId/verify", async (req, res) => {
-    try {
-      const { access, policy } = await integrationAccess(req, "execute", "integration_provider_connection.verify");
-      const binding = await db.query.eosIntegrationBindings.findFirst({
-        where: and(eq(eosIntegrationBindings.id, req.params.bindingId), eq(eosIntegrationBindings.companyId, access.company.id)),
-      });
-      const visible = await visibleSeatIds(access.company.id, access.seat.id, access.role);
-      if (!binding || binding.providerKey !== "gohighlevel" || binding.adapterReference !== "gohighlevel-private-integration-v1" || binding.lifecycleState === "retired" || !visible.has(binding.ownerSeatId)) {
-        throw new EosRouteError(404, "gohighlevel_binding_not_found", "GoHighLevel company binding not found in this authority scope.");
-      }
-      const verified = await gohighlevel.verifyCompanyConnection(binding);
-      const now = new Date();
-      const [updated] = await db.update(eosIntegrationBindings).set({
-        connectionState: verified.healthy ? "connected" : "failed",
-        healthState: verified.healthy ? "healthy" : verified.connected ? "degraded" : "unavailable",
-        lastHealthAt: now,
-        updatedAt: now,
-      }).where(eq(eosIntegrationBindings.id, binding.id)).returning();
-      await db.insert(eosAuditRecords).values({
-        id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id,
-        action: "integration_binding.provider_identity_verified", targetType: "integration_binding", targetId: updated.id,
-        traceId: policy.traceId, correlationId: policy.correlationId, result: verified.reason,
-        details: { providerKey: "gohighlevel", externalReference: verified.externalReference, policyDecisionId: policy.decisionId, readOnly: true }, createdAt: now,
-      });
-      return res.json({
-        id: updated.id, connectionState: updated.connectionState, healthState: updated.healthState, lastHealthAt: updated.lastHealthAt,
-        verification: { connected: verified.connected, healthy: verified.healthy, reason: verified.reason, externalReference: verified.externalReference, deliveryVerified: false },
       });
     } catch (error) { return providerError(res, error); }
   });
