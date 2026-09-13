@@ -2693,11 +2693,6 @@ export default function EosOverlayPage() {
     onError: (error) => showMutationError("Evidence recording", error),
   });
 
-  // GoHighLevel's Marketplace location picker cannot be rendered by several
-  // embedded mobile web views. Keep EOS on its Systems page and hand the
-  // short-lived authorization URL to an actual browser only after it is made.
-  const [goHighLevelAuthorizationUrl, setGoHighLevelAuthorizationUrl] = useState<string | null>(null);
-
   const connectIntegrationMutation = useMutation({
     mutationFn: (integration: JsonRecord) => {
       const provider =
@@ -2707,15 +2702,7 @@ export default function EosOverlayPage() {
         `${root}/integrations/${provider}/auth`,
       );
     },
-    onSuccess: ({ authUrl }, integration) => {
-      if (integration.id === "gohighlevel") {
-        setGoHighLevelAuthorizationUrl(authUrl);
-        toast({
-          title: "GoHighLevel location chooser is ready",
-          description: "Open it in your browser, select the company location, then return here. EOS will stay open.",
-        });
-        return;
-      }
+    onSuccess: ({ authUrl }) => {
       window.location.assign(authUrl);
     },
     onError: (error, integration) => showMutationError(`${integration.name} connection`, error),
@@ -12338,36 +12325,6 @@ export default function EosOverlayPage() {
                 }
               />
             ))}
-            <AlertDialog
-              open={Boolean(goHighLevelAuthorizationUrl)}
-              onOpenChange={(open) => {
-                if (!open) setGoHighLevelAuthorizationUrl(null);
-              }}
-            >
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Continue GoHighLevel in your browser</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    GoHighLevel’s location chooser does not support this embedded browser. EOS will remain on this Systems page while you choose the authorized company location in a regular browser window.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  {goHighLevelAuthorizationUrl && (
-                    <Button asChild>
-                      <a
-                        href={goHighLevelAuthorizationUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <ExternalLink className="mr-2 h-4 w-4" />
-                        Open location chooser
-                      </a>
-                    </Button>
-                  )}
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
             {notionConnected && (
               <Card>
                 <CardHeader>
