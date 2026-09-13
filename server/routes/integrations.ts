@@ -636,7 +636,7 @@ export function registerIntegrationRoutes(app: Express): void {
       const returnPath = internalOAuthReturnPath(oauthState.returnTo);
       if (!credentialEncryptionConfigured()) return res.redirect(oauthResultRedirect(returnPath, "integration_error", "credential_encryption_not_configured"));
       const tokens = await gohighlevel.exchangeCode(code);
-      await storage.upsertOauthToken({ userId: req.user.id, provider: "gohighlevel", accessToken: encryptCredential(tokens.accessToken), refreshToken: tokens.refreshToken ? encryptCredential(tokens.refreshToken) : undefined, tokenType: tokens.tokenType, expiresAt: tokens.expiresAt, scope: tokens.scope, metadata: tokens.metadata });
+      await storage.upsertOauthToken({ userId: oauthState.userId, provider: "gohighlevel", accessToken: encryptCredential(tokens.accessToken), refreshToken: tokens.refreshToken ? encryptCredential(tokens.refreshToken) : undefined, tokenType: tokens.tokenType, expiresAt: tokens.expiresAt, scope: tokens.scope, metadata: tokens.metadata });
       res.redirect(oauthResultRedirect(returnPath, "gohighlevel", "authorized"));
     } catch (error: any) {
       console.error("GoHighLevel OAuth callback error:", error);
