@@ -2819,13 +2819,6 @@ export default function EosOverlayPage() {
           {},
         );
       }
-      if (integration.id === "gohighlevel" && connection?.id && integration.providerBinding) {
-        return requestJson<JsonRecord>(
-          "POST",
-          `${root}/integrations/gohighlevel/bindings/${connection.id}/verify`,
-          {},
-        );
-      }
       if (connection?.id) {
         return requestJson<JsonRecord>(
           "POST",
@@ -2873,7 +2866,7 @@ export default function EosOverlayPage() {
       draft: CompanyVaultConnectionDraft;
     }) => {
       const providerKey = String(integration.id || "");
-      if (providerKey !== "stripe" && providerKey !== "docusign" && providerKey !== "gohighlevel")
+      if (providerKey !== "stripe" && providerKey !== "docusign")
         throw new Error("This provider is not configured through a managed company connection.");
       const providerDefaults = providerKey === "stripe"
         ? {
@@ -2886,7 +2879,7 @@ export default function EosOverlayPage() {
             manualFallback: "Issue or reconcile the approved payment directly in the selected company Stripe dashboard.",
             failureRecovery: "Stop affected payment execution, reconcile the provider record, preserve receipts, and escalate to the accountable finance owner.",
           }
-        : providerKey === "docusign" ? {
+        : {
             adapterKind: "service_account",
             // This existing private company integration is intentionally a
             // Demo-only JWT identity check. It proves account reachability but
@@ -2898,20 +2891,11 @@ export default function EosOverlayPage() {
             expectedEvents: ["envelope.sent", "envelope.completed", "envelope.voided"],
             manualFallback: "Prepare and send the approved agreement directly from the selected company DocuSign workspace.",
             failureRecovery: "Stop affected agreement dispatch, reconcile the envelope record, preserve certificate evidence, and escalate to the accountable legal or commercial owner.",
-          } : {
-            adapterKind: "api_key",
-            adapterReference: "gohighlevel-private-integration-v1",
-            transport: "HTTPS + GoHighLevel API + read-only location identity check",
-            nativePermissions: ["contacts.readonly", "contacts.write", "opportunities.readonly", "opportunities.write"],
-            operations: ["gohighlevel.location.verify", "gohighlevel.contact.lookup", "gohighlevel.contact.upsert", "gohighlevel.opportunity.search", "gohighlevel.opportunity.create"],
-            expectedEvents: ["contact.upserted", "opportunity.created", "opportunity.status.updated"],
-            manualFallback: "Operate the governed EOS work packet and update the authorized GoHighLevel location manually.",
-            failureRecovery: "Stop affected CRM execution, reconcile the provider record, preserve the provider receipt, and escalate to the accountable revenue owner.",
           };
       const common = {
         providerKey,
         providerAccountReference: draft.providerAccountReference.trim(),
-        ...(providerKey === "docusign" || providerKey === "gohighlevel"
+        ...(providerKey === "docusign"
           ? { credentialReference: String(draft.credentialReference || "") }
           : {}),
         ...providerDefaults,
@@ -2929,7 +2913,7 @@ export default function EosOverlayPage() {
             ...(draft.accountScope.trim()
               ? { accountScope: draft.accountScope.trim() }
               : {}),
-            ...(providerKey === "stripe" && draft.credentialReference.trim()
+            ...(providerKey !== "docusign" && draft.credentialReference.trim()
               ? { credentialReference: draft.credentialReference.trim() }
               : {}),
             expectedConfigurationVersion: Number(existing.configurationVersion),
@@ -2949,8 +2933,8 @@ export default function EosOverlayPage() {
           name: `${integration.name} company provider`,
           systemType: "provider",
           capabilities: providerDefaults.operations,
-          dataDomains: providerKey === "stripe" ? ["commercial", "finance"] : providerKey === "docusign" ? ["commercial", "legal"] : ["commercial", "revenue", "customer"],
-          authoritativeFields: providerKey === "stripe" ? ["payment and receipt facts"] : providerKey === "docusign" ? ["envelope and certificate facts"] : ["CRM contact and pipeline facts"],
+          dataDomains: providerKey === "stripe" ? ["commercial", "finance"] : ["commercial", "legal"],
+          authoritativeFields: providerKey === "stripe" ? ["payment and receipt facts"] : ["envelope and certificate facts"],
           replacementIntent: "integrate",
           evidenceIds: [],
         });
@@ -2962,7 +2946,7 @@ export default function EosOverlayPage() {
         administratorReference: draft.administratorReference.trim(),
         accountScope: draft.accountScope.trim(),
         credentialReference:
-          providerKey === "docusign" || providerKey === "gohighlevel"
+          providerKey === "docusign"
             ? draft.credentialReference.trim()
             : draft.credentialReference.trim(),
         connectionState: "configured",
@@ -12853,10 +12837,9 @@ function IntegrationControlCard({
 }) {
   const actions = new Set<string>(integration.actions || []);
   const isCompanyManagedCredentialProvider =
-    integration.id === "stripe" || integration.id === "docusign" || integration.id === "gohighlevel";
+    integration.id === "stripe" || integration.id === "docusign";
   const isStripeManagedProvider = integration.id === "stripe";
   const isDocusignManagedProvider = integration.id === "docusign";
-  const isGoHighLevelManagedProvider = integration.id === "gohighlevel";
   const docusignPreset = integration.connectionPreset as JsonRecord | null | undefined;
   const [companySetupOpen, setCompanySetupOpen] = useState(false);
   const [companyVaultDraft, setCompanyVaultDraft] =
@@ -12886,7 +12869,7 @@ function IntegrationControlCard({
   // Company-managed providers use server-owned, read-only identity probes.
   // They never expose a credential to the browser or enable consequential effects.
   const companyBindingVerifiable =
-    ((integration.id === "docusign" || integration.id === "gohighlevel") && Boolean(configuredProviderBinding)) ||
+    (integration.id === "docusign" && Boolean(configuredProviderBinding)) ||
     (integration.id === "stripe" && companyBindingConnected);
   const readiness = integration.readiness && typeof integration.readiness === "object"
     ? integration.readiness as JsonRecord
@@ -13160,28 +13143,6 @@ function IntegrationControlCard({
                 : `Connect ${integration.name}`}
             </Button>
           )}
-          {isGoHighLevelManagedProvider && actions.has("configure_company") && (
-            <Button
-              onClick={() => {
-                setCompanyVaultDraft((current) => ({
-                  ...current,
-                  providerAccountReference:
-                    current.providerAccountReference || String(integration.accountReference || ""),
-                  credentialReference:
-                    current.credentialReference || "op://EntrepreneurOS/Production/EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS",
-                  administratorReference:
-                    current.administratorReference || String(integration.providerBinding?.administratorReference || ""),
-                  accountScope:
-                    current.accountScope || "Empyrean Studios · company-managed GoHighLevel location · governed CRM operations",
-                }));
-                setCompanySetupOpen((open) => !open);
-              }}
-              disabled={pending}
-            >
-              <Plug className="mr-2 h-4 w-4" />
-              {companyBindingConnected ? "Reconnect GoHighLevel" : "Connect GoHighLevel"}
-            </Button>
-          )}
           {(actions.has("connect") || actions.has("reconnect")) && (
             <Button onClick={onConnect} disabled={pending}>
               <Plug className="mr-2 h-4 w-4" />
@@ -13200,7 +13161,7 @@ function IntegrationControlCard({
             companyBindingVerifiable) && (
             <Button
               variant="outline"
-              onClick={() => onVerify((integration.id === "docusign" || integration.id === "gohighlevel") ? configuredProviderBinding || undefined : activeCompanyConnection)}
+              onClick={() => onVerify(integration.id === "docusign" ? configuredProviderBinding || undefined : activeCompanyConnection)}
               disabled={pending}
             >
               <RefreshCw
@@ -13239,7 +13200,7 @@ function IntegrationControlCard({
           )}
         </div>
 
-        {(isStripeManagedProvider || isGoHighLevelManagedProvider) && companySetupOpen && (
+        {isStripeManagedProvider && companySetupOpen && (
           <div className="space-y-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
             <div>
               <p className="font-medium">
@@ -13250,8 +13211,6 @@ function IntegrationControlCard({
               <p className="mt-1 text-sm text-muted-foreground">
                 {integration.id === "docusign"
                   ? "EOS will match this company account to its managed DocuSign authorization and run a read-only identity check. No agreement is sent or changed during connection."
-                  : integration.id === "gohighlevel"
-                    ? "Enter the HighLevel location identifier only. EOS stores the matching company credential in the vault; never paste a private token into EOS. The first check reads only bounded location reachability."
                   : "Record the company account and its managed connection. Enter safe identifiers only—never paste a key, token, password, or signing secret into EOS."}
               </p>
             </div>
@@ -13266,7 +13225,7 @@ function IntegrationControlCard({
                       providerAccountReference: event.target.value,
                     }))
                   }
-                  placeholder={integration.id === "stripe" ? "acct_…" : integration.id === "gohighlevel" ? "GoHighLevel location ID" : "DocuSign account or sender reference"}
+                  placeholder={integration.id === "stripe" ? "acct_…" : "DocuSign account or sender reference"}
                 />
               </label>
               {integration.id === "stripe" && (

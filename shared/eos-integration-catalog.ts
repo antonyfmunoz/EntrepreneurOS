@@ -77,10 +77,10 @@ export const eosIntegrationCatalog: Readonly<Record<EosIntegrationKey, EosIntegr
     expectedControlPlanes: commonControls,
   },
   gohighlevel: {
-    key: "gohighlevel", name: "GoHighLevel", function: "crm", custody: "company_vault",
-    companyConnectionKey: null, providerBindingKey: "gohighlevel",
+    key: "gohighlevel", name: "GoHighLevel", function: "crm", custody: "seat_oauth",
+    companyConnectionKey: "gohighlevel", providerBindingKey: null,
     executionBoundary: "Contact and pipeline writes require an entitled revenue role, local approval, idempotency, and a provider receipt.",
-    operatorBoundary: "The company private-integration credential remains binding-scoped in the vault; revenue seats receive only explicit CRM capabilities.",
+    operatorBoundary: "The location OAuth custodian is not the owner of the company CRM or its customer records.",
     expectedControlPlanes: commonControls,
   },
   docusign: {
