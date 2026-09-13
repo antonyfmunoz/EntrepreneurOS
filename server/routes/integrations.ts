@@ -615,6 +615,7 @@ export function registerIntegrationRoutes(app: Express): void {
   });
 
   const handleGoHighLevelCallback = async (req: Request, res: Response) => {
+    let returnPath = "/portfolios";
     try {
       const code = typeof req.query.code === "string" ? req.query.code : "";
       const state = typeof req.query.state === "string" ? req.query.state : "";
@@ -633,14 +634,14 @@ export function registerIntegrationRoutes(app: Express): void {
         : null;
       if (!code) return res.redirect("/portfolios?integration_error=no_code");
       if (!oauthState) return res.redirect("/portfolios?integration_error=invalid_oauth_state");
-      const returnPath = internalOAuthReturnPath(oauthState.returnTo);
+      returnPath = internalOAuthReturnPath(oauthState.returnTo);
       if (!credentialEncryptionConfigured()) return res.redirect(oauthResultRedirect(returnPath, "integration_error", "credential_encryption_not_configured"));
       const tokens = await gohighlevel.exchangeCode(code);
       await storage.upsertOauthToken({ userId: oauthState.userId, provider: "gohighlevel", accessToken: encryptCredential(tokens.accessToken), refreshToken: tokens.refreshToken ? encryptCredential(tokens.refreshToken) : undefined, tokenType: tokens.tokenType, expiresAt: tokens.expiresAt, scope: tokens.scope, metadata: tokens.metadata });
       res.redirect(oauthResultRedirect(returnPath, "gohighlevel", "authorized"));
     } catch (error: any) {
       console.error("GoHighLevel OAuth callback error:", error);
-      res.redirect("/portfolios?integration_error=oauth_callback_failed");
+      res.redirect(oauthResultRedirect(returnPath, "integration_error", "gohighlevel_oauth_failed"));
     }
   };
 

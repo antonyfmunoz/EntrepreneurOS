@@ -76,4 +76,28 @@ describe("GoHighLevel OAuth state", () => {
       if (previous.redirectUri === undefined) delete process.env.GOHIGHLEVEL_REDIRECT_URI; else process.env.GOHIGHLEVEL_REDIRECT_URI = previous.redirectUri;
     }
   });
+
+  it("uses the single approved location when HighLevel omits locationId from a completed installation", async () => {
+    const previous = {
+      clientId: process.env.GOHIGHLEVEL_CLIENT_ID,
+      clientSecret: process.env.GOHIGHLEVEL_CLIENT_SECRET,
+      installationUrl: process.env.GOHIGHLEVEL_INSTALLATION_URL,
+      fetch: globalThis.fetch,
+    };
+    process.env.GOHIGHLEVEL_CLIENT_ID = "registered-client-id";
+    process.env.GOHIGHLEVEL_CLIENT_SECRET = "registered-client-secret";
+    process.env.GOHIGHLEVEL_INSTALLATION_URL = "https://marketplace.gohighlevel.com/v2/oauth/chooselocation?version_id=app-version";
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      access_token: "access-token", approvedLocations: ["selected-location"], companyId: "company-1",
+    }), { status: 200, headers: { "Content-Type": "application/json" } })) as typeof fetch;
+
+    try {
+      await expect(exchangeCode("provider-code")).resolves.toMatchObject({ metadata: { locationId: "selected-location", companyId: "company-1" } });
+    } finally {
+      globalThis.fetch = previous.fetch;
+      if (previous.clientId === undefined) delete process.env.GOHIGHLEVEL_CLIENT_ID; else process.env.GOHIGHLEVEL_CLIENT_ID = previous.clientId;
+      if (previous.clientSecret === undefined) delete process.env.GOHIGHLEVEL_CLIENT_SECRET; else process.env.GOHIGHLEVEL_CLIENT_SECRET = previous.clientSecret;
+      if (previous.installationUrl === undefined) delete process.env.GOHIGHLEVEL_INSTALLATION_URL; else process.env.GOHIGHLEVEL_INSTALLATION_URL = previous.installationUrl;
+    }
+  });
 });
