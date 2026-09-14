@@ -55,6 +55,7 @@ function mergeMetadata(current: Metadata, update: Metadata): Metadata {
     grantedScopes: update.grantedScopes?.length ? update.grantedScopes : current.grantedScopes,
   };
 }
+function isCompanyToken(current: Metadata) { return current.userType?.trim().toLowerCase() === "company"; }
 async function resolveInstalledLocation(result: TokenResponse, initial: Metadata): Promise<Metadata> {
   if (initial.locationId) return initial;
   const companyId = initial.companyId;
@@ -89,6 +90,36 @@ async function resolveInstalledLocation(result: TokenResponse, initial: Metadata
       .filter(Boolean)));
     return locations.length === 1 ? { ...initial, locationId: locations[0] } : initial;
   } finally { clearTimeout(timeout); }
+}
+
+/**
+ * Marketplace installations can return a company token even when one location
+ * was selected. CRM endpoints require a location (sub-account) token, so turn
+ * that verified company token into its one selected location token before any
+ * CRM health check or operation. The conversion never chooses a location.
+ */
+async function issueLocationToken(companyAccessToken: string, current: Metadata): Promise<TokenResponse> {
+  if (!current.companyId || !current.locationId) throw new Error("GoHighLevel company authorization did not identify one selected location.");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const response = await fetch(`${API_BASE}/oauth/locationToken`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${companyAccessToken}`, Accept: "application/json", "Content-Type": "application/json", Version: API_VERSION },
+      body: JSON.stringify({ companyId: current.companyId, locationId: current.locationId }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`GoHighLevel could not issue a location token (${response.status}).`);
+    const result = await response.json() as TokenResponse;
+    if (!result.access_token) throw new Error("GoHighLevel returned no location access token.");
+    return result;
+  } finally { clearTimeout(timeout); }
+}
+
+async function normalizeLocationToken(result: TokenResponse, current: Metadata) {
+  if (!isCompanyToken(current)) return { result, metadata: current };
+  const locationResult = await issueLocationToken(result.access_token!, current);
+  return { result: locationResult, metadata: mergeMetadata(current, nextMetadata(locationResult)) };
 }
 
 async function tokenRequest(body: Record<string, string>): Promise<TokenResponse> {
@@ -135,12 +166,40 @@ export async function readOAuthState(state: string, userId: string, now = Date.n
 }
 export function isConfigured() { try { stateSecret(); configuration(); return credentialEncryptionConfigured(); } catch { return false; } }
 export async function getAuthUrl(userId: string, returnTo?: string) { const { clientId, installationUrl, redirectUri } = configuration(); const url = new URL(installationUrl); url.searchParams.set("client_id", clientId); url.searchParams.set("redirect_uri", redirectUri); url.searchParams.set("state", await createOAuthState(userId, Date.now(), returnTo)); return url.toString(); }
-export async function exchangeCode(code: string) { if (!code.trim() || code.length > 10_000) throw new Error("GoHighLevel authorization returned an invalid authorization code."); const result = await tokenRequest({ grant_type: "authorization_code", code, user_type: "Location" }); const next = await resolveInstalledLocation(result, nextMetadata(result)); if (!next.locationId) throw new Error("GoHighLevel did not identify one selected sub-account. Reconnect and select exactly one location."); return { accessToken: result.access_token!, refreshToken: result.refresh_token, tokenType: result.token_type || "Bearer", expiresAt: expiry(result.expires_in), scope: result.scope || "", metadata: next }; }
-async function refreshAccessToken(userId: string) { const token = await storage.getOauthToken(userId, "gohighlevel"); if (!token?.refreshToken) throw new Error("GoHighLevel authorization expired. Reconnect the company location in Systems."); const result = await tokenRequest({ grant_type: "refresh_token", refresh_token: decryptCredential(token.refreshToken), user_type: "Location" }); const next = { ...mergeMetadata(metadata(token.metadata), nextMetadata(result)), grantedScopes: scopes(result.scope || token.scope || "") }; await storage.upsertOauthToken({ userId, provider: "gohighlevel", accessToken: encryptCredential(result.access_token!), refreshToken: result.refresh_token ? encryptCredential(result.refresh_token) : token.refreshToken, tokenType: result.token_type || token.tokenType || "Bearer", expiresAt: expiry(result.expires_in), scope: result.scope || token.scope || "", metadata: next }); return result.access_token!; }
-async function accessToken(userId: string) { const token = await storage.getOauthToken(userId, "gohighlevel"); if (!token) throw new Error("GoHighLevel is not connected. Connect the CRM location first."); if (token.expiresAt && new Date(token.expiresAt) <= new Date()) return refreshAccessToken(userId); return decryptCredential(token.accessToken); }
+export async function exchangeCode(code: string) {
+  if (!code.trim() || code.length > 10_000) throw new Error("GoHighLevel authorization returned an invalid authorization code.");
+  const companyResult = await tokenRequest({ grant_type: "authorization_code", code, user_type: "Company" });
+  const selected = await resolveInstalledLocation(companyResult, nextMetadata(companyResult));
+  if (!selected.locationId) throw new Error("GoHighLevel did not identify one selected sub-account. Reconnect and select exactly one location.");
+  const normalized = await normalizeLocationToken(companyResult, selected);
+  return { accessToken: normalized.result.access_token!, refreshToken: normalized.result.refresh_token, tokenType: normalized.result.token_type || "Bearer", expiresAt: expiry(normalized.result.expires_in), scope: normalized.result.scope || companyResult.scope || "", metadata: normalized.metadata };
+}
+async function refreshAccessToken(userId: string) {
+  const token = await storage.getOauthToken(userId, "gohighlevel");
+  if (!token?.refreshToken) throw new Error("GoHighLevel authorization expired. Reconnect the company location in Systems.");
+  const current = metadata(token.metadata);
+  const refreshed = await tokenRequest({ grant_type: "refresh_token", refresh_token: decryptCredential(token.refreshToken), user_type: isCompanyToken(current) ? "Company" : "Location" });
+  const merged = { ...mergeMetadata(current, nextMetadata(refreshed)), grantedScopes: scopes(refreshed.scope || token.scope || "") };
+  const normalized = await normalizeLocationToken(refreshed, merged);
+  const next = { ...normalized.metadata, grantedScopes: scopes(normalized.result.scope || refreshed.scope || token.scope || "") };
+  await storage.upsertOauthToken({ userId, provider: "gohighlevel", accessToken: encryptCredential(normalized.result.access_token!), refreshToken: normalized.result.refresh_token ? encryptCredential(normalized.result.refresh_token) : token.refreshToken, tokenType: normalized.result.token_type || token.tokenType || "Bearer", expiresAt: expiry(normalized.result.expires_in), scope: normalized.result.scope || refreshed.scope || token.scope || "", metadata: next });
+  return normalized.result.access_token!;
+}
+async function accessToken(userId: string) {
+  const token = await storage.getOauthToken(userId, "gohighlevel");
+  if (!token) throw new Error("GoHighLevel is not connected. Connect the CRM location first.");
+  if (token.expiresAt && new Date(token.expiresAt) <= new Date()) return refreshAccessToken(userId);
+  const current = metadata(token.metadata);
+  if (!isCompanyToken(current)) return decryptCredential(token.accessToken);
+  const normalized = await normalizeLocationToken({ access_token: decryptCredential(token.accessToken), refresh_token: token.refreshToken ? decryptCredential(token.refreshToken) : undefined, token_type: token.tokenType || undefined, scope: token.scope || undefined }, current);
+  await storage.upsertOauthToken({ userId, provider: "gohighlevel", accessToken: encryptCredential(normalized.result.access_token!), refreshToken: normalized.result.refresh_token ? encryptCredential(normalized.result.refresh_token) : token.refreshToken || undefined, tokenType: normalized.result.token_type || token.tokenType || "Bearer", expiresAt: expiry(normalized.result.expires_in) || token.expiresAt || undefined, scope: normalized.result.scope || token.scope || "", metadata: normalized.metadata });
+  return normalized.result.access_token!;
+}
 async function request(userId: string, path: string, init: RequestInit = {}) { const call = async (token: string) => { const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 10_000); try { return await fetch(`${API_BASE}${path}`, { ...init, headers: { Authorization: `Bearer ${token}`, Accept: "application/json", Version: API_VERSION, ...(init.body ? { "Content-Type": "application/json" } : {}), ...(init.headers || {}) }, signal: controller.signal }); } finally { clearTimeout(timeout); } }; const first = await call(await accessToken(userId)); return first.status === 401 ? call(await refreshAccessToken(userId)) : first; }
 export async function connectionSummary(userId: string) { if (!isConfigured()) return { configured: false, connected: false, location: null, grantedScopes: [] as string[] }; const token = await storage.getOauthToken(userId, "gohighlevel"); if (!token) return { configured: true, connected: false, location: null, grantedScopes: [] as string[] }; try { decryptCredential(token.accessToken); const current = metadata(token.metadata); return { configured: true, connected: Boolean(current.locationId), location: current.locationId ? current : null, grantedScopes: current.grantedScopes || scopes(token.scope || "") }; } catch { return { configured: true, connected: false, location: null, grantedScopes: [] as string[] }; } }
-export async function verifyConnection(userId: string) { const summary = await connectionSummary(userId); if (!summary.connected || !summary.location?.locationId) return { ...summary, healthy: false }; try { const response = await request(userId, `/opportunities/search?locationId=${encodeURIComponent(summary.location.locationId)}&status=all&limit=1`); if (!response.ok) return { ...summary, healthy: false }; return { ...summary, healthy: true }; } catch { return { ...summary, healthy: false }; } }
+// A minimal contact listing is a valid read-only location-token probe. Unlike
+// opportunity search, it does not require search filters or pagination state.
+export async function verifyConnection(userId: string) { const summary = await connectionSummary(userId); if (!summary.connected || !summary.location?.locationId) return { ...summary, healthy: false }; try { const response = await request(userId, `/contacts/?locationId=${encodeURIComponent(summary.location.locationId)}&limit=1`); if (!response.ok) return { ...summary, healthy: false }; return { ...summary, healthy: true }; } catch { return { ...summary, healthy: false }; } }
 function ensureLocation(result: Awaited<ReturnType<typeof verifyConnection>>) { if (!result.healthy || !result.location?.locationId) throw new Error("GoHighLevel location authorization is unavailable or unhealthy."); return result.location.locationId; }
 export async function lookupContact(userId: string, input: { email?: string; phone?: string; limit?: number }) { const locationId = ensureLocation(await verifyConnection(userId)); const key = input.email ? "email" : "phone"; const value = input.email || input.phone; if (!value) throw new Error("Provide one contact email or phone number."); const response = await request(userId, `/contacts/lookup?locationId=${encodeURIComponent(locationId)}&${key}=${encodeURIComponent(value)}&limit=${Math.min(20, Math.max(1, Math.trunc(input.limit || 10)))}`); if (!response.ok) throw new Error(`GoHighLevel contact lookup failed with ${response.status}.`); const body = await response.json() as { contacts?: Array<Record<string, unknown>> }; return { locationId, contacts: (body.contacts || []).map(contactProjection) }; }
 function contactProjection(value: Record<string, unknown>) { return { id: typeof value.id === "string" ? value.id : "", name: typeof value.name === "string" ? value.name : null, firstName: typeof value.firstName === "string" ? value.firstName : null, lastName: typeof value.lastName === "string" ? value.lastName : null, email: typeof value.email === "string" ? value.email : null, phone: typeof value.phone === "string" ? value.phone : null, locationId: typeof value.locationId === "string" ? value.locationId : null }; }
