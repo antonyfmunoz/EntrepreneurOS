@@ -188,7 +188,8 @@ function Import-FlySecretsFromEnvironment([string]$App, [string[]]$Names) {
 $optionalProviderSecretGroups = @(
   [pscustomobject]@{ Name = "QuickBooks Online OAuth"; Names = @("QUICKBOOKS_CLIENT_ID", "QUICKBOOKS_CLIENT_SECRET", "QUICKBOOKS_REDIRECT_URI", "QUICKBOOKS_ENVIRONMENT") },
   [pscustomobject]@{ Name = "Slack OAuth"; Names = @("SLACK_CLIENT_ID", "SLACK_CLIENT_SECRET", "SLACK_REDIRECT_URI") },
-  [pscustomobject]@{ Name = "GoHighLevel OAuth"; Names = @("GOHIGHLEVEL_CLIENT_ID", "GOHIGHLEVEL_CLIENT_SECRET", "GOHIGHLEVEL_INSTALLATION_URL", "GOHIGHLEVEL_REDIRECT_URI") }
+  [pscustomobject]@{ Name = "GoHighLevel OAuth"; Names = @("GOHIGHLEVEL_CLIENT_ID", "GOHIGHLEVEL_CLIENT_SECRET", "GOHIGHLEVEL_INSTALLATION_URL", "GOHIGHLEVEL_REDIRECT_URI") },
+  [pscustomobject]@{ Name = "DocuSign OAuth"; Names = @("DOCUSIGN_CLIENT_ID", "DOCUSIGN_CLIENT_SECRET", "DOCUSIGN_REDIRECT_URI") }
 )
 
 function Resolve-OptionalProviderSecretNames {
@@ -207,45 +208,6 @@ function Resolve-OptionalProviderSecretNames {
 }
 
 $optionalProviderSecretNames = @(Resolve-OptionalProviderSecretNames)
-
-# DocuSign's existing Demo JWT identity is a company-owned service connection,
-# not an operator-entered vault reference. Keep the source fields local to this
-# release process and merge the exact credential into the server-only adapter
-# map. Consequential effects stay disabled by EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED.
-$docusignDemoNames = @(
-  "DOCUSIGN_DEMO_PRIVATE_KEY",
-  "DOCUSIGN_DEMO_USER_ID",
-  "DOCUSIGN_DEMO_ACCOUNT_ID",
-  "DOCUSIGN_DEMO_INTEGRATION_KEY",
-  "DOCUSIGN_DEMO_OAUTH_BASE_URL",
-  "DOCUSIGN_DEMO_API_BASE_URL"
-)
-foreach ($name in $docusignDemoNames) {
-  if (-not [Environment]::GetEnvironmentVariable($name)) {
-    throw "Missing required private DocuSign Demo release variable: $name"
-  }
-}
-
-function Add-DocusignDemoCredentialToRuntimeMap {
-  $map = @{}
-  try {
-    $current = $env:EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS | ConvertFrom-Json -AsHashtable
-    if ($current) { $map = $current }
-  } catch {
-    throw "EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS is not valid JSON."
-  }
-  $map["op://EntrepreneurOS/Production/DOCUSIGN_DEMO_INTEGRATION_KEY"] = @{
-    provider = "docusign"
-    integrationKey = $env:DOCUSIGN_DEMO_INTEGRATION_KEY
-    userId = $env:DOCUSIGN_DEMO_USER_ID
-    privateKey = $env:DOCUSIGN_DEMO_PRIVATE_KEY
-    oauthBaseUrl = $env:DOCUSIGN_DEMO_OAUTH_BASE_URL
-    apiBaseUrl = $env:DOCUSIGN_DEMO_API_BASE_URL
-  }
-  $env:EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS = $map | ConvertTo-Json -Depth 8 -Compress
-}
-
-Add-DocusignDemoCredentialToRuntimeMap
 
 if (-not $env:MIGRATION_DATABASE_URL) {
   throw "MIGRATION_DATABASE_URL is required in the local release process and is never staged into the Fly runtime."
@@ -447,7 +409,6 @@ try {
     "EOS_ALERT_EMAIL_SENDER_USER_ID", "EOS_ALERT_EMAIL_SENDER_ADDRESS", "EOS_ALERT_EMAIL_RECIPIENT",
     "EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS",
     "EOS_RECOVERY_PROVIDER_EFFECTS_ENABLED", "EOS_RECOVERY_PROVIDER_EXECUTION_CREDENTIALS",
-    "DOCUSIGN_DEMO_ACCOUNT_ID",
     "EOS_INTEGRATION_PROVIDER_EFFECTS_ENABLED", "EOS_PROVIDER_INGRESS_WORKER_INTERVAL_MS",
     "EOS_INTEGRATION_DISPATCH_RECOVERY_AFTER_MS", "EOS_INTEGRATION_DISPATCH_RECOVERY_INTERVAL_MS",
     "EOS_PLATFORM_ADMIN_USER_IDS", "EOS_ACCOUNT_DELETION_ENABLED", "EOS_LEGAL_ENFORCEMENT", "EOS_PUBLIC_PAID_SAAS",
