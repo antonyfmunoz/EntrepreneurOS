@@ -525,8 +525,10 @@ function RecoveryCall2Control({
     const request = execution.request || {};
     return request.agreementInstanceId === activation?.id || request.billingManifestId === billing?.id;
   });
-  const copyWebhookPath = async (provider: "docusign" | "stripe", bindingId: string) => {
-    const path = `/api/eos/recovery-provider-webhooks/${provider}/${bindingId}`;
+  const copyWebhookPath = async (provider: "docusign" | "stripe", sourceId: string, companyConnection = false) => {
+    const path = provider === "docusign" && companyConnection
+      ? `/api/eos/recovery-provider-webhooks/docusign/connections/${sourceId}`
+      : `/api/eos/recovery-provider-webhooks/${provider}/${sourceId}`;
     try {
       await navigator.clipboard.writeText(`${window.location.origin}${path}`);
       toast({ title: `${provider === "docusign" ? "DocuSign" : "Stripe"} receipt URL copied` });
@@ -690,7 +692,7 @@ function RecoveryCall2Control({
               </div>
               <div className="space-y-2">
                 <p className="text-sm font-semibold">Provider destinations</p>
-                {activation.eSignBindingId ? <div className="flex items-center gap-2 rounded-lg border bg-background p-2"><code className="min-w-0 flex-1 truncate text-xs">/api/eos/recovery-provider-webhooks/docusign/{activation.eSignBindingId}</code><Button size="icon" variant="ghost" aria-label="Copy DocuSign receipt URL" onClick={() => copyWebhookPath("docusign", activation.eSignBindingId)}><Copy className="h-4 w-4"/></Button></div> : null}
+                {activation.eSignProviderConnectionId ? <div className="flex items-center gap-2 rounded-lg border bg-background p-2"><code className="min-w-0 flex-1 truncate text-xs">/api/eos/recovery-provider-webhooks/docusign/connections/{activation.eSignProviderConnectionId}</code><Button size="icon" variant="ghost" aria-label="Copy DocuSign receipt URL" onClick={() => copyWebhookPath("docusign", activation.eSignProviderConnectionId, true)}><Copy className="h-4 w-4"/></Button></div> : activation.eSignBindingId ? <div className="flex items-center gap-2 rounded-lg border bg-background p-2"><code className="min-w-0 flex-1 truncate text-xs">/api/eos/recovery-provider-webhooks/docusign/{activation.eSignBindingId}</code><Button size="icon" variant="ghost" aria-label="Copy DocuSign receipt URL" onClick={() => copyWebhookPath("docusign", activation.eSignBindingId)}><Copy className="h-4 w-4"/></Button></div> : null}
                 {billing.stripeBindingId ? <div className="flex items-center gap-2 rounded-lg border bg-background p-2"><code className="min-w-0 flex-1 truncate text-xs">/api/eos/recovery-provider-webhooks/stripe/{billing.stripeBindingId}</code><Button size="icon" variant="ghost" aria-label="Copy Stripe receipt URL" onClick={() => copyWebhookPath("stripe", billing.stripeBindingId)}><Copy className="h-4 w-4"/></Button></div> : null}
                 <p className="text-xs text-muted-foreground">Provider webhooks are required only for external adapters. Native envelopes keep document hashes, recipient state, and the append-only audit chain inside EOS.</p>
               </div>

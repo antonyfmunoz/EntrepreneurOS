@@ -62,8 +62,10 @@ export async function executeApprovedRecoveryProviderExecution(input: {
     where: and(eq(eosProviderConnections.id, request.providerConnectionId), eq(eosProviderConnections.companyId, input.companyId), eq(eosProviderConnections.providerKey, input.execution.provider)),
   }) : null;
   if (input.execution.provider === "docusign") {
-    if (!providerConnection || providerConnection.connectionState !== "connected" || providerConnection.healthState !== "healthy")
+    const connectionReady = Boolean(providerConnection && providerConnection.connectionState === "connected" && providerConnection.healthState === "healthy");
+    if (!connectionReady && !binding)
       throw new Error("The exact DocuSign company connection is no longer execution-ready.");
+    if (!connectionReady && binding) bindingIsUsable(binding);
   } else {
     if (!binding) throw new Error("Recovery execution binding is unavailable.");
     bindingIsUsable(binding);

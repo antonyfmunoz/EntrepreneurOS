@@ -12260,7 +12260,22 @@ export function registerEosRuntimeRoutes(app: Express): void {
           const providerConnection = agreement?.eSignProviderConnectionId
             ? await db.query.eosProviderConnections.findFirst({ where: and(eq(eosProviderConnections.id, agreement.eSignProviderConnectionId), eq(eosProviderConnections.companyId, access.company.id), eq(eosProviderConnections.providerKey, "docusign")) })
             : undefined;
-          if (!agreement || !providerConnection || providerConnection.connectionState !== "connected" || providerConnection.healthState !== "healthy")
+          const legacyBinding = agreement?.eSignBindingId
+            ? await db.query.eosIntegrationBindings.findFirst({ where: and(eq(eosIntegrationBindings.id, agreement.eSignBindingId), eq(eosIntegrationBindings.companyId, access.company.id), eq(eosIntegrationBindings.providerKey, "docusign")) })
+            : undefined;
+          const legacyBindingReady = Boolean(
+            legacyBinding
+            && legacyBinding.lifecycleState === "active"
+            && legacyBinding.connectionState === "connected"
+            && legacyBinding.healthState === "healthy"
+            && legacyBinding.parityState === "passing"
+            && legacyBinding.providerAccountReference
+            && legacyBinding.credentialReference,
+          );
+          const connectionReady = Boolean(providerConnection && providerConnection.connectionState === "connected" && providerConnection.healthState === "healthy");
+          // Existing agreements may finish through the exact historical binding
+          // they were approved with. New UI configuration cannot create this path.
+          if (!agreement || (!connectionReady && !legacyBindingReady))
             throw new EosRouteError(409, "recovery_docusign_connection_required", "The exact verified DocuSign company connection is not available.");
           idempotencyKey = recoveryProviderIdempotencyKey({ companyId: access.company.id, operation: input.operation, targetId: agreement.id, targetVersion: agreement.version, option: input.operation.endsWith("void_recovery_agreement_with_local_approval") ? "void" : "issue" });
           if (input.operation === "docusign.send_recovery_agreement_with_local_approval") {
@@ -12278,7 +12293,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
           storedRequest = {
             agreementInstanceId: agreement.id,
             targetVersion: agreement.version,
-            providerConnectionId: providerConnection.id,
+            ...(connectionReady ? { providerConnectionId: providerConnection!.id } : { bindingId: legacyBinding!.id }),
             ...(input.operation === "docusign.void_recovery_agreement_with_local_approval" ? { rationale: input.rationale } : {}),
             requestedBySeatId: access.seat.id,
             requestPolicyDecisionId: requestPolicyDecision.decisionId,
