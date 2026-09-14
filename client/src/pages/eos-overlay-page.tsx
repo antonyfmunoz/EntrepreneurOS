@@ -1055,6 +1055,11 @@ export default function EosOverlayPage() {
     queryFn: () => requestJson("GET", `${root}/integrations/gohighlevel/connections`),
     enabled: Boolean(companyId && (contextQuery.data?.principalContext?.allowedSurfaces || []).includes("systems")),
   });
+  const docusignProviderConnectionsQuery = useQuery<JsonRecord>({
+    queryKey: [root, roleScopeKey, "docusign-provider-connections"],
+    queryFn: () => requestJson("GET", `${root}/integrations/docusign/connections`),
+    enabled: Boolean(companyId && (contextQuery.data?.principalContext?.allowedSurfaces || []).includes("systems")),
+  });
   const systemsStateQuery = useQuery<JsonRecord>({
     queryKey: [root, roleScopeKey, "systems-state"],
     queryFn: () => requestJson("GET", `${root}/systems-state`),
@@ -2723,6 +2728,7 @@ export default function EosOverlayPage() {
         quickbooksProviderConnectionsQuery.refetch(),
         slackProviderConnectionsQuery.refetch(),
         gohighlevelProviderConnectionsQuery.refetch(),
+        docusignProviderConnectionsQuery.refetch(),
       ]);
       const current = new URL(window.location.href);
       current.searchParams.delete(integration.id);
@@ -2761,6 +2767,7 @@ export default function EosOverlayPage() {
         quickbooksProviderConnectionsQuery.refetch(),
         slackProviderConnectionsQuery.refetch(),
         gohighlevelProviderConnectionsQuery.refetch(),
+        docusignProviderConnectionsQuery.refetch(),
       ]);
       const integration = variables.integration;
       if (variables.connection?.id) {
@@ -2812,6 +2819,7 @@ export default function EosOverlayPage() {
         quickbooksProviderConnectionsQuery.refetch(),
         slackProviderConnectionsQuery.refetch(),
         gohighlevelProviderConnectionsQuery.refetch(),
+        docusignProviderConnectionsQuery.refetch(),
       ]);
       const integration = variables.integration;
       toast({
@@ -2995,6 +3003,8 @@ export default function EosOverlayPage() {
             ? "slack"
           : query.get("gohighlevel") === "authorized"
             ? "gohighlevel"
+          : query.get("docusign") === "authorized"
+            ? "docusign"
         : null;
     if (!providerId || attachIntegrationMutation.isPending) return;
     const integration = integrationsQuery.data?.find((item) => item.id === providerId);
@@ -12281,6 +12291,8 @@ export default function EosOverlayPage() {
                           ? slackProviderConnectionsQuery.data?.connections || []
                         : integration.id === "gohighlevel"
                           ? gohighlevelProviderConnectionsQuery.data?.connections || []
+                        : integration.id === "docusign"
+                          ? docusignProviderConnectionsQuery.data?.connections || []
                         : []
                 }
                 pending={
