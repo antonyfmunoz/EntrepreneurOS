@@ -1067,6 +1067,11 @@ export default function EosOverlayPage() {
     queryFn: () => requestJson("GET", `${root}/integrations/docusign/connections`),
     enabled: Boolean(companyId && (contextQuery.data?.principalContext?.allowedSurfaces || []).includes("systems")),
   });
+  const stripeProviderConnectionsQuery = useQuery<JsonRecord>({
+    queryKey: [root, roleScopeKey, "stripe-provider-connections"],
+    queryFn: () => requestJson("GET", `${root}/integrations/stripe/connections`),
+    enabled: Boolean(companyId && (contextQuery.data?.principalContext?.allowedSurfaces || []).includes("systems")),
+  });
   const systemsStateQuery = useQuery<JsonRecord>({
     queryKey: [root, roleScopeKey, "systems-state"],
     queryFn: () => requestJson("GET", `${root}/systems-state`),
@@ -2736,6 +2741,7 @@ export default function EosOverlayPage() {
         slackProviderConnectionsQuery.refetch(),
         gohighlevelProviderConnectionsQuery.refetch(),
         docusignProviderConnectionsQuery.refetch(),
+        stripeProviderConnectionsQuery.refetch(),
       ]);
       const current = new URL(window.location.href);
       current.searchParams.delete(integration.id);
@@ -2775,6 +2781,7 @@ export default function EosOverlayPage() {
         slackProviderConnectionsQuery.refetch(),
         gohighlevelProviderConnectionsQuery.refetch(),
         docusignProviderConnectionsQuery.refetch(),
+        stripeProviderConnectionsQuery.refetch(),
       ]);
       const integration = variables.integration;
       if (variables.connection?.id) {
@@ -2827,6 +2834,7 @@ export default function EosOverlayPage() {
         slackProviderConnectionsQuery.refetch(),
         gohighlevelProviderConnectionsQuery.refetch(),
         docusignProviderConnectionsQuery.refetch(),
+        stripeProviderConnectionsQuery.refetch(),
       ]);
       const integration = variables.integration;
       toast({
@@ -12300,15 +12308,15 @@ export default function EosOverlayPage() {
                           ? gohighlevelProviderConnectionsQuery.data?.connections || []
                         : integration.id === "docusign"
                           ? docusignProviderConnectionsQuery.data?.connections || []
-                        : []
+                        : integration.id === "stripe"
+                          ? stripeProviderConnectionsQuery.data?.connections || []
+                          : []
                 }
                 pending={
                   connectIntegrationMutation.isPending ||
                   attachIntegrationMutation.isPending ||
                   disconnectIntegrationMutation.isPending ||
-                  verifyIntegrationMutation.isPending ||
-                  companyVaultBindingMutation.isPending ||
-                  retireCompanyVaultBindingMutation.isPending
+                  verifyIntegrationMutation.isPending
                 }
                 onConnect={() => connectIntegrationMutation.mutate(integration)}
                 onAttach={() => attachIntegrationMutation.mutate(integration)}
@@ -12322,15 +12330,6 @@ export default function EosOverlayPage() {
                   verifyIntegrationMutation.mutate({
                     integration,
                     connection,
-                  })
-                }
-                onConfigureCompany={(draft) =>
-                  companyVaultBindingMutation.mutate({ integration, draft })
-                }
-                onRetireCompanyBinding={(binding) =>
-                  retireCompanyVaultBindingMutation.mutate({
-                    integration,
-                    binding,
                   })
                 }
               />
@@ -12777,8 +12776,6 @@ function IntegrationControlCard({
   onAttach,
   onDisconnect,
   onVerify,
-  onConfigureCompany,
-  onRetireCompanyBinding,
 }: {
   integration: JsonRecord;
   companyConnections: JsonRecord[];
@@ -12787,38 +12784,15 @@ function IntegrationControlCard({
   onAttach: () => void;
   onDisconnect: (connection?: JsonRecord) => void;
   onVerify: (connection?: JsonRecord) => void;
-  onConfigureCompany: (draft: CompanyVaultConnectionDraft) => void;
-  onRetireCompanyBinding: (binding: JsonRecord) => void;
 }) {
   const actions = new Set<string>(integration.actions || []);
-  const isCompanyManagedCredentialProvider = integration.id === "stripe";
-  const isStripeManagedProvider = integration.id === "stripe";
-  const [companySetupOpen, setCompanySetupOpen] = useState(false);
-  const [companyVaultDraft, setCompanyVaultDraft] =
-    useState<CompanyVaultConnectionDraft>({
-      providerAccountReference: String(integration.accountReference || ""),
-      credentialReference: "",
-      administratorReference: String(integration.providerBinding?.administratorReference || ""),
-      accountScope: String(integration.providerBinding?.accountScope || ""),
-    });
   const activeConnections = companyConnections.filter(
     (connection) => connection.connectionState === "connected",
   );
   const activeCompanyConnection = activeConnections.find(
     (connection) => connection.authorizedForCurrentUser,
   ) || activeConnections[0];
-  const configuredProviderBinding = integration.providerBinding as
-    | JsonRecord
-    | null
-    | undefined;
-  const displayedCompanyConnection = activeCompanyConnection || configuredProviderBinding;
-  const companyBindingConnected =
-    isCompanyManagedCredentialProvider &&
-    Boolean(configuredProviderBinding) &&
-    Boolean(integration.connected);
-  // Company-managed providers use server-owned, read-only identity probes.
-  // They never expose a credential to the browser or enable consequential effects.
-  const companyBindingVerifiable = integration.id === "stripe" && companyBindingConnected;
+  const displayedCompanyConnection = activeCompanyConnection;
   const readiness = integration.readiness && typeof integration.readiness === "object"
     ? integration.readiness as JsonRecord
     : null;
@@ -12925,13 +12899,7 @@ function IntegrationControlCard({
               <div className="mt-2 space-y-2">
                 <p className="font-medium">{displayedCompanyConnection.providerAccountReference}</p>
                 <p className="text-sm text-muted-foreground">
-                  {activeCompanyConnection
-                    ? `Connected to this company · owner seat ${String(activeCompanyConnection.ownerSeatId).slice(0, 8)} · recovery seat ${String(activeCompanyConnection.recoveryOwnerSeatId).slice(0, 8)}`
-                    : isCompanyManagedCredentialProvider
-                      ? companyBindingConnected
-                        ? "Connected to this company through its managed company connection. Provider execution remains governed by separate approval, evidence, and recovery gates."
-                        : "Connection setup is recorded for this company. Complete the provider connection and verification before EOS can use it here."
-                      : "Configured for this company and governed by its role, authority, approval, and audit controls."}
+                  {`Connected to this company · owner seat ${String(activeCompanyConnection?.ownerSeatId).slice(0, 8)} · recovery seat ${String(activeCompanyConnection?.recoveryOwnerSeatId).slice(0, 8)}`}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {displayedCompanyConnection.accountScope || "Provider scope is recorded with this company connection."}
@@ -13047,28 +13015,6 @@ function IntegrationControlCard({
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-          {isStripeManagedProvider && actions.has("configure_company") && (
-            <Button
-              onClick={() => {
-                setCompanyVaultDraft((current) => ({
-                  ...current,
-                  providerAccountReference:
-                    current.providerAccountReference ||
-                    String(integration.accountReference || ""),
-                  accountScope:
-                    current.accountScope ||
-                    String(integration.providerBinding?.accountScope || ""),
-                }));
-                setCompanySetupOpen((open) => !open);
-              }}
-              disabled={pending}
-            >
-              <Plug className="mr-2 h-4 w-4" />
-              {companyBindingConnected
-                ? `Reconnect ${integration.name}`
-                : `Connect ${integration.name}`}
-            </Button>
-          )}
           {(actions.has("connect") || actions.has("reconnect")) && (
             <Button onClick={onConnect} disabled={pending}>
               <Plug className="mr-2 h-4 w-4" />
@@ -13077,14 +13023,13 @@ function IntegrationControlCard({
                 : `Connect ${integration.name}`}
             </Button>
           )}
-          {integration.authorizationAvailable && !activeCompanyConnection && (integration.id === "google_workspace" || integration.id === "notion" || integration.id === "quickbooks" || integration.id === "slack" || integration.id === "gohighlevel" || integration.id === "docusign") && (
+          {integration.authorizationAvailable && !activeCompanyConnection && (integration.id === "google_workspace" || integration.id === "notion" || integration.id === "quickbooks" || integration.id === "slack" || integration.id === "gohighlevel" || integration.id === "docusign" || integration.id === "stripe") && (
             <Button onClick={onAttach} disabled={pending}>
               <Link2 className="mr-2 h-4 w-4" />
               Use in this company
             </Button>
           )}
-          {((actions.has("verify") && Boolean(activeCompanyConnection)) ||
-            companyBindingVerifiable) && (
+          {actions.has("verify") && Boolean(activeCompanyConnection) && (
             <Button
               variant="outline"
               onClick={() => onVerify(activeCompanyConnection)}
@@ -13102,16 +13047,6 @@ function IntegrationControlCard({
               Remove from this company
             </Button>
           )}
-          {isCompanyManagedCredentialProvider && configuredProviderBinding && (
-            <Button
-              variant="outline"
-              onClick={() => onRetireCompanyBinding(configuredProviderBinding)}
-              disabled={pending}
-            >
-              <Unplug className="mr-2 h-4 w-4" />
-              Remove from this company
-            </Button>
-          )}
           {actions.has("view_manifest") && (
             <Button asChild variant="outline">
               <a
@@ -13125,98 +13060,6 @@ function IntegrationControlCard({
             </Button>
           )}
         </div>
-
-        {isStripeManagedProvider && companySetupOpen && (
-          <div className="space-y-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
-            <div>
-              <p className="font-medium">
-                {companyBindingConnected
-                  ? `Reconnect ${integration.name} to this company`
-                  : `Connect ${integration.name} to this company`}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {integration.id === "docusign"
-                  ? "EOS will match this company account to its managed DocuSign authorization and run a read-only identity check. No agreement is sent or changed during connection."
-                  : "Record the company account and its managed connection. Enter safe identifiers only—never paste a key, token, password, or signing secret into EOS."}
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1 text-xs font-medium">
-                <span>Provider account reference</span>
-                <Input
-                  value={companyVaultDraft.providerAccountReference}
-                  onChange={(event) =>
-                    setCompanyVaultDraft((draft) => ({
-                      ...draft,
-                      providerAccountReference: event.target.value,
-                    }))
-                  }
-                  placeholder={integration.id === "stripe" ? "acct_…" : "DocuSign account or sender reference"}
-                />
-              </label>
-              {integration.id === "stripe" && (
-                <label className="space-y-1 text-xs font-medium">
-                  <span>Managed credential reference</span>
-                  <Input
-                    value={companyVaultDraft.credentialReference}
-                    onChange={(event) =>
-                      setCompanyVaultDraft((draft) => ({
-                        ...draft,
-                        credentialReference: event.target.value,
-                      }))
-                    }
-                    placeholder={integration.providerBinding ? "Leave blank to retain the existing secure connection" : "Administrator-provided secure reference"}
-                  />
-                </label>
-              )}
-              <label className="space-y-1 text-xs font-medium">
-                <span>Account administrator reference</span>
-                <Input
-                  value={companyVaultDraft.administratorReference}
-                  onChange={(event) =>
-                    setCompanyVaultDraft((draft) => ({
-                      ...draft,
-                      administratorReference: event.target.value,
-                    }))
-                  }
-                  placeholder="Safe admin identity or 1Password item reference"
-                />
-              </label>
-              <label className="space-y-1 text-xs font-medium">
-                <span>Company account scope</span>
-                <Input
-                  value={companyVaultDraft.accountScope}
-                  onChange={(event) =>
-                    setCompanyVaultDraft((draft) => ({
-                      ...draft,
-                      accountScope: event.target.value,
-                    }))
-                  }
-                  placeholder="Company, environment, and authorized resources"
-                />
-              </label>
-            </div>
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setCompanySetupOpen(false)} disabled={pending}>
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                disabled={
-                  pending ||
-                  !companyVaultDraft.providerAccountReference.trim() ||
-                  (integration.id === "stripe" &&
-                    !integration.providerBinding &&
-                    !companyVaultDraft.credentialReference.trim())
-                }
-                onClick={() => onConfigureCompany(companyVaultDraft)}
-              >
-                <ShieldCheck className="mr-2 h-4 w-4" />
-                Save company connection
-              </Button>
-            </div>
-          </div>
-        )}
 
         {!integration.configured && integration.id !== "umh" && (
           <Alert>

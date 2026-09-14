@@ -18,7 +18,7 @@ import { authorizeAction, companyAccess, EosRouteError, visibleSeatIds } from ".
 
 type SupportedProvider = "gmail" | "notion" | "quickbooks" | "slack" | "gohighlevel" | "stripe" | "docusign";
 type OAuthProvider = Exclude<SupportedProvider, "stripe">;
-type CompanyProviderKey = "google_workspace" | "notion" | "quickbooks" | "slack" | "gohighlevel" | "docusign";
+type CompanyProviderKey = "google_workspace" | "notion" | "quickbooks" | "slack" | "gohighlevel" | "docusign" | "stripe";
 
 const attachConnectionSchema = z.object({
   ownerSeatId: z.string().uuid().optional(),
@@ -90,6 +90,36 @@ async function stripeConnectionStatus(companyId: number) {
   };
 }
 
+async function stripeBindingForCompany(companyId: number) {
+  const bindings = await db.select().from(eosIntegrationBindings).where(eq(eosIntegrationBindings.companyId, companyId));
+  return bindings.find((item) => item.providerKey === "stripe" && item.lifecycleState === "active")
+    || bindings.find((item) => item.providerKey === "stripe" && item.lifecycleState !== "retired")
+    || null;
+}
+
+async function stripeManagedIdentity(companyId: number): Promise<ProviderIdentity & { bindingId: string | null }> {
+  const binding = await stripeBindingForCompany(companyId);
+  if (!binding) return {
+    bindingId: null,
+    connected: false,
+    healthy: false,
+    accountReference: null,
+    accountScope: "",
+    grantedPermissions: [],
+    providerMetadata: {},
+  };
+  const health = await verifyStripeConnection(binding);
+  return {
+    bindingId: binding.id,
+    connected: health.connected,
+    healthy: health.healthy,
+    accountReference: binding.providerAccountReference || null,
+    accountScope: binding.accountScope || "Company-scoped Stripe merchant account; credentials and webhook secrets remain vault-managed.",
+    grantedPermissions: health.healthy ? ["Company-specific restricted Stripe key", "Binding-specific webhook signing secret"] : [],
+    providerMetadata: { integrationBindingId: binding.id, credentialCustody: "company_managed_vault" },
+  };
+}
+
 function oauthProvider(provider: SupportedProvider): OAuthProvider {
   if (provider === "stripe") {
     throw new EosRouteError(409, "integration_provider_managed_connection", "Stripe is a company-managed connection. Configure its binding and managed vault credential through the Systems registry.");
@@ -97,7 +127,7 @@ function oauthProvider(provider: SupportedProvider): OAuthProvider {
   return provider;
 }
 
-function companyProviderKey(provider: OAuthProvider): CompanyProviderKey {
+function companyProviderKey(provider: OAuthProvider | "stripe"): CompanyProviderKey {
   return provider === "gmail" ? "google_workspace" : provider;
 }
 
@@ -323,8 +353,20 @@ export function registerIntegrationRoutes(app: Express): void {
   app.get("/api/eos/companies/:companyId/integrations/:provider/connections", async (req, res) => {
     try {
       const { access } = await integrationAccess(req, "view", "integration_provider_connection.read");
-      const provider = oauthProvider(providerFrom(req));
+      const requestedProvider = providerFrom(req);
       const visible = await visibleSeatIds(access.company.id, access.seat.id, access.role);
+      if (requestedProvider === "stripe") {
+        const connections = await db.select().from(eosProviderConnections).where(and(
+          eq(eosProviderConnections.companyId, access.company.id),
+          eq(eosProviderConnections.providerKey, "stripe"),
+        ));
+        const identity = await stripeManagedIdentity(access.company.id);
+        return res.json({
+          currentAuthorization: identity,
+          connections: connections.filter((connection) => visible.has(connection.ownerSeatId)).map((connection) => connectionProjection(connection, req.user.id)),
+        });
+      }
+      const provider = oauthProvider(requestedProvider);
       const connections = await db.select().from(eosProviderConnections).where(and(
         eq(eosProviderConnections.companyId, access.company.id),
         eq(eosProviderConnections.providerKey, companyProviderKey(provider)),
@@ -342,7 +384,7 @@ export function registerIntegrationRoutes(app: Express): void {
   app.post("/api/eos/companies/:companyId/integrations/:provider/connections/attach", async (req, res) => {
     try {
       const { access, policy } = await integrationAccess(req, "execute", "integration_provider_connection.attach");
-      const provider = oauthProvider(providerFrom(req));
+      const requestedProvider = providerFrom(req);
       const input = attachConnectionSchema.parse(req.body || {});
       const visible = await visibleSeatIds(access.company.id, access.seat.id, access.role);
       const ownerSeatId = input.ownerSeatId || access.seat.id;
@@ -350,6 +392,41 @@ export function registerIntegrationRoutes(app: Express): void {
       if (!visible.has(ownerSeatId) || !visible.has(recoveryOwnerSeatId)) {
         throw new EosRouteError(403, "provider_connection_owner_scope_denied", "The accountable and recovery seats must be inside your visible company hierarchy.");
       }
+      if (requestedProvider === "stripe") {
+        const identity = await stripeManagedIdentity(access.company.id);
+        if (!identity.bindingId)
+          throw new EosRouteError(409, "stripe_company_binding_required", "Configure this company's restricted Stripe credential in the deployment vault before attaching Stripe to EOS.");
+        if (!identity.connected || !identity.healthy || !identity.accountReference)
+          throw new EosRouteError(409, "provider_authorization_not_verified", "The configured Stripe merchant account did not pass its read-only identity and webhook-readiness check.");
+        const [existing] = await db.select().from(eosProviderConnections).where(and(
+          eq(eosProviderConnections.companyId, access.company.id),
+          eq(eosProviderConnections.providerKey, "stripe"),
+          eq(eosProviderConnections.providerAccountReference, identity.accountReference),
+        )).limit(1);
+        if (existing && !visible.has(existing.ownerSeatId))
+          throw new EosRouteError(409, "provider_connection_owner_not_visible", "That Stripe account is already linked to this company under a seat outside your authority scope.");
+        const now = new Date();
+        const values = {
+          authorizationUserId: req.user.id, ownerSeatId, recoveryOwnerSeatId,
+          accountScope: identity.accountScope, grantedPermissions: identity.grantedPermissions,
+          credentialReference: "company_managed_vault", connectionState: "connected" as const, healthState: "healthy" as const,
+          providerMetadata: identity.providerMetadata, lastHealthAt: now, revokedAt: null, updatedAt: now,
+        };
+        const connection = existing
+          ? (await db.update(eosProviderConnections).set(values).where(eq(eosProviderConnections.id, existing.id)).returning())[0]
+          : (await db.insert(eosProviderConnections).values({
+            id: randomUUID(), companyId: access.company.id, providerKey: "stripe",
+            providerAccountReference: identity.accountReference, createdByUserId: req.user.id, createdAt: now, ...values,
+          }).returning())[0];
+        await db.insert(eosAuditRecords).values({
+          id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id,
+          action: "provider_connection.attached", targetType: "provider_connection", targetId: connection.id,
+          traceId: policy.traceId, correlationId: policy.correlationId, result: "connected",
+          details: { providerKey: "stripe", providerAccountReference: identity.accountReference, integrationBindingId: identity.bindingId, ownerSeatId, recoveryOwnerSeatId, policyDecisionId: policy.decisionId }, createdAt: now,
+        });
+        return res.status(existing ? 200 : 201).json(connectionProjection(connection, req.user.id));
+      }
+      const provider = oauthProvider(requestedProvider);
       const identity = await providerIdentity(provider, req.user.id);
       if (!identity.connected || !identity.healthy || !identity.accountReference) {
         throw new EosRouteError(409, "provider_authorization_not_verified", `Connect and verify ${providerLabel(provider)} before attaching it to this company.`);
@@ -392,8 +469,28 @@ export function registerIntegrationRoutes(app: Express): void {
   app.post("/api/eos/companies/:companyId/integrations/:provider/connections/:connectionId/verify", async (req, res) => {
     try {
       const { access, policy } = await integrationAccess(req, "execute", "integration_provider_connection.verify");
-      const provider = oauthProvider(providerFrom(req));
+      const requestedProvider = providerFrom(req);
       const connection = await visibleCompanyConnection(access.company.id, req.params.connectionId, access);
+      if (requestedProvider === "stripe") {
+        if (connection.providerKey !== "stripe") throw new EosRouteError(404, "provider_connection_not_found", "Provider connection not found in this authority scope.");
+        const identity = await stripeManagedIdentity(access.company.id);
+        const healthy = identity.connected && identity.healthy && identity.accountReference === connection.providerAccountReference;
+        const now = new Date();
+        const [updated] = await db.update(eosProviderConnections).set({
+          connectionState: healthy ? "connected" : "failed", healthState: healthy ? "healthy" : identity.connected ? "degraded" : "unavailable",
+          accountScope: identity.accountScope || connection.accountScope,
+          grantedPermissions: identity.grantedPermissions.length ? identity.grantedPermissions : connection.grantedPermissions,
+          providerMetadata: identity.providerMetadata, lastHealthAt: now, updatedAt: now,
+        }).where(eq(eosProviderConnections.id, connection.id)).returning();
+        await db.insert(eosAuditRecords).values({
+          id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id,
+          action: "provider_connection.verified", targetType: "provider_connection", targetId: updated.id,
+          traceId: policy.traceId, correlationId: policy.correlationId, result: updated.healthState,
+          details: { providerKey: "stripe", integrationBindingId: identity.bindingId, policyDecisionId: policy.decisionId }, createdAt: now,
+        });
+        return res.json(connectionProjection(updated, req.user.id));
+      }
+      const provider = oauthProvider(requestedProvider);
       if (connection.providerKey !== companyProviderKey(provider)) throw new EosRouteError(404, "provider_connection_not_found", "Provider connection not found in this authority scope.");
       const identity = await providerIdentity(provider, connection.authorizationUserId);
       const healthy = identity.connected && identity.healthy && identity.accountReference === connection.providerAccountReference;
@@ -420,8 +517,21 @@ export function registerIntegrationRoutes(app: Express): void {
   app.post("/api/eos/companies/:companyId/integrations/:provider/connections/:connectionId/revoke", async (req, res) => {
     try {
       const { access, policy } = await integrationAccess(req, "decide", "integration_provider_connection.revoke");
-      const provider = oauthProvider(providerFrom(req));
+      const requestedProvider = providerFrom(req);
       const connection = await visibleCompanyConnection(access.company.id, req.params.connectionId, access);
+      if (requestedProvider === "stripe") {
+        if (connection.providerKey !== "stripe") throw new EosRouteError(404, "provider_connection_not_found", "Provider connection not found in this authority scope.");
+        const now = new Date();
+        const [updated] = await db.update(eosProviderConnections).set({ connectionState: "revoked", healthState: "unknown", revokedAt: now, updatedAt: now }).where(eq(eosProviderConnections.id, connection.id)).returning();
+        await db.insert(eosAuditRecords).values({
+          id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id,
+          action: "provider_connection.revoked", targetType: "provider_connection", targetId: updated.id,
+          traceId: policy.traceId, correlationId: policy.correlationId, result: "revoked",
+          details: { providerKey: "stripe", policyDecisionId: policy.decisionId, credentialsRetained: true }, createdAt: now,
+        });
+        return res.json(connectionProjection(updated, req.user.id));
+      }
+      const provider = oauthProvider(requestedProvider);
       if (connection.providerKey !== companyProviderKey(provider)) throw new EosRouteError(404, "provider_connection_not_found", "Provider connection not found in this authority scope.");
       const now = new Date();
       const [updated] = await db.update(eosProviderConnections).set({ connectionState: "revoked", healthState: "unknown", revokedAt: now, updatedAt: now }).where(eq(eosProviderConnections.id, connection.id)).returning();
