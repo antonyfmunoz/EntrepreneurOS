@@ -20698,6 +20698,9 @@ export function registerEosRuntimeRoutes(app: Express): void {
       const docusignCompanyConnection = providerConnections.find((connection) =>
         connection.providerKey === "docusign" && connection.connectionState === "connected" && connection.healthState === "healthy",
       ) || null;
+      const stripeCompanyConnection = providerConnections.find((connection) =>
+        connection.providerKey === "stripe" && connection.connectionState === "connected" && connection.healthState === "healthy",
+      ) || null;
       const stripeBinding = companyBindings.find((item) => item.providerKey === "stripe" && item.lifecycleState === "active")
         || companyBindings.find((item) => item.providerKey === "stripe" && item.lifecycleState !== "retired")
         || null;
@@ -20790,16 +20793,17 @@ export function registerEosRuntimeRoutes(app: Express): void {
             description: "Company-scoped merchant account for customer payments and payment receipts.",
             state: !stripeBinding
               ? "not_configured"
-              : stripeConnection?.connected
+              : stripeCompanyConnection && stripeConnection?.connected
                 ? "connected"
                 : "available",
-            health: stripeConnection?.healthy
+            health: stripeCompanyConnection && stripeConnection?.healthy
               ? "healthy"
-              : stripeConnection?.connected
+              : stripeCompanyConnection && stripeConnection?.connected
                 ? "degraded"
                 : "not_connected",
             configured: Boolean(stripeBinding),
-            connected: Boolean(stripeConnection?.connected),
+            connected: Boolean(stripeCompanyConnection && stripeConnection?.connected),
+            authorizationAvailable: Boolean(stripeBinding),
             providerType: "company_managed_merchant",
             authority: "company_payment_execution_after_local_approval",
             risk: "consequential_write",
@@ -20808,11 +20812,11 @@ export function registerEosRuntimeRoutes(app: Express): void {
               "Merchant identity": Boolean(stripeConnection?.healthy),
               "Webhook signing": stripeConnection?.reason === "ready",
             },
-            accountReference: stripeBinding?.providerAccountReference || null,
+            accountReference: stripeCompanyConnection?.providerAccountReference || stripeBinding?.providerAccountReference || null,
             connectionScope: "This is the selected company's merchant connection. Its restricted key and webhook signing secret remain vault-managed and are never shared across companies.",
             operations: ["stripe.create_recovery_checkout_with_local_approval", "stripe.cancel_recovery_subscription_with_local_approval", "stripe.refund_recovery_setup_with_local_approval"],
             requiredScopes: ["Company-specific restricted Stripe key", "Binding-specific webhook signing secret"],
-            grantedScopes: stripeConnection?.healthy ? ["Company-specific restricted Stripe key", "Binding-specific webhook signing secret"] : [],
+            grantedScopes: stripeCompanyConnection && stripeConnection?.healthy ? ["Company-specific restricted Stripe key", "Binding-specific webhook signing secret"] : [],
             executionAdapter: "EOS-owned Stripe commercial adapter",
             manualFallback: "Issue or reconcile the approved payment directly in the selected company's Stripe dashboard.",
             providerBinding: stripeBinding
@@ -20827,10 +20831,10 @@ export function registerEosRuntimeRoutes(app: Express): void {
                   credentialReferenceConfigured: Boolean(stripeBinding.credentialReference),
                 }
               : null,
-            // Stripe is a company-vault provider, not a user OAuth flow.  The
-            // action opens the governed binding setup rather than implying
-            // that a person can attach a merchant credential to their seat.
-            actions: ["configure_company"],
+            // Stripe remains a company-vault credential. Attaching it here
+            // creates only EOS's role-governed company connection, never a
+            // browser-visible key or a Stripe OAuth grant.
+            actions: stripeCompanyConnection ? ["verify"] : stripeBinding ? ["attach"] : [],
           },
           {
             id: "gohighlevel",
