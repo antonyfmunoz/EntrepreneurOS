@@ -67,7 +67,7 @@ describe("GoHighLevel OAuth state", () => {
         "Content-Type": "application/x-www-form-urlencoded",
         Version: "2021-07-28",
       }));
-      expect(request.body).toBe("client_id=registered-client-id&client_secret=registered-client-secret&redirect_uri=https%3A%2F%2Fentrepreneuros.net%2Fapi%2Fauth%2Fcrm%2Fcallback&grant_type=authorization_code&code=provider-code&user_type=Location");
+      expect(request.body).toBe("client_id=registered-client-id&client_secret=registered-client-secret&redirect_uri=https%3A%2F%2Fentrepreneuros.net%2Fapi%2Fauth%2Fcrm%2Fcallback&grant_type=authorization_code&code=provider-code&user_type=Company");
     } finally {
       globalThis.fetch = previous.fetch;
       if (previous.clientId === undefined) delete process.env.GOHIGHLEVEL_CLIENT_ID; else process.env.GOHIGHLEVEL_CLIENT_ID = previous.clientId;
@@ -120,6 +120,43 @@ describe("GoHighLevel OAuth state", () => {
       await expect(exchangeCode("provider-code")).resolves.toMatchObject({ metadata: { locationId: "installed-location", companyId: "company-1" } });
       expect(String(fetchMock.mock.calls[1][0])).toBe("https://services.leadconnectorhq.com/oauth/installedLocations?companyId=company-1&appId=registered&isInstalled=true&limit=100&versionId=registered-version");
       expect(fetchMock.mock.calls[1][1].headers).toEqual(expect.objectContaining({ Authorization: "Bearer access-token", Version: "2021-07-28" }));
+    } finally {
+      globalThis.fetch = previous.fetch;
+      if (previous.clientId === undefined) delete process.env.GOHIGHLEVEL_CLIENT_ID; else process.env.GOHIGHLEVEL_CLIENT_ID = previous.clientId;
+      if (previous.clientSecret === undefined) delete process.env.GOHIGHLEVEL_CLIENT_SECRET; else process.env.GOHIGHLEVEL_CLIENT_SECRET = previous.clientSecret;
+      if (previous.installationUrl === undefined) delete process.env.GOHIGHLEVEL_INSTALLATION_URL; else process.env.GOHIGHLEVEL_INSTALLATION_URL = previous.installationUrl;
+    }
+  });
+
+  it("converts a company authorization into the selected location token before CRM use", async () => {
+    const previous = {
+      clientId: process.env.GOHIGHLEVEL_CLIENT_ID,
+      clientSecret: process.env.GOHIGHLEVEL_CLIENT_SECRET,
+      installationUrl: process.env.GOHIGHLEVEL_INSTALLATION_URL,
+      fetch: globalThis.fetch,
+    };
+    process.env.GOHIGHLEVEL_CLIENT_ID = "registered-client-id";
+    process.env.GOHIGHLEVEL_CLIENT_SECRET = "registered-client-secret";
+    process.env.GOHIGHLEVEL_INSTALLATION_URL = "https://marketplace.gohighlevel.com/v2/oauth/chooselocation?version_id=app-version";
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        access_token: "company-token", refresh_token: "company-refresh", companyId: "company-1", approvedLocations: ["location-1"], userType: "Company",
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        access_token: "location-token", refresh_token: "location-refresh", locationId: "location-1", companyId: "company-1", userType: "Location", scope: "contacts.readonly",
+      }), { status: 200 }));
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    try {
+      await expect(exchangeCode("provider-code")).resolves.toMatchObject({
+        accessToken: "location-token", refreshToken: "location-refresh", metadata: { locationId: "location-1", companyId: "company-1", userType: "Location" },
+      });
+      expect(fetchMock.mock.calls[1][0]).toBe("https://services.leadconnectorhq.com/oauth/locationToken");
+      expect(fetchMock.mock.calls[1][1]).toEqual(expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer company-token", Version: "2021-07-28" }),
+        body: JSON.stringify({ companyId: "company-1", locationId: "location-1" }),
+      }));
     } finally {
       globalThis.fetch = previous.fetch;
       if (previous.clientId === undefined) delete process.env.GOHIGHLEVEL_CLIENT_ID; else process.env.GOHIGHLEVEL_CLIENT_ID = previous.clientId;
