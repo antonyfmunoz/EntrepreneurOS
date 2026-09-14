@@ -34,11 +34,13 @@ GOHIGHLEVEL_CLIENT_ID=op://EntrepreneurOS/Production/GOHIGHLEVEL_CLIENT_ID
 GOHIGHLEVEL_CLIENT_SECRET=op://EntrepreneurOS/Production/GOHIGHLEVEL_CLIENT_SECRET
 GOHIGHLEVEL_INSTALLATION_URL=op://EntrepreneurOS/Production/GOHIGHLEVEL_INSTALLATION_URL
 GOHIGHLEVEL_REDIRECT_URI=https://entrepreneuros.net/api/auth/crm/callback
-# Company-owned DocuSign OAuth. EOS keeps this app registration server-side;
-# company administrators connect their actual signing account in Systems.
-DOCUSIGN_CLIENT_ID=op://EntrepreneurOS/Production/DOCUSIGN_CLIENT_ID
-DOCUSIGN_CLIENT_SECRET=op://EntrepreneurOS/Production/DOCUSIGN_CLIENT_SECRET
-DOCUSIGN_REDIRECT_URI=https://entrepreneuros.net/api/auth/docusign/callback
+# Optional DocuSign OAuth. Add all three values together only after the
+# production DocuSign app registration exists in 1Password. Keeping this
+# group absent is intentional: the Systems card then reports unavailable
+# instead of offering a connection that cannot complete.
+# DOCUSIGN_CLIENT_ID=op://EntrepreneurOS/Production/DOCUSIGN_CLIENT_ID
+# DOCUSIGN_CLIENT_SECRET=op://EntrepreneurOS/Production/DOCUSIGN_CLIENT_SECRET
+# DOCUSIGN_REDIRECT_URI=https://entrepreneuros.net/api/auth/docusign/callback
 EOS_PUBLIC_ORIGIN=https://entrepreneuros.net
 EOS_PRODUCTION_ENVIRONMENT_SUBJECT=environment:entrepreneuros-production
 EOS_PRODUCTION_RELEASE_BRANCH=feature/company-system
