@@ -2786,13 +2786,6 @@ export default function EosOverlayPage() {
     mutationFn: async ({ integration, connection }: { integration: JsonRecord; connection?: JsonRecord }) => {
       const provider =
         integration.id === "google_workspace" ? "gmail" : integration.id;
-      if (integration.id === "docusign" && connection?.id) {
-        return requestJson<JsonRecord>(
-          "POST",
-          `${root}/integrations/docusign/bindings/${connection.id}/verify`,
-          {},
-        );
-      }
       if (connection?.id) {
         return requestJson<JsonRecord>(
           "POST",
@@ -12779,17 +12772,12 @@ function IntegrationControlCard({
   onRetireCompanyBinding: (binding: JsonRecord) => void;
 }) {
   const actions = new Set<string>(integration.actions || []);
-  const isCompanyManagedCredentialProvider =
-    integration.id === "stripe" || integration.id === "docusign";
+  const isCompanyManagedCredentialProvider = integration.id === "stripe";
   const isStripeManagedProvider = integration.id === "stripe";
-  const isDocusignManagedProvider = integration.id === "docusign";
-  const docusignPreset = integration.connectionPreset as JsonRecord | null | undefined;
   const [companySetupOpen, setCompanySetupOpen] = useState(false);
   const [companyVaultDraft, setCompanyVaultDraft] =
     useState<CompanyVaultConnectionDraft>({
-      providerAccountReference: String(
-        integration.accountReference || docusignPreset?.providerAccountReference || "",
-      ),
+      providerAccountReference: String(integration.accountReference || ""),
       credentialReference: "",
       administratorReference: String(integration.providerBinding?.administratorReference || ""),
       accountScope: String(integration.providerBinding?.accountScope || ""),
@@ -12811,9 +12799,7 @@ function IntegrationControlCard({
     Boolean(integration.connected);
   // Company-managed providers use server-owned, read-only identity probes.
   // They never expose a credential to the browser or enable consequential effects.
-  const companyBindingVerifiable =
-    (integration.id === "docusign" && Boolean(configuredProviderBinding)) ||
-    (integration.id === "stripe" && companyBindingConnected);
+  const companyBindingVerifiable = integration.id === "stripe" && companyBindingConnected;
   const readiness = integration.readiness && typeof integration.readiness === "object"
     ? integration.readiness as JsonRecord
     : null;
@@ -13042,28 +13028,6 @@ function IntegrationControlCard({
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-          {isDocusignManagedProvider && actions.has("configure_company") && (
-            <Button
-              onClick={() =>
-                onConfigureCompany({
-                  providerAccountReference: String(
-                    docusignPreset?.providerAccountReference || integration.accountReference || "",
-                  ),
-                  credentialReference: String(docusignPreset?.credentialReference || ""),
-                  administratorReference: String(
-                    docusignPreset?.administratorReference || integration.providerBinding?.administratorReference || "",
-                  ),
-                  accountScope: String(
-                    docusignPreset?.accountScope || integration.providerBinding?.accountScope || "",
-                  ),
-                })
-              }
-              disabled={pending || !String(docusignPreset?.providerAccountReference || integration.accountReference || "").trim()}
-            >
-              <Plug className="mr-2 h-4 w-4" />
-              {companyBindingConnected ? "Reconnect DocuSign" : "Connect DocuSign"}
-            </Button>
-          )}
           {isStripeManagedProvider && actions.has("configure_company") && (
             <Button
               onClick={() => {
@@ -13094,7 +13058,7 @@ function IntegrationControlCard({
                 : `Connect ${integration.name}`}
             </Button>
           )}
-          {integration.authorizationAvailable && !activeCompanyConnection && (integration.id === "google_workspace" || integration.id === "notion" || integration.id === "quickbooks" || integration.id === "slack" || integration.id === "gohighlevel") && (
+          {integration.authorizationAvailable && !activeCompanyConnection && (integration.id === "google_workspace" || integration.id === "notion" || integration.id === "quickbooks" || integration.id === "slack" || integration.id === "gohighlevel" || integration.id === "docusign") && (
             <Button onClick={onAttach} disabled={pending}>
               <Link2 className="mr-2 h-4 w-4" />
               Use in this company
@@ -13104,7 +13068,7 @@ function IntegrationControlCard({
             companyBindingVerifiable) && (
             <Button
               variant="outline"
-              onClick={() => onVerify(integration.id === "docusign" ? configuredProviderBinding || undefined : activeCompanyConnection)}
+              onClick={() => onVerify(activeCompanyConnection)}
               disabled={pending}
             >
               <RefreshCw

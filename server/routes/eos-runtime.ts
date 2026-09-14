@@ -14,12 +14,12 @@ import * as notion from "../integrations/notion";
 import * as quickbooks from "../integrations/quickbooks";
 import * as slack from "../integrations/slack";
 import * as gohighlevel from "../integrations/gohighlevel";
+import * as docusign from "../integrations/docusign";
 import { verifyStripeConnection } from "../integrations/stripe-health";
 import { integrationCatalogEntry, integrationReadiness } from "@shared/eos-integration-catalog";
 import { providerExecutionEnabled } from "@shared/integration-operations";
 import {
   executeRecoveryCommercialEffect,
-  recoveryCommercialBindingCredentialConfigured,
   recoveryCommercialEffectsConfigured,
   type RecoveryCommercialEffect,
 } from "../integrations/recovery-commercial";
@@ -20655,12 +20655,13 @@ export function registerEosRuntimeRoutes(app: Express): void {
         purpose: "administer_systems_registry",
         classification: "confidential",
       });
-      const [googleSetupAuthorization, notionSetupAuthorization, quickbooksSetupAuthorization, slackSetupAuthorization, gohighlevelSetupAuthorization, companyBindings, providerConnections] = await Promise.all([
+      const [googleSetupAuthorization, notionSetupAuthorization, quickbooksSetupAuthorization, slackSetupAuthorization, gohighlevelSetupAuthorization, docusignSetupAuthorization, companyBindings, providerConnections] = await Promise.all([
         gmail.connectionSummary(req.user.id),
         notion.connectionSummary(req.user.id),
         quickbooks.connectionSummary(req.user.id),
         slack.connectionSummary(req.user.id),
         gohighlevel.connectionSummary(req.user.id),
+        docusign.connectionSummary(req.user.id),
         db.select().from(eosIntegrationBindings).where(eq(eosIntegrationBindings.companyId, access.company.id)),
         db.select().from(eosProviderConnections).where(eq(eosProviderConnections.companyId, access.company.id)),
       ]);
@@ -20679,42 +20680,13 @@ export function registerEosRuntimeRoutes(app: Express): void {
       const gohighlevelCompanyConnection = providerConnections.find((connection) =>
         connection.providerKey === "gohighlevel" && connection.connectionState === "connected" && connection.healthState === "healthy",
       ) || null;
+      const docusignCompanyConnection = providerConnections.find((connection) =>
+        connection.providerKey === "docusign" && connection.connectionState === "connected" && connection.healthState === "healthy",
+      ) || null;
       const stripeBinding = companyBindings.find((item) => item.providerKey === "stripe" && item.lifecycleState === "active")
         || companyBindings.find((item) => item.providerKey === "stripe" && item.lifecycleState !== "retired")
         || null;
       const stripeConnection = stripeBinding ? await verifyStripeConnection(stripeBinding) : null;
-      const docusignBinding = companyBindings.find((item) => item.providerKey === "docusign" && item.lifecycleState === "active")
-        || companyBindings.find((item) => item.providerKey === "docusign" && item.lifecycleState !== "retired")
-        || null;
-      // This is a private, company-owned Demo connection used to validate the
-      // EOS adapter against the actual provider account. The account identifier
-      // is supplied only by deployment configuration; no key, token, or vault
-      // reference is ever returned to the browser.
-      const docusignDemoAccountReference = process.env.DOCUSIGN_DEMO_ACCOUNT_ID?.trim() || null;
-      const docusignConnectionPreset = docusignDemoAccountReference
-        ? {
-            providerAccountReference: docusignDemoAccountReference,
-            credentialReference: "op://EntrepreneurOS/Production/DOCUSIGN_DEMO_INTEGRATION_KEY",
-            administratorReference: "Empyrean Studios DocuSign Demo administrator",
-            accountScope: "Empyrean Studios · DocuSign Demo · read-only identity validation; agreement dispatch remains blocked.",
-          }
-        : null;
-      const docusignConnectionHealthy = Boolean(
-        docusignBinding
-        && docusignBinding.connectionState === "connected"
-        && docusignBinding.healthState === "healthy"
-      );
-      const docusignCredentialConfigured = docusignBinding
-        ? recoveryCommercialBindingCredentialConfigured(docusignBinding)
-        : false;
-      const docusignExecutionReady = Boolean(
-        docusignConnectionHealthy
-        && docusignCredentialConfigured
-        && docusignBinding?.lifecycleState === "active"
-        && docusignBinding.parityState === "passing",
-      );
-      const docusignDemoValidation =
-        docusignBinding?.adapterReference === "docusign-jwt-demo-v1";
       const umhConfigured = federationConfigured();
       const integrationItems = [
           {
@@ -20878,75 +20850,28 @@ export function registerEosRuntimeRoutes(app: Express): void {
             name: "DocuSign",
             description:
               "Company-bound agreement dispatch, signature status, and certificate evidence.",
-            state: !docusignBinding
-              ? docusignConnectionPreset
-                ? "available"
-                : "not_configured"
-              : docusignConnectionHealthy
-                ? "connected"
-                : "available",
-            health: docusignConnectionHealthy ? "healthy" : "not_connected",
-            configured: Boolean(docusignBinding || docusignConnectionPreset),
-            connected: docusignConnectionHealthy,
-            providerType: "company_managed_signature",
+            state: docusignCompanyConnection ? "connected" : docusignSetupAuthorization.configured ? "available" : "not_configured",
+            health: docusignCompanyConnection ? "healthy" : "not_connected",
+            configured: docusignSetupAuthorization.configured,
+            connected: Boolean(docusignCompanyConnection),
+            authorizationAvailable: docusignSetupAuthorization.connected,
+            providerType: "oauth",
             authority: "company_agreement_execution_after_local_approval",
             risk: "consequential_write",
             services: ["Agreement dispatch", "Signature events", "Certificates"],
             serviceHealth: {
-              "Agreement dispatch": docusignExecutionReady,
-              "Signature events": docusignConnectionHealthy,
-              Certificates: docusignConnectionHealthy,
+              "Agreement dispatch": Boolean(docusignCompanyConnection),
+              "Signature events": Boolean(docusignCompanyConnection),
+              Certificates: Boolean(docusignCompanyConnection),
             },
-            operations: docusignDemoValidation
-              ? ["Demo JWT authentication validation (non-sending)"]
-              : docusignBinding
-              ? ["docusign.send_recovery_agreement_with_local_approval", "docusign.void_recovery_agreement_with_local_approval"]
-              : [],
-            requiredScopes: [
-              ...(docusignDemoValidation
-                ? [
-                    "DocuSign Demo JWT consent",
-                    "Vault-managed Demo credential reference",
-                    "Separate production binding and fresh provider health before dispatch",
-                  ]
-                : [
-                    "Binding-specific managed DocuSign credential",
-                    "Template and sender authority",
-                    "Envelope and Connect HMAC callback access",
-                  ]),
-            ],
-            grantedScopes: docusignConnectionHealthy
-              ? ["Binding-specific managed DocuSign credential", "Verified DocuSign account identity"]
-              : [],
-            accountReference: docusignBinding?.providerAccountReference || null,
-            connectionPreset: docusignConnectionPreset,
-            connectionScope: docusignDemoValidation
-              ? docusignBinding?.accountScope || "Company-scoped Demo validation only; agreement dispatch remains blocked."
-              : "This is a company agreement binding. EOS executes only an exact, locally approved agreement action through the selected binding; the managed credential remains in the vault and is never shared across companies.",
-            executionAdapter: docusignDemoValidation
-              ? "EOS-owned DocuSign JWT adapter — Demo validation only"
-              : "EOS-owned DocuSign agreement and receipt-reconciliation adapter",
-            providerBinding: docusignBinding
-              ? {
-                  id: docusignBinding.id,
-                  configurationVersion: docusignBinding.configurationVersion,
-                  providerAccountReference: docusignBinding.providerAccountReference,
-                  administratorReference: docusignBinding.administratorReference,
-                  accountScope: docusignBinding.accountScope,
-                  lifecycleState: docusignBinding.lifecycleState,
-                  connectionState: docusignBinding.connectionState,
-                  credentialReferenceConfigured: Boolean(docusignBinding.credentialReference),
-                }
-              : null,
-            manualFallback:
-              docusignBinding
-                ? "Prepare and review the agreement in EOS. Keep dispatch blocked until a separate production binding is approved and verified."
-                : "Prepare the agreement in EOS and send it from the authorized DocuSign workspace manually.",
-            // The same visible provider lifecycle as every other company
-            // integration: Connect, then read-only Verify, and Remove. The
-            // credential remains server-managed and Demo verification never
-            // represents production agreement dispatch.
-            actions: ["configure_company"],
+            operations: docusignCompanyConnection ? ["docusign.send_recovery_agreement_with_local_approval", "docusign.void_recovery_agreement_with_local_approval"] : [],
+            requiredScopes: ["signature", "extended", "offline_access"],
+            grantedScopes: docusignCompanyConnection?.grantedPermissions || [],
+            accountReference: docusignCompanyConnection?.providerAccountReference || null,
+            connectionScope: "This is a company-scoped DocuSign account connection. EOS attaches the authorized account to this company while preserving role controls, approvals, audit evidence, and recovery boundaries.",
+            executionAdapter: "EOS-owned DocuSign OAuth agreement adapter",
+            manualFallback: "Prepare the agreement in EOS and send it from the authorized DocuSign workspace manually.",
+            actions: docusignCompanyConnection ? ["verify", ...(docusignSetupAuthorization.connected ? ["reconnect"] : [])] : docusignSetupAuthorization.connected ? ["reconnect"] : docusignSetupAuthorization.configured ? ["connect"] : [],
           },
           {
             id: "quickbooks",
@@ -21083,7 +21008,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
               executionEnabled: integration.id === "stripe"
                 ? recoveryCommercialEffectsConfigured()
                 : integration.id === "docusign"
-                  ? docusignExecutionReady && recoveryCommercialEffectsConfigured()
+                  ? false
                   : providerExecutionEnabled(),
             }),
           };
