@@ -48,6 +48,16 @@ const gohighlevelAdapter = vi.hoisted(() => ({
   verifyConnection: vi.fn(async () => ({ configured: true, connected: true, healthy: true, location: { locationId: "location-1" }, grantedScopes: ["contacts.readonly"] })),
   disconnect: vi.fn(async () => ({ success: true, providerRevoked: false })),
 }));
+const docusignAdapter = vi.hoisted(() => ({
+  isConfigured: vi.fn(() => true),
+  getAuthUrl: vi.fn(() => "https://account.docusign.com/oauth/auth?state=signed"),
+  readOAuthState: vi.fn(),
+  readOAuthStateFromCallback: vi.fn(),
+  exchangeCode: vi.fn(),
+  connectionSummary: vi.fn(async () => ({ configured: true, connected: true, account: { accountId: "docusign-account-1", accountName: "Empyrean Studios" } })),
+  verifyConnection: vi.fn(async () => ({ configured: true, connected: true, healthy: true, account: { accountId: "docusign-account-1", accountName: "Empyrean Studios" } })),
+  disconnect: vi.fn(async () => ({ success: true, providerRevoked: false })),
+}));
 const storageAdapter = vi.hoisted(() => ({
   upsertOauthToken: vi.fn(),
   deleteOauthToken: vi.fn(),
@@ -75,6 +85,7 @@ vi.mock("../../server/integrations/gmail", () => gmailAdapter);
 vi.mock("../../server/integrations/quickbooks", () => quickbooksAdapter);
 vi.mock("../../server/integrations/slack", () => slackAdapter);
 vi.mock("../../server/integrations/gohighlevel", () => gohighlevelAdapter);
+vi.mock("../../server/integrations/docusign", () => docusignAdapter);
 vi.mock("../../server/integrations/stripe-health", () => stripeHealthAdapter);
 vi.mock("../../server/storage", () => ({ storage: storageAdapter }));
 vi.mock("../../server/db", () => ({ db: dbAdapter }));
@@ -99,6 +110,7 @@ describe("Notion integration HTTP controls", () => {
     for (const mock of Object.values(quickbooksAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
     for (const mock of Object.values(slackAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
     for (const mock of Object.values(gohighlevelAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
+    for (const mock of Object.values(docusignAdapter)) if (typeof mock === "function" && "mockClear" in mock) (mock as any).mockClear();
     storageAdapter.upsertOauthToken.mockReset();
     stripeHealthAdapter.verifyStripeConnection.mockClear();
     dbAdapter.bindings = [];
@@ -174,6 +186,12 @@ describe("Notion integration HTTP controls", () => {
     expect(gohighlevelAdapter.getAuthUrl).toHaveBeenCalledWith(userId, "/company/12#systems");
   });
 
+  it("starts DocuSign authorization with the same company return path", async () => {
+    const response = await api.get("/api/eos/companies/12/integrations/docusign/auth").expect(200);
+    expect(response.body.authUrl).toContain("account.docusign.com");
+    expect(docusignAdapter.getAuthUrl).toHaveBeenCalledWith(userId, "/company/12#systems");
+  });
+
   it("stores encrypted QuickBooks OAuth credentials and the selected accounting company realm", async () => {
     process.env.EOS_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 17).toString("base64");
     quickbooksAdapter.readOAuthState.mockReturnValue({ userId, expiresAt: Date.now() + 60_000, nonce: "nonce", returnTo: "/company/12#systems" });
@@ -222,6 +240,19 @@ describe("Notion integration HTTP controls", () => {
     gohighlevelAdapter.exchangeCode.mockResolvedValue({ accessToken: "gohighlevel-access-plaintext", refreshToken: "gohighlevel-refresh-plaintext", tokenType: "Bearer", expiresAt: new Date("2026-10-01T00:00:00.000Z"), scope: "contacts.readonly", metadata: { locationId: "location-1", companyId: "company-1" } });
     const response = await api.get("/api/auth/crm/callback?code=provider-code&state=signed-state").expect(302);
     expect(response.headers.location).toBe("/company/12?gohighlevel=authorized#systems");
+    delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
+  });
+
+  it("stores a DocuSign authorization and returns to the originating Systems view", async () => {
+    process.env.EOS_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 31).toString("base64");
+    docusignAdapter.readOAuthState.mockResolvedValue({ userId, expiresAt: Date.now() + 60_000, nonce: "nonce", returnTo: "/company/12#systems" });
+    docusignAdapter.exchangeCode.mockResolvedValue({ accessToken: "docusign-access-plaintext", refreshToken: "docusign-refresh-plaintext", tokenType: "Bearer", expiresAt: new Date("2026-10-01T00:00:00.000Z"), scope: "signature extended offline_access", metadata: { accountId: "docusign-account-1", accountName: "Empyrean Studios", baseUri: "https://na4.docusign.net" } });
+    const response = await api.get("/api/auth/docusign/callback?code=provider-code&state=signed-state").expect(302);
+    expect(response.headers.location).toBe("/company/12?docusign=authorized#systems");
+    expect(storageAdapter.upsertOauthToken).toHaveBeenCalledWith(expect.objectContaining({ userId, provider: "docusign" }));
+    const stored = storageAdapter.upsertOauthToken.mock.calls.at(-1)[0];
+    expect(stored.accessToken).toMatch(/^enc:v1:/);
+    expect(JSON.stringify(stored)).not.toContain("docusign-access-plaintext");
     delete process.env.EOS_CREDENTIAL_ENCRYPTION_KEY;
   });
 
