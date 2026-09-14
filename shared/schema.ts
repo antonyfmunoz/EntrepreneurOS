@@ -3051,7 +3051,10 @@ export const eosRecoveryProviderReceipts = pgTable("eos_recovery_provider_receip
   id: text("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   providerKey: text("provider_key").notNull(),
-  integrationBindingId: text("integration_binding_id").notNull().references(() => eosIntegrationBindings.id, { onDelete: "restrict" }),
+  // Legacy receipts remain anchored to a binding. New DocuSign receipts are
+  // anchored to the same company-scoped OAuth connection that issued them.
+  integrationBindingId: text("integration_binding_id").references(() => eosIntegrationBindings.id, { onDelete: "restrict" }),
+  providerConnectionId: text("provider_connection_id").references(() => eosProviderConnections.id, { onDelete: "restrict" }),
   providerEventId: text("provider_event_id").notNull(),
   providerObjectReference: text("provider_object_reference").notNull().default(""),
   eventType: text("event_type").notNull(),
@@ -3073,12 +3076,14 @@ export const eosRecoveryProviderReceipts = pgTable("eos_recovery_provider_receip
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("eos_recovery_provider_receipt_event_idx").on(table.providerKey, table.integrationBindingId, table.providerEventId),
+  uniqueIndex("eos_recovery_provider_receipt_connection_event_idx").on(table.providerKey, table.providerConnectionId, table.providerEventId),
   index("eos_recovery_provider_receipt_activation_idx").on(table.companyId, table.agreementInstanceId, table.billingManifestId, table.occurredAt),
   check("eos_recovery_provider_receipt_provider_check", sql`${table.providerKey} IN ('docusign','stripe')`),
   check("eos_recovery_provider_receipt_object_check", sql`${table.objectType} IN ('agreement','billing','unmatched')`),
   check("eos_recovery_provider_receipt_signature_check", sql`${table.signatureState} = 'verified'`),
   check("eos_recovery_provider_receipt_processing_check", sql`${table.processingState} IN ('applied','ignored','rejected','recovery_required')`),
   check("eos_recovery_provider_receipt_target_check", sql`(${table.objectType} = 'agreement' AND ${table.agreementInstanceId} IS NOT NULL AND ${table.billingManifestId} IS NULL) OR (${table.objectType} = 'billing' AND ${table.billingManifestId} IS NOT NULL AND ${table.agreementInstanceId} IS NULL) OR (${table.objectType} = 'unmatched' AND ${table.agreementInstanceId} IS NULL AND ${table.billingManifestId} IS NULL)`),
+  check("eos_recovery_provider_receipt_source_check", sql`(${table.integrationBindingId} IS NOT NULL AND ${table.providerConnectionId} IS NULL) OR (${table.integrationBindingId} IS NULL AND ${table.providerConnectionId} IS NOT NULL)`),
 ]);
 
 export const eosRecoveryActivationEvents = pgTable("eos_recovery_activation_events", {
