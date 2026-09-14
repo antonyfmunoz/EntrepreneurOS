@@ -2976,6 +2976,9 @@ export const eosRecoveryAgreementInstances = pgTable("eos_recovery_agreement_ins
   agreementVersion: text("agreement_version").notNull().default(""),
   eSignProvider: text("e_sign_provider").notNull().default("eos_native"),
   eSignTemplateReference: text("e_sign_template_reference").notNull().default(""),
+  // New agreements use the standard company-scoped provider connection. The
+  // legacy binding remains only so historical envelopes can be reconciled.
+  eSignProviderConnectionId: text("e_sign_provider_connection_id").references(() => eosProviderConnections.id, { onDelete: "restrict" }),
   eSignBindingId: text("e_sign_binding_id").references(() => eosIntegrationBindings.id, { onDelete: "restrict" }),
   nativeEnvelopeId: text("native_envelope_id").references(() => eosEsignEnvelopes.id, { onDelete: "restrict" }),
   providerEnvelopeReference: text("provider_envelope_reference").notNull().default(""),

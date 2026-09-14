@@ -13,6 +13,7 @@ import {
   eosOfferPrograms,
   eosEvidence,
   eosIntegrationBindings,
+  eosProviderConnections,
   eosRecoveryActivationEvents,
   eosRecoveryAgreementAuthorities,
   eosRecoveryAgreementInstances,
@@ -848,9 +849,11 @@ export function registerRecoveryCalculatorRoutes(app: Express): void {
       const { agreement } = await recoveryActivation(companyId, req.params.packetId);
       if (agreement.version !== input.version) throw new RecoveryRouteError(409, "recovery_agreement_version_conflict", "The agreement package changed before this configuration was saved.");
       [input.eSignTemplateReference, input.agreementVersion].forEach(assertConfigurationReference);
-      const binding = input.eSignBindingId ? await db.query.eosIntegrationBindings.findFirst({ where: and(eq(eosIntegrationBindings.id, input.eSignBindingId), eq(eosIntegrationBindings.companyId, companyId)) }) : null;
-      if (input.eSignProvider === "docusign" && (!binding || binding.providerKey !== "docusign"))
-        throw new RecoveryRouteError(400, "recovery_docusign_binding_required", "Select this company's DocuSign Integration Binding.");
+      const providerConnection = input.eSignProviderConnectionId
+        ? await db.query.eosProviderConnections.findFirst({ where: and(eq(eosProviderConnections.id, input.eSignProviderConnectionId), eq(eosProviderConnections.companyId, companyId)) })
+        : null;
+      if (input.eSignProvider === "docusign" && (!providerConnection || providerConnection.providerKey !== "docusign" || providerConnection.connectionState !== "connected" || providerConnection.healthState !== "healthy"))
+        throw new RecoveryRouteError(400, "recovery_docusign_connection_required", "Select this company's verified DocuSign connection.");
       const nativeDocument = input.eSignProvider === "eos_native"
         ? await db.query.eosEsignDocumentVersions.findFirst({ where: and(eq(eosEsignDocumentVersions.id, input.eSignTemplateReference), eq(eosEsignDocumentVersions.companyId, companyId)) })
         : null;
@@ -865,11 +868,12 @@ export function registerRecoveryCalculatorRoutes(app: Express): void {
           clientSignerEmail: input.clientSignerEmail.toLowerCase(), providerLegalName: input.providerLegalName,
           agreementVersion: input.agreementVersion, eSignProvider: input.eSignProvider,
           eSignTemplateReference: input.eSignTemplateReference,
-          eSignBindingId: input.eSignProvider === "docusign" ? input.eSignBindingId : null,
+          eSignProviderConnectionId: input.eSignProvider === "docusign" ? input.eSignProviderConnectionId : null,
+          eSignBindingId: null,
           version: agreement.version + 1, updatedAt: now,
         }).where(and(eq(eosRecoveryAgreementInstances.id, agreement.id), eq(eosRecoveryAgreementInstances.version, agreement.version))).returning();
         if (!updated) throw new RecoveryRouteError(409, "recovery_agreement_version_conflict", "The agreement package changed before this configuration was saved.");
-        await appendActivationEvent(tx, agreement.id, updated, "agreement", { userId: req.user.id, seatId: access.seat.id }, "agreement_configured", agreement.state, agreement.state, { eSignProvider: input.eSignProvider, bindingId: input.eSignBindingId || null, documentVersionId: input.eSignProvider === "eos_native" ? input.eSignTemplateReference : null, agreementVersion: input.agreementVersion, providerEffect: false }, traceId);
+        await appendActivationEvent(tx, agreement.id, updated, "agreement", { userId: req.user.id, seatId: access.seat.id }, "agreement_configured", agreement.state, agreement.state, { eSignProvider: input.eSignProvider, providerConnectionId: input.eSignProviderConnectionId || null, documentVersionId: input.eSignProvider === "eos_native" ? input.eSignTemplateReference : null, agreementVersion: input.agreementVersion, providerEffect: false }, traceId);
       });
       res.json(updated);
     } catch (error) {
@@ -916,8 +920,8 @@ export function registerRecoveryCalculatorRoutes(app: Express): void {
       const companyId = Number(req.params.companyId);
       const access = await recoveryCommercialAccess(req, companyId);
       const { agreement, authority, billing } = await recoveryActivation(companyId, req.params.packetId);
-      const [eSignBinding, nativeDocument, stripeBinding] = await Promise.all([
-        agreement.eSignBindingId ? db.query.eosIntegrationBindings.findFirst({ where: and(eq(eosIntegrationBindings.id, agreement.eSignBindingId), eq(eosIntegrationBindings.companyId, companyId)) }) : null,
+      const [eSignConnection, nativeDocument, stripeBinding] = await Promise.all([
+        agreement.eSignProviderConnectionId ? db.query.eosProviderConnections.findFirst({ where: and(eq(eosProviderConnections.id, agreement.eSignProviderConnectionId), eq(eosProviderConnections.companyId, companyId), eq(eosProviderConnections.providerKey, "docusign")) }) : null,
         agreement.eSignProvider === "eos_native" && agreement.eSignTemplateReference ? db.query.eosEsignDocumentVersions.findFirst({ where: and(eq(eosEsignDocumentVersions.id, agreement.eSignTemplateReference), eq(eosEsignDocumentVersions.companyId, companyId)) }) : null,
         billing.stripeBindingId ? db.query.eosIntegrationBindings.findFirst({ where: and(eq(eosIntegrationBindings.id, billing.stripeBindingId), eq(eosIntegrationBindings.companyId, companyId)) }) : null,
       ]);
@@ -927,7 +931,7 @@ export function registerRecoveryCalculatorRoutes(app: Express): void {
         ...(counselApproved && authority.effectiveVersion !== agreement.agreementVersion ? ["Agreement version does not match the effective counsel-reviewed version."] : []),
         ...(!agreement.clientLegalName || !agreement.clientSignerName || !agreement.clientSignerEmail || !agreement.providerLegalName || !agreement.eSignTemplateReference ? ["Client identity, provider legal name, agreement version, and signing document/template must be configured."] : []),
         ...(agreement.eSignProvider === "eos_native" && (!nativeDocument || nativeDocument.documentVersion !== agreement.agreementVersion || !nativeDocument.counselEvidenceId) ? ["The EOS native document version must be tenant-scoped, match the effective agreement version, and retain counsel evidence lineage."] : []),
-        ...agreementProviderBlockers(agreement.eSignProvider as "eos_native" | "docusign", eSignBinding || null),
+        ...(agreement.eSignProvider === "docusign" && (!eSignConnection || eSignConnection.connectionState !== "connected" || eSignConnection.healthState !== "healthy") ? ["A verified DocuSign company connection is required."] : []),
       ];
       const paymentReady = billing.setupPaymentState === "succeeded"
         && ["active", "trialing"].includes(billing.subscriptionState);

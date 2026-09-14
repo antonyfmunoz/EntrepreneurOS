@@ -12257,11 +12257,11 @@ export function registerEosRuntimeRoutes(app: Express): void {
               eq(eosRecoveryAgreementInstances.companyId, access.company.id),
               eq(eosRecoveryAgreementInstances.workPacketId, packet.id),
             ));
-          const binding = agreement?.eSignBindingId
-            ? await db.query.eosIntegrationBindings.findFirst({ where: and(eq(eosIntegrationBindings.id, agreement.eSignBindingId), eq(eosIntegrationBindings.companyId, access.company.id)) })
+          const providerConnection = agreement?.eSignProviderConnectionId
+            ? await db.query.eosProviderConnections.findFirst({ where: and(eq(eosProviderConnections.id, agreement.eSignProviderConnectionId), eq(eosProviderConnections.companyId, access.company.id), eq(eosProviderConnections.providerKey, "docusign")) })
             : undefined;
-          if (!agreement || !binding || binding.providerKey !== "docusign")
-            throw new EosRouteError(409, "recovery_docusign_binding_required", "The exact DocuSign Integration Binding is not available.");
+          if (!agreement || !providerConnection || providerConnection.connectionState !== "connected" || providerConnection.healthState !== "healthy")
+            throw new EosRouteError(409, "recovery_docusign_connection_required", "The exact verified DocuSign company connection is not available.");
           idempotencyKey = recoveryProviderIdempotencyKey({ companyId: access.company.id, operation: input.operation, targetId: agreement.id, targetVersion: agreement.version, option: input.operation.endsWith("void_recovery_agreement_with_local_approval") ? "void" : "issue" });
           if (input.operation === "docusign.send_recovery_agreement_with_local_approval") {
             if (agreement.state !== "eligible_to_issue" || agreement.providerEnvelopeReference)
@@ -12278,7 +12278,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
           storedRequest = {
             agreementInstanceId: agreement.id,
             targetVersion: agreement.version,
-            bindingId: binding.id,
+            providerConnectionId: providerConnection.id,
             ...(input.operation === "docusign.void_recovery_agreement_with_local_approval" ? { rationale: input.rationale } : {}),
             requestedBySeatId: access.seat.id,
             requestPolicyDecisionId: requestPolicyDecision.decisionId,

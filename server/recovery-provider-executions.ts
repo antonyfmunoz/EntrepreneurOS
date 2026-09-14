@@ -4,6 +4,7 @@ import {
   eosAuditRecords,
   eosEvidence,
   eosIntegrationBindings,
+  eosProviderConnections,
   eosProviderExecutions,
   eosRecoveryAgreementInstances,
   eosRecoveryActivationEvents,
@@ -17,6 +18,8 @@ import {
   executeRecoveryCommercialEffect,
   type RecoveryCommercialEffect,
 } from "./integrations/recovery-commercial";
+import * as docusign from "./integrations/docusign";
+import { docusignEnvelopeParameters } from "@shared/recovery-provider-executions";
 import { db } from "./db";
 
 type Execution = typeof eosProviderExecutions.$inferSelect;
@@ -25,6 +28,7 @@ type StoredRequest = {
   billingManifestId?: string;
   agreementInstanceId?: string;
   bindingId?: string;
+  providerConnectionId?: string;
   targetVersion?: number;
   timing?: "immediate" | "period_end";
   reason?: "duplicate" | "fraudulent" | "requested_by_customer";
@@ -45,17 +49,25 @@ export async function executeApprovedRecoveryProviderExecution(input: {
   actorUserId: string;
 }) {
   const request = input.execution.request as StoredRequest;
-  if (!request.bindingId || !Number.isInteger(request.targetVersion))
+  if ((!request.bindingId && !request.providerConnectionId) || !Number.isInteger(request.targetVersion))
     throw new Error("Recovery execution target metadata is incomplete.");
-  const binding = await db.query.eosIntegrationBindings.findFirst({
+  const binding = request.bindingId ? await db.query.eosIntegrationBindings.findFirst({
     where: and(
       eq(eosIntegrationBindings.id, request.bindingId),
       eq(eosIntegrationBindings.companyId, input.companyId),
       eq(eosIntegrationBindings.providerKey, input.execution.provider),
     ),
-  });
-  if (!binding) throw new Error("Recovery execution binding is unavailable.");
-  bindingIsUsable(binding);
+  }) : null;
+  const providerConnection = request.providerConnectionId ? await db.query.eosProviderConnections.findFirst({
+    where: and(eq(eosProviderConnections.id, request.providerConnectionId), eq(eosProviderConnections.companyId, input.companyId), eq(eosProviderConnections.providerKey, input.execution.provider)),
+  }) : null;
+  if (input.execution.provider === "docusign") {
+    if (!providerConnection || providerConnection.connectionState !== "connected" || providerConnection.healthState !== "healthy")
+      throw new Error("The exact DocuSign company connection is no longer execution-ready.");
+  } else {
+    if (!binding) throw new Error("Recovery execution binding is unavailable.");
+    bindingIsUsable(binding);
+  }
 
   let effect: RecoveryCommercialEffect;
   let targetType: "recovery_billing_manifest" | "recovery_agreement_instance";
@@ -187,11 +199,18 @@ export async function executeApprovedRecoveryProviderExecution(input: {
     .returning();
   if (!claimed) throw new Error("Recovery execution was already claimed.");
 
-  const providerReceipt = await executeRecoveryCommercialEffect({
-    binding,
-    execution: input.execution,
-    effect,
-  });
+  const providerReceipt = input.execution.provider === "docusign" && providerConnection
+    ? await (async () => {
+      const result = effect.kind === "docusign_send"
+        ? await docusign.sendEnvelope(providerConnection.authorizationUserId, docusignEnvelopeParameters({ executionId: input.execution.id, ...effect }))
+        : effect.kind === "docusign_void"
+          ? await docusign.voidEnvelope(providerConnection.authorizationUserId, effect.envelopeReference, effect.rationale)
+          : null;
+      const id = typeof result?.envelopeId === "string" ? result.envelopeId : "";
+      if (!id) throw new Error("DocuSign accepted the request without returning an envelope reference.");
+      return { objectType: "envelope" as const, id, status: result?.status };
+    })()
+    : await executeRecoveryCommercialEffect({ binding: binding!, execution: input.execution, effect });
   if (!providerReceipt.id?.trim())
     throw new Error("The provider accepted the request without returning an object reference.");
   const completedAt = new Date();
@@ -257,7 +276,7 @@ export async function executeApprovedRecoveryProviderExecution(input: {
       objectType: targetType === "recovery_billing_manifest" ? "billing" : "agreement",
       objectId: targetId,
       actorUserId: input.actorUserId,
-      actorSeatId: binding.ownerSeatId,
+      actorSeatId: providerConnection?.ownerSeatId || binding!.ownerSeatId,
       sequence: (latest?.sequence || 0) + 1,
       eventType: `provider_execution_${effect.kind}`,
       fromState,
