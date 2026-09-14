@@ -20803,7 +20803,10 @@ export function registerEosRuntimeRoutes(app: Express): void {
                 : "not_connected",
             configured: Boolean(stripeBinding),
             connected: Boolean(stripeCompanyConnection && stripeConnection?.connected),
-            authorizationAvailable: Boolean(stripeBinding),
+            // Stripe is already company-owned at the vault boundary. Its
+            // visible lifecycle is therefore Connect/Reconnect -> Verify ->
+            // Remove, not a second "Use in this company" action alongside it.
+            authorizationAvailable: false,
             providerType: "company_managed_merchant",
             authority: "company_payment_execution_after_local_approval",
             risk: "consequential_write",
@@ -20834,7 +20837,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
             // Stripe remains a company-vault credential. Attaching it here
             // creates only EOS's role-governed company connection, never a
             // browser-visible key or a Stripe OAuth grant.
-            actions: stripeCompanyConnection ? ["verify"] : stripeBinding ? ["attach"] : [],
+            actions: stripeCompanyConnection ? ["verify", "reconnect"] : stripeBinding ? ["connect"] : [],
           },
           {
             id: "gohighlevel",

@@ -12318,7 +12318,9 @@ export default function EosOverlayPage() {
                   disconnectIntegrationMutation.isPending ||
                   verifyIntegrationMutation.isPending
                 }
-                onConnect={() => connectIntegrationMutation.mutate(integration)}
+                onConnect={() => integration.id === "stripe"
+                  ? attachIntegrationMutation.mutate(integration)
+                  : connectIntegrationMutation.mutate(integration)}
                 onAttach={() => attachIntegrationMutation.mutate(integration)}
                 onDisconnect={(connection) =>
                   disconnectIntegrationMutation.mutate({
