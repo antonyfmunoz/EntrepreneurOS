@@ -6,6 +6,7 @@ import {
   eosAuditRecords,
   eosEvidence,
   eosIntegrationBindings,
+  eosProviderConnections,
   eosRecoveryActivationEvents,
   eosRecoveryAgreementInstances,
   eosRecoveryBillingManifests,
@@ -24,23 +25,49 @@ import { db } from "./db";
 
 type ProviderKey = "docusign" | "stripe";
 type Binding = typeof eosIntegrationBindings.$inferSelect;
+type ProviderConnection = typeof eosProviderConnections.$inferSelect;
+type ReceiptSource = {
+  id: string;
+  companyId: number;
+  providerAccountReference: string;
+  recordedByUserId: string;
+  ownerSeatId: string;
+  bindingId?: string;
+  providerConnectionId?: string;
+};
 type ReceiptResult = { duplicate: boolean; processingState: string; providerEventId: string };
+
+function receiptSourceForBinding(binding: Binding): ReceiptSource {
+  return {
+    id: binding.id, bindingId: binding.id, companyId: binding.companyId,
+    providerAccountReference: binding.providerAccountReference,
+    recordedByUserId: binding.recordedByUserId, ownerSeatId: binding.ownerSeatId,
+  };
+}
+
+function receiptSourceForConnection(connection: ProviderConnection): ReceiptSource {
+  return {
+    id: connection.id, providerConnectionId: connection.id, companyId: connection.companyId,
+    providerAccountReference: connection.providerAccountReference,
+    recordedByUserId: connection.createdByUserId, ownerSeatId: connection.ownerSeatId,
+  };
+}
 
 const stripeVerifier = new Stripe("sk_test_eos_webhook_verification_only", {
   apiVersion: "2026-07-29.dahlia",
 });
 
-function configuredSecrets(bindingId: string): string[] {
+function configuredSecrets(sourceId: string): string[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(process.env.EOS_RECOVERY_PROVIDER_WEBHOOK_SECRETS || "{}");
   } catch {
     throw new Error("Recovery provider webhook secret mapping is invalid.");
   }
-  const value = (parsed as Record<string, unknown> | null)?.[bindingId];
+  const value = (parsed as Record<string, unknown> | null)?.[sourceId];
   const values = typeof value === "string" ? [value] : Array.isArray(value) ? value : [];
   const secrets = values.filter((item): item is string => typeof item === "string" && item.length >= 16);
-  if (!secrets.length) throw new Error("Recovery provider webhook verification is not configured for this binding.");
+  if (!secrets.length) throw new Error("Recovery provider webhook verification is not configured for this company provider connection.");
   return secrets;
 }
 
@@ -168,7 +195,7 @@ async function appendProviderActivationEvent(
   activationId: string,
   object: { id: string; companyId: number },
   objectType: "agreement" | "billing",
-  binding: Binding,
+  source: ReceiptSource,
   eventType: string,
   fromState: string,
   toState: string,
@@ -181,7 +208,7 @@ async function appendProviderActivationEvent(
     .orderBy(desc(eosRecoveryActivationEvents.sequence)).limit(1);
   await tx.insert(eosRecoveryActivationEvents).values({
     id: randomUUID(), companyId: object.companyId, activationId, objectType,
-    objectId: object.id, actorUserId: binding.recordedByUserId, actorSeatId: binding.ownerSeatId,
+    objectId: object.id, actorUserId: source.recordedByUserId, actorSeatId: source.ownerSeatId,
     sequence: (latest?.sequence || 0) + 1, eventType, fromState, toState,
     details, traceId, correlationId: activationId,
   });
@@ -189,7 +216,7 @@ async function appendProviderActivationEvent(
 
 async function providerEvidence(
   tx: any,
-  binding: Binding,
+  source: ReceiptSource,
   target: { id: string; workPacketId: string },
   provider: ProviderKey,
   providerEventId: string,
@@ -202,8 +229,8 @@ async function providerEvidence(
 ) {
   const id = randomUUID();
   await tx.insert(eosEvidence).values({
-    id, companyId: binding.companyId, workPacketId: target.workPacketId,
-    recordedByUserId: binding.recordedByUserId, evidenceType: "provider_receipt",
+    id, companyId: source.companyId, workPacketId: target.workPacketId,
+    recordedByUserId: source.recordedByUserId, evidenceType: "provider_receipt",
     title: `${provider === "docusign" ? "DocuSign" : "Stripe"} ${eventType} receipt`,
     details: { providerEventId, providerObjectReference: objectReference, payloadSha256, signatureState: "verified", processingState },
     evidenceKey: `provider-receipt:${provider}:${providerEventId}`,
@@ -217,44 +244,50 @@ async function providerEvidence(
   return id;
 }
 
-function receiptBase(binding: Binding, input: {
+function receiptBase(source: ReceiptSource, input: {
   provider: ProviderKey; providerEventId: string; eventType: string; providerObjectReference: string;
   verifierMethod: string; payloadSha256: string; payloadProjection: Record<string, unknown>; occurredAt: Date;
 }) {
   return {
-    id: randomUUID(), companyId: binding.companyId, providerKey: input.provider,
-    integrationBindingId: binding.id, providerEventId: input.providerEventId,
+    id: randomUUID(), companyId: source.companyId, providerKey: input.provider,
+    integrationBindingId: source.bindingId || null, providerConnectionId: source.providerConnectionId || null, providerEventId: input.providerEventId,
     providerObjectReference: input.providerObjectReference, eventType: input.eventType,
     signatureState: "verified", verifierMethod: input.verifierMethod, payloadSha256: input.payloadSha256,
     payloadProjection: input.payloadProjection, externalEffectsObserved: true,
-    schemaVersion: RECOVERY_PROVIDER_RECEIPT_VERSION, recordedByUserId: binding.recordedByUserId,
+    schemaVersion: RECOVERY_PROVIDER_RECEIPT_VERSION, recordedByUserId: source.recordedByUserId,
     occurredAt: input.occurredAt, receivedAt: new Date(),
   };
 }
 
 async function reconcileDocusign(
-  tx: any, binding: Binding, payload: any, rawBody: Buffer,
+  tx: any, source: ReceiptSource, payload: any, rawBody: Buffer,
 ): Promise<ReceiptResult> {
   const eventType = typeof payload?.event === "string" ? payload.event.toLowerCase() : "";
   const envelopeId = stringRef(payload?.data?.envelopeId || payload?.data?.envelopeSummary?.envelopeId);
   const occurredAt = safeDate(payload?.generatedDateTime || payload?.data?.envelopeSummary?.statusChangedDateTime);
   const payloadSha256 = createHash("sha256").update(rawBody).digest("hex");
   const providerEventId = stringRef(payload?.eventId || payload?.id) || `${eventType}:${envelopeId}:${occurredAt.toISOString()}`;
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`docusign:${binding.id}:${providerEventId}`}))`);
-  const existing = await tx.query.eosRecoveryProviderReceipts.findFirst({ where: and(eq(eosRecoveryProviderReceipts.integrationBindingId, binding.id), eq(eosRecoveryProviderReceipts.providerEventId, providerEventId), eq(eosRecoveryProviderReceipts.providerKey, "docusign")) });
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`docusign:${source.id}:${providerEventId}`}))`);
+  const sourceClause = source.providerConnectionId
+    ? eq(eosRecoveryProviderReceipts.providerConnectionId, source.providerConnectionId)
+    : eq(eosRecoveryProviderReceipts.integrationBindingId, source.bindingId!);
+  const agreementSourceClause = source.providerConnectionId
+    ? eq(eosRecoveryAgreementInstances.eSignProviderConnectionId, source.providerConnectionId)
+    : eq(eosRecoveryAgreementInstances.eSignBindingId, source.bindingId!);
+  const existing = await tx.query.eosRecoveryProviderReceipts.findFirst({ where: and(sourceClause, eq(eosRecoveryProviderReceipts.providerEventId, providerEventId), eq(eosRecoveryProviderReceipts.providerKey, "docusign")) });
   if (existing) return { duplicate: true, processingState: existing.processingState, providerEventId };
 
   const accountId = stringRef(payload?.data?.accountId || payload?.data?.envelopeSummary?.accountId);
   const agreementId = docusignField(payload, "eos_agreement_instance_id");
   const [agreement] = agreementId
-    ? await tx.select().from(eosRecoveryAgreementInstances).where(and(eq(eosRecoveryAgreementInstances.id, agreementId), eq(eosRecoveryAgreementInstances.companyId, binding.companyId), eq(eosRecoveryAgreementInstances.eSignBindingId, binding.id))).limit(1)
+    ? await tx.select().from(eosRecoveryAgreementInstances).where(and(eq(eosRecoveryAgreementInstances.id, agreementId), eq(eosRecoveryAgreementInstances.companyId, source.companyId), agreementSourceClause)).limit(1)
     : envelopeId
-      ? await tx.select().from(eosRecoveryAgreementInstances).where(and(eq(eosRecoveryAgreementInstances.companyId, binding.companyId), eq(eosRecoveryAgreementInstances.eSignBindingId, binding.id), eq(eosRecoveryAgreementInstances.providerEnvelopeReference, envelopeId))).limit(1)
+      ? await tx.select().from(eosRecoveryAgreementInstances).where(and(eq(eosRecoveryAgreementInstances.companyId, source.companyId), agreementSourceClause, eq(eosRecoveryAgreementInstances.providerEnvelopeReference, envelopeId))).limit(1)
       : [];
-  const base = receiptBase(binding, { provider: "docusign", providerEventId, eventType, providerObjectReference: envelopeId, verifierMethod: "docusign_connect_hmac_sha256", payloadSha256, occurredAt, payloadProjection: { eventType, envelopeReference: envelopeId, accountReference: accountId } });
+  const base = receiptBase(source, { provider: "docusign", providerEventId, eventType, providerObjectReference: envelopeId, verifierMethod: "docusign_connect_hmac_sha256", payloadSha256, occurredAt, payloadProjection: { eventType, envelopeReference: envelopeId, accountReference: accountId } });
   let failureCode = "";
   if (!eventType || !envelopeId) failureCode = "docusign_event_invalid";
-  else if (accountId && accountId !== binding.providerAccountReference) failureCode = "provider_account_mismatch";
+  else if (accountId && accountId !== source.providerAccountReference) failureCode = "provider_account_mismatch";
   else if (!agreement) failureCode = "agreement_mapping_unavailable";
   else if (!agreement.providerEnvelopeReference && (
     docusignField(payload, "eos_agreement_version") !== agreement.agreementVersion
@@ -268,7 +301,7 @@ async function reconcileDocusign(
   }
 
   const transition = reconcileAgreementReceipt(agreement.state as RecoveryAgreementState, eventType);
-  const evidenceId = await providerEvidence(tx, binding, agreement, "docusign", providerEventId, eventType, envelopeId, payloadSha256, occurredAt, "docusign_connect_hmac_sha256", transition.processingState);
+  const evidenceId = await providerEvidence(tx, source, agreement, "docusign", providerEventId, eventType, envelopeId, payloadSha256, occurredAt, "docusign_connect_hmac_sha256", transition.processingState);
   const blockers = transition.processingState === "recovery_required"
     ? Array.from(new Set([...(agreement.blockers as string[]), `Provider receipt conflict: ${transition.failureCode}.`]))
     : transition.state === "signed" ? [] : agreement.blockers;
@@ -276,7 +309,7 @@ async function reconcileDocusign(
     state: transition.state, providerEnvelopeReference: envelopeId,
     providerReceiptEvidenceId: evidenceId, blockers, version: agreement.version + 1, updatedAt: new Date(),
   }).where(and(eq(eosRecoveryAgreementInstances.id, agreement.id), eq(eosRecoveryAgreementInstances.version, agreement.version)));
-  await appendProviderActivationEvent(tx, agreement.id, agreement, "agreement", binding, `provider_${eventType}`, agreement.state, transition.state, { providerEventId, evidenceId, processingState: transition.processingState, failureCode: transition.failureCode, externalEffectObserved: true, externalEffectExecutedByEos: false }, randomUUID());
+  await appendProviderActivationEvent(tx, agreement.id, agreement, "agreement", source, `provider_${eventType}`, agreement.state, transition.state, { providerEventId, evidenceId, processingState: transition.processingState, failureCode: transition.failureCode, externalEffectObserved: true, externalEffectExecutedByEos: false }, randomUUID());
 
   const [billing] = await tx.select().from(eosRecoveryBillingManifests).where(eq(eosRecoveryBillingManifests.agreementInstanceId, agreement.id)).limit(1);
   if (billing && ["signed", "declined", "voided", "expired"].includes(transition.state)) {
@@ -288,7 +321,7 @@ async function reconcileDocusign(
         : ["Authoritative setup-payment and active-subscription receipts are still required."];
       const nextState = paymentReady ? "active" : "setup_paid_subscription_pending";
       await tx.update(eosRecoveryBillingManifests).set({ state: nextState, blockers: nextBlockers, version: billing.version + 1, updatedAt: new Date() }).where(eq(eosRecoveryBillingManifests.id, billing.id));
-      await appendProviderActivationEvent(tx, agreement.id, billing, "billing", binding, "agreement_receipt_reconciled", billing.state, nextState, { agreementEvidenceId: evidenceId, providerEffectExecutedByEos: false }, randomUUID());
+      await appendProviderActivationEvent(tx, agreement.id, billing, "billing", source, "agreement_receipt_reconciled", billing.state, nextState, { agreementEvidenceId: evidenceId, providerEffectExecutedByEos: false }, randomUUID());
     } else {
       const paymentObserved = billing.setupPaymentState === "succeeded"
         || ["active", "trialing"].includes(billing.subscriptionState);
@@ -297,7 +330,7 @@ async function reconcileDocusign(
     }
   }
   await tx.insert(eosRecoveryProviderReceipts).values({ ...base, objectType: "agreement", agreementInstanceId: agreement.id, processingState: transition.processingState, failureCode: transition.failureCode, failureSummary: transition.failureCode ? "The event conflicts with the recorded agreement lifecycle and requires review." : "", evidenceId });
-  await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: binding.companyId, actorUserId: binding.recordedByUserId, action: "recovery_provider_receipt.reconciled", targetType: "recovery_agreement_instance", targetId: agreement.id, traceId: randomUUID(), correlationId: agreement.id, result: transition.processingState, details: { provider: "docusign", providerEventId, eventType, signatureVerified: true, externalEffectObserved: true, externalEffectExecutedByEos: false }, createdAt: new Date() });
+  await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: source.companyId, actorUserId: source.recordedByUserId, action: "recovery_provider_receipt.reconciled", targetType: "recovery_agreement_instance", targetId: agreement.id, traceId: randomUUID(), correlationId: agreement.id, result: transition.processingState, details: { provider: "docusign", providerEventId, eventType, signatureVerified: true, externalEffectObserved: true, externalEffectExecutedByEos: false }, createdAt: new Date() });
   return { duplicate: false, processingState: transition.processingState, providerEventId };
 }
 
@@ -338,7 +371,8 @@ async function reconcileStripe(tx: any, binding: Binding, event: Stripe.Event, r
   const existing = await tx.query.eosRecoveryProviderReceipts.findFirst({ where: and(eq(eosRecoveryProviderReceipts.integrationBindingId, binding.id), eq(eosRecoveryProviderReceipts.providerEventId, providerEventId), eq(eosRecoveryProviderReceipts.providerKey, "stripe")) });
   if (existing) return { duplicate: true, processingState: existing.processingState, providerEventId };
   const billing = await findBilling(tx, binding, projection);
-  const base = receiptBase(binding, { provider: "stripe", providerEventId, eventType: event.type, providerObjectReference: projection.providerObjectReference, verifierMethod: "stripe_sdk_webhook_signature_v1", payloadSha256, occurredAt: projection.occurredAt, payloadProjection: projection.payloadProjection });
+  const source = receiptSourceForBinding(binding);
+  const base = receiptBase(source, { provider: "stripe", providerEventId, eventType: event.type, providerObjectReference: projection.providerObjectReference, verifierMethod: "stripe_sdk_webhook_signature_v1", payloadSha256, occurredAt: projection.occurredAt, payloadProjection: projection.payloadProjection });
   const account = typeof event.account === "string" ? event.account : "";
   let failureCode = event.livemode !== true ? "provider_mode_mismatch" : account && account !== binding.providerAccountReference ? "provider_account_mismatch" : !billing ? "billing_mapping_unavailable" : "";
   if (failureCode || !billing) {
@@ -349,7 +383,7 @@ async function reconcileStripe(tx: any, binding: Binding, event: Stripe.Event, r
   failureCode = validateStripeCommercialMatch(billing, projection, event.type);
   let transition = reconcileStripeReceipt({ state: billing.state as RecoveryBillingSignals["state"], setupPaymentState: billing.setupPaymentState as RecoveryBillingSignals["setupPaymentState"], subscriptionState: billing.subscriptionState as RecoveryBillingSignals["subscriptionState"], agreementSigned: agreement?.state === "signed" }, { eventType: event.type, checkoutPaymentStatus: projection.object?.payment_status, subscriptionStatus: event.type.startsWith("customer.subscription.") ? projection.object?.status : undefined, invoicePaid: event.type === "invoice.paid" ? projection.object?.paid !== false : undefined });
   if (failureCode) transition = { ...transition, state: "recovery_required", processingState: "recovery_required", failureCode };
-  const evidenceId = await providerEvidence(tx, binding, billing, "stripe", providerEventId, event.type, projection.providerObjectReference, payloadSha256, projection.occurredAt, "stripe_sdk_webhook_signature_v1", transition.processingState);
+  const evidenceId = await providerEvidence(tx, source, billing, "stripe", providerEventId, event.type, projection.providerObjectReference, payloadSha256, projection.occurredAt, "stripe_sdk_webhook_signature_v1", transition.processingState);
   const blockers = transition.processingState === "recovery_required" ? [`Provider receipt mismatch: ${transition.failureCode}.`] : transition.state === "active" ? [] : billing.blockers;
   await tx.update(eosRecoveryBillingManifests).set({
     state: transition.state, setupPaymentState: transition.setupPaymentState, subscriptionState: transition.subscriptionState,
@@ -361,7 +395,7 @@ async function reconcileStripe(tx: any, binding: Binding, event: Stripe.Event, r
     providerReceiptEvidenceId: evidenceId, lastProviderEventAt: projection.occurredAt,
     blockers, version: billing.version + 1, updatedAt: new Date(),
   }).where(and(eq(eosRecoveryBillingManifests.id, billing.id), eq(eosRecoveryBillingManifests.version, billing.version)));
-  await appendProviderActivationEvent(tx, billing.agreementInstanceId, billing, "billing", binding, `provider_${event.type}`, billing.state, transition.state, { providerEventId, evidenceId, processingState: transition.processingState, failureCode: transition.failureCode, externalEffectObserved: true, externalEffectExecutedByEos: false }, randomUUID());
+  await appendProviderActivationEvent(tx, billing.agreementInstanceId, billing, "billing", source, `provider_${event.type}`, billing.state, transition.state, { providerEventId, evidenceId, processingState: transition.processingState, failureCode: transition.failureCode, externalEffectObserved: true, externalEffectExecutedByEos: false }, randomUUID());
   const paymentReady = transition.setupPaymentState === "succeeded"
     && ["active", "trialing"].includes(transition.subscriptionState);
   if (agreement && paymentReady && agreement.state === "blocked_payment") {
@@ -375,7 +409,7 @@ async function reconcileStripe(tx: any, binding: Binding, event: Stripe.Event, r
       eq(eosRecoveryAgreementInstances.id, agreement.id),
       eq(eosRecoveryAgreementInstances.version, agreement.version),
     ));
-    await appendProviderActivationEvent(tx, agreement.id, { ...agreement, version: agreementVersion }, "agreement", binding, "payment_receipts_reconciled", agreement.state, "eligible_to_issue", { providerEventId, billingEvidenceId: evidenceId, externalEffectExecutedByEos: false }, randomUUID());
+    await appendProviderActivationEvent(tx, agreement.id, { ...agreement, version: agreementVersion }, "agreement", source, "payment_receipts_reconciled", agreement.state, "eligible_to_issue", { providerEventId, billingEvidenceId: evidenceId, externalEffectExecutedByEos: false }, randomUUID());
   }
   await tx.insert(eosRecoveryProviderReceipts).values({ ...base, objectType: "billing", billingManifestId: billing.id, processingState: transition.processingState, failureCode: transition.failureCode, failureSummary: transition.failureCode ? "The event conflicts with the authorized billing manifest or lifecycle and requires review." : "", evidenceId });
   await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: binding.companyId, actorUserId: binding.recordedByUserId, action: "recovery_provider_receipt.reconciled", targetType: "recovery_billing_manifest", targetId: billing.id, traceId: randomUUID(), correlationId: billing.agreementInstanceId, result: transition.processingState, details: { provider: "stripe", providerEventId, eventType: event.type, signatureVerified: true, externalEffectObserved: true, externalEffectExecutedByEos: false }, createdAt: new Date() });
@@ -383,16 +417,20 @@ async function reconcileStripe(tx: any, binding: Binding, event: Stripe.Event, r
 }
 
 export async function processRecoveryProviderWebhook(input: {
-  provider: string; bindingId: string; rawBody: Buffer; headers: IncomingHttpHeaders;
+  provider: string; bindingId?: string; connectionId?: string; rawBody: Buffer; headers: IncomingHttpHeaders;
 }): Promise<ReceiptResult> {
   const provider = recoveryProviderKeySchema.parse(input.provider);
-  const binding = await db.query.eosIntegrationBindings.findFirst({ where: eq(eosIntegrationBindings.id, input.bindingId) });
-  if (!binding || !bindingUsable(binding, provider)) throw new Error("Recovery provider binding is not active and connected.");
-  const secrets = configuredSecrets(binding.id);
+  if (Boolean(input.bindingId) === Boolean(input.connectionId)) throw new Error("Exactly one Recovery provider source is required.");
+  const binding = input.bindingId ? await db.query.eosIntegrationBindings.findFirst({ where: eq(eosIntegrationBindings.id, input.bindingId) }) : null;
+  const connection = input.connectionId ? await db.query.eosProviderConnections.findFirst({ where: eq(eosProviderConnections.id, input.connectionId) }) : null;
+  if (binding && (!bindingUsable(binding, provider) || provider === "docusign" && input.connectionId)) throw new Error("Recovery provider binding is not active and connected.");
+  if (connection && (provider !== "docusign" || connection.providerKey !== "docusign" || connection.connectionState !== "connected" || connection.healthState !== "healthy")) throw new Error("Recovery provider company connection is not active and healthy.");
+  if (!binding && !connection) throw new Error("Recovery provider connection is not active and connected.");
+  const secrets = configuredSecrets(binding?.id || connection!.id);
   const verified = provider === "stripe"
     ? verifyStripe(input.rawBody, input.headers, secrets)
     : verifyDocusign(input.rawBody, input.headers, secrets);
   return db.transaction((tx) => provider === "stripe"
-    ? reconcileStripe(tx, binding, verified as Stripe.Event, input.rawBody)
-    : reconcileDocusign(tx, binding, verified, input.rawBody));
+    ? reconcileStripe(tx, binding!, verified as Stripe.Event, input.rawBody)
+    : reconcileDocusign(tx, connection ? receiptSourceForConnection(connection) : receiptSourceForBinding(binding!), verified, input.rawBody));
 }

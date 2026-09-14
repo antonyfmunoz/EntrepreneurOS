@@ -66,16 +66,20 @@ export const recoveryAgreementConfigurationSchema = z.object({
   agreementVersion: text(2, 240),
   eSignProvider: z.enum(["eos_native", "docusign"]).optional(),
   eSignTemplateReference: reference,
+  eSignProviderConnectionId: z.string().uuid().optional(),
   eSignBindingId: z.string().uuid().optional(),
 }).superRefine((value, context) => {
-  const provider = value.eSignProvider || (value.eSignBindingId ? "docusign" : "eos_native");
+  const provider = value.eSignProvider || (value.eSignProviderConnectionId || value.eSignBindingId ? "docusign" : "eos_native");
   if (provider === "eos_native" && !z.string().uuid().safeParse(value.eSignTemplateReference).success)
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["eSignTemplateReference"], message: "Select an EOS native document version." });
-  if (provider === "docusign" && !value.eSignBindingId)
-    context.addIssue({ code: z.ZodIssueCode.custom, path: ["eSignBindingId"], message: "Select a DocuSign Integration Binding." });
+  // New configurations use a company-scoped connection. Keep the retired
+  // binding field readable for records created before that migration so an
+  // existing agreement can still be reconciled or safely repaired.
+  if (provider === "docusign" && !value.eSignProviderConnectionId && !value.eSignBindingId)
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["eSignProviderConnectionId"], message: "Select a verified DocuSign company connection." });
 }).transform((value) => ({
   ...value,
-  eSignProvider: value.eSignProvider || (value.eSignBindingId ? "docusign" as const : "eos_native" as const),
+  eSignProvider: value.eSignProvider || (value.eSignProviderConnectionId || value.eSignBindingId ? "docusign" as const : "eos_native" as const),
 }));
 
 export const recoveryBillingConfigurationSchema = z.object({

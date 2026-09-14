@@ -255,6 +255,10 @@ function RecoveryCall2Control({
   canRecordCounselDisposition: boolean;
 }) {
   const { toast } = useToast();
+  const docusignConnectionsQuery = useQuery<JsonRecord>({
+    queryKey: [root, "recovery-docusign-company-connections"],
+    queryFn: () => requestJson("GET", `${root}/integrations/docusign/connections`),
+  });
   const packet = session.call2Packet as JsonRecord | null;
   const { untrustedUploadsEnabled } = useRuntimeCapabilities();
   const [draft, setDraft] = useState<JsonRecord>({});
@@ -325,7 +329,7 @@ function RecoveryCall2Control({
       clientSignerName: activation.clientSignerName || "", clientSignerEmail: activation.clientSignerEmail || session.workEmail || "",
       providerLegalName: activation.providerLegalName || "", agreementVersion: activation.agreementVersion || authority.effectiveVersion || "",
       eSignProvider: activation.eSignProvider || "eos_native",
-      eSignTemplateReference: activation.eSignTemplateReference || "", eSignBindingId: activation.eSignBindingId || "",
+      eSignTemplateReference: activation.eSignTemplateReference || "", eSignProviderConnectionId: activation.eSignProviderConnectionId || "", eSignBindingId: activation.eSignBindingId || "",
     }));
     setBillingConfig((current) => ({
       ...current, stripeBindingId: billing.stripeBindingId || "", providerProductReference: billing.providerProductReference || "",
@@ -509,7 +513,8 @@ function RecoveryCall2Control({
   }
 
   const terms = packet.termsPresented || {};
-  const docusignBindings = activationBindings.filter((item) => item.providerKey === "docusign");
+  const docusignConnections = ((docusignConnectionsQuery.data?.connections || []) as JsonRecord[])
+    .filter((item) => item.connectionState === "connected" && item.healthState === "healthy");
   const nativeDocumentVersions = nativeDocuments.data || [];
   const stripeBindings = activationBindings.filter((item) => item.providerKey === "stripe");
   const counselEvidence = authority ? evidence.filter((item) => item.workPacketId === authority.workPacketId && item.verificationState === "verified") : [];
@@ -520,8 +525,10 @@ function RecoveryCall2Control({
     const request = execution.request || {};
     return request.agreementInstanceId === activation?.id || request.billingManifestId === billing?.id;
   });
-  const copyWebhookPath = async (provider: "docusign" | "stripe", bindingId: string) => {
-    const path = `/api/eos/recovery-provider-webhooks/${provider}/${bindingId}`;
+  const copyWebhookPath = async (provider: "docusign" | "stripe", sourceId: string, companyConnection = false) => {
+    const path = provider === "docusign" && companyConnection
+      ? `/api/eos/recovery-provider-webhooks/docusign/connections/${sourceId}`
+      : `/api/eos/recovery-provider-webhooks/${provider}/${sourceId}`;
     try {
       await navigator.clipboard.writeText(`${window.location.origin}${path}`);
       toast({ title: `${provider === "docusign" ? "DocuSign" : "Stripe"} receipt URL copied` });
@@ -618,7 +625,7 @@ function RecoveryCall2Control({
                 <label className="space-y-2 text-sm font-medium">Authorized signer<Input value={agreementConfig.clientSignerName || ""} onChange={(event) => setAgreementConfig((value) => ({ ...value, clientSignerName: event.target.value }))}/></label>
                 <label className="space-y-2 text-sm font-medium">Signer email<Input type="email" value={agreementConfig.clientSignerEmail || ""} onChange={(event) => setAgreementConfig((value) => ({ ...value, clientSignerEmail: event.target.value }))}/></label>
                 <label className="space-y-2 text-sm font-medium">Effective agreement version<Input value={agreementConfig.agreementVersion || ""} onChange={(event) => setAgreementConfig((value) => ({ ...value, agreementVersion: event.target.value }))}/></label>
-                <label className="space-y-2 text-sm font-medium">Signing engine<select className="h-10 w-full rounded-md border border-input bg-background px-3" value={agreementConfig.eSignProvider || "eos_native"} onChange={(event) => setAgreementConfig((value) => ({ ...value, eSignProvider: event.target.value, eSignTemplateReference: "", eSignBindingId: "" }))}><option value="eos_native">EOS native — no per-envelope fee</option><option value="docusign">DocuSign adapter</option></select></label>
+                <label className="space-y-2 text-sm font-medium">Signing engine<select className="h-10 w-full rounded-md border border-input bg-background px-3" value={agreementConfig.eSignProvider || "eos_native"} onChange={(event) => setAgreementConfig((value) => ({ ...value, eSignProvider: event.target.value, eSignTemplateReference: "", eSignProviderConnectionId: "", eSignBindingId: "" }))}><option value="eos_native">EOS native — no per-envelope fee</option><option value="docusign">DocuSign adapter</option></select></label>
                 {agreementConfig.eSignProvider === "eos_native" ? <>
                   <label className="space-y-2 text-sm font-medium lg:col-span-2">Counsel-linked EOS document version
                     <select className="h-10 w-full rounded-md border border-input bg-background px-3" value={agreementConfig.eSignTemplateReference || ""} onChange={(event) => { const document = nativeDocumentVersions.find((item) => item.id === event.target.value); setAgreementConfig((value) => ({ ...value, eSignTemplateReference: event.target.value, agreementVersion: document?.documentVersion || value.agreementVersion })); }}>
@@ -632,7 +639,7 @@ function RecoveryCall2Control({
                     <NativeEsignFieldEditor file={nativeDocumentFile} fields={nativeDocumentFields} onFieldsChange={setNativeDocumentFields} roleOptions={[{ value: "client", label: "Client signer" }]}/>
                     <div className="flex justify-end"><Button type="button" variant="outline" onClick={() => uploadNativeDocument.mutate()} disabled={uploadNativeDocument.isPending || !nativeDocumentFile || !authority.counselEvidenceId || !nativeDocumentFields.some((field) => field.type === "signature" && field.required && field.roleKey === "client")}>{uploadNativeDocument.isPending ? "Registering…" : "Register immutable PDF"}</Button></div>
                   </div> : <p className="rounded-lg border bg-background p-3 text-sm text-muted-foreground lg:col-span-2">Trusted-source mode: generate a reviewed agreement in EOS Native Signing → Library, then select its immutable version above. Direct PDF uploads are unavailable.</p>}
-                </> : <><label className="space-y-2 text-sm font-medium">DocuSign template reference<Input value={agreementConfig.eSignTemplateReference || ""} onChange={(event) => setAgreementConfig((value) => ({ ...value, eSignTemplateReference: event.target.value }))}/></label><label className="space-y-2 text-sm font-medium">DocuSign Integration Binding<select className="h-10 w-full rounded-md border border-input bg-background px-3" value={agreementConfig.eSignBindingId || ""} onChange={(event) => setAgreementConfig((value) => ({ ...value, eSignBindingId: event.target.value }))}><option value="">Select binding</option>{docusignBindings.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.connectionState}/{item.healthState}/{item.parityState}</option>)}</select></label></>}
+                </> : <><label className="space-y-2 text-sm font-medium">DocuSign template reference<Input value={agreementConfig.eSignTemplateReference || ""} onChange={(event) => setAgreementConfig((value) => ({ ...value, eSignTemplateReference: event.target.value }))}/></label><label className="space-y-2 text-sm font-medium">DocuSign company connection<select className="h-10 w-full rounded-md border border-input bg-background px-3" value={agreementConfig.eSignProviderConnectionId || ""} onChange={(event) => setAgreementConfig((value) => ({ ...value, eSignProviderConnectionId: event.target.value }))}><option value="">Select verified connection</option>{docusignConnections.map((item) => <option key={item.id} value={item.id}>{item.providerAccountReference} — verified</option>)}</select></label></>}
               </div>
               {(activation.blockers || []).length > 0 && <ul className="space-y-1 text-sm text-destructive">{activation.blockers.map((item: string) => <li key={item}>• {item}</li>)}</ul>}
               <Button variant="outline" onClick={() => saveAgreement.mutate()} disabled={saveAgreement.isPending}>Save agreement configuration</Button>
@@ -685,7 +692,7 @@ function RecoveryCall2Control({
               </div>
               <div className="space-y-2">
                 <p className="text-sm font-semibold">Provider destinations</p>
-                {activation.eSignBindingId ? <div className="flex items-center gap-2 rounded-lg border bg-background p-2"><code className="min-w-0 flex-1 truncate text-xs">/api/eos/recovery-provider-webhooks/docusign/{activation.eSignBindingId}</code><Button size="icon" variant="ghost" aria-label="Copy DocuSign receipt URL" onClick={() => copyWebhookPath("docusign", activation.eSignBindingId)}><Copy className="h-4 w-4"/></Button></div> : null}
+                {activation.eSignProviderConnectionId ? <div className="flex items-center gap-2 rounded-lg border bg-background p-2"><code className="min-w-0 flex-1 truncate text-xs">/api/eos/recovery-provider-webhooks/docusign/connections/{activation.eSignProviderConnectionId}</code><Button size="icon" variant="ghost" aria-label="Copy DocuSign receipt URL" onClick={() => copyWebhookPath("docusign", activation.eSignProviderConnectionId, true)}><Copy className="h-4 w-4"/></Button></div> : activation.eSignBindingId ? <div className="flex items-center gap-2 rounded-lg border bg-background p-2"><code className="min-w-0 flex-1 truncate text-xs">/api/eos/recovery-provider-webhooks/docusign/{activation.eSignBindingId}</code><Button size="icon" variant="ghost" aria-label="Copy DocuSign receipt URL" onClick={() => copyWebhookPath("docusign", activation.eSignBindingId)}><Copy className="h-4 w-4"/></Button></div> : null}
                 {billing.stripeBindingId ? <div className="flex items-center gap-2 rounded-lg border bg-background p-2"><code className="min-w-0 flex-1 truncate text-xs">/api/eos/recovery-provider-webhooks/stripe/{billing.stripeBindingId}</code><Button size="icon" variant="ghost" aria-label="Copy Stripe receipt URL" onClick={() => copyWebhookPath("stripe", billing.stripeBindingId)}><Copy className="h-4 w-4"/></Button></div> : null}
                 <p className="text-xs text-muted-foreground">Provider webhooks are required only for external adapters. Native envelopes keep document hashes, recipient state, and the append-only audit chain inside EOS.</p>
               </div>
