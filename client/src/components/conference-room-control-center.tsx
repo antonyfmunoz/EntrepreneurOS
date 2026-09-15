@@ -48,8 +48,11 @@ export function ConferenceRoomControlCenter({ root, seats, canExecute, canDecide
   const [error, setError] = useState("");
 
   const query = useQuery<Json>({
-    queryKey: [root, "canonical-instruments"],
-    queryFn: async () => (await apiRequest("GET", `${root}/instruments`)).json(),
+    // Ask for this instrument only. A Work Room role may be entitled to
+    // conference rooms without being entitled to enumerate every company
+    // instrument, and the scoped endpoint preserves that visibility boundary.
+    queryKey: [root, "conference-rooms"],
+    queryFn: async () => (await apiRequest("GET", `${root}/instruments/conference_rooms`)).json(),
   });
   const objects: Json[] = query.data?.objects || [];
   const rooms = useMemo(() => objects.filter((item) => item.instrumentKey === "conference_rooms" && item.objectType === "room"), [objects]);
@@ -60,7 +63,7 @@ export function ConferenceRoomControlCenter({ root, seats, canExecute, canDecide
   const roomMeetings = meetings.filter((item) => item.data?.roomObjectId === selectedRoom?.id);
   const meetingDecisions = decisions.filter((item) => item.data?.meetingObjectId === selectedMeeting?.id);
 
-  const refresh = async () => queryClient.invalidateQueries({ queryKey: [root, "canonical-instruments"] });
+  const refresh = async () => queryClient.invalidateQueries({ queryKey: [root, "conference-rooms"] });
   const createRoom = useMutation({
     mutationFn: async () => (await apiRequest("POST", `${root}/instrument-objects`, {
       instrumentKey: "conference_rooms", objectType: "room", objectKey: `room:${roomTitle.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}:${Date.now()}`,
