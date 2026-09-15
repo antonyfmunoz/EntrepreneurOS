@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { cloneElement, isValidElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, CheckCircle2, Circle, Network, Sparkles } from "lucide-react";
@@ -201,7 +201,14 @@ export default function CompanySetupPage() {
 }
 
 function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: React.ReactNode }) {
-  return <div><Label className="eos-label">{label}</Label>{hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}<div className="mt-2">{children}</div>{error && <p className="mt-2 text-sm text-destructive">{error}</p>}</div>;
+  // Labels must be available to assistive technology as well as visible in the
+  // mission UI. Radix controls do not automatically inherit surrounding text.
+  const labeledChild = isValidElement(children)
+    ? cloneElement(children as React.ReactElement<any>, {
+        "aria-label": (children.props as any)["aria-label"] || label,
+      })
+    : children;
+  return <div><Label className="eos-label">{label}</Label>{hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}<div className="mt-2">{labeledChild}</div>{error && <p className="mt-2 text-sm text-destructive">{error}</p>}</div>;
 }
 
 function Choice({ value, label, selected }: { value: string; label: string; selected: boolean }) {
