@@ -22,12 +22,29 @@ async function authHeaders(extra?: Record<string, string>): Promise<Record<strin
   return headers;
 }
 
+// A user can temporarily enter another assigned role from the EOS workspace.
+// Keep that selected-seat context on every company-scoped request, including
+// component-local queries that use apiRequest directly rather than a page
+// helper. This prevents the rendered role and API authorization role diverging.
+function withEosSeatContext(url: string): string {
+  if (
+    typeof window === "undefined" ||
+    !url.includes("/api/eos/companies/")
+  )
+    return url;
+  const seatId = new URLSearchParams(window.location.search).get("seat");
+  if (!seatId) return url;
+  const scoped = new URL(url, window.location.origin);
+  if (!scoped.searchParams.has("seatId")) scoped.searchParams.set("seatId", seatId);
+  return `${scoped.pathname}${scoped.search}${scoped.hash}`;
+}
+
 export async function apiBinaryRequest<T = unknown>(
   url: string,
   body: Blob,
   headers: Record<string, string> = {},
 ): Promise<T> {
-  const response = await fetch(url, {
+  const response = await fetch(withEosSeatContext(url), {
     method: "POST",
     headers: await authHeaders(headers),
     body,
@@ -61,7 +78,7 @@ export async function apiRequest<T = any>(
     ...(serializedBody ? { "Content-Type": "application/json" } : {}),
     ...(options?.headers ? Object.fromEntries(new Headers(options.headers).entries()) : {}),
   });
-  const res = await fetch(url, {
+  const res = await fetch(withEosSeatContext(url), {
     ...options,
     method,
     headers,
@@ -82,7 +99,7 @@ export const getQueryFn: <T>(options: {
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     const headers = await authHeaders();
-    const res = await fetch(queryKey[0] as string, {
+    const res = await fetch(withEosSeatContext(queryKey[0] as string), {
       headers,
       credentials: "include",
     });
