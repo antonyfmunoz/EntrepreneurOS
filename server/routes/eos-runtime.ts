@@ -268,6 +268,7 @@ import {
   selectAdvisorSeats,
   selectOperatingAssignment,
   seatCreateSchema,
+  seatUpdateSchema,
   type EosSeatKind,
   type AuthorityClass,
   visibilityPolicyFor,
@@ -4359,6 +4360,30 @@ export function registerEosRuntimeRoutes(app: Express): void {
         };
       });
       return { status: 201, body: outcome };
+    }),
+  );
+
+  app.patch(
+    "/api/eos/companies/:companyId/seats/:seatId",
+    route(async (req) => {
+      const access = await companyAccess(req);
+      if (!mayAdminOrganization(access)) throw new EosRouteError(403, "organization_manage_denied", "This operating role lacks organization-design authority.");
+      const input = seatUpdateSchema.parse(req.body);
+      const [seat] = await db.select().from(eosSeats).where(and(eq(eosSeats.id, req.params.seatId), eq(eosSeats.companyId, access.company.id), eq(eosSeats.status, "active"))).limit(1);
+      if (!seat) throw new EosRouteError(404, "seat_not_found", "The role does not exist in this company.");
+      if (seat.kind === "founder" && (input.supervisorSeatId !== undefined || input.title !== undefined)) throw new EosRouteError(409, "founder_seat_structure_immutable", "Founder reporting position and title are immutable.");
+      if (input.supervisorSeatId) {
+        if (input.supervisorSeatId === seat.id) throw new EosRouteError(400, "seat_self_supervision_invalid", "A role cannot report to itself.");
+        const [supervisor] = await db.select().from(eosSeats).where(and(eq(eosSeats.id, input.supervisorSeatId), eq(eosSeats.companyId, access.company.id), eq(eosSeats.status, "active"))).limit(1);
+        if (!supervisor) throw new EosRouteError(400, "invalid_supervisor", "Supervisor must be an active role in this company.");
+      }
+      const policy = await authorizeAction(req, access, { authorityClass: "grant_access", resource: "seat", actionKey: "seat.update", purpose: "maintain_accountable_role", classification: "restricted", consequence: "material", targetSeatId: seat.id });
+      const [updated] = await db.transaction(async (tx) => {
+        const rows = await tx.update(eosSeats).set({ ...input, updatedAt: new Date() }).where(eq(eosSeats.id, seat.id)).returning();
+        await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "seat.updated", targetType: "seat", targetId: seat.id, traceId: policy.traceId, correlationId: policy.correlationId, result: "active", details: { changedFields: Object.keys(input), policyDecisionId: policy.decisionId }, createdAt: new Date() });
+        return rows;
+      });
+      return { body: updated };
     }),
   );
 

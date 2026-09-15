@@ -3455,6 +3455,17 @@ export const seatCreateSchema = z.object({
   toolEntitlements: z.array(z.string().min(1).max(120)).max(100).default([]),
 });
 
+// A seat is the canonical role object. Occupancy is deliberately excluded:
+// humans enter and leave through the invitation/assignment lifecycle so that
+// the role agent can reliably switch between autonomous and assistant modes.
+export const seatUpdateSchema = z.object({
+  title: z.string().min(1).max(120).optional(),
+  agentName: z.string().min(1).max(80).optional(),
+  mandate: z.string().max(2000).optional(),
+  toolEntitlements: z.array(z.string().min(1).max(120)).max(100).optional(),
+  supervisorSeatId: z.string().uuid().nullable().optional(),
+}).refine((value) => Object.keys(value).length > 0, "At least one seat field is required.");
+
 export const authoritySubjectTypes = [
   "agent",
   "team",
