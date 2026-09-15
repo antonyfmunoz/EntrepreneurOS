@@ -1872,7 +1872,9 @@ try {
     throw new Error(
       `First-run organization context was incomplete: ${JSON.stringify(firstRunState.context)}`,
     );
-  await desktop.goto(`${origin}${new URL(desktop.url()).pathname}#command`, {
+  const newlyCreatedCompanyId = new URL(desktop.url()).pathname.match(/\/company\/(\d+)/)?.[1];
+  if (!newlyCreatedCompanyId) throw new Error("Created company route did not include a company id.");
+  await desktop.goto(`${origin}/company/${newlyCreatedCompanyId}#command`, {
     waitUntil: "domcontentloaded",
   });
   await desktop
