@@ -2335,7 +2335,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
             grants: access.authorityCandidates,
             principalKey: req.user.id,
             seatId: seat.id,
-            action: {
+            action: policyActionContextSchema.parse({
               authorityClass: "view",
               resource: `instrument:${instrumentKey}`,
               actionKey: "instrument.read",
@@ -2343,7 +2343,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
               classification: "internal",
               consequence: "routine",
               targetSeatId: seat.id,
-            },
+            }),
           }).outcome === "permit",
         ),
         toolEntitlements: Array.from(
