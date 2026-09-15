@@ -117,8 +117,7 @@ const IntegrationOperationsControlCenter = lazy(() => import("@/components/integ
 const ArtifactClosureControlCenter = lazy(() => import("@/components/artifact-closure-control-center").then((module) => ({ default: module.ArtifactClosureControlCenter })));
 const NativeOperatingControlCenter = lazy(() => import("@/components/native-operating-control-center").then((module) => ({ default: module.NativeOperatingControlCenter })));
 const CanonicalInstrumentControlCenter = lazy(() => import("@/components/canonical-instrument-control-center").then((module) => ({ default: module.CanonicalInstrumentControlCenter })));
-const ConferenceRoomControlCenter = lazy(() => import("@/components/conference-room-control-center").then((module) => ({ default: module.ConferenceRoomControlCenter })));
-const NativeMessageHub = lazy(() => import("@/components/native-message-hub").then((module) => ({ default: module.NativeMessageHub })));
+const LeadCaptureStudio = lazy(() => import("@/components/lead-capture-studio").then((module) => ({ default: module.LeadCaptureStudio })));
 const EndStateGovernanceControlCenter = lazy(() => import("@/components/end-state-governance-control-center").then((module) => ({ default: module.EndStateGovernanceControlCenter })));
 
 function DeferredControlFallback() {
@@ -1360,18 +1359,19 @@ export default function EosOverlayPage() {
         ),
     ),
   );
-  const canUseInstrument = (instrumentKey: string) => Boolean(
-    principalContext?.authority?.grants?.some(
-      (grant: JsonRecord) =>
-        Array.isArray(grant.authorityClasses) &&
-        grant.authorityClasses.includes("view") &&
-        authorityGrantCoversResource(
-          grant,
-          `instrument:${instrumentKey}`,
-          principalContext?.seatId,
-        ),
-    ),
+  // The server is the authority for this list. It evaluates the full policy
+  // decision (assignment, active grants, denies, ceilings, and conditions),
+  // instead of the incomplete client-side grant check previously used here.
+  const visibleInstrumentKeys = new Set<string>(
+    principalContext?.visibleInstrumentKeys || [],
   );
+  const canUseInstrument = (instrumentKey: string) =>
+    visibleInstrumentKeys.has(instrumentKey);
+  // A role's Work Room is its assigned operating queue, not a copy of every
+  // company-wide control surface. Founder-owned growth controls are exposed
+  // here; role communication continues through the hierarchical assistant
+  // drawer until a role has been explicitly assigned a native tool surface.
+  const mayOperateFounderGrowthTools = isFounder;
   const mayAdminOrganization =
     ["founder", "company_ceo"].includes(principalContext?.role) &&
     effectiveAuthorityClasses.has("grant_access");
@@ -10505,28 +10505,9 @@ export default function EosOverlayPage() {
           </TabsContent>
 
           <TabsContent value="work-room" className="space-y-6">
-            {canUseInstrument("messages") && <Suspense fallback={<DeferredControlFallback />}>
-              <NativeMessageHub
+            {mayOperateFounderGrowthTools && canUseInstrument("forms") && canUseInstrument("crm") && <Suspense fallback={<DeferredControlFallback />}>
+              <LeadCaptureStudio
                 root={root}
-                seats={visibleSeats.map((seat: JsonRecord) => ({
-                  id: String(seat.id),
-                  title: String(seat.title || "Role"),
-                  agentName: String(seat.agentName || "Assistant"),
-                  status: String(seat.status || "active"),
-                }))}
-                canExecute={effectiveAuthorityClasses.has("execute")}
-                canDecide={effectiveAuthorityClasses.has("decide")}
-              />
-            </Suspense>}
-            {canUseInstrument("conference_rooms") && <Suspense fallback={<DeferredControlFallback />}>
-              <ConferenceRoomControlCenter
-                root={root}
-                seats={visibleSeats.map((seat: JsonRecord) => ({
-                  id: String(seat.id),
-                  title: String(seat.title || "Role"),
-                  agentName: String(seat.agentName || "Assistant"),
-                  status: String(seat.status || "active"),
-                }))}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
               />

@@ -36,6 +36,7 @@ const CandidatePortalPage = lazy(() => import("@/pages/candidate-portal-page"));
 const RecoveryCalculatorPage = lazy(() => import("@/pages/recovery-calculator-page"));
 const NativeEsignPage = lazy(() => import("@/pages/native-esign-page"));
 const StakeholderPortalPage = lazy(() => import("@/pages/stakeholder-portal-page"));
+const LeadCapturePage = lazy(() => import("@/pages/lead-capture-page"));
 const NotFoundPage = lazy(() => import("@/pages/not-found-page"));
 
 type CanonicalCompanySurface = "organization" | "intelligence" | "operations" | "work-room";
@@ -192,6 +193,17 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <Suspense fallback={<FullPageStatus title="Opening your stakeholder workspace" description="Validating the private access link." />}>
           <StakeholderPortalPage />
+        </Suspense>
+        <Toaster />
+      </QueryClientProvider>
+    );
+  }
+
+  if (window.location.pathname.startsWith("/capture/")) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <Suspense fallback={<FullPageStatus title="Opening your form" description="Preparing this EOS intake point." />}>
+          <LeadCapturePage />
         </Suspense>
         <Toaster />
       </QueryClientProvider>

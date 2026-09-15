@@ -125,6 +125,7 @@ import {
   separationOfDutiesRuleSchema,
   type PolicyDecisionOutcome,
 } from "@shared/eos-policy";
+import { eosInstrumentKeys } from "@shared/instrument-runtime";
 import {
   approvalDecisionSchema,
   allowedSurfacesFor,
@@ -2329,6 +2330,22 @@ export function registerEosRuntimeRoutes(app: Express): void {
             effectiveUntil: grant.effectiveUntil,
           })),
         },
+        visibleInstrumentKeys: eosInstrumentKeys.filter((instrumentKey) =>
+          evaluatePolicyDecision({
+            grants: access.authorityCandidates,
+            principalKey: req.user.id,
+            seatId: seat.id,
+            action: policyActionContextSchema.parse({
+              authorityClass: "view",
+              resource: `instrument:${instrumentKey}`,
+              actionKey: "instrument.read",
+              purpose: "inspect_instrument",
+              classification: "internal",
+              consequence: "routine",
+              targetSeatId: seat.id,
+            }),
+          }).outcome === "permit",
+        ),
         toolEntitlements: Array.from(
           new Set([
             ...(Array.isArray(seat.toolEntitlements)
