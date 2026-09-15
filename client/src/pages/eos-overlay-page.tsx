@@ -1364,9 +1364,7 @@ export default function EosOverlayPage() {
     principalContext?.authority?.grants?.some(
       (grant: JsonRecord) =>
         Array.isArray(grant.authorityClasses) &&
-        grant.authorityClasses.some((authorityClass: string) =>
-          ["view", "execute", "decide"].includes(authorityClass),
-        ) &&
+        grant.authorityClasses.includes("view") &&
         authorityGrantCoversResource(
           grant,
           `instrument:${instrumentKey}`,
