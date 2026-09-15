@@ -29,6 +29,9 @@ const InvitationAcceptancePage = lazy(() => import("@/pages/invitation-acceptanc
 const PortfolioList = lazy(() => import("@/pages/portfolio-list-page"));
 const PortfolioDetail = lazy(() => import("@/pages/portfolio-detail-page"));
 const EosOverlayPage = lazy(() => import("@/pages/eos-overlay-page"));
+const OrgStudioPage = lazy(() => import("@/pages/org-studio-page"));
+const RevenueWorkspacePage = lazy(() => import("@/pages/revenue-workspace-page"));
+const OperationsStudioPage = lazy(() => import("@/pages/operations-studio-page"));
 const CandidatePortalPage = lazy(() => import("@/pages/candidate-portal-page"));
 const RecoveryCalculatorPage = lazy(() => import("@/pages/recovery-calculator-page"));
 const NativeEsignPage = lazy(() => import("@/pages/native-esign-page"));
@@ -106,6 +109,15 @@ function Router() {
       </ProtectedRoute>
       <ProtectedRoute path="/portfolios/:portfolioId">
         {() => <PortfolioDetail />}
+      </ProtectedRoute>
+      <ProtectedRoute path="/company/:companyId/org-studio">
+        {() => <OrgStudioPage />}
+      </ProtectedRoute>
+      <ProtectedRoute path="/company/:companyId/revenue">
+        {() => <RevenueWorkspacePage />}
+      </ProtectedRoute>
+      <ProtectedRoute path="/company/:companyId/operations">
+        {() => <OperationsStudioPage />}
       </ProtectedRoute>
       <ProtectedRoute path="/company/:companyId">
         {() => <EosOverlayPage />}

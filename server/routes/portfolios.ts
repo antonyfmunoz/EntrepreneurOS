@@ -368,17 +368,16 @@ export function registerPortfolioRoutes(app: Express): void {
     const attachSchema = z.object({ companyId: z.number().int().positive() });
     const createSchema = z.object({
       name: z.string().min(1),
+      legalName: z.string().trim().min(1).max(240).optional(),
+      assumedBusinessNames: z.array(z.string().trim().min(2).max(240)).max(30).optional(),
       stage: z.string().min(1),
       industry: z.string().optional(),
       businessModel: z.string().optional(),
+      offer: z.string().trim().min(1).max(2_000).optional(),
+      targetCustomer: z.string().trim().min(1).max(2_000).optional(),
       goals: z.string().optional(),
       assistantName: z.string().optional(),
-      founderProfile: z.object({
-        vision: z.string().max(2000).default(""),
-        values: z.string().max(1200).default(""),
-        decisionStyle: z.string().max(1200).default(""),
-        workingStyle: z.string().max(1200).default(""),
-      }).optional(),
+      founderProfile: z.record(z.unknown()).optional(),
     });
     const bodySchema = z.union([attachSchema, createSchema]);
 
@@ -441,8 +440,12 @@ export function registerPortfolioRoutes(app: Express): void {
           ownerUserId: userId,
           portfolioId,
           name: body.name,
+          legalName: body.legalName ?? body.name,
+          assumedBusinessNames: body.assumedBusinessNames ?? [],
           stage: body.stage,
           type: body.businessModel ?? null,
+          offer: body.offer ?? null,
+          targetCustomer: body.targetCustomer ?? null,
           goals: body.goals ?? null,
           assistantName: body.assistantName ?? "Assistant",
           founderProfile: body.founderProfile ?? {},
