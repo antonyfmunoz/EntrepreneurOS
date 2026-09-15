@@ -1361,18 +1361,14 @@ export default function EosOverlayPage() {
         ),
     ),
   );
-  const canUseInstrument = (instrumentKey: string) => Boolean(
-    principalContext?.authority?.grants?.some(
-      (grant: JsonRecord) =>
-        Array.isArray(grant.authorityClasses) &&
-        grant.authorityClasses.includes("view") &&
-        authorityGrantCoversResource(
-          grant,
-          `instrument:${instrumentKey}`,
-          principalContext?.seatId,
-        ),
-    ),
+  // The server is the authority for this list. It evaluates the full policy
+  // decision (assignment, active grants, denies, ceilings, and conditions),
+  // instead of the incomplete client-side grant check previously used here.
+  const visibleInstrumentKeys = new Set<string>(
+    principalContext?.visibleInstrumentKeys || [],
   );
+  const canUseInstrument = (instrumentKey: string) =>
+    visibleInstrumentKeys.has(instrumentKey);
   const mayAdminOrganization =
     ["founder", "company_ceo"].includes(principalContext?.role) &&
     effectiveAuthorityClasses.has("grant_access");
