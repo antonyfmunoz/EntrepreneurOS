@@ -1841,6 +1841,7 @@ try {
     .fill(
       "Validate the first customer outcome and establish a weekly operating cadence.",
     );
+  await desktop.getByRole("button", { name: "Continue", exact: true }).click();
   await desktop.getByText("Agent-first", { exact: true }).click();
   await desktop.getByRole("button", { name: "Continue", exact: true }).click();
   await desktop.getByRole("button", { name: "Create company and open Org Studio", exact: true }).click();
