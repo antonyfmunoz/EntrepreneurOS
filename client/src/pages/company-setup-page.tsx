@@ -46,7 +46,9 @@ export default function CompanySetupPage() {
     if (typeof window === "undefined") return "";
     return new URLSearchParams(window.location.search).get("portfolioId") || "";
   }, []);
-  const [currentStep, setCurrentStep] = useState(0);
+  // A portfolio-selected entry point is the same journey, simply resumed at
+  // the already-completed placement mission.
+  const [currentStep, setCurrentStep] = useState(() => requestedPortfolioId ? 1 : 0);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showCreatePortfolio, setShowCreatePortfolio] = useState(false);
   const [portfolioName, setPortfolioName] = useState("");
@@ -169,7 +171,7 @@ export default function CompanySetupPage() {
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">New and established companies first define their operating reality. Existing systems are reconciled afterward—not used as the company definition.</p>
           <ol className="mt-7 space-y-2" aria-label="Company Mission Journey progress">
             {missionStatus.map((mission, index) => (
-              <li key={mission.key}><button type="button" onClick={() => index <= currentStep || mission.complete ? setCurrentStep(index) : undefined} disabled={index > currentStep && !mission.complete} className={`flex w-full items-start gap-3 rounded-xl p-3 text-left transition-colors ${currentStep === index ? "bg-primary/10 text-foreground" : mission.complete ? "text-foreground hover:bg-muted" : "cursor-not-allowed text-muted-foreground"}`}>
+              <li key={mission.key}><button type="button" aria-label={`Step ${index + 1} of ${companyMissionJourney.length}: ${mission.title}`} onClick={() => index <= currentStep || mission.complete ? setCurrentStep(index) : undefined} disabled={index > currentStep && !mission.complete} className={`flex w-full items-start gap-3 rounded-xl p-3 text-left transition-colors ${currentStep === index ? "bg-primary/10 text-foreground" : mission.complete ? "text-foreground hover:bg-muted" : "cursor-not-allowed text-muted-foreground"}`}>
                 {mission.complete ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> : <Circle className="mt-0.5 h-4 w-4 shrink-0" />}<span><span className="block text-sm font-medium">{mission.title}</span><span className="mt-0.5 block text-xs text-muted-foreground">{mission.unlocks}</span></span>
               </button></li>
             ))}
