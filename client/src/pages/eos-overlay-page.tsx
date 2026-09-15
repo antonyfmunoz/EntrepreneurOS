@@ -4819,11 +4819,21 @@ export default function EosOverlayPage() {
             )}
             <Card>
               <CardHeader>
-                <CardTitle>Organization Compiler</CardTitle>
-                <CardDescription>
-                  Compile current company intent into a versioned manifest.
-                  Activation is an explicit local owner decision.
-                </CardDescription>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <CardTitle>Organization Compiler</CardTitle>
+                    <CardDescription className="mt-2">
+                      Compile current company intent into a versioned manifest.
+                      Activation is an explicit local owner decision.
+                    </CardDescription>
+                  </div>
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/company/${companyId}/org-studio`}>
+                      <Network className="mr-2 h-4 w-4" />
+                      Open Org Studio
+                    </Link>
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-2 text-sm">
@@ -7610,6 +7620,12 @@ export default function EosOverlayPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-2">
+                <Button asChild variant="outline">
+                  <Link href={`/company/${companyId}/revenue`}>
+                    <BriefcaseBusiness className="mr-2 h-4 w-4" />
+                    Open Revenue Workspace
+                  </Link>
+                </Button>
                 <Button
                   onClick={() =>
                     sendEaMessage(
@@ -9541,6 +9557,12 @@ export default function EosOverlayPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-2">
+                <Button asChild variant="outline">
+                  <Link href={`/company/${companyId}/operations`}>
+                    <Workflow className="mr-2 h-4 w-4" />
+                    Open Process Studio
+                  </Link>
+                </Button>
                 <Button
                   onClick={() =>
                     sendEaMessage(

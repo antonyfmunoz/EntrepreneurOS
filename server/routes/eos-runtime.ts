@@ -321,6 +321,7 @@ import {
 } from "../company-compilation/notion-source-adapter";
 import { DeclarativeMaterializationError } from "../company-compilation/declarative-materializer";
 import { companyPackageParitySnapshot } from "../company-compilation/semantic-parity";
+import { companyBlueprintForBusinessModel } from "@shared/company-blueprints";
 
 function escapeHtml(value: string): string {
   return value.replace(
@@ -2866,6 +2867,92 @@ export function registerEosRuntimeRoutes(app: Express): void {
         },
       });
       return { body: policy };
+    }),
+  );
+
+  app.get(
+    "/api/eos/companies/:companyId/company-blueprint",
+    route(async (req) => {
+      const access = await companyAccess(req);
+      const businessModel = access.company.type || (access.company.founderProfile as Record<string, unknown>)?.businessModel as string | undefined;
+      const blueprint = companyBlueprintForBusinessModel(businessModel);
+      const visible = await visibleSeatIds(access.company.id, access.seat.id, access.role);
+      const seats = await db.select().from(eosSeats).where(and(eq(eosSeats.companyId, access.company.id), eq(eosSeats.status, "active")));
+      return {
+        body: {
+          blueprint: {
+            key: blueprint.key,
+            title: blueprint.title,
+            description: blueprint.description,
+            roles: blueprint.roles.map((role) => {
+              const seat = seats.find((candidate) => candidate.title === role.title && candidate.kind === role.kind);
+              return {
+                ...role,
+                state: seat ? "instantiated" : "ready",
+                visible: !seat || visible.has(seat.id),
+                seatId: seat?.id || null,
+              };
+            }),
+          },
+        },
+      };
+    }),
+  );
+
+  app.post(
+    "/api/eos/companies/:companyId/company-blueprint/instantiate",
+    route(async (req) => {
+      const access = await companyAccess(req);
+      if (!mayAdminOrganization(access))
+        throw new EosRouteError(403, "company_blueprint_manage_denied", "This role lacks authority to instantiate the company operating blueprint.");
+      const input = z.object({ blueprintKey: z.string().trim().min(1).max(120).optional() }).strict().parse(req.body || {});
+      const businessModel = access.company.type || (access.company.founderProfile as Record<string, unknown>)?.businessModel as string | undefined;
+      const blueprint = companyBlueprintForBusinessModel(businessModel);
+      if (input.blueprintKey && input.blueprintKey !== blueprint.key)
+        throw new EosRouteError(409, "company_blueprint_context_mismatch", "This blueprint no longer matches the company business model. Update the Company Mission Journey first.");
+      await authorizeAction(req, access, {
+        authorityClass: "grant_access",
+        resource: "organization",
+        actionKey: "company_blueprint.instantiate",
+        purpose: "instantiate_company_operating_formation",
+        classification: "restricted",
+        consequence: "material",
+      });
+      const outcome = await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${access.company.id}, 24712)`);
+        const existingSeats = await tx.select().from(eosSeats).where(and(eq(eosSeats.companyId, access.company.id), eq(eosSeats.status, "active")));
+        const byTemplateKey = new Map<string, typeof eosSeats.$inferSelect>();
+        const created: typeof eosSeats.$inferSelect[] = [];
+        const present: typeof eosSeats.$inferSelect[] = [];
+        for (const role of blueprint.roles) {
+          let seat = existingSeats.find((candidate) => candidate.title === role.title && candidate.kind === role.kind);
+          if (!seat) {
+            const supervisor = role.supervisorKey ? byTemplateKey.get(role.supervisorKey) : undefined;
+            const [inserted] = await tx.insert(eosSeats).values({
+              id: randomUUID(), companyId: access.company.id, title: role.title, kind: role.kind,
+              supervisorSeatId: supervisor?.id || access.seat.id, occupantUserId: null,
+              agentName: role.agentName, agentMode: "autonomous", mandate: role.mandate,
+              authority: { blueprintKey: blueprint.key, approval: "supervisor" }, toolEntitlements: role.tools,
+              status: "active", createdAt: new Date(), updatedAt: new Date(),
+            }).returning();
+            seat = inserted;
+            created.push(seat);
+            await ensureSeatOperatingKernel(tx, access.company, seat, req.user.id);
+          } else {
+            present.push(seat);
+          }
+          byTemplateKey.set(role.key, seat);
+        }
+        const trace = tracePair();
+        await tx.insert(eosAuditRecords).values({
+          id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id,
+          action: "company_blueprint.instantiated", targetType: "company_blueprint", targetId: blueprint.key,
+          traceId: trace.traceId, correlationId: trace.correlationId, result: "applied",
+          details: { blueprintKey: blueprint.key, businessModel: businessModel || "hybrid", createdSeatIds: created.map((seat) => seat.id), preservedSeatIds: present.map((seat) => seat.id) },
+        });
+        return { blueprintKey: blueprint.key, created, present };
+      });
+      return { status: 201, body: outcome };
     }),
   );
 

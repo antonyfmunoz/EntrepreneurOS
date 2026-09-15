@@ -168,6 +168,25 @@ export function registerCompanyRoutes(app: Express): void {
     }
   });
 
+  // Founder-only Company Mission Journey hydration. This is intentionally the
+  // same company record used by creation and operating runtime; an existing
+  // company does not receive a second, integration-first intake system.
+  app.get("/api/company/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+      const companyId = Number(req.params.id);
+      if (!Number.isInteger(companyId)) return res.status(400).json({ message: "Invalid company id" });
+      const [company] = await db.select().from(companiesTable)
+        .where(and(eq(companiesTable.id, companyId), eq(companiesTable.ownerUserId, req.user.id)))
+        .limit(1);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      return res.json(company);
+    } catch (error) {
+      console.error("Error fetching company mission context:", error);
+      return res.status(500).json({ message: "Failed to fetch company mission context" });
+    }
+  });
+
   app.post("/api/company", async (req, res) => {
     const createCompanySchema = z.object({
       name: z.string().min(1, "Name is required"),

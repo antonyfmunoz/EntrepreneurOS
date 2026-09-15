@@ -1804,15 +1804,17 @@ try {
     .getByRole("link", { name: "Add organization", exact: true })
     .first()
     .click();
-  await desktop.getByLabel("Step 2 of 6: Company", { exact: true }).waitFor();
+  await desktop.getByLabel("Step 2 of 7: Establish company identity", { exact: true }).waitFor();
   await desktop
-    .getByLabel("Company Name", { exact: true })
+    .getByLabel("Operating company name", { exact: true })
     .fill("New Founder Company");
   await desktop.getByRole("button", { name: "Continue", exact: true }).click();
   await desktop.getByText("Pre-revenue", { exact: true }).click();
   await desktop.getByRole("button", { name: "Continue", exact: true }).click();
   await desktop.getByLabel("Industry", { exact: true }).fill("Software");
-  await desktop.getByText("SaaS", { exact: true }).click();
+  await desktop.getByText("Software", { exact: true }).click();
+  await desktop.getByLabel("Initial offer or value stream", { exact: true }).fill("New Founder Offer");
+  await desktop.getByLabel("Primary customer or buyer", { exact: true }).fill("Independent service businesses");
   await desktop.getByRole("button", { name: "Continue", exact: true }).click();
   await desktop
     .getByLabel("Executive Assistant name", { exact: true })
@@ -1835,18 +1837,16 @@ try {
     .fill("Daily brief, explicit decisions, minimal interruption.");
   await desktop.getByRole("button", { name: "Continue", exact: true }).click();
   await desktop
-    .getByPlaceholder(/10x revenue/)
+    .getByLabel("Near-term outcomes", { exact: true })
     .fill(
       "Validate the first customer outcome and establish a weekly operating cadence.",
     );
-  await desktop
-    .getByRole("button", { name: "Open command center", exact: true })
-    .click();
-  await desktop.waitForURL(/\/company\/\d+/);
-  await desktop.getByRole("heading", { name: "Home", exact: true }).waitFor();
-  await desktop
-    .getByRole("button", { name: "Rename Nova Prime", exact: true })
-    .waitFor();
+  await desktop.getByRole("button", { name: "Continue", exact: true }).click();
+  await desktop.getByText("Agent-first", { exact: true }).click();
+  await desktop.getByRole("button", { name: "Continue", exact: true }).click();
+  await desktop.getByRole("button", { name: "Create company and open Org Studio", exact: true }).click();
+  await desktop.waitForURL(/\/company\/\d+\/org-studio/);
+  await desktop.getByRole("heading", { name: "Org Studio", exact: true }).waitFor();
   const firstRunState = await desktop.evaluate(async () => {
     const companyId = window.location.pathname.match(/\/company\/(\d+)/)?.[1];
     const [portfolios, context] = await Promise.all([
@@ -1872,7 +1872,9 @@ try {
     throw new Error(
       `First-run organization context was incomplete: ${JSON.stringify(firstRunState.context)}`,
     );
-  await desktop.goto(`${origin}${new URL(desktop.url()).pathname}#command`, {
+  const newlyCreatedCompanyId = new URL(desktop.url()).pathname.match(/\/company\/(\d+)/)?.[1];
+  if (!newlyCreatedCompanyId) throw new Error("Created company route did not include a company id.");
+  await desktop.goto(`${origin}/company/${newlyCreatedCompanyId}#command`, {
     waitUntil: "domcontentloaded",
   });
   await desktop
@@ -2128,13 +2130,8 @@ try {
   await mobile.goto(`${origin}/company-setup?portfolioId=${portfolioId}`, {
     waitUntil: "domcontentloaded",
   });
-  await mobile
-    .getByRole("heading", {
-      name: "Build the operating foundation",
-      exact: true,
-    })
-    .waitFor();
-  await mobile.getByLabel("Step 2 of 6: Company", { exact: true }).waitFor();
+  await mobile.getByRole("heading", { name: "One company model. One path.", exact: true }).waitFor();
+  await mobile.getByLabel("Step 2 of 7: Establish company identity", { exact: true }).waitFor();
   if (
     await mobile
       .getByRole("button", { name: "Open navigation", exact: true })
@@ -2151,12 +2148,12 @@ try {
   if (setupOverflow)
     throw new Error("Mobile company setup has horizontal overflow.");
   await mobile.getByRole("button", { name: "Back", exact: true }).click();
-  await mobile.getByLabel("Step 1 of 6: Portfolio", { exact: true }).waitFor();
+  await mobile.getByLabel("Step 1 of 7: Place the company", { exact: true }).waitFor();
   await mobile
     .getByText(portfolioName, { exact: true })
     .locator("xpath=ancestor::button[1]")
     .click();
-  await mobile.getByLabel("Step 2 of 6: Company", { exact: true }).waitFor();
+  await mobile.getByLabel("Step 2 of 7: Establish company identity", { exact: true }).waitFor();
   await mobile.goto(`${origin}/company/${companyId}#my-role`, {
     waitUntil: "domcontentloaded",
   });
