@@ -1,0 +1,133 @@
+import { useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { CalendarDays, DoorOpen, Gavel, Plus, RefreshCw, UsersRound } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+
+type Json = Record<string, any>;
+type Seat = { id: string; title: string; agentName: string; status?: string };
+
+function commandKey(prefix: string) {
+  const suffix = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}:${suffix}`;
+}
+
+function localDateTime(hoursFromNow = 1) {
+  const date = new Date(Date.now() + hoursFromNow * 3_600_000);
+  date.setSeconds(0, 0);
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16);
+}
+
+function stateVariant(state: string) {
+  return ["active", "completed"].includes(state) ? "default" as const : "outline" as const;
+}
+
+export function ConferenceRoomControlCenter({ root, seats, canExecute, canDecide }: {
+  root: string;
+  seats: Seat[];
+  canExecute: boolean;
+  canDecide: boolean;
+}) {
+  const [selectedRoomId, setSelectedRoomId] = useState("");
+  const [selectedMeetingId, setSelectedMeetingId] = useState("");
+  const [roomTitle, setRoomTitle] = useState("");
+  const [roomPurpose, setRoomPurpose] = useState("");
+  const [meetingTitle, setMeetingTitle] = useState("");
+  const [agenda, setAgenda] = useState("");
+  const [startsAt, setStartsAt] = useState(localDateTime(1));
+  const [endsAt, setEndsAt] = useState(localDateTime(2));
+  const [participantSeatIds, setParticipantSeatIds] = useState<string[]>([]);
+  const [decision, setDecision] = useState("");
+  const [error, setError] = useState("");
+
+  const query = useQuery<Json>({
+    queryKey: [root, "canonical-instruments"],
+    queryFn: async () => (await apiRequest("GET", `${root}/instruments`)).json(),
+  });
+  const objects: Json[] = query.data?.objects || [];
+  const rooms = useMemo(() => objects.filter((item) => item.instrumentKey === "conference_rooms" && item.objectType === "room"), [objects]);
+  const meetings = useMemo(() => objects.filter((item) => item.instrumentKey === "conference_rooms" && item.objectType === "meeting"), [objects]);
+  const decisions = useMemo(() => objects.filter((item) => item.instrumentKey === "conference_rooms" && item.objectType === "decision"), [objects]);
+  const selectedRoom = rooms.find((item) => item.id === selectedRoomId) || rooms[0];
+  const selectedMeeting = meetings.find((item) => item.id === selectedMeetingId) || meetings.find((item) => item.data?.roomObjectId === selectedRoom?.id);
+  const roomMeetings = meetings.filter((item) => item.data?.roomObjectId === selectedRoom?.id);
+  const meetingDecisions = decisions.filter((item) => item.data?.meetingObjectId === selectedMeeting?.id);
+
+  const refresh = async () => queryClient.invalidateQueries({ queryKey: [root, "canonical-instruments"] });
+  const createRoom = useMutation({
+    mutationFn: async () => (await apiRequest("POST", `${root}/instrument-objects`, {
+      instrumentKey: "conference_rooms", objectType: "room", objectKey: `room:${roomTitle.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}:${Date.now()}`,
+      title: roomTitle.trim(), summary: roomPurpose.trim(), classification: "confidential", visibility: "organization",
+      data: { roomType: "virtual", accessRule: "invited_participants" }, sourceReference: {}, evidenceIds: [], idempotencyKey: commandKey("conference-room"),
+    })).json(),
+    onSuccess: async (result) => { setSelectedRoomId(result.object.id); setRoomTitle(""); setRoomPurpose(""); await refresh(); },
+    onError: (cause: Error) => setError(cause.message),
+  });
+  const createMeeting = useMutation({
+    mutationFn: async () => {
+      if (!selectedRoom) throw new Error("Create or select a Conference Room first.");
+      const result = await (await apiRequest("POST", `${root}/instrument-objects`, {
+        instrumentKey: "conference_rooms", objectType: "meeting", objectKey: `meeting:${meetingTitle.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}:${Date.now()}`,
+        title: meetingTitle.trim(), summary: `Scheduled in ${selectedRoom.title}.`, classification: "confidential", visibility: "organization",
+        data: { roomObjectId: selectedRoom.id, startsAt: new Date(startsAt).toISOString(), endsAt: new Date(endsAt).toISOString(), participantSeatIds, agenda: agenda.trim() },
+        sourceReference: { authority: "native_eos" }, evidenceIds: [], idempotencyKey: commandKey("conference-meeting"),
+      })).json();
+      await apiRequest("POST", `${root}/instrument-links`, { sourceObjectId: selectedRoom.id, targetObjectId: result.object.id, relationshipType: "hosts", metadata: {}, idempotencyKey: commandKey("conference-link") });
+      return result;
+    },
+    onSuccess: async (result) => { setSelectedMeetingId(result.object.id); setMeetingTitle(""); setAgenda(""); setParticipantSeatIds([]); await refresh(); },
+    onError: (cause: Error) => setError(cause.message),
+  });
+  const recordDecision = useMutation({
+    mutationFn: async () => {
+      if (!selectedMeeting) throw new Error("Select a scheduled meeting first.");
+      const decidedBySeatId = Array.isArray(selectedMeeting.data?.participantSeatIds)
+        ? selectedMeeting.data.participantSeatIds.find((seatId: unknown) => typeof seatId === "string" && seatId.length > 0)
+        : undefined;
+      if (!decidedBySeatId) throw new Error("A decision requires a recorded meeting participant.");
+      return (await apiRequest("POST", `${root}/instrument-objects`, {
+        instrumentKey: "conference_rooms", objectType: "decision", objectKey: `decision:${Date.now()}`, title: `Decision · ${selectedMeeting.title}`,
+        summary: decision.trim(), classification: "confidential", visibility: "organization",
+        data: { meetingObjectId: selectedMeeting.id, decision: decision.trim(), decidedBySeatId },
+        sourceReference: { authority: "native_eos" }, evidenceIds: [], idempotencyKey: commandKey("conference-decision"),
+      })).json();
+    },
+    onSuccess: async () => { setDecision(""); await refresh(); },
+    onError: (cause: Error) => setError(cause.message),
+  });
+  const activate = useMutation({
+    mutationFn: async (object: Json) => (await apiRequest("POST", `${root}/instrument-objects/${object.id}/transitions`, {
+      expectedVersion: object.version, state: "active", rationale: "Activate the governed Conference Room object for its stated operating purpose.", evidenceIds: [], idempotencyKey: commandKey("activate-conference-object"),
+    })).json(),
+    onSuccess: refresh,
+    onError: (cause: Error) => setError(cause.message),
+  });
+
+  const meetingTimesValid = Boolean(startsAt && endsAt && new Date(endsAt).getTime() > new Date(startsAt).getTime());
+  const toggleSeat = (seatId: string) => setParticipantSeatIds((current) => current.includes(seatId) ? current.filter((id) => id !== seatId) : [...current, seatId]);
+  return <Card data-testid="conference-room-control-center">
+    <CardHeader>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><CardTitle className="flex items-center gap-2"><DoorOpen className="h-5 w-5 text-primary" />Conference Rooms</CardTitle><CardDescription className="mt-1">A native room turns a bounded meeting into an accountable agenda, decision record, and follow-on work—without pretending a video, email, or calendar provider is required.</CardDescription></div>
+        <Button size="sm" variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}><RefreshCw className={`mr-2 h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />Refresh</Button>
+      </div>
+    </CardHeader>
+    <CardContent className="space-y-5">
+      {error && <Alert variant="destructive"><AlertTitle>Conference command not applied</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+      <div className="grid gap-5 xl:grid-cols-2">
+        <section className="rounded-xl border p-4"><div className="flex items-center gap-2"><DoorOpen className="h-4 w-4 text-primary" /><h3 className="font-semibold">1. Establish a room</h3></div><p className="mt-1 text-sm text-muted-foreground">A room is a governed operating context, not an untracked chat link.</p><div className="mt-4 grid gap-3"><div><Label htmlFor="conference-room-title">Room name</Label><Input id="conference-room-title" className="mt-1" value={roomTitle} onChange={(event) => setRoomTitle(event.target.value)} placeholder="Revenue recovery leadership room" /></div><div><Label htmlFor="conference-room-purpose">Purpose</Label><Textarea id="conference-room-purpose" className="mt-1" value={roomPurpose} onChange={(event) => setRoomPurpose(event.target.value)} placeholder="What decisions and work belong in this room?" /></div><Button disabled={!canExecute || roomTitle.trim().length < 2 || createRoom.isPending} onClick={() => createRoom.mutate()}><Plus className="mr-2 h-4 w-4" />{createRoom.isPending ? "Creating room…" : "Create room"}</Button></div><div className="mt-4 space-y-2">{rooms.map((room) => <button type="button" key={room.id} onClick={() => { setSelectedRoomId(room.id); setSelectedMeetingId(""); }} className={`w-full rounded-lg border p-3 text-left ${selectedRoom?.id === room.id ? "border-primary bg-primary/5" : "bg-muted/30"}`}><div className="flex justify-between gap-3"><span className="font-medium">{room.title}</span><Badge variant={stateVariant(room.state)}>{room.state}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{room.summary || "No purpose recorded"}</p></button>)}{!rooms.length && <p className="py-3 text-sm text-muted-foreground">No native rooms yet.</p>}</div></section>
+        <section className="rounded-xl border p-4"><div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-primary" /><h3 className="font-semibold">2. Schedule a governed meeting</h3></div><p className="mt-1 text-sm text-muted-foreground">EOS records the agenda and participants locally. A connected calendar can be reconciled later, but is never assumed.</p><div className="mt-4 grid gap-3"><div><Label htmlFor="conference-meeting-title">Meeting title</Label><Input id="conference-meeting-title" className="mt-1" value={meetingTitle} onChange={(event) => setMeetingTitle(event.target.value)} placeholder="Weekly commercial review" /></div><div className="grid gap-3 sm:grid-cols-2"><div><Label htmlFor="conference-starts-at">Starts</Label><Input id="conference-starts-at" className="mt-1" type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} /></div><div><Label htmlFor="conference-ends-at">Ends</Label><Input id="conference-ends-at" className="mt-1" type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} /></div></div>{!meetingTimesValid && <p className="text-xs text-destructive">The meeting end time must be after its start time.</p>}<div><Label htmlFor="conference-agenda">Agenda</Label><Textarea id="conference-agenda" className="mt-1" value={agenda} onChange={(event) => setAgenda(event.target.value)} placeholder="Decisions required, evidence to inspect, and intended next actions" /></div><div><p className="text-sm font-medium">Participants</p><div className="mt-2 flex flex-wrap gap-2">{seats.filter((seat) => seat.status !== "inactive").map((seat) => <label key={seat.id} className="flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-1.5 text-xs"><input type="checkbox" checked={participantSeatIds.includes(seat.id)} onChange={() => toggleSeat(seat.id)} />{seat.title}</label>)}</div></div><Button disabled={!canExecute || !selectedRoom || meetingTitle.trim().length < 2 || !agenda.trim() || !participantSeatIds.length || !meetingTimesValid || createMeeting.isPending} onClick={() => createMeeting.mutate()}><CalendarDays className="mr-2 h-4 w-4" />{createMeeting.isPending ? "Scheduling…" : "Schedule native meeting"}</Button></div></section>
+      </div>
+      <section className="rounded-xl border p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Meeting ledger</p><h3 className="mt-1 font-semibold">{selectedRoom ? selectedRoom.title : "Choose a room"}</h3></div>{selectedRoom?.state === "draft" && <Button size="sm" variant="outline" disabled={!canDecide || activate.isPending} onClick={() => activate.mutate(selectedRoom)}>Activate room</Button>}</div><div className="mt-4 grid gap-3 lg:grid-cols-2">{roomMeetings.map((meeting) => <button key={meeting.id} type="button" onClick={() => setSelectedMeetingId(meeting.id)} className={`rounded-xl border p-4 text-left ${selectedMeeting?.id === meeting.id ? "border-primary bg-primary/5" : "bg-muted/30"}`}><div className="flex justify-between gap-3"><p className="font-medium">{meeting.title}</p><Badge variant={stateVariant(meeting.state)}>{meeting.state}</Badge></div><p className="mt-2 text-sm text-muted-foreground">{meeting.data?.agenda}</p><p className="mt-2 text-xs text-muted-foreground">{meeting.data?.startsAt ? new Date(meeting.data.startsAt).toLocaleString() : "Time not recorded"} · {Array.isArray(meeting.data?.participantSeatIds) ? meeting.data.participantSeatIds.length : 0} participants</p></button>)}{selectedRoom && !roomMeetings.length && <p className="py-5 text-sm text-muted-foreground">No meetings scheduled in this room.</p>}</div>{selectedMeeting?.state === "draft" && <Button className="mt-4" size="sm" variant="outline" disabled={!canDecide || activate.isPending} onClick={() => activate.mutate(selectedMeeting)}>Activate selected meeting</Button>}</section>
+      {selectedMeeting && <section className="grid gap-5 rounded-xl border p-4 xl:grid-cols-2"><div><div className="flex items-center gap-2"><Gavel className="h-4 w-4 text-primary" /><h3 className="font-semibold">3. Record a decision</h3></div><p className="mt-1 text-sm text-muted-foreground">Decisions stay reviewable and can be connected to Work Packets or approvals. This records no external action.</p><Textarea className="mt-4" value={decision} onChange={(event) => setDecision(event.target.value)} placeholder="State the decision, accountable owner, and any condition or follow-up." /><Button className="mt-3" disabled={!canExecute || decision.trim().length < 3 || recordDecision.isPending} onClick={() => recordDecision.mutate()}><Gavel className="mr-2 h-4 w-4" />{recordDecision.isPending ? "Recording…" : "Record draft decision"}</Button></div><div><div className="flex items-center gap-2"><UsersRound className="h-4 w-4 text-primary" /><h3 className="font-semibold">Decision record</h3></div><div className="mt-3 space-y-2">{meetingDecisions.map((item) => <div key={item.id} className="rounded-lg bg-muted p-3"><div className="flex justify-between gap-3"><p className="font-medium">{item.summary}</p><Badge variant={stateVariant(item.state)}>{item.state}</Badge></div>{item.state === "draft" && <Button size="sm" variant="outline" className="mt-3" disabled={!canDecide || activate.isPending} onClick={() => activate.mutate(item)}>Activate decision</Button>}</div>)}{!meetingDecisions.length && <p className="text-sm text-muted-foreground">No decision has been recorded for this meeting.</p>}</div></div></section>}
+      <Alert><AlertTitle>Hierarchy and authority remain intact</AlertTitle><AlertDescription>Rooms coordinate people and role agents; they do not bypass role visibility, reporting paths, approvals, or external-provider controls.</AlertDescription></Alert>
+    </CardContent>
+  </Card>;
+}
