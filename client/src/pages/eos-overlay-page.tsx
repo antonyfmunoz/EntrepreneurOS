@@ -1360,6 +1360,20 @@ export default function EosOverlayPage() {
         ),
     ),
   );
+  const canUseInstrument = (instrumentKey: string) => Boolean(
+    principalContext?.authority?.grants?.some(
+      (grant: JsonRecord) =>
+        Array.isArray(grant.authorityClasses) &&
+        grant.authorityClasses.some((authorityClass: string) =>
+          ["view", "execute", "decide"].includes(authorityClass),
+        ) &&
+        authorityGrantCoversResource(
+          grant,
+          `instrument:${instrumentKey}`,
+          principalContext?.seatId,
+        ),
+    ),
+  );
   const mayAdminOrganization =
     ["founder", "company_ceo"].includes(principalContext?.role) &&
     effectiveAuthorityClasses.has("grant_access");
@@ -10493,7 +10507,7 @@ export default function EosOverlayPage() {
           </TabsContent>
 
           <TabsContent value="work-room" className="space-y-6">
-            <Suspense fallback={<DeferredControlFallback />}>
+            {canUseInstrument("messages") && <Suspense fallback={<DeferredControlFallback />}>
               <NativeMessageHub
                 root={root}
                 seats={visibleSeats.map((seat: JsonRecord) => ({
@@ -10505,8 +10519,8 @@ export default function EosOverlayPage() {
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
               />
-            </Suspense>
-            <Suspense fallback={<DeferredControlFallback />}>
+            </Suspense>}
+            {canUseInstrument("conference_rooms") && <Suspense fallback={<DeferredControlFallback />}>
               <ConferenceRoomControlCenter
                 root={root}
                 seats={visibleSeats.map((seat: JsonRecord) => ({
@@ -10518,7 +10532,7 @@ export default function EosOverlayPage() {
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
               />
-            </Suspense>
+            </Suspense>}
             <Card>
               <CardHeader>
                 <CardTitle>Active Work Room</CardTitle>
