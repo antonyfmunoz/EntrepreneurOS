@@ -232,7 +232,11 @@ const { createClerkClient } = require("@clerk/backend");
   process.stdout.write(token.jwt);
 })().catch((error) => { console.error(error.message); process.exit(1); });
 '@
-      $freshToken = & node -e $mintTokenScript
+      # Feed the script through stdin instead of `node -e`. PowerShell's native
+      # argument marshalling removes the embedded quotes from a multiline
+      # `-e` payload on Windows, which made the final authenticated smoke fail
+      # even after Fly had successfully promoted the candidate.
+      $freshToken = $mintTokenScript | & node
       if ($LASTEXITCODE -ne 0 -or -not $freshToken -or $freshToken.Trim().Split('.').Count -ne 3) {
         throw "Could not mint a fresh active-administrator session for the authenticated release smoke."
       }
