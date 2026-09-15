@@ -119,6 +119,7 @@ const NativeOperatingControlCenter = lazy(() => import("@/components/native-oper
 const CanonicalInstrumentControlCenter = lazy(() => import("@/components/canonical-instrument-control-center").then((module) => ({ default: module.CanonicalInstrumentControlCenter })));
 const ConferenceRoomControlCenter = lazy(() => import("@/components/conference-room-control-center").then((module) => ({ default: module.ConferenceRoomControlCenter })));
 const NativeMessageHub = lazy(() => import("@/components/native-message-hub").then((module) => ({ default: module.NativeMessageHub })));
+const LeadCaptureStudio = lazy(() => import("@/components/lead-capture-studio").then((module) => ({ default: module.LeadCaptureStudio })));
 const EndStateGovernanceControlCenter = lazy(() => import("@/components/end-state-governance-control-center").then((module) => ({ default: module.EndStateGovernanceControlCenter })));
 
 function DeferredControlFallback() {
@@ -10505,6 +10506,13 @@ export default function EosOverlayPage() {
           </TabsContent>
 
           <TabsContent value="work-room" className="space-y-6">
+            {canUseInstrument("forms") && canUseInstrument("crm") && <Suspense fallback={<DeferredControlFallback />}>
+              <LeadCaptureStudio
+                root={root}
+                canExecute={effectiveAuthorityClasses.has("execute")}
+                canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
             {canUseInstrument("messages") && <Suspense fallback={<DeferredControlFallback />}>
               <NativeMessageHub
                 root={root}
