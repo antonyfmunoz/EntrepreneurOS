@@ -145,44 +145,6 @@ type CompanyVaultConnectionDraft = {
   administratorReference: string;
   accountScope: string;
 };
-type OrganizationBlueprintDraft = {
-  purpose: string;
-  stage: string;
-  offer: string;
-  targetCustomer: string;
-  goals: string;
-  vision: string;
-  values: string;
-  decisionStyle: string;
-  workingStyle: string;
-  startingPoint: "new_company" | "existing_company";
-  operatingModel: "agent_first" | "hybrid_team" | "human_team";
-  businessModel: string;
-  primaryGrowthMotion: string;
-  departments: string;
-  priorityTools: string;
-  existingSystems: string;
-};
-
-const emptyOrganizationBlueprintDraft: OrganizationBlueprintDraft = {
-  purpose: "",
-  stage: "MVP",
-  offer: "",
-  targetCustomer: "",
-  goals: "",
-  vision: "",
-  values: "",
-  decisionStyle: "",
-  workingStyle: "",
-  startingPoint: "new_company",
-  operatingModel: "agent_first",
-  businessModel: "",
-  primaryGrowthMotion: "",
-  departments: "",
-  priorityTools: "",
-  existingSystems: "",
-};
-
 function blueprintList(value: string) {
   return value
     .split(/[\n,]/)
@@ -772,10 +734,6 @@ export default function EosOverlayPage() {
   const { toast } = useToast();
   const root = `/api/eos/companies/${companyId}`;
   const [activeTab, setActiveTab] = useState("home");
-  const [blueprintDraft, setBlueprintDraft] =
-    useState<OrganizationBlueprintDraft>(emptyOrganizationBlueprintDraft);
-  const [blueprintDraftKey, setBlueprintDraftKey] = useState("");
-  const [isBlueprintEditorOpen, setIsBlueprintEditorOpen] = useState(false);
   const [packetTitle, setPacketTitle] = useState("");
   const [packetObjective, setPacketObjective] = useState("");
   const [packetApproval, setPacketApproval] = useState(true);
@@ -1430,43 +1388,6 @@ export default function EosOverlayPage() {
   const canManageOrganizationBlueprint = ["founder", "company_ceo"].includes(
     String(principalContext?.role || ""),
   );
-  const currentBlueprintKey = `${companyId}:${manifest?.id || "new"}:${company?.name || ""}:${company?.stage || ""}:${company?.offer || ""}`;
-  const buildBlueprintDraft = (): OrganizationBlueprintDraft => {
-    const manifestInput = (manifest?.manifest || {}) as JsonRecord;
-    const manifestBlueprint = (manifestInput.blueprint || {}) as JsonRecord;
-    const founderProfile = (manifestInput.founderProfile || company?.founderProfile || {}) as JsonRecord;
-    const asText = (value: unknown) =>
-      Array.isArray(value) ? value.map(String).join("\n") : "";
-    return {
-      purpose: String(manifestInput.purpose || company?.goals || ""),
-      stage: String(manifestInput.stage || company?.stage || "MVP"),
-      offer: String(manifestInput.offer || company?.offer || ""),
-      targetCustomer: String(manifestInput.targetCustomer || company?.targetCustomer || ""),
-      goals: asText(manifestInput.goals) || String(company?.goals || ""),
-      vision: String(founderProfile.vision || ""),
-      values: String(founderProfile.values || ""),
-      decisionStyle: String(founderProfile.decisionStyle || ""),
-      workingStyle: String(founderProfile.workingStyle || ""),
-      startingPoint:
-        manifestBlueprint.startingPoint === "existing_company"
-          ? "existing_company"
-          : "new_company",
-      operatingModel:
-        manifestBlueprint.operatingModel === "hybrid_team" ||
-        manifestBlueprint.operatingModel === "human_team"
-          ? manifestBlueprint.operatingModel
-          : "agent_first",
-      businessModel: String(manifestBlueprint.businessModel || ""),
-      primaryGrowthMotion: String(manifestBlueprint.primaryGrowthMotion || ""),
-      departments: asText(manifestBlueprint.departments),
-      priorityTools: asText(manifestBlueprint.priorityTools),
-      existingSystems: asText(manifestBlueprint.existingSystems),
-    };
-  };
-  const resetBlueprintDraft = () => {
-    setBlueprintDraft(buildBlueprintDraft());
-    setBlueprintDraftKey(currentBlueprintKey);
-  };
   const effectiveAuthorityClasses = new Set<string>(
     principalContext?.authority?.classes || [],
   );
@@ -1683,20 +1604,6 @@ export default function EosOverlayPage() {
   }, [activeTab, principalContext?.role]);
 
   useEffect(() => {
-    if (blueprintDraftKey === currentBlueprintKey) return;
-    resetBlueprintDraft();
-  }, [
-    blueprintDraftKey,
-    company?.founderProfile,
-    company?.goals,
-    company?.offer,
-    company?.stage,
-    company?.targetCustomer,
-    currentBlueprintKey,
-    manifest?.id,
-  ]);
-
-  useEffect(() => {
     const persisted = communicationQuery.data?.messages || [];
     setEaMessages(
       persisted.map((message: JsonRecord) => ({
@@ -1802,18 +1709,19 @@ export default function EosOverlayPage() {
 
   const compilerMutation = useMutation({
     mutationFn: async () => {
-      const goals = blueprintList(blueprintDraft.goals);
+      const profile = (company?.founderProfile || {}) as JsonRecord;
+      const operatingFormation = String(profile.operatingFormation || "agent_first");
+      const goals = blueprintList(String(company?.goals || ""));
       const purpose =
-        blueprintDraft.purpose.trim() ||
+        String(company?.goals || "").trim() ||
         `Build a durable, operator-ready organization for ${company?.name || "this company"}.`;
       const offer =
-        blueprintDraft.offer.trim() || "Define and validate the primary offer";
+        String(company?.offer || "").trim() || "Define and validate the primary offer";
       const targetCustomer =
-        blueprintDraft.targetCustomer.trim() ||
-        "Define the initial ideal customer";
+        String(company?.targetCustomer || "").trim() || "Define the initial ideal customer";
       return requestJson<JsonRecord>("POST", `${root}/compiler/drafts`, {
         purpose,
-        stage: blueprintDraft.stage.trim() || company?.stage || "MVP",
+        stage: String(company?.stage || "MVP"),
         offer,
         targetCustomer,
         goals: goals.length
@@ -1823,23 +1731,31 @@ export default function EosOverlayPage() {
         ownerSeat: { title: "Founder / Owner", authority: "owner" },
         operatingCadence: "weekly",
         founderProfile: {
-          vision: blueprintDraft.vision.trim(),
-          values: blueprintDraft.values.trim(),
-          decisionStyle: blueprintDraft.decisionStyle.trim(),
-          workingStyle: blueprintDraft.workingStyle.trim(),
+          vision: String(profile.vision || ""),
+          values: String(profile.values || ""),
+          decisionStyle: String(profile.decisionStyle || ""),
+          workingStyle: String(profile.workingStyle || ""),
         },
         blueprint: {
-          startingPoint: blueprintDraft.startingPoint,
-          operatingModel: blueprintDraft.operatingModel,
-          businessModel: blueprintDraft.businessModel.trim(),
-          primaryGrowthMotion: blueprintDraft.primaryGrowthMotion.trim(),
-          departments: blueprintList(blueprintDraft.departments),
-          priorityTools: blueprintList(blueprintDraft.priorityTools),
-          existingSystems: blueprintList(blueprintDraft.existingSystems),
+          startingPoint:
+            operatingFormation === "existing_team"
+              ? "existing_company"
+              : "new_company",
+          operatingModel:
+            operatingFormation === "existing_team"
+              ? "human_team"
+              : operatingFormation === "hybrid"
+                ? "hybrid_team"
+                : "agent_first",
+          businessModel: String(company?.type || profile.businessModel || ""),
+          primaryGrowthMotion: "",
+          departments: [],
+          priorityTools: [],
+          existingSystems: [],
         },
         sourceAssertions: [
           {
-            label: "Founder-provided company blueprint",
+            label: "Company Mission Journey",
             value: purpose,
             sourceType: "user_assertion",
           },
@@ -5202,94 +5118,23 @@ export default function EosOverlayPage() {
                 <section className="rounded-2xl border bg-background p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="font-semibold">Company setup inputs</p>
+                      <p className="font-semibold">Canonical company inputs</p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        Describe the company once. EOS uses these inputs to
-                        personalize the organization, roles, missions, and
-                        native operating surfaces.
+                        Company identity, founder charter, operating formation,
+                        and business-model variables are defined once in the
+                        Company Mission Journey. This manifest reads that
+                        canonical context; it is not a second intake.
                       </p>
                     </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={resetBlueprintDraft}>
-                        Reset to current
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => setIsBlueprintEditorOpen((open) => !open)}>
-                        {isBlueprintEditorOpen ? "Hide inputs" : "Edit inputs"}
-                      </Button>
-                    </div>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/company-setup?companyId=${companyId}`}>Open Company Mission Journey</Link>
+                    </Button>
                   </div>
-                  {(isBlueprintEditorOpen || !manifest) && (
-                    <div className="mt-4 space-y-4">
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <label className="space-y-2 text-sm font-medium">Company purpose
-                          <Textarea value={blueprintDraft.purpose} onChange={(event) => setBlueprintDraft((draft) => ({ ...draft, purpose: event.target.value }))} placeholder="Why this organization exists and what it will accomplish" />
-                        </label>
-                        <label className="space-y-2 text-sm font-medium">Stage
-                          <Input value={blueprintDraft.stage} onChange={(event) => setBlueprintDraft((draft) => ({ ...draft, stage: event.target.value }))} placeholder="MVP, operating, scaling…" />
-                        </label>
-                        <label className="space-y-2 text-sm font-medium">Primary offer
-                          <Input value={blueprintDraft.offer} onChange={(event) => setBlueprintDraft((draft) => ({ ...draft, offer: event.target.value }))} placeholder="The first offer EOS will help operate" />
-                        </label>
-                        <label className="space-y-2 text-sm font-medium">Initial customer
-                          <Input value={blueprintDraft.targetCustomer} onChange={(event) => setBlueprintDraft((draft) => ({ ...draft, targetCustomer: event.target.value }))} placeholder="Who the company creates value for" />
-                        </label>
-                        <label className="space-y-2 text-sm font-medium">Starting point
-                          <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={blueprintDraft.startingPoint} onChange={(event) => setBlueprintDraft((draft) => ({ ...draft, startingPoint: event.target.value as OrganizationBlueprintDraft["startingPoint"] }))}>
-                            <option value="new_company">New company</option>
-                            <option value="existing_company">Existing company</option>
-                          </select>
-                        </label>
-                        <label className="space-y-2 text-sm font-medium">Operating model
-                          <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={blueprintDraft.operatingModel} onChange={(event) => setBlueprintDraft((draft) => ({ ...draft, operatingModel: event.target.value as OrganizationBlueprintDraft["operatingModel"] }))}>
-                            <option value="agent_first">Agent-first</option>
-                            <option value="hybrid_team">Hybrid team</option>
-                            <option value="human_team">Human team</option>
-                          </select>
-                        </label>
-                      </div>
-                      <label className="block space-y-2 text-sm font-medium">Goals — one per line
-                        <Textarea value={blueprintDraft.goals} onChange={(event) => setBlueprintDraft((draft) => ({ ...draft, goals: event.target.value }))} placeholder="Reach a repeatable customer-value loop&#10;Establish the first operating cadence" />
-                      </label>
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <label className="space-y-2 text-sm font-medium">Business model
-                          <Input value={blueprintDraft.businessModel} onChange={(event) => setBlueprintDraft((draft) => ({ ...draft, businessModel: event.target.value }))} placeholder="Agency, SaaS, services, commerce…" />
-                        </label>
-                        <label className="space-y-2 text-sm font-medium">Primary growth motion
-                          <Input value={blueprintDraft.primaryGrowthMotion} onChange={(event) => setBlueprintDraft((draft) => ({ ...draft, primaryGrowthMotion: event.target.value }))} placeholder="Outbound, referral, content, partnerships…" />
-                        </label>
-                        <label className="space-y-2 text-sm font-medium">Departments — comma or line separated
-                          <Textarea value={blueprintDraft.departments} onChange={(event) => setBlueprintDraft((draft) => ({ ...draft, departments: event.target.value }))} placeholder="Sales&#10;Marketing&#10;Finance" />
-                        </label>
-                        <label className="space-y-2 text-sm font-medium">Priority native tools — comma or line separated
-                          <Textarea value={blueprintDraft.priorityTools} onChange={(event) => setBlueprintDraft((draft) => ({ ...draft, priorityTools: event.target.value }))} placeholder="CRM&#10;Contracts&#10;Content calendar" />
-                        </label>
-                      </div>
-                      {blueprintDraft.startingPoint === "existing_company" && (
-                        <label className="block space-y-2 text-sm font-medium">Existing systems to reconcile — comma or line separated
-                          <Textarea value={blueprintDraft.existingSystems} onChange={(event) => setBlueprintDraft((draft) => ({ ...draft, existingSystems: event.target.value }))} placeholder="QuickBooks&#10;Google Workspace&#10;CRM" />
-                        </label>
-                      )}
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <label className="space-y-2 text-sm font-medium">Founder vision
-                          <Textarea value={blueprintDraft.vision} onChange={(event) => setBlueprintDraft((draft) => ({ ...draft, vision: event.target.value }))} placeholder="The future this organization is building" />
-                        </label>
-                        <label className="space-y-2 text-sm font-medium">Values
-                          <Textarea value={blueprintDraft.values} onChange={(event) => setBlueprintDraft((draft) => ({ ...draft, values: event.target.value }))} placeholder="The principles that constrain decisions" />
-                        </label>
-                        <label className="space-y-2 text-sm font-medium">Decision style
-                          <Textarea value={blueprintDraft.decisionStyle} onChange={(event) => setBlueprintDraft((draft) => ({ ...draft, decisionStyle: event.target.value }))} placeholder="How decisions should be prepared and escalated" />
-                        </label>
-                        <label className="space-y-2 text-sm font-medium">Working style
-                          <Textarea value={blueprintDraft.workingStyle} onChange={(event) => setBlueprintDraft((draft) => ({ ...draft, workingStyle: event.target.value }))} placeholder="Preferred cadence, communication, and review style" />
-                        </label>
-                      </div>
-                    </div>
-                  )}
                   <div className="mt-4 flex flex-wrap items-center gap-3">
                     <Button onClick={() => compilerMutation.mutate()} disabled={compilerMutation.isPending}>
-                      {compilerMutation.isPending ? "Compiling…" : manifest ? "Compile updated blueprint" : "Compile organization blueprint"}
+                      {compilerMutation.isPending ? "Compiling…" : manifest ? "Compile next manifest from current context" : "Compile organization manifest"}
                     </Button>
-                    <p className="text-xs text-muted-foreground">Compiling creates a reviewable draft. It does not activate the company, connect systems, or mark setup missions complete.</p>
+                    <p className="text-xs text-muted-foreground">Compilation reads the saved Company Mission Journey. It creates a reviewable draft only; it does not activate the company, connect systems, or mark missions complete.</p>
                   </div>
                 </section>
                 {isFounder &&
