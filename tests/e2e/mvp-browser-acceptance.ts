@@ -1679,6 +1679,10 @@ try {
     throw new Error(
       "An employee without the Calendar tool entitlement was offered the native Calendar operator surface.",
     );
+  if (await desktop.getByTestId("native-documents-studio").count())
+    throw new Error(
+      "An employee without the Docs tool entitlement was offered the native Docs operator surface.",
+    );
   if (await desktop.getByTestId("native-message-hub").count())
     throw new Error(
       "An employee without the Messages tool entitlement was offered the native Message Hub.",
