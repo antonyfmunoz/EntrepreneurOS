@@ -4586,6 +4586,58 @@ export function allowedSurfacesFor(role: EosSeatKind): readonly string[] {
   return surfacePolicies[role];
 }
 
+// Role designers use familiar names such as "CRM" and "Documents". Policy
+// enforcement, however, must receive the canonical native tool key that the
+// API routes authorize. Keep this translation at the organizational boundary
+// so display labels never accidentally become a different authority scope.
+const nativeToolAliases: Readonly<Record<string, string>> = {
+  command: "command",
+  objectives: "objectives",
+  analytics: "analytics",
+  workflows: "workflows",
+  workflow: "workflows",
+  documents: "docs",
+  document: "docs",
+  docs: "docs",
+  files: "files",
+  sheets: "sheets",
+  slides: "slides",
+  tables: "tables",
+  forms: "forms",
+  calendar: "calendar",
+  "content calendar": "calendar",
+  crm: "crm",
+  messages: "messages",
+  projects: "projects",
+  project: "projects",
+  roadmap: "projects",
+  tasks: "tasks",
+  task: "tasks",
+  campaigns: "ads",
+  campaign: "ads",
+  ads: "ads",
+  websites: "websites",
+  website: "websites",
+  commerce: "commerce",
+  finance: "finance",
+  search: "search",
+  canvas: "canvas",
+  "conference rooms": "conference_rooms",
+  "conference room": "conference_rooms",
+  ai: "ai",
+  knowledge: "knowledge",
+  memory: "memory",
+  reputation: "reputation",
+};
+
+export function canonicalToolEntitlements(values: readonly string[] | null | undefined): string[] {
+  return Array.from(new Set((values || [])
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => nativeToolAliases[value.toLowerCase()] || value.toLowerCase())));
+}
+
 export type EosNextActionReason =
   "organization_setup" | "approval" | "active_work" | "new_work";
 

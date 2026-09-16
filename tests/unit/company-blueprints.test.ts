@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { compileCompanyBlueprintStarters, companyBlueprintForBusinessModel, companyBlueprints } from "../../shared/company-blueprints";
 import { materializeNativeWorkflowStarter } from "../../shared/native-workflow-starters";
 import { materializeNativeBusinessStarters } from "../../shared/native-business-starters";
+import { canonicalToolEntitlements } from "../../shared/eos-runtime";
 
 describe("company operating blueprints", () => {
   it("maps business-model variables to one editable company formation", () => {
@@ -71,5 +72,11 @@ describe("company operating blueprints", () => {
       publicCapture: true,
       consentVersion: "native-eos-lead-capture-v1",
     });
+  });
+
+  it("maps role-designer labels to the canonical tool keys used by policy enforcement", () => {
+    expect(canonicalToolEntitlements([
+      "CRM", "Documents", "Content Calendar", "Campaigns", "Roadmap", "CRM",
+    ])).toEqual(["crm", "docs", "calendar", "ads", "projects"]);
   });
 });
