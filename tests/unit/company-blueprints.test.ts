@@ -69,6 +69,8 @@ describe("company operating blueprints", () => {
       "crm:pipeline",
       "forms:form",
       "websites:site",
+      "websites:page",
+      "websites:funnel",
     ]);
     expect(starters.find((starter) => starter.key === "commercial-pipeline")).toMatchObject({
       title: "Revenue recovery service pipeline",
@@ -78,6 +80,17 @@ describe("company operating blueprints", () => {
     expect(starters.find((starter) => starter.key === "commercial-intake")?.data).toMatchObject({
       publicCapture: true,
       consentVersion: "native-eos-lead-capture-v1",
+    });
+    expect(starters.find((starter) => starter.key === "commercial-page")?.data).toMatchObject({
+      publicPage: true,
+      siteObjectId: { starterAssetId: "company-site" },
+      primaryCtaTarget: "capture_form",
+      primaryCtaTargetId: { starterAssetId: "commercial-intake" },
+      path: "/start",
+    });
+    expect(starters.find((starter) => starter.key === "commercial-funnel")?.data).toMatchObject({
+      publicFunnel: true,
+      captureFormObjectId: { starterAssetId: "commercial-intake" },
     });
   });
 

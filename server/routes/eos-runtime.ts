@@ -3081,7 +3081,16 @@ export function registerEosRuntimeRoutes(app: Express): void {
               targetCustomer: access.company.targetCustomer || "",
             }).map((starter) => {
               const objectKey = `company-blueprint:${blueprint.key}:${starter.key}`;
-              const object = instruments.find((candidate) => candidate.instrumentKey === starter.instrumentKey && candidate.objectKey === objectKey);
+              const original = instruments.find((candidate) => candidate.instrumentKey === starter.instrumentKey && candidate.objectKey === objectKey);
+              const object = instruments.find((candidate) => {
+                const source = candidate.sourceReference as Record<string, unknown>;
+                return candidate.instrumentKey === starter.instrumentKey
+                  && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(candidate.id)
+                  && source.capability === "company_blueprint_starter"
+                  && source.blueprintKey === blueprint.key
+                  && source.starterKey === starter.key
+                  && (!original || source.supersedesCompilerAssetId === original.id);
+              }) || original;
               const ownerVisible = !object || (visible.has(object.ownerSeatId) && mayAccessClassification(access, object.classification));
               return {
                 key: starter.key,
@@ -3369,15 +3378,83 @@ export function registerEosRuntimeRoutes(app: Express): void {
           .select()
           .from(eosInstrumentObjects)
           .where(eq(eosInstrumentObjects.companyId, access.company.id));
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        const starterObjectKey = (starterKey: string) => `company-blueprint:${blueprint.key}:${starterKey}`;
+        const originalStarterAsset = (starter: typeof nativeAssets[number]) => existingNativeAssets.find((candidate) => candidate.instrumentKey === starter.instrumentKey && candidate.objectKey === starterObjectKey(starter.key));
+        const successorStarterAsset = (starter: typeof nativeAssets[number], original?: typeof eosInstrumentObjects.$inferSelect) => existingNativeAssets.find((candidate) => {
+          const source = candidate.sourceReference as Record<string, unknown>;
+          return candidate.instrumentKey === starter.instrumentKey
+            && uuidPattern.test(candidate.id)
+            && source.capability === "company_blueprint_starter"
+            && source.blueprintKey === blueprint.key
+            && source.starterKey === starter.key
+            && (!original || source.supersedesCompilerAssetId === original.id);
+        });
+        const effectiveStarterAsset = (starter: typeof nativeAssets[number]) => {
+          const original = originalStarterAsset(starter);
+          return successorStarterAsset(starter, original) || original;
+        };
+        const starterReferences = (value: unknown): string[] => {
+          if (Array.isArray(value)) return value.flatMap(starterReferences);
+          if (!value || typeof value !== "object") return [];
+          const record = value as Record<string, unknown>;
+          if (Object.keys(record).length === 1 && typeof record.starterAssetId === "string") return [record.starterAssetId];
+          return Object.values(record).flatMap(starterReferences);
+        };
+        // Rebuild any compiler asset that points at a legacy asset as well.
+        // Otherwise a page or funnel could retain a stale reference after the
+        // intake/site it relies on receives its UUID-compatible successor.
+        const starterKeysToRecreate = new Set(nativeAssets.filter((starter) => {
+          const original = originalStarterAsset(starter);
+          const successor = successorStarterAsset(starter, original);
+          return Boolean(original && !successor && !uuidPattern.test(original.id) && (original.data as Record<string, unknown> | undefined)?.compilerStarter === true);
+        }).map((starter) => starter.key));
+        let discoveredDependency = true;
+        while (discoveredDependency) {
+          discoveredDependency = false;
+          for (const starter of nativeAssets) {
+            if (starterKeysToRecreate.has(starter.key)) continue;
+            if (!starterReferences(starter.data).some((key) => starterKeysToRecreate.has(key))) continue;
+            const existing = effectiveStarterAsset(starter);
+            if (existing && (existing.data as Record<string, unknown> | undefined)?.compilerStarter === true) {
+              starterKeysToRecreate.add(starter.key);
+              discoveredDependency = true;
+            }
+          }
+        }
+        const starterObjectIds = new Map<string, string>();
         for (const starter of nativeAssets) {
-          const objectKey = `company-blueprint:${blueprint.key}:${starter.key}`;
-          const existing = existingNativeAssets.find((candidate) => candidate.instrumentKey === starter.instrumentKey && candidate.objectKey === objectKey);
-          if (existing) {
+          const existing = effectiveStarterAsset(starter);
+          // Public publisher routes accept UUID identifiers. Earlier compiler
+          // drafts used readable IDs, which made native intake impossible to
+          // publish. New drafts receive UUIDs and old compiler drafts upgrade
+          // on the next explicit blueprint instantiation.
+          starterObjectIds.set(starter.key, existing && !starterKeysToRecreate.has(starter.key) ? existing.id : randomUUID());
+        }
+        const resolveStarterData = (value: unknown): unknown => {
+          if (Array.isArray(value)) return value.map(resolveStarterData);
+          if (!value || typeof value !== "object") return value;
+          const record = value as Record<string, unknown>;
+          if (Object.keys(record).length === 1 && typeof record.starterAssetId === "string") {
+            const resolved = starterObjectIds.get(record.starterAssetId);
+            if (!resolved) throw new EosRouteError(409, "company_blueprint_native_reference_missing", "A compiled native asset references an unavailable company starter.");
+            return resolved;
+          }
+          return Object.fromEntries(Object.entries(record).map(([key, nested]) => [key, resolveStarterData(nested)]));
+        };
+        const migratedLegacyNativeAssetIds: string[] = [];
+        for (const starter of nativeAssets) {
+          const original = originalStarterAsset(starter);
+          const existing = effectiveStarterAsset(starter);
+          if (existing && !starterKeysToRecreate.has(starter.key)) {
             preservedNativeAssetIds.push(existing.id);
             continue;
           }
           const ownerSeatId = byTemplateKey.get(starter.ownerRoleKey)?.id || byTemplateKey.get("company_ceo")?.id || access.seat.id;
           const now = new Date();
+          if (original && !uuidPattern.test(original.id)) migratedLegacyNativeAssetIds.push(original.id);
+          const data = resolveStarterData(starter.data) as Record<string, unknown>;
+          const objectKey = existing ? `${starterObjectKey(starter.key)}:upgrade:${randomUUID().slice(0, 8)}` : starterObjectKey(starter.key);
           const projection = {
             schemaVersion: "eos.instrument-object.v1",
             companyId: access.company.id,
@@ -3390,17 +3467,18 @@ export function registerEosRuntimeRoutes(app: Express): void {
             classification: "confidential",
             visibility: "organization",
             ownerSeatId,
-            data: starter.data,
+            data,
             sourceReference: {
               authority: "native_eos",
               capability: "company_blueprint_starter",
               blueprintKey: blueprint.key,
               starterKey: starter.key,
+              ...(existing ? { supersedesCompilerAssetId: existing.id } : {}),
             },
             evidenceIds: [],
             version: 1,
           };
-          const id = `instrument:company-blueprint:${access.company.id}:${blueprint.key}:${starter.key}`;
+          const id = starterObjectIds.get(starter.key)!;
           await tx.insert(eosInstrumentObjects).values({
             id,
             ...projection,
@@ -3427,9 +3505,10 @@ export function registerEosRuntimeRoutes(app: Express): void {
             createdStarterProcessIds,
             createdNativeAssetIds,
             preservedNativeAssetIds,
+            migratedLegacyNativeAssetIds,
           },
         });
-        return { blueprintKey: blueprint.key, created, present, starterArtifacts, createdStarterObjectiveIds, createdStarterPacketIds, createdStarterProcessIds, createdNativeAssetIds, preservedNativeAssetIds };
+        return { blueprintKey: blueprint.key, created, present, starterArtifacts, createdStarterObjectiveIds, createdStarterPacketIds, createdStarterProcessIds, createdNativeAssetIds, preservedNativeAssetIds, migratedLegacyNativeAssetIds };
       });
       return { status: 201, body: outcome };
     }),
