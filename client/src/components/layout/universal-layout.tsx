@@ -124,7 +124,10 @@ export function UniversalLayout({
               aria-hidden="true"
               data-eos-decision-hud-clearance={floatingPanelExpanded ? "expanded" : "collapsed"}
               className={
-                "pointer-events-none transition-[height] duration-200 " +
+                // The HUD is sticky at top-3. Reserve that offset as well as
+                // its dynamic height so expanded controls cannot overlap the
+                // first visible workspace content.
+                "pointer-events-none mt-3 transition-[height] duration-200 " +
                 (floatingPanelExpanded ? "h-7 sm:h-9" : "h-3")
               }
             />
