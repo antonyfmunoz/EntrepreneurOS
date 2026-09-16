@@ -9650,6 +9650,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
         classification: input.classification,
         consequence: "material",
         targetSeatId: accountableSeatId,
+        toolKey: "workflows",
       });
       const id = randomUUID();
       const now = new Date();
@@ -9767,6 +9768,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
         classification: source.classification,
         consequence: "material",
         targetSeatId: source.accountableSeatId,
+        toolKey: "workflows",
       });
       const [latest] = await db
         .select({ version: eosProcessDefinitions.version })
@@ -9998,6 +10000,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
         classification: input.classification || record.classification,
         consequence: material ? "material" : "routine",
         targetSeatId: accountableSeatId,
+        toolKey: "workflows",
       });
       const updates: any = {
         ...input,

@@ -1115,6 +1115,14 @@ const processStepSchema = z.object({
   title: z.string().trim().min(1).max(300),
   instructions: z.string().trim().min(1).max(4000),
   completionCriteria: z.string().trim().min(1).max(2000),
+  // These are deliberately part of the immutable process version rather than
+  // UI-only metadata. A no-code workflow must be able to explain which kind
+  // of action it represents, the minimum authority that can advance it, and
+  // the native tool boundary it may use.
+  actionKind: z.enum(["manual", "native", "approval", "condition"]).default("manual"),
+  authorityClass: z.enum(["view", "execute", "decide"]).default("execute"),
+  toolKey: z.string().trim().min(1).max(200).default("operations"),
+  onFailure: z.string().trim().min(3).max(2000).default("Stop, preserve the current state, and escalate to the accountable role."),
 });
 export const processCreateSchema = operationsRecordBase.extend({
   capabilityInstanceId: z.string().uuid(),

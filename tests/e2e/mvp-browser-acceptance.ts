@@ -422,29 +422,41 @@ try {
   await desktop.getByText("Resource registered", { exact: true }).waitFor();
   const processName = `Browser accepted delivery ${Date.now()}`;
   await desktop
-    .getByLabel("Process capability")
+    .getByLabel("Company capability")
     .selectOption({ label: capabilityName });
-  await desktop.getByLabel("Process name").fill(processName);
+  await desktop.getByLabel("Workflow name").fill(processName);
   await desktop
-    .getByLabel("Process purpose")
+    .getByLabel("Operating purpose")
     .fill("Prove that an operator can execute work from the rendered SOP");
   await desktop
-    .getByLabel("Process intended outcome")
+    .getByLabel("Done when")
     .fill("The browser acceptance result is reviewed and accepted");
   await desktop
-    .getByLabel("Process trigger")
+    .getByLabel("When it starts")
     .fill("The governed Work Packet enters ready state");
   await desktop
-    .getByLabel("First procedure step")
+    .getByLabel("Workflow step 1 title")
+    .fill("Execute browser acceptance fixture");
+  await desktop
+    .getByLabel("Workflow step 1 instructions")
     .fill(
       "Execute the browser acceptance fixture and record the observed result",
     );
   await desktop
-    .getByRole("button", { name: "Map executable process", exact: true })
+    .getByLabel("Workflow step 1 completion criterion")
+    .fill("The observed browser result is recorded for review");
+  await desktop
+    .getByRole("button", { name: "Create workflow", exact: true })
     .click();
   await desktop
-    .getByText("Executable process mapped", { exact: true })
+    .getByText(processName, { exact: true })
     .waitFor();
+  await desktop
+    .getByLabel("Work Packet capability")
+    .selectOption({ label: capabilityName });
+  await desktop
+    .getByLabel("Work Packet process")
+    .selectOption({ label: `${processName} · v1` });
   const missionTitle = `Interactive MVP ${Date.now()}`;
   await desktop.getByPlaceholder("Mission title").fill(missionTitle);
   await desktop
