@@ -116,6 +116,10 @@ export function NativeFunnelStudio({
   const [editingPage, setEditingPage] = useState<Json | null>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState("");
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("focus") !== "native-funnel-studio") return;
+    document.getElementById("native-funnel-studio")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
   const formsQuery = useQuery<Json>({
     queryKey: [root, "native-funnel-forms"],
     queryFn: async () =>
@@ -432,7 +436,7 @@ export function NativeFunnelStudio({
   const pageFormTitle = editingPage ? "Edit public page" : "Create public page";
 
   return (
-    <Card data-testid="native-funnel-studio">
+    <Card id="native-funnel-studio" data-testid="native-funnel-studio">
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
