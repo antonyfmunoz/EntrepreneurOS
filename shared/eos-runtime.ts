@@ -4648,6 +4648,10 @@ export function allowedSurfacesForRoleTools(
   const surfaces = new Set(allowedSurfacesFor(role));
   const tools = new Set(canonicalToolEntitlements(toolEntitlements));
   if (tools.has("finance")) surfaces.add("capital");
+  // Commercial work is a role-specific operating surface, not a founder-only
+  // navigation exception. A commercial role earns it from the same native
+  // CRM/dialer contract that Org Studio displays and edits.
+  if (tools.has("crm") || tools.has("dialer")) surfaces.add("commercial");
   return Array.from(surfaces);
 }
 
@@ -4671,7 +4675,14 @@ const nativeToolAliases: Readonly<Record<string, string>> = {
   forms: "forms",
   calendar: "calendar",
   "content calendar": "calendar",
+  "sales calendar": "calendar",
+  booking: "calendar",
+  bookings: "calendar",
   crm: "crm",
+  dialer: "dialer",
+  outreach: "dialer",
+  calling: "dialer",
+  "sales outreach": "dialer",
   messages: "messages",
   projects: "projects",
   project: "projects",

@@ -1417,6 +1417,11 @@ export default function EosOverlayPage() {
   // its own governed work surface without inheriting founder-only controls.
   const mayOperateNativeCrm =
     canUseInstrument("crm") && (isFounder || toolEntitlements.has("crm"));
+  // The dialer is a separate governed capability from merely seeing a CRM.
+  // A commercial role can inspect the company state it needs, but can only
+  // create or record outreach after Org Studio explicitly assigns Dialer.
+  const mayOperateNativeOutreach =
+    canUseInstrument("crm") && (isFounder || toolEntitlements.has("dialer"));
   // Growth planning is founder-controlled by default; a non-founder needs the
   // explicit Ads tool grant for campaign, audience, creative, and budget work.
   const mayOperateNativeMarketing =
@@ -7728,7 +7733,7 @@ export default function EosOverlayPage() {
               </CardContent>
             </Card>
 
-            <Card id="native-outreach-dialer" className="scroll-mt-40">
+            {mayOperateNativeOutreach ? <Card id="native-outreach-dialer" className="scroll-mt-40">
               <CardHeader>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -7792,7 +7797,12 @@ export default function EosOverlayPage() {
                   {!commercialStateQuery.isLoading && !(commercialStateQuery.data?.outreachSequences || []).length && <p className="text-sm text-muted-foreground">No native outreach sequences are visible in this role scope.</p>}
                 </div>
               </CardContent>
-            </Card>
+            </Card> : <Card id="native-outreach-dialer" className="scroll-mt-40">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Phone className="h-5 w-5" />Native outreach &amp; dialer</CardTitle>
+                <CardDescription className="mt-2 max-w-3xl">This role can inspect the commercial state available in its hierarchy, but cannot create or record outreach. A founder or Company CEO can assign the native Dialer tool to this role in Org Studio when that responsibility belongs here.</CardDescription>
+              </CardHeader>
+            </Card>}
 
             <Card id="recovery-sales-briefs" className="scroll-mt-40">
               <CardHeader>

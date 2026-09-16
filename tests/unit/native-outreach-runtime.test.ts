@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  allowedSurfacesForRoleTools,
+  canonicalToolEntitlements,
   outreachAttemptCreateSchema,
   outreachAttemptOutcomes,
   outreachChannels,
@@ -38,5 +40,14 @@ describe("native outreach and dialer runtime", () => {
       outcome: "do_not_contact",
       note: "Prospect asked by email on 2026-09-16 not to receive phone outreach.",
     }).outcome).toBe("do_not_contact");
+  });
+
+  it("treats Dialer as a real role capability rather than a display label", () => {
+    expect(canonicalToolEntitlements(["CRM", "Sales outreach", "Sales Calendar"]))
+      .toEqual(["crm", "dialer", "calendar"]);
+    expect(allowedSurfacesForRoleTools("functional_executive", ["CRM", "Dialer"]))
+      .toContain("commercial");
+    expect(allowedSurfacesForRoleTools("functional_executive", ["Documents"]))
+      .not.toContain("commercial");
   });
 });
