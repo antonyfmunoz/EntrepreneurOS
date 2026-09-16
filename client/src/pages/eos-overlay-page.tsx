@@ -124,6 +124,7 @@ const NativeMessageHub = lazy(() => import("@/components/native-message-hub").th
 const NativeDocumentsStudio = lazy(() => import("@/components/native-documents-studio").then((module) => ({ default: module.NativeDocumentsStudio })));
 const NativeSheetsStudio = lazy(() => import("@/components/native-sheets-studio").then((module) => ({ default: module.NativeSheetsStudio })));
 const NativeCrmStudio = lazy(() => import("@/components/native-crm-studio").then((module) => ({ default: module.NativeCrmStudio })));
+const NativeWorkflowComposer = lazy(() => import("@/components/native-workflow-composer").then((module) => ({ default: module.NativeWorkflowComposer })));
 const EndStateGovernanceControlCenter = lazy(() => import("@/components/end-state-governance-control-center").then((module) => ({ default: module.EndStateGovernanceControlCenter })));
 
 function DeferredControlFallback() {
@@ -735,12 +736,6 @@ export default function EosOverlayPage() {
   const [capabilityKey, setCapabilityKey] = useState("");
   const [capabilityTrigger, setCapabilityTrigger] = useState("");
   const [capabilityModuleId, setCapabilityModuleId] = useState("");
-  const [processCapabilityId, setProcessCapabilityId] = useState("");
-  const [processName, setProcessName] = useState("");
-  const [processPurpose, setProcessPurpose] = useState("");
-  const [processOutcome, setProcessOutcome] = useState("");
-  const [processTrigger, setProcessTrigger] = useState("");
-  const [processStep, setProcessStep] = useState("");
   const [resourceName, setResourceName] = useState("");
   const [resourceType, setResourceType] = useState("system_tool");
   const [resourceRights, setResourceRights] = useState("");
@@ -1399,6 +1394,12 @@ export default function EosOverlayPage() {
   // its own governed work surface without inheriting founder-only controls.
   const mayOperateNativeCrm =
     canUseInstrument("crm") && (isFounder || toolEntitlements.has("crm"));
+  // Workflow authorship changes how a company operates, so it is founder
+  // capability by default and an explicit tool grant for any other role.
+  // Viewing an Operations surface alone never grants this control.
+  const mayOperateNativeWorkflows =
+    canUseInstrument("workflows") &&
+    (isFounder || toolEntitlements.has("workflows"));
   // A role's Work Room is its assigned operating queue, not a copy of every
   // company-wide control surface. Founder-owned growth controls are exposed
   // here; role communication continues through the hierarchical assistant
@@ -2266,7 +2267,6 @@ export default function EosOverlayPage() {
       setCapabilityKey("");
       setCapabilityTrigger("");
       setCapabilityModuleId("");
-      setProcessCapabilityId(record.id);
       setPacketCapabilityId(record.id);
       await operationsStateQuery.refetch();
       toast({ title: "Capability instance mapped" });
@@ -2292,53 +2292,6 @@ export default function EosOverlayPage() {
       toast({ title: "Capability module assignment updated" });
     },
     onError: (error) => showMutationError("Capability module assignment", error),
-  });
-  const processMutation = useMutation({
-    mutationFn: () =>
-      requestJson<JsonRecord>("POST", `${root}/processes`, {
-        capabilityInstanceId: processCapabilityId,
-        name: processName,
-        workflowKey: `workflow:${processName
-          .trim()
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")}`,
-        purpose: processPurpose,
-        intendedOutcome: processOutcome,
-        triggerCondition: processTrigger,
-        procedureSteps: [
-          {
-            id: "step-1",
-            title: processStep.slice(0, 120),
-            instructions: processStep,
-            completionCriteria: processOutcome,
-          },
-        ],
-        requiredOutputs: [processOutcome],
-        evidenceRequirements: ["Observed execution result"],
-        failurePaths: [
-          "Stop, preserve state, and escalate to the accountable seat",
-        ],
-        terminalCriteria: [processOutcome],
-        acceptanceTests: [
-          "An authorized fixture operator completes the normal path from the rendered SOP",
-        ],
-      }),
-    onSuccess: async (record) => {
-      setProcessName("");
-      setProcessPurpose("");
-      setProcessOutcome("");
-      setProcessTrigger("");
-      setProcessStep("");
-      setPacketProcessId(record.id);
-      setPacketCapabilityId(record.capabilityInstanceId);
-      await operationsStateQuery.refetch();
-      toast({
-        title: "Executable process mapped",
-        description:
-          "Advance its qualification only as implementation and observed evidence become real.",
-      });
-    },
-    onError: (error) => showMutationError("Process creation", error),
   });
   const processTransitionMutation = useMutation({
     mutationFn: ({
@@ -9521,6 +9474,18 @@ export default function EosOverlayPage() {
           </TabsContent>
 
           <TabsContent value="operations" className="space-y-8">
+            {mayOperateNativeWorkflows && (
+              <Suspense fallback={<DeferredControlFallback />}>
+                <NativeWorkflowComposer
+                  root={root}
+                  capabilities={operationsStateQuery.data?.capabilities || []}
+                  processes={operationsStateQuery.data?.processes || []}
+                  canExecute={effectiveAuthorityClasses.has("execute")}
+                  canDecide={effectiveAuthorityClasses.has("decide")}
+                  onChanged={() => operationsStateQuery.refetch()}
+                />
+              </Suspense>
+            )}
             <Suspense fallback={<DeferredControlFallback />}>
               <NativeOperatingControlCenter
                 root={root}
@@ -9778,89 +9743,24 @@ export default function EosOverlayPage() {
 
               <Card id="operations-processes" className="scroll-mt-40">
                 <CardHeader>
-                  <CardTitle>Processes & SOPs</CardTitle>
+                  <CardTitle>Workflow governance</CardTitle>
                   <CardDescription>
-                    A versioned executable contract served inside work—not
-                    narrative instructions in another system.
+                    Review qualification and release state for the versioned
+                    process contracts built in the native Workflow Composer.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="space-y-3 rounded-xl border p-4">
-                    <select
-                      aria-label="Process capability"
-                      value={processCapabilityId}
-                      onChange={(event) =>
-                        setProcessCapabilityId(event.target.value)
-                      }
-                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      <option value="">Choose a capability</option>
-                      {(operationsStateQuery.data?.capabilities || [])
-                        .filter(
-                          (item: JsonRecord) => item.state !== "deprecated",
-                        )
-                        .map((item: JsonRecord) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name}
-                          </option>
-                        ))}
-                    </select>
-                    <Input
-                      aria-label="Process name"
-                      value={processName}
-                      onChange={(event) => setProcessName(event.target.value)}
-                      placeholder="Process / SOP name"
-                    />
-                    <Textarea
-                      aria-label="Process purpose"
-                      value={processPurpose}
-                      onChange={(event) =>
-                        setProcessPurpose(event.target.value)
-                      }
-                      placeholder="Purpose"
-                    />
-                    <Textarea
-                      aria-label="Process intended outcome"
-                      value={processOutcome}
-                      onChange={(event) =>
-                        setProcessOutcome(event.target.value)
-                      }
-                      placeholder="Intended outcome and completion criterion"
-                    />
-                    <Input
-                      aria-label="Process trigger"
-                      value={processTrigger}
-                      onChange={(event) =>
-                        setProcessTrigger(event.target.value)
-                      }
-                      placeholder="Trigger event or condition"
-                    />
-                    <Textarea
-                      aria-label="First procedure step"
-                      value={processStep}
-                      onChange={(event) => setProcessStep(event.target.value)}
-                      placeholder="First executable step"
-                    />
-                    <Button
-                      className="w-full"
-                      disabled={
-                        !processCapabilityId ||
-                        processName.trim().length < 2 ||
-                        processPurpose.trim().length < 3 ||
-                        processOutcome.trim().length < 3 ||
-                        processTrigger.trim().length < 3 ||
-                        processStep.trim().length < 1 ||
-                        processMutation.isPending ||
-                        !effectiveAuthorityClasses.has("execute")
-                      }
-                      onClick={() => processMutation.mutate()}
-                    >
-                      <Plus className="mr-2 h-4 w-4" />
-                      {processMutation.isPending
-                        ? "Mapping…"
-                        : "Map executable process"}
-                    </Button>
-                  </div>
+                  {!mayOperateNativeWorkflows && (
+                    <Alert>
+                      <ShieldCheck className="h-4 w-4" />
+                      <AlertTitle>Workflow authoring is not assigned to this role</AlertTitle>
+                      <AlertDescription>
+                        You can review the governed process versions visible to
+                        your organizational scope. A founder or an explicitly
+                        equipped workflow role can author and version them.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   <div className="space-y-3">
                     {(operationsStateQuery.data?.processes || []).map(
                       (item: JsonRecord) => (
