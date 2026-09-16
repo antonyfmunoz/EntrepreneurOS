@@ -55,6 +55,19 @@ function secretFreeReceipt(value: unknown): boolean {
   return /^(?:provider|evidence|branch|backup|restore|run|receipt):[A-Za-z0-9._:/-]+$/.test(candidate);
 }
 
+/**
+ * A disposable/local rehearsal is useful repository evidence, but it is not
+ * production recovery evidence. Keep the distinction in the verifier so a
+ * local pg_dump or fixture restore can never be relabeled as a production
+ * backup, migration, or restore prerequisite during promotion.
+ */
+function productionRecoveryReceipt(value: unknown): boolean {
+  const candidate = text(value);
+  return secretFreeReceipt(candidate)
+    && !/(?:^|[:/_-])local(?:$|[:/_-])/i.test(candidate)
+    && !/(?:^|[:/_-])localhost(?:$|[:/_-])/i.test(candidate);
+}
+
 function databaseSubject(value: unknown): boolean {
   const candidate = text(value);
   return /^database:[A-Za-z0-9][A-Za-z0-9._:/-]{2,199}$/.test(candidate)
@@ -88,7 +101,7 @@ export function productionPromotionEvidenceIssues(
   if (sourceMigrationCount === null || sourceMigrationCount < 0) issues.push("database.sourceMigrationCount");
 
   if (backup.result !== "pass") issues.push("database.backup.result");
-  if (!secretFreeReceipt(backup.receiptRef)) issues.push("database.backup.receiptRef");
+  if (!productionRecoveryReceipt(backup.receiptRef)) issues.push("database.backup.receiptRef");
   if (!validPastTimestamp(backup.completedAt, now, 24 * 60 * 60_000)) issues.push("database.backup.completedAt");
 
   if (rehearsal.result !== "pass") issues.push("database.migrationRehearsal.result");
@@ -96,11 +109,11 @@ export function productionPromotionEvidenceIssues(
   if (text(rehearsal.databaseSubject) === text(database.productionSubject)) issues.push("database.migrationRehearsal.isolated");
   if (rehearsalSourceCount !== sourceMigrationCount) issues.push("database.migrationRehearsal.sourceMigrationCount");
   if (rehearsalTargetCount !== expected.targetMigrationCount) issues.push("database.migrationRehearsal.targetMigrationCount");
-  if (!secretFreeReceipt(rehearsal.receiptRef)) issues.push("database.migrationRehearsal.receiptRef");
+  if (!productionRecoveryReceipt(rehearsal.receiptRef)) issues.push("database.migrationRehearsal.receiptRef");
   if (!validPastTimestamp(rehearsal.completedAt, now, 7 * 24 * 60 * 60_000)) issues.push("database.migrationRehearsal.completedAt");
 
   if (restore.result !== "pass") issues.push("database.restoreRehearsal.result");
-  if (!secretFreeReceipt(restore.receiptRef)) issues.push("database.restoreRehearsal.receiptRef");
+  if (!productionRecoveryReceipt(restore.receiptRef)) issues.push("database.restoreRehearsal.receiptRef");
   if (!validPastTimestamp(restore.completedAt, now, 7 * 24 * 60 * 60_000)) issues.push("database.restoreRehearsal.completedAt");
   if (restoreRtoMinutes === null || restoreRtoMinutes < 1) issues.push("database.restoreRehearsal.rtoMinutes");
   if (restoreRpoMinutes === null || restoreRpoMinutes < 0) issues.push("database.restoreRehearsal.rpoMinutes");
