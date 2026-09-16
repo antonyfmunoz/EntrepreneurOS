@@ -32,6 +32,7 @@ import { registerInstrumentRuntimeRoutes } from "./routes/instrument-runtime";
 import { registerPublicStakeholderPortalRoutes, registerStakeholderPortalRoutes } from "./routes/stakeholder-portal";
 import { registerPublicLeadCaptureRoutes } from "./routes/public-lead-capture";
 import { registerPublicFunnelRoutes } from "./routes/public-funnels";
+import { registerPublicSiteRoutes } from "./routes/public-sites";
 import { errorHandler } from "./middleware/error-handler";
 import { blockLegacyUnscopedApis, requireLocalApiAuth } from "./middleware/api-security";
 import { federationCommandRateLimit, localApiRateLimit } from "./middleware/rate-limit";
@@ -61,6 +62,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerPublicStakeholderPortalRoutes(app);
   registerPublicLeadCaptureRoutes(app);
   registerPublicFunnelRoutes(app);
+  registerPublicSiteRoutes(app);
 
   // Signed federation ingress is authenticated by the projection-owned UMH
   // adapter. Register it before the Clerk gate; every remaining API route
