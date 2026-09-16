@@ -5,6 +5,17 @@ export type ParsedTeamRosterRow = {
   reportsTo: string;
 };
 
+export type TeamRosterPlanningEntry = ParsedTeamRosterRow & {
+  id: string;
+  seatId: string | null;
+};
+
+export type TeamRosterSeatCandidate = {
+  id: string;
+  title: string;
+  kind: string;
+};
+
 const headerAliases: Record<keyof ParsedTeamRosterRow, string[]> = {
   name: ["name", "full name", "employee", "employee name", "person"],
   email: ["email", "work email", "email address", "company email"],
@@ -82,4 +93,35 @@ export function parseTeamRosterCsv(text: string): ParsedTeamRosterRow[] {
 
 export function normalizedRosterRole(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Produces only exact, conflict-free role suggestions for a staged roster.
+ * The returned map never changes a roster entry: a founder must deliberately
+ * accept each mapping before an invitation flow can become available.
+ */
+export function suggestedTeamRosterSeats(
+  entries: TeamRosterPlanningEntry[],
+  seats: TeamRosterSeatCandidate[],
+  unavailableSeatIds: Iterable<string>,
+): Map<string, string> {
+  const unavailable = new Set(Array.from(unavailableSeatIds));
+  entries.forEach((entry) => {
+    if (entry.seatId) unavailable.add(entry.seatId);
+  });
+  const suggestions = new Map<string, string>();
+  entries.forEach((entry) => {
+    if (entry.seatId) return;
+    const role = normalizedRosterRole(entry.sourceTitle);
+    if (!role) return;
+    const match = seats.find((seat) =>
+      seat.kind !== "founder" &&
+      !unavailable.has(seat.id) &&
+      normalizedRosterRole(seat.title) === role,
+    );
+    if (!match) return;
+    suggestions.set(entry.id, match.id);
+    unavailable.add(match.id);
+  });
+  return suggestions;
 }

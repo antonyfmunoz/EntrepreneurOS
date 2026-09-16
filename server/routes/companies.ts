@@ -10,6 +10,7 @@ import {
 } from "@shared/schema";
 import { db } from "../db";
 import { hasEntitlement } from "../billing/stripe";
+import { companyFounderProfileSchema } from "@shared/company-founder-profile";
 
 async function ownsCompany(companyId: number, userId: string): Promise<boolean> {
   const rows = await db.select({ id: companiesTable.id }).from(companiesTable)
@@ -198,7 +199,7 @@ export function registerCompanyRoutes(app: Express): void {
       targetCustomer: z.string().optional(),
       goals: z.string().optional(),
       assistantName: z.string().trim().min(1).max(40).optional(),
-      founderProfile: z.record(z.unknown()).optional(),
+      founderProfile: companyFounderProfileSchema.optional(),
     });
 
     try {
@@ -253,7 +254,7 @@ export function registerCompanyRoutes(app: Express): void {
       targetCustomer: z.string().optional().nullable(),
       goals: z.string().optional().nullable(),
       assistantName: z.string().trim().min(1).max(40).optional().nullable(),
-      founderProfile: z.record(z.unknown()).optional(),
+      founderProfile: companyFounderProfileSchema.optional(),
     });
 
     try {
