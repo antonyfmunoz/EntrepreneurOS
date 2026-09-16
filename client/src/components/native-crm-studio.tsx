@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowRight, BriefcaseBusiness, ContactRound, Handshake, KanbanSquare, Plus, RefreshCw, ShieldCheck, UserRound } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -53,6 +53,11 @@ export function NativeCrmStudio({ root, roleScopeKey, canExecute, canDecide }: {
   const [opportunityAmount, setOpportunityAmount] = useState("");
   const [opportunityStage, setOpportunityStage] = useState("Qualified");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("focus") !== "native-crm-studio") return;
+    document.getElementById("native-crm-studio")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   const query = useQuery<Json>({
     // The cache key prevents a newly selected seat from seeing another role's
@@ -154,7 +159,7 @@ export function NativeCrmStudio({ root, roleScopeKey, canExecute, canDecide }: {
   const opportunitiesForPipeline = opportunities.filter((opportunity) => !selectedPipeline || opportunity.data?.pipelineObjectId === selectedPipeline.id);
   const relationshipPerson = (relationship: Json) => people.find((person) => person.id === relationship.data?.personObjectId);
 
-  return <Card data-testid="native-crm-studio">
+  return <Card id="native-crm-studio" data-testid="native-crm-studio">
     <CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2"><ContactRound className="h-5 w-5 text-primary" />Native Relationship CRM</CardTitle><CardDescription className="mt-1">Operate people, relationship context, commercial facets, pipelines, and opportunities directly in EOS. A connected CRM can reconcile here later; it is never required for the company to operate.</CardDescription></div><Button size="sm" variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}><RefreshCw className={`mr-2 h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />Refresh</Button></div></CardHeader>
     <CardContent className="space-y-5">
       {error && <Alert variant="destructive"><AlertTitle>CRM command not applied</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}

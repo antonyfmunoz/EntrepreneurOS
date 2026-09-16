@@ -618,10 +618,20 @@ export default function OrgStudioPage() {
                     <div className="mt-3 grid gap-2 sm:grid-cols-3">
                       {(blueprint.data.blueprint.nativeAssets || [])
                         .filter((asset: RecordValue) => asset.visible)
-                        .map((asset: RecordValue) => (
-                          <Link
+                        .map((asset: RecordValue) => {
+                          const focus = asset.instrumentKey === "crm"
+                            ? "native-crm-studio"
+                            : asset.instrumentKey === "forms"
+                              ? "native-lead-capture"
+                              : "native-funnel-studio";
+                          const destination = asset.instrumentKey === "crm"
+                            ? "Native CRM"
+                            : asset.instrumentKey === "forms"
+                              ? "Lead Capture Studio"
+                              : "Website & Funnel Studio";
+                          return <Link
                             key={asset.key}
-                            href={`/company/${companyId}#work-room`}
+                            href={`/company/${companyId}?focus=${focus}#work-room`}
                             className="rounded-lg bg-muted/70 px-3 py-2 text-sm transition-colors hover:bg-muted"
                           >
                             <span className="block font-medium">
@@ -633,10 +643,10 @@ export default function OrgStudioPage() {
                                 : "Tool starter ready to compile"}
                             </span>
                             <span className="mt-2 block text-xs font-medium text-primary">
-                              Open in Work Room →
+                              Open {destination} →
                             </span>
                           </Link>
-                        ))}
+                        })}
                     </div>
                   </div>
                 )}

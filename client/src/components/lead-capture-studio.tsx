@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Copy, ExternalLink, FileInput, Plus, RefreshCw, Trash2, UserRoundPlus } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -37,6 +37,10 @@ export function LeadCaptureStudio({ root, canExecute, canDecide }: { root: strin
   const [questions, setQuestions] = useState<Question[]>(starterQuestions);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState("");
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("focus") !== "native-lead-capture") return;
+    document.getElementById("native-lead-capture")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
   const query = useQuery<Json>({
     queryKey: [root, "native-lead-capture"],
     queryFn: async () => (await apiRequest("GET", root + "/instruments/forms")).json(),
@@ -73,7 +77,7 @@ export function LeadCaptureStudio({ root, canExecute, canDecide }: { root: strin
     } catch { setError("Copy was unavailable in this browser. Select the link and copy it manually."); }
   };
 
-  return <Card data-testid="native-lead-capture-studio">
+  return <Card id="native-lead-capture" data-testid="native-lead-capture-studio">
     <CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2"><FileInput className="h-5 w-5 text-primary" />Lead Capture Studio</CardTitle><CardDescription className="mt-1">Build and publish native EOS lead forms. They collect consented submissions directly into EOS Forms and CRM—no external form builder or CRM is required.</CardDescription></div><Button size="sm" variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}><RefreshCw className={"mr-2 h-4 w-4 " + (query.isFetching ? "animate-spin" : "")} />Refresh</Button></div></CardHeader>
     <CardContent className="space-y-5">
       {error && <Alert variant="destructive"><AlertTitle>Lead-capture command not applied</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
