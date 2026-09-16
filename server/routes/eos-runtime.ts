@@ -323,7 +323,7 @@ import {
 } from "../company-compilation/notion-source-adapter";
 import { DeclarativeMaterializationError } from "../company-compilation/declarative-materializer";
 import { companyPackageParitySnapshot } from "../company-compilation/semantic-parity";
-import { companyBlueprintForBusinessModel } from "@shared/company-blueprints";
+import { compileCompanyBlueprintStarters, companyBlueprintForBusinessModel } from "@shared/company-blueprints";
 
 function escapeHtml(value: string): string {
   return value.replace(
@@ -2961,14 +2961,102 @@ export function registerEosRuntimeRoutes(app: Express): void {
           }
           byTemplateKey.set(role.key, seat);
         }
+        // The same intake variables that selected this formation now compile
+        // into concrete native command and launch artifacts.  A provider is
+        // neither read nor required here.  Stable identifiers make retrying
+        // this endpoint safe for an established company while preserving any
+        // user-authored changes to the artifacts after their first creation.
+        const starters = compileCompanyBlueprintStarters(blueprint, {
+          offer: access.company.offer,
+          targetCustomer: access.company.targetCustomer,
+          goals: access.company.goals,
+        });
+        const createdStarterObjectiveIds: string[] = [];
+        const createdStarterPacketIds: string[] = [];
+        const starterArtifacts: Array<{ key: string; objectiveId: string; workPacketId: string; ownerSeatId: string }> = [];
         const trace = tracePair();
+        for (const starter of starters) {
+          const ownerSeatId = byTemplateKey.get(starter.ownerRoleKey)?.id || byTemplateKey.get("company_ceo")?.id || access.seat.id;
+          const objectiveId = `objective:company-blueprint:${access.company.id}:${blueprint.key}:${starter.key}`;
+          const packetId = `packet:company-blueprint:${access.company.id}:${blueprint.key}:${starter.key}`;
+          const [existingObjective] = await tx.select().from(eosObjectives).where(and(eq(eosObjectives.id, objectiveId), eq(eosObjectives.companyId, access.company.id))).limit(1);
+          if (!existingObjective) {
+            await tx.insert(eosObjectives).values({
+              id: objectiveId,
+              companyId: access.company.id,
+              portfolioId: access.company.portfolioId,
+              objectiveKey: `company-blueprint:${blueprint.key}:${starter.key}`,
+              recordType: "objective",
+              title: starter.title,
+              statement: starter.statement,
+              state: "proposed",
+              priority: starter.priority,
+              ownerSeatId,
+              scopeBoundary: "Created from the common Company Mission Journey. It remains a native EOS planning record until an authorized operator activates it.",
+              rationaleTheory: `Business-in-a-box template ${blueprint.key}/${starter.key}, compiled with founder-entered company variables.`,
+              successExitCriteria: starter.successExitCriteria,
+              timeHorizon: "Initial operating cycle",
+              workPacketIds: [packetId],
+              metricIds: [],
+              evidenceIds: [],
+              decisionPolicyKeys: [],
+              sourceAuthority: "native_eos",
+              classification: "internal",
+              recordedByUserId: req.user.id,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+            createdStarterObjectiveIds.push(objectiveId);
+          }
+          const [existingPacket] = await tx.select({ id: eosWorkPackets.id }).from(eosWorkPackets).where(and(eq(eosWorkPackets.id, packetId), eq(eosWorkPackets.companyId, access.company.id))).limit(1);
+          if (!existingPacket) {
+            await tx.insert(eosWorkPackets).values({
+              id: packetId,
+              companyId: access.company.id,
+              createdByUserId: req.user.id,
+              accountableUserId: req.user.id,
+              accountableSeatId: ownerSeatId,
+              title: `Launch · ${starter.title}`,
+              objective: starter.statement,
+              status: "draft",
+              priority: starter.priority === "critical" ? "urgent" : starter.priority,
+              source: "compiler",
+              visibility: "company",
+              classification: "internal",
+              requiresApproval: false,
+              toolPack: starter.tools,
+              evidenceRequirements: ["Named accountable owner", "Accepted output or reviewed operating evidence"],
+              resourceIds: [],
+              expectedOutput: starter.successExitCriteria,
+              acceptanceCriteria: "An authorized role activates and completes the packet using the declared native tools and attributable evidence.",
+              constraintsPolicies: "No external provider effect is implied by this native starter packet.",
+              failureEscalationCompensation: "Pause, record the missing evidence or authority, and escalate through the company reporting graph.",
+              humanFallback: "The assigned human or founder may direct the role agent and approve consequential changes.",
+              sourceLineage: JSON.stringify({ template: `company-blueprint:${blueprint.key}:${starter.key}`, workflowTemplateKey: starter.workflowTemplateKey, variables: starter.variables }),
+              outputArtifactKeys: [],
+              traceId: trace.traceId,
+              correlationId: trace.correlationId,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+            createdStarterPacketIds.push(packetId);
+          }
+          starterArtifacts.push({ key: starter.key, objectiveId, workPacketId: packetId, ownerSeatId });
+        }
         await tx.insert(eosAuditRecords).values({
           id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id,
           action: "company_blueprint.instantiated", targetType: "company_blueprint", targetId: blueprint.key,
           traceId: trace.traceId, correlationId: trace.correlationId, result: "applied",
-          details: { blueprintKey: blueprint.key, businessModel: businessModel || "hybrid", createdSeatIds: created.map((seat) => seat.id), preservedSeatIds: present.map((seat) => seat.id) },
+          details: {
+            blueprintKey: blueprint.key,
+            businessModel: businessModel || "hybrid",
+            createdSeatIds: created.map((seat) => seat.id),
+            preservedSeatIds: present.map((seat) => seat.id),
+            createdStarterObjectiveIds,
+            createdStarterPacketIds,
+          },
         });
-        return { blueprintKey: blueprint.key, created, present };
+        return { blueprintKey: blueprint.key, created, present, starterArtifacts, createdStarterObjectiveIds, createdStarterPacketIds };
       });
       return { status: 201, body: outcome };
     }),

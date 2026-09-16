@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { companyBlueprintForBusinessModel, companyBlueprints } from "../../shared/company-blueprints";
+import { compileCompanyBlueprintStarters, companyBlueprintForBusinessModel, companyBlueprints } from "../../shared/company-blueprints";
 
 describe("company operating blueprints", () => {
   it("maps business-model variables to one editable company formation", () => {
@@ -14,5 +14,24 @@ describe("company operating blueprints", () => {
       expect(ceo?.kind).toBe("company_ceo");
       expect(ceo?.tools.length).toBeGreaterThan(0);
     }
+  });
+
+  it("turns founder-entered variables into company-specific native starter artifacts", () => {
+    const blueprint = companyBlueprintForBusinessModel("services");
+    const starters = compileCompanyBlueprintStarters(blueprint, {
+      offer: "Revenue recovery service",
+      targetCustomer: "B2B service companies",
+      goals: "Validate the offer\nClose the first three clients",
+    });
+    expect(starters).toHaveLength(2);
+    expect(starters[0]).toMatchObject({
+      key: "commercial-foundation",
+      ownerRoleKey: "growth",
+      workflowTemplateKey: "lead-to-discovery",
+      variables: { offer: "Revenue recovery service", targetCustomer: "B2B service companies" },
+    });
+    expect(starters[0].statement).toContain("Revenue recovery service");
+    expect(starters[0].statement).toContain("B2B service companies");
+    expect(starters[1].statement).toContain("Validate the offer");
   });
 });
