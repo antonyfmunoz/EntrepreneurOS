@@ -1944,7 +1944,7 @@ try {
     .getByText("Prove repeatable customer value", { exact: true })
     .waitFor();
   await desktop
-    .locator("#command-objectives")
+    .getByTestId("command-objective-card")
     .filter({ hasText: "Prove repeatable customer value" })
     .getByRole("button", { name: "active", exact: true })
     .click();

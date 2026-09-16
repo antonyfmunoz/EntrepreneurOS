@@ -4434,7 +4434,7 @@ export default function EosOverlayPage() {
                           (seat: JsonRecord) => seat.id === item.ownerSeatId,
                         );
                         return (
-                          <div key={item.id} className="rounded-xl border p-4">
+                          <div key={item.id} data-testid="command-objective-card" className="rounded-xl border p-4">
                             <div className="flex flex-wrap items-center gap-2">
                               <StateBadge state={item.state} />
                               <Badge variant="outline">
