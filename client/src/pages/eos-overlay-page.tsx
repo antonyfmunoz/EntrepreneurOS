@@ -12453,6 +12453,7 @@ export default function EosOverlayPage() {
                 root={root}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
+                visibleInstrumentKeys={principalContext?.visibleInstrumentKeys || []}
                 evidence={evidence.map((item: JsonRecord) => ({
                   id: String(item.id),
                   title: String(item.title || "Evidence"),

@@ -503,6 +503,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     currentUserId = ownerId;
     const manifest = await api.get(`/api/eos/companies/${companyId}/instruments`).expect(200);
     expect(manifest.body.manifest).toHaveLength(26);
+    expect(manifest.body.permittedInstrumentKeys).toHaveLength(26);
     expect(manifest.body.manifest.map((item: any) => item.key)).toEqual(expect.arrayContaining(["docs", "sheets", "slides", "conference_rooms", "ads", "reputation", "websites"]));
 
     const createPayload = {
@@ -5290,7 +5291,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         agentName: "Atlas",
         mandate: "Own delivery operations",
         authority: { approveDownline: true },
-        toolEntitlements: ["gmail.send_with_local_approval"],
+        toolEntitlements: ["docs", "gmail.send_with_local_approval"],
       })
       .expect(201);
     const retiredDirectAssignment = await api
@@ -5360,6 +5361,23 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(context.body.principalContext.allowedSurfaces).not.toContain(
       "capital",
     );
+    // Org Studio's explicit native-tool contract is now the same boundary for
+    // role-projected navigation and every generic instrument endpoint. A
+    // manager equipped for Docs must not receive a discovery catalog for CRM,
+    // Finance, or every other company tool.
+    expect(context.body.principalContext.visibleInstrumentKeys).toEqual([
+      "docs",
+    ]);
+    const managerInstruments = await api
+      .get(`/api/eos/companies/${companyId}/instruments`)
+      .expect(200);
+    expect(managerInstruments.body.permittedInstrumentKeys).toEqual(["docs"]);
+    expect(managerInstruments.body.manifest).toEqual([
+      expect.objectContaining({ key: "docs" }),
+    ]);
+    await api
+      .get(`/api/eos/companies/${companyId}/instruments/finance`)
+      .expect(403);
     expect(context.body.company.founderProfile).toBeUndefined();
     expect(context.body.company.ownerUserId).toBeUndefined();
     expect(context.body.portfolio).toEqual({
