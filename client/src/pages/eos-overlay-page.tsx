@@ -151,6 +151,19 @@ function blueprintList(value: string) {
     .map((item) => item.trim())
     .filter(Boolean);
 }
+function profileStringList(profile: JsonRecord, key: string) {
+  const value = profile?.[key];
+  if (Array.isArray(value))
+    return Array.from(
+      new Set(
+        value
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean),
+      ),
+    );
+  return typeof value === "string" ? blueprintList(value) : [];
+}
 type CommandTransitionDraft = {
   kind: "objective" | "metric_outcome" | "risk_control";
   id: string;
@@ -12659,6 +12672,17 @@ export default function EosOverlayPage() {
               evidence={evidence}
               authorityClasses={effectiveAuthorityClasses}
               showError={showMutationError}
+              onboardingSystems={profileStringList(
+                (company?.founderProfile || {}) as JsonRecord,
+                "existingSystems",
+              )}
+              onPrepareInventoryReconciliation={(systemName) =>
+                prepareWorkPacket(
+                  `Reconcile system inventory · ${systemName}`,
+                  `Map the authoritative records, owner, native EOS equivalent, safe fallback, and cutover decision for ${systemName}. Do not connect, import, or change ${systemName} until its governed provider path is separately authorized.`,
+                  "Named authority owner, source-of-truth fields, native fallback acceptance, and approved reconciliation plan",
+                )
+              }
             />
             {(integrationsQuery.data || []).map((integration) => (
               <IntegrationControlCard
@@ -18196,6 +18220,8 @@ function SystemsRegistryInstrument({
   evidence,
   authorityClasses: effectiveClasses,
   showError,
+  onboardingSystems,
+  onPrepareInventoryReconciliation,
 }: {
   root: string;
   state?: JsonRecord;
@@ -18208,6 +18234,8 @@ function SystemsRegistryInstrument({
   evidence: JsonRecord[];
   authorityClasses: Set<string>;
   showError: (action: string, error: unknown) => void;
+  onboardingSystems: string[];
+  onPrepareInventoryReconciliation: (systemName: string) => void;
 }) {
   const { toast } = useToast();
   const [systemName, setSystemName] = useState("");
@@ -18263,6 +18291,12 @@ function SystemsRegistryInstrument({
   const entitlements = state?.entitlements || [];
   const automations = state?.automations || [];
   const observations = state?.healthObservations || [];
+  const registeredSystemNames = new Set(
+    systems.map((item: JsonRecord) => String(item.name || "").trim().toLowerCase()),
+  );
+  const unregisteredOnboardingSystems = onboardingSystems.filter(
+    (name) => !registeredSystemNames.has(name.trim().toLowerCase()),
+  );
   const after = async (title: string) => {
     await refetch();
     toast({ title });
@@ -18602,6 +18636,75 @@ function SystemsRegistryInstrument({
           )}
         />
       </div>
+      {onboardingSystems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Company Mission Journey inventory</CardTitle>
+            <CardDescription>
+              These are systems the founder named during company setup. They
+              are not connected providers and EOS has not imported any data
+              from them. Turn each one into a governed reconciliation plan or
+              register its architecture only when the responsible role is ready.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {onboardingSystems.map((name) => {
+              const registered = registeredSystemNames.has(
+                name.trim().toLowerCase(),
+              );
+              return (
+                <div
+                  key={name}
+                  className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="font-medium">{name}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {registered
+                        ? "Architecture record registered. Provider connection, authority, and health stay separately governed."
+                        : "Inventory only — authority, data domains, and replacement intent have not been asserted."}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {!registered && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSystemName(name);
+                          setSystemType("application");
+                          setSystemCapability("");
+                          setSystemDataDomain("");
+                          setSystemAuthorityField("");
+                          setSystemReplacement("integrate");
+                          document
+                            .getElementById("systems-registry-inventory")
+                            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }}
+                      >
+                        Map architecture
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant={registered ? "outline" : "default"}
+                      onClick={() => onPrepareInventoryReconciliation(name)}
+                    >
+                      Prepare reconciliation
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+            {!unregisteredOnboardingSystems.length && (
+              <p className="text-xs text-muted-foreground">
+                Every named system has an architecture record. Connection and
+                cutover remain separate, evidence-gated decisions.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Enterprise architecture inventory</CardTitle>
@@ -18610,7 +18713,7 @@ function SystemsRegistryInstrument({
             fields, ownership, evidence, and replacement intent.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent id="systems-registry-inventory" className="space-y-4">
           <div className="grid gap-3 lg:grid-cols-2">
             <Input
               aria-label="System name"
