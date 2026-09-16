@@ -1458,6 +1458,7 @@ function SelectedSeatEditor({
           onSave({
             id: seat.id,
             title: values.get("title"),
+            department: values.get("department"),
             agentName: values.get("agentName"),
             mandate: values.get("mandate"),
             toolEntitlements: tools
@@ -1471,6 +1472,15 @@ function SelectedSeatEditor({
       >
         <Field label="Role title">
           <Input name="title" defaultValue={seat.title} />
+        </Field>
+        <Field
+          label="Department"
+          hint="Change the operating function that owns this role. This does not change the role's authority."
+        >
+          <Input
+            name="department"
+            defaultValue={seat.department || "General Management"}
+          />
         </Field>
         <Field label="Role Agent name">
           <Input name="agentName" defaultValue={seat.agentName} />
