@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 const routes = readFileSync(new URL("../../server/routes.ts", import.meta.url), "utf8");
 const security = readFileSync(new URL("../../server/middleware/api-security.ts", import.meta.url), "utf8");
 const canonicalRuntime = readFileSync(new URL("../../server/routes/eos-runtime.ts", import.meta.url), "utf8");
+const instrumentRuntime = readFileSync(new URL("../../server/routes/instrument-runtime.ts", import.meta.url), "utf8");
+const overlay = readFileSync(new URL("../../client/src/pages/eos-overlay-page.tsx", import.meta.url), "utf8");
 
 describe("native communication authority cutover", () => {
   it("does not register legacy global agent or assistant route modules", () => {
@@ -25,5 +27,15 @@ describe("native communication authority cutover", () => {
     expect(canonicalRuntime).toContain('"/api/eos/companies/:companyId/executive-assistant/messages"');
     expect(canonicalRuntime).toContain("sole founder-facing communication channel");
     expect(canonicalRuntime).toContain("Respect the reporting chain");
+  });
+
+  it("offers the native Message Hub only to explicitly entitled roles and enforces its reporting path server-side", () => {
+    expect(overlay).toContain('toolEntitlements.has("messages")');
+    expect(overlay).toContain("NativeMessageHub");
+    expect(instrumentRuntime).toContain("assertNativeMessageCreate");
+    expect(instrumentRuntime).toContain("message_reporting_path_required");
+    expect(instrumentRuntime).toContain("message_conversation_membership_required");
+    expect(instrumentRuntime).toContain("message_parent_required");
+    expect(instrumentRuntime).toContain("messageConversationParticipants");
   });
 });

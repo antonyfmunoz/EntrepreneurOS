@@ -120,6 +120,7 @@ const CanonicalInstrumentControlCenter = lazy(() => import("@/components/canonic
 const LeadCaptureStudio = lazy(() => import("@/components/lead-capture-studio").then((module) => ({ default: module.LeadCaptureStudio })));
 const NativeFunnelStudio = lazy(() => import("@/components/native-funnel-studio").then((module) => ({ default: module.NativeFunnelStudio })));
 const NativeCalendarStudio = lazy(() => import("@/components/native-calendar-studio").then((module) => ({ default: module.NativeCalendarStudio })));
+const NativeMessageHub = lazy(() => import("@/components/native-message-hub").then((module) => ({ default: module.NativeMessageHub })));
 const EndStateGovernanceControlCenter = lazy(() => import("@/components/end-state-governance-control-center").then((module) => ({ default: module.EndStateGovernanceControlCenter })));
 
 function DeferredControlFallback() {
@@ -1378,6 +1379,11 @@ export default function EosOverlayPage() {
   const mayOperateNativeCalendar =
     canUseInstrument("calendar") &&
     (isFounder || toolEntitlements.has("calendar"));
+  // Communication is deliberately not a blanket founder surface. The founder
+  // uses the EA rail; a role opens the native Message Hub only when its role
+  // pack explicitly grants the Messages tool.
+  const mayOperateNativeMessages =
+    canUseInstrument("messages") && toolEntitlements.has("messages");
   // A role's Work Room is its assigned operating queue, not a copy of every
   // company-wide control surface. Founder-owned growth controls are exposed
   // here; role communication continues through the hierarchical assistant
@@ -10516,6 +10522,16 @@ export default function EosOverlayPage() {
           </TabsContent>
 
           <TabsContent value="work-room" className="space-y-6">
+            {mayOperateNativeMessages && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeMessageHub
+                root={root}
+                roleScopeKey={roleScopeKey}
+                activeSeatId={principalContext?.seatId || ""}
+                seats={visibleSeats}
+                canExecute={effectiveAuthorityClasses.has("execute")}
+                canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
             {mayOperateNativeCalendar && <Suspense fallback={<DeferredControlFallback />}>
               <NativeCalendarStudio
                 root={root}
