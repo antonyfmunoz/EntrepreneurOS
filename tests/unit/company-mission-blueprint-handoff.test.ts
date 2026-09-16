@@ -42,4 +42,10 @@ describe("Company Mission blueprint handoff", () => {
     expect(runtime).toContain('state: "draft"');
     expect(runtime).toContain("Existing lifecycle controls still govern whether any form, site, or");
   });
+
+  it("binds role labels to the same canonical native tool keys enforced by policy", () => {
+    expect(runtime).toContain("canonicalToolEntitlements(role.tools)");
+    expect(runtime).toContain("canonicalToolEntitlements(input.toolEntitlements)");
+    expect(runtime).toContain("grant:${seat.id}:baseline");
+  });
 });

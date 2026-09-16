@@ -130,6 +130,7 @@ import { eosInstrumentKeys } from "@shared/instrument-runtime";
 import {
   approvalDecisionSchema,
   allowedSurfacesFor,
+  canonicalToolEntitlements,
   authoritySubjectCreateSchema,
   authoritySubjectIsEffective,
   authoritySubjectTransitionSchema,
@@ -3017,7 +3018,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
               id: randomUUID(), companyId: access.company.id, title: role.title, kind: role.kind,
               supervisorSeatId: supervisor?.id || access.seat.id, occupantUserId: null,
               agentName: role.agentName, agentMode: "autonomous", mandate: role.mandate,
-              authority: { blueprintKey: blueprint.key, approval: "supervisor" }, toolEntitlements: role.tools,
+              authority: { blueprintKey: blueprint.key, approval: "supervisor" }, toolEntitlements: canonicalToolEntitlements(role.tools),
               status: "active", createdAt: new Date(), updatedAt: new Date(),
             }).returning();
             seat = inserted;
@@ -4358,7 +4359,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
             conditionRules,
             approvalPolicy,
             separationOfDuties,
-            toolEntitlements: input.toolEntitlements,
+            toolEntitlements: canonicalToolEntitlements(input.toolEntitlements),
             policyDecisionSource: input.policyDecisionSource,
             evidenceReferences: input.evidenceReferences,
             revocationDependentWork: input.revocationDependentWork,
@@ -4698,7 +4699,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
             agentMode: input.occupantUserId ? "assistant" : "autonomous",
             mandate: input.mandate,
             authority: input.authority,
-            toolEntitlements: input.toolEntitlements,
+            toolEntitlements: canonicalToolEntitlements(input.toolEntitlements),
           })
           .returning();
         const kernel = await ensureSeatOperatingKernel(
@@ -4734,7 +4735,19 @@ export function registerEosRuntimeRoutes(app: Express): void {
       }
       const policy = await authorizeAction(req, access, { authorityClass: "grant_access", resource: "seat", actionKey: "seat.update", purpose: "maintain_accountable_role", classification: "restricted", consequence: "material", targetSeatId: seat.id });
       const [updated] = await db.transaction(async (tx) => {
-        const rows = await tx.update(eosSeats).set({ ...input, updatedAt: new Date() }).where(eq(eosSeats.id, seat.id)).returning();
+        const nextInput = {
+          ...input,
+          ...(input.toolEntitlements === undefined
+            ? {}
+            : { toolEntitlements: canonicalToolEntitlements(input.toolEntitlements) }),
+        };
+        const rows = await tx.update(eosSeats).set({ ...nextInput, updatedAt: new Date() }).where(eq(eosSeats.id, seat.id)).returning();
+        if (input.toolEntitlements !== undefined) {
+          await tx.update(eosAuthorityGrants).set({ toolEntitlements: rows[0].toolEntitlements }).where(and(
+            eq(eosAuthorityGrants.id, `grant:${seat.id}:baseline`),
+            eq(eosAuthorityGrants.companyId, access.company.id),
+          ));
+        }
         await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "seat.updated", targetType: "seat", targetId: seat.id, traceId: policy.traceId, correlationId: policy.correlationId, result: "active", details: { changedFields: Object.keys(input), policyDecisionId: policy.decisionId }, createdAt: new Date() });
         return rows;
       });
