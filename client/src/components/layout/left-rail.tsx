@@ -1,11 +1,13 @@
 import { useLocation } from "wouter";
 import { Blocks, Bot, BriefcaseBusiness, Command, Home, Landmark, Network, Workflow } from "lucide-react";
+import type { ReactNode } from "react";
 
 interface LeftRailProps {
   collapsed?: boolean;
+  leadingAction?: ReactNode;
 }
 
-export default function LeftRail({ collapsed = false }: LeftRailProps) {
+export default function LeftRail({ collapsed = false, leadingAction }: LeftRailProps) {
   const [location] = useLocation();
   const companyId = location.match(/^\/company\/([^/]+)/)?.[1];
   const companyRoot = companyId ? `/company/${companyId}` : "/portfolios";
@@ -23,6 +25,7 @@ export default function LeftRail({ collapsed = false }: LeftRailProps) {
   return (
     <nav className={collapsed ? "px-1.5" : "px-2"} aria-label="EOS primary navigation">
       <ul className="space-y-0.5">
+        {leadingAction && <li>{leadingAction}</li>}
         {items.map((item) => {
           const path = item.href.split("#")[0];
           const active = location === path || (path !== "/portfolios" && location.startsWith(`${path}/`));

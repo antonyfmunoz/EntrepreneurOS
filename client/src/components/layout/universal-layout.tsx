@@ -63,8 +63,16 @@ export function UniversalLayout({
     return () => window.removeEventListener("eos:open-communication", openCommunication);
   }, [hasRight, right.setCollapsed]);
 
+  const desktopLeftRailToggle = (
+    <RailToggle side="left" collapsed={left.collapsed} onClick={left.toggle} variant="navigation" />
+  );
   const customNavigation = (
-    <CustomNavigation items={leftRailItems ?? []} collapsed={left.collapsed} onNavigate={() => setMobileLeftOpen(false)} />
+    <CustomNavigation
+      items={leftRailItems ?? []}
+      collapsed={left.collapsed}
+      onNavigate={() => setMobileLeftOpen(false)}
+      leadingAction={desktopLeftRailToggle}
+    />
   );
 
   return (
@@ -83,10 +91,23 @@ export function UniversalLayout({
       />
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {hasLeft && <aside className={(left.collapsed ? "w-12 " : "w-[240px] ") + "relative hidden min-h-0 flex-shrink-0 overflow-visible border-r border-border/60 bg-[#eff1f2] transition-[width] duration-200 lg:block"}>
-          <RailToggle side="left" collapsed={left.collapsed} onClick={left.toggle} />
-          <div className="h-full overflow-y-auto py-3">{hasCustomLeft ? customNavigation : <LeftRail collapsed={left.collapsed} />}</div>
-        </aside>}
+        {hasLeft && (
+          <aside
+            className={
+              (left.collapsed ? "w-12 " : "w-[240px] ") +
+              "relative hidden min-h-0 flex-shrink-0 overflow-visible border-r border-border/60 bg-[#eff1f2] transition-[width] duration-200 lg:block"
+            }
+          >
+            <div className="h-full overflow-y-auto py-3">
+              {hasCustomLeft ? customNavigation : (
+                <LeftRail
+                  collapsed={left.collapsed}
+                  leadingAction={desktopLeftRailToggle}
+                />
+              )}
+            </div>
+          </aside>
+        )}
 
         <main className="relative min-w-0 flex-1 overflow-y-auto bg-white">
           {floatingPanel === false ? null : floatingPanel ?? <FloatingAIPanel />}
@@ -94,7 +115,7 @@ export function UniversalLayout({
             "mx-auto w-full max-w-[1600px] " +
             (floatingPanel === false
               ? "px-3 py-5 sm:px-6 lg:px-10 lg:py-8"
-              : "px-3 pb-5 pt-24 sm:px-6 sm:pb-6 sm:pt-20 lg:px-10 lg:pb-8 lg:pt-20")
+              : "px-3 pb-5 pt-4 sm:px-6 sm:pb-6 sm:pt-4 lg:px-10 lg:pb-8 lg:pt-4")
           }>
             {children}
           </div>
@@ -125,10 +146,21 @@ export function UniversalLayout({
   );
 }
 
-function CustomNavigation({ items, collapsed, onNavigate }: { items: UniversalLayoutLeftRailItem[]; collapsed: boolean; onNavigate: () => void }) {
+function CustomNavigation({
+  items,
+  collapsed,
+  onNavigate,
+  leadingAction,
+}: {
+  items: UniversalLayoutLeftRailItem[];
+  collapsed: boolean;
+  onNavigate: () => void;
+  leadingAction?: React.ReactNode;
+}) {
   return (
     <nav className={collapsed ? "px-1.5" : "px-2"} aria-label="EOS primary navigation">
       <ul className="flex flex-col gap-0.5">
+        {leadingAction && <li>{leadingAction}</li>}
         {items.map((item) => (
           <li key={`${item.label}-${item.href}`}>
             <a
@@ -157,10 +189,54 @@ function CustomNavigation({ items, collapsed, onNavigate }: { items: UniversalLa
   );
 }
 
-function RailToggle({ side, collapsed, onClick }: { side: "left" | "right"; collapsed: boolean; onClick: () => void }) {
-  const Icon = side === "left" ? (collapsed ? ChevronRight : ChevronLeft) : (collapsed ? ChevronLeft : ChevronRight);
+function RailToggle({
+  side,
+  collapsed,
+  onClick,
+  variant = "edge",
+}: {
+  side: "left" | "right";
+  collapsed: boolean;
+  onClick: () => void;
+  variant?: "edge" | "navigation";
+}) {
+  const Icon =
+    side === "left"
+      ? collapsed
+        ? ChevronRight
+        : ChevronLeft
+      : collapsed
+        ? ChevronLeft
+        : ChevronRight;
+  const label = `${collapsed ? "Expand" : "Collapse"} ${side} rail`;
+
+  if (variant === "navigation") {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        title={label}
+        className={
+          (collapsed ? "justify-center px-0 " : "justify-start px-2.5 ") +
+          "flex min-h-10 w-full items-center gap-2 rounded-lg text-muted-foreground transition-colors hover:bg-white/70 hover:text-primary"
+        }
+      >
+        <Icon className="h-4 w-4 flex-shrink-0" />
+      </button>
+    );
+  }
+
   return (
-    <button type="button" onClick={onClick} aria-label={`${collapsed ? "Expand" : "Collapse"} ${side} rail`} className={(side === "left" ? "-right-3 " : "-left-3 ") + "absolute top-5 z-20 grid h-6 w-6 place-items-center rounded-full bg-white text-muted-foreground shadow-md transition-colors hover:text-primary"}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className={
+        (side === "left" ? "-right-3 " : "-left-3 ") +
+        "absolute top-5 z-20 grid h-6 w-6 place-items-center rounded-full bg-white text-muted-foreground shadow-md transition-colors hover:text-primary"
+      }
+    >
       <Icon className="h-3.5 w-3.5" />
     </button>
   );
