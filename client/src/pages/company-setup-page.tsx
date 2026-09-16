@@ -69,6 +69,7 @@ export default function CompanySetupPage() {
   const [workingStyle, setWorkingStyle] = useState("");
   const [goals, setGoals] = useState("");
   const [formation, setFormation] = useState<CompanyMissionInput["formation"]>();
+  const [compiledCompanyId, setCompiledCompanyId] = useState("");
   const hydratedCompany = useRef(false);
 
   const portfoliosQuery = useQuery<Portfolio[]>({
@@ -134,6 +135,15 @@ export default function CompanySetupPage() {
     setErrors(next); return Object.keys(next).length === 0;
   }, [currentStep, selectedPortfolioId, companyName, stage, businessModel, offer, targetCustomer, assistantName, founderVision, goals, formation]);
 
+  const compileBlueprint = useMutation<Record<string, unknown>, Error, string>({
+    mutationFn: async (companyId) =>
+      (await apiRequest("POST", `/api/eos/companies/${encodeURIComponent(companyId)}/company-blueprint/instantiate`, {})).json(),
+    onSuccess: async (_, companyId) => {
+      await queryClient.invalidateQueries({ queryKey: ["portfolios"] });
+      setLocation(`/company/${companyId}/org-studio?from=mission&compiled=1`);
+    },
+  });
+
   const saveCompany = useMutation<Company, Error, Record<string, unknown>>({
     mutationFn: async (body) => {
       if (!existingCompanyId)
@@ -146,7 +156,15 @@ export default function CompanySetupPage() {
     onSuccess: (company) => {
       queryClient.invalidateQueries({ queryKey: ["portfolios"] });
       queryClient.invalidateQueries({ queryKey: ["company-mission", existingCompanyId] });
-      setLocation(`/company/${company.id}/org-studio?from=mission`);
+      // Completing the shared company intake is an actual compilation event.
+      // The business-model and formation variables select the native role
+      // template, then materialize only the missing downstream seats, agents,
+      // reporting edges, operating packs, authority baselines, and tool
+      // entitlements.  It is deliberately idempotent for an established
+      // company resuming this same journey.
+      const companyId = String(company.id);
+      setCompiledCompanyId(companyId);
+      compileBlueprint.mutate(companyId);
     },
   });
 
@@ -192,8 +210,9 @@ export default function CompanySetupPage() {
             {currentStep === 5 && <div className="max-w-3xl space-y-4"><p className="text-sm text-muted-foreground">This is not permanent. It sets the initial shape of the company graph. People can be added later into existing seats, where the role agent becomes their assistant.</p><RadioGroup value={formation} onValueChange={(value) => setFormation(value as CompanyMissionInput["formation"])} className="space-y-3">{FORMATIONS.map(([value, title, description]) => <label key={value} className={`flex cursor-pointer gap-3 rounded-xl border p-5 ${formation === value ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:border-primary/40"}`}><RadioGroupItem value={value} /><span><span className="font-medium">{title}</span><span className="mt-1 block text-sm text-muted-foreground">{description}</span></span></label>)}</RadioGroup>{errors.formation && <p className="text-sm text-destructive">{errors.formation}</p>}</div>}
             {currentStep === 6 && <div className="max-w-3xl space-y-5"><div className="rounded-xl border border-primary/20 bg-primary/5 p-5"><Network className="mb-3 h-6 w-6 text-primary"/><h3 className="font-semibold">Native first. Integrations when useful.</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">EOS will create the company’s native operating foundation now. Connect a CRM, accounting system, document service, or inbox later only to reconcile existing data or use a specialist external rail. No integration is required to use the company graph, roles, work, documents, or native instruments.</p></div><div className="rounded-xl bg-muted/50 p-5"><p className="font-medium">What happens next</p><ul className="mt-3 space-y-2 text-sm text-muted-foreground"><li>• Open Org Studio and shape the real reporting graph.</li><li>• Activate seats, role agents, responsibilities, and the tools each role needs.</li><li>• Use Systems only when an external provider adds value or holds historical data.</li></ul></div></div>}
           </div>
-          <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between"><Button variant="ghost" disabled={currentStep === 0} onClick={() => { setErrors({}); setCurrentStep((step) => Math.max(0, step - 1)); }}>Back</Button>{currentStep < companyMissionJourney.length - 1 ? <Button onClick={advance}>Continue <ArrowRight className="ml-2 h-4 w-4" /></Button> : <Button disabled={saveCompany.isPending} onClick={completeJourney}>{saveCompany.isPending ? "Creating company…" : existingCompanyId ? "Save and open Org Studio" : "Create company and open Org Studio"}<ArrowRight className="ml-2 h-4 w-4" /></Button>}</div>
+          <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between"><Button variant="ghost" disabled={currentStep === 0 || compileBlueprint.isPending} onClick={() => { setErrors({}); setCurrentStep((step) => Math.max(0, step - 1)); }}>Back</Button>{currentStep < companyMissionJourney.length - 1 ? <Button onClick={advance}>Continue <ArrowRight className="ml-2 h-4 w-4" /></Button> : <Button disabled={saveCompany.isPending || compileBlueprint.isPending} onClick={completeJourney}>{saveCompany.isPending ? "Saving company…" : compileBlueprint.isPending ? "Compiling business blueprint…" : existingCompanyId ? "Save and compile blueprint" : "Create company and compile blueprint"}<ArrowRight className="ml-2 h-4 w-4" /></Button>}</div>
           {saveCompany.isError && <p className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">The mission could not be saved. Review the company details and try again.</p>}
+          {compileBlueprint.isError && compiledCompanyId && <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><p>The company was saved, but EOS could not yet compile its native operating blueprint. No provider connection or external data was changed.</p><Button className="mt-3" variant="outline" disabled={compileBlueprint.isPending} onClick={() => compileBlueprint.mutate(compiledCompanyId)}>Retry blueprint compilation</Button></div>}
         </div>
       </section>
     </UniversalLayout>
