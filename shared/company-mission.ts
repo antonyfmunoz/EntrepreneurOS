@@ -39,6 +39,12 @@ export type CompanyMissionInput = {
    * pretending that a provider import is its organization chart.
    */
   teamSnapshot?: string;
+  /**
+   * Optional names of systems that already hold company records. This is
+   * inventory only, never a provider connection or a claim that EOS has
+   * imported, reconciled, or activated anything from those systems.
+   */
+  existingSystems?: string[];
 };
 
 export type CompanyMissionDefinition = {
@@ -104,7 +110,7 @@ export const companyMissionJourney: readonly CompanyMissionDefinition[] = [
   {
     key: "systems_reconciliation",
     title: "Reconcile systems when useful",
-    purpose: "Optionally connect and reconcile existing systems after the company model is established. Native EOS instruments remain available without them.",
+    purpose: "Optionally name systems that already hold records, then connect and reconcile them only after the company model is established. Native EOS instruments remain available without them.",
     prerequisite: "operating_formation",
     unlocks: "Provider overlays, import plans, and controlled native cutover.",
     isComplete: () => true,

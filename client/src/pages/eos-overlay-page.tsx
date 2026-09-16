@@ -145,6 +145,25 @@ type CompanyVaultConnectionDraft = {
   administratorReference: string;
   accountScope: string;
 };
+function blueprintList(value: string) {
+  return value
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+function profileStringList(profile: JsonRecord, key: string) {
+  const value = profile?.[key];
+  if (Array.isArray(value))
+    return Array.from(
+      new Set(
+        value
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean),
+      ),
+    );
+  return typeof value === "string" ? blueprintList(value) : [];
+}
 type CommandTransitionDraft = {
   kind: "objective" | "metric_outcome" | "risk_control";
   id: string;
@@ -1337,8 +1356,25 @@ export default function EosOverlayPage() {
   )
     ? manifest.manifest.packageSelections
     : [];
+  const blueprintPlan = (manifest?.manifest?.blueprintPlan || null) as JsonRecord | null;
   const availableCompanyPackages = companyPackagesQuery.data || [];
   const packets = packetsQuery.data || [];
+  const blueprintMissionPackets = new globalThis.Map<string, JsonRecord>(
+    blueprintPlan && manifest?.id
+      ? packets
+          .filter((packet: JsonRecord) =>
+            String(packet.sourceLineage || "").startsWith(
+              `organization-blueprint:${manifest.id}:`,
+            ),
+          )
+          .map((packet: JsonRecord) => [
+            String(packet.sourceLineage).slice(
+              `organization-blueprint:${manifest.id}:`.length,
+            ),
+            packet,
+          ])
+      : [],
+  );
   const approvals = approvalsQuery.data || [];
   const evidence = evidenceQuery.data || [];
   const activePackets = packets.filter(
@@ -1362,6 +1398,9 @@ export default function EosOverlayPage() {
     company?.assistantName ||
     "Assistant";
   const isFounder = principalContext?.role === "founder";
+  const canManageOrganizationBlueprint = ["founder", "company_ceo"].includes(
+    String(principalContext?.role || ""),
+  );
   const effectiveAuthorityClasses = new Set<string>(
     principalContext?.authority?.classes || [],
   );
@@ -1682,34 +1721,55 @@ export default function EosOverlayPage() {
   }, [packetsQuery.data, providerPacketId]);
 
   const compilerMutation = useMutation({
-    mutationFn: async () =>
-      requestJson<JsonRecord>("POST", `${root}/compiler/drafts`, {
-        purpose:
-          company?.goals ||
-          `Build a durable, operator-ready organization for ${company?.name || "this company"}.`,
-        stage: company?.stage || "MVP",
-        offer: company?.offer || "Define and validate the primary offer",
-        targetCustomer:
-          company?.targetCustomer || "Define the initial ideal customer",
-        goals: String(
-          company?.goals || "Activate the first repeatable customer-value loop",
-        )
-          .split("\n")
-          .map((item) => item.trim())
-          .filter(Boolean),
+    mutationFn: async () => {
+      const profile = (company?.founderProfile || {}) as JsonRecord;
+      const operatingFormation = String(profile.operatingFormation || "agent_first");
+      const goals = blueprintList(String(company?.goals || ""));
+      const purpose =
+        String(company?.goals || "").trim() ||
+        `Build a durable, operator-ready organization for ${company?.name || "this company"}.`;
+      const offer =
+        String(company?.offer || "").trim() || "Define and validate the primary offer";
+      const targetCustomer =
+        String(company?.targetCustomer || "").trim() || "Define the initial ideal customer";
+      return requestJson<JsonRecord>("POST", `${root}/compiler/drafts`, {
+        purpose,
+        stage: String(company?.stage || "MVP"),
+        offer,
+        targetCustomer,
+        goals: goals.length
+          ? goals
+          : ["Activate the first repeatable customer-value loop"],
         enabledModules: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
         ownerSeat: { title: "Founder / Owner", authority: "owner" },
         operatingCadence: "weekly",
         founderProfile: {
-          vision: company?.founderProfile?.vision || "",
-          values: company?.founderProfile?.values || "",
-          decisionStyle: company?.founderProfile?.decisionStyle || "",
-          workingStyle: company?.founderProfile?.workingStyle || "",
+          vision: String(profile.vision || ""),
+          values: String(profile.values || ""),
+          decisionStyle: String(profile.decisionStyle || ""),
+          workingStyle: String(profile.workingStyle || ""),
+        },
+        blueprint: {
+          startingPoint:
+            operatingFormation === "existing_team"
+              ? "existing_company"
+              : "new_company",
+          operatingModel:
+            operatingFormation === "existing_team"
+              ? "human_team"
+              : operatingFormation === "hybrid"
+                ? "hybrid_team"
+                : "agent_first",
+          businessModel: String(company?.type || profile.businessModel || ""),
+          primaryGrowthMotion: "",
+          departments: [],
+          priorityTools: [],
+          existingSystems: [],
         },
         sourceAssertions: [
           {
-            label: "Company setup",
-            value: company?.goals || "Initial owner-defined company intent",
+            label: "Company Mission Journey",
+            value: purpose,
             sourceType: "user_assertion",
           },
         ],
@@ -1741,7 +1801,8 @@ export default function EosOverlayPage() {
             evidence: "/api/ready",
           },
         ],
-      }),
+      });
+    },
     onSuccess: async (draft) => {
       await refresh();
       toast({
@@ -1751,6 +1812,26 @@ export default function EosOverlayPage() {
       });
     },
     onError: (error) => showMutationError("Manifest compilation", error),
+  });
+
+  const materializeBlueprintMissionsMutation = useMutation({
+    mutationFn: () => {
+      if (!manifest?.id) throw new Error("Compile an organization manifest before creating setup missions.");
+      return requestJson<JsonRecord>(
+        "POST",
+        `${root}/manifests/${encodeURIComponent(String(manifest.id))}/blueprint-missions/materialize`,
+        {},
+      );
+    },
+    onSuccess: async (result) => {
+      await refresh();
+      const created = Array.isArray(result.created) ? result.created.length : 0;
+      toast({
+        title: created ? `${created} setup mission${created === 1 ? "" : "s"} created` : "Setup missions already exist",
+        description: "Each mission is governed work. Completing it still requires the named evidence and any separate authority or provider action.",
+      });
+    },
+    onError: (error) => showMutationError("Blueprint setup missions", error),
   });
 
   const companyPackageMutation = useMutation({
@@ -4988,16 +5069,87 @@ export default function EosOverlayPage() {
                     </AlertDescription>
                   </Alert>
                 )}
-                <Button
-                  onClick={() => compilerMutation.mutate()}
-                  disabled={compilerMutation.isPending}
-                >
-                  {compilerMutation.isPending
-                    ? "Compiling…"
-                    : manifest
-                      ? "Compile next draft"
-                      : "Compile organization draft"}
-                </Button>
+                {blueprintPlan && (
+                  <section className="rounded-2xl border bg-muted/30 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold">Current blueprint plan</p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          These are the next setup missions generated from the
+                          approved inputs—not completed work or provider claims.
+                        </p>
+                      </div>
+                      <Badge variant="secondary">
+                        {String(blueprintPlan?.context?.operatingModel || "agent_first").replaceAll("_", " ")}
+                      </Badge>
+                    </div>
+                    <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                      {(blueprintPlan.setupMissions || []).map((mission: JsonRecord) => {
+                        const packet = blueprintMissionPackets.get(String(mission.key));
+                        return (
+                          <div key={String(mission.key)} className="rounded-xl border bg-background p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="font-medium">{mission.title}</p>
+                              <StateBadge state={String(packet?.status || mission.status || "not_started")} />
+                            </div>
+                            <p className="mt-2 text-sm text-muted-foreground">{mission.objective}</p>
+                            <p className="mt-3 text-xs text-muted-foreground">
+                              Owner: {String(mission.owner || "founder").replaceAll("_", " ")} · Evidence: {(mission.completionEvidence || []).join("; ")}
+                            </p>
+                            {packet && (
+                              <Button variant="link" size="sm" className="mt-2 h-auto px-0" onClick={() => setActiveTab("work-room")}>
+                                Open governed setup work →
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {canManageOrganizationBlueprint && (
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <Button
+                          size="sm"
+                          onClick={() => materializeBlueprintMissionsMutation.mutate()}
+                          disabled={materializeBlueprintMissionsMutation.isPending}
+                        >
+                          {materializeBlueprintMissionsMutation.isPending
+                            ? "Creating setup missions…"
+                            : blueprintMissionPackets.size
+                              ? "Create remaining setup missions"
+                              : "Create governed setup missions"}
+                        </Button>
+                        <p className="text-xs text-muted-foreground">
+                          This creates tenant-scoped work packets only. It does not advance, approve, or complete any mission.
+                        </p>
+                      </div>
+                    )}
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {String(blueprintPlan.activationBoundary || "")}
+                    </p>
+                  </section>
+                )}
+                <section className="rounded-2xl border bg-background p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold">Canonical company inputs</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Company identity, founder charter, operating formation,
+                        and business-model variables are defined once in the
+                        Company Mission Journey. This manifest reads that
+                        canonical context; it is not a second intake.
+                      </p>
+                    </div>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/company-setup?companyId=${companyId}`}>Open Company Mission Journey</Link>
+                    </Button>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <Button onClick={() => compilerMutation.mutate()} disabled={compilerMutation.isPending}>
+                      {compilerMutation.isPending ? "Compiling…" : manifest ? "Compile next manifest from current context" : "Compile organization manifest"}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">Compilation reads the saved Company Mission Journey. It creates a reviewable draft only; it does not activate the company, connect systems, or mark missions complete.</p>
+                  </div>
+                </section>
                 {isFounder &&
                   availableCompanyPackages.map(
                     (packageDefinition: JsonRecord) => {
@@ -12520,6 +12672,17 @@ export default function EosOverlayPage() {
               evidence={evidence}
               authorityClasses={effectiveAuthorityClasses}
               showError={showMutationError}
+              onboardingSystems={profileStringList(
+                (company?.founderProfile || {}) as JsonRecord,
+                "existingSystems",
+              )}
+              onPrepareInventoryReconciliation={(systemName) =>
+                prepareWorkPacket(
+                  `Reconcile system inventory · ${systemName}`,
+                  `Map the authoritative records, owner, native EOS equivalent, safe fallback, and cutover decision for ${systemName}. Do not connect, import, or change ${systemName} until its governed provider path is separately authorized.`,
+                  "Named authority owner, source-of-truth fields, native fallback acceptance, and approved reconciliation plan",
+                )
+              }
             />
             {(integrationsQuery.data || []).map((integration) => (
               <IntegrationControlCard
@@ -18057,6 +18220,8 @@ function SystemsRegistryInstrument({
   evidence,
   authorityClasses: effectiveClasses,
   showError,
+  onboardingSystems,
+  onPrepareInventoryReconciliation,
 }: {
   root: string;
   state?: JsonRecord;
@@ -18069,6 +18234,8 @@ function SystemsRegistryInstrument({
   evidence: JsonRecord[];
   authorityClasses: Set<string>;
   showError: (action: string, error: unknown) => void;
+  onboardingSystems: string[];
+  onPrepareInventoryReconciliation: (systemName: string) => void;
 }) {
   const { toast } = useToast();
   const [systemName, setSystemName] = useState("");
@@ -18124,6 +18291,12 @@ function SystemsRegistryInstrument({
   const entitlements = state?.entitlements || [];
   const automations = state?.automations || [];
   const observations = state?.healthObservations || [];
+  const registeredSystemNames = new Set(
+    systems.map((item: JsonRecord) => String(item.name || "").trim().toLowerCase()),
+  );
+  const unregisteredOnboardingSystems = onboardingSystems.filter(
+    (name) => !registeredSystemNames.has(name.trim().toLowerCase()),
+  );
   const after = async (title: string) => {
     await refetch();
     toast({ title });
@@ -18463,6 +18636,75 @@ function SystemsRegistryInstrument({
           )}
         />
       </div>
+      {onboardingSystems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Company Mission Journey inventory</CardTitle>
+            <CardDescription>
+              These are systems the founder named during company setup. They
+              are not connected providers and EOS has not imported any data
+              from them. Turn each one into a governed reconciliation plan or
+              register its architecture only when the responsible role is ready.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {onboardingSystems.map((name) => {
+              const registered = registeredSystemNames.has(
+                name.trim().toLowerCase(),
+              );
+              return (
+                <div
+                  key={name}
+                  className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="font-medium">{name}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {registered
+                        ? "Architecture record registered. Provider connection, authority, and health stay separately governed."
+                        : "Inventory only — authority, data domains, and replacement intent have not been asserted."}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {!registered && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSystemName(name);
+                          setSystemType("application");
+                          setSystemCapability("");
+                          setSystemDataDomain("");
+                          setSystemAuthorityField("");
+                          setSystemReplacement("integrate");
+                          document
+                            .getElementById("systems-registry-inventory")
+                            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }}
+                      >
+                        Map architecture
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant={registered ? "outline" : "default"}
+                      onClick={() => onPrepareInventoryReconciliation(name)}
+                    >
+                      Prepare reconciliation
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+            {!unregisteredOnboardingSystems.length && (
+              <p className="text-xs text-muted-foreground">
+                Every named system has an architecture record. Connection and
+                cutover remain separate, evidence-gated decisions.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Enterprise architecture inventory</CardTitle>
@@ -18471,7 +18713,7 @@ function SystemsRegistryInstrument({
             fields, ownership, evidence, and replacement intent.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent id="systems-registry-inventory" className="space-y-4">
           <div className="grid gap-3 lg:grid-cols-2">
             <Input
               aria-label="System name"
