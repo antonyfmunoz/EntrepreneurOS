@@ -166,6 +166,7 @@ import {
   manifestInputSchema,
   membershipInvitationCreateSchema,
   membershipInvitationTokenSchema,
+  teamRosterPlanSchema,
   membershipAdministrationSchema,
   metricOutcomeCreateSchema,
   metricOutcomeUpdateSchema,
@@ -2720,6 +2721,13 @@ export function registerEosRuntimeRoutes(app: Express): void {
         invitations: invitations.map(publicInvitation),
         identityPolicy,
         teamSeats,
+        // A roster plan is restricted to organization administrators. It is
+        // intentionally separate from actual memberships/invitations so an
+        // imported employee list never grants a person access by accident.
+        teamRosterPlan: canAdmin
+          ? (access.company.founderProfile as Record<string, unknown>)
+              ?.teamRosterPlan || { version: "team-roster-plan-v1", entries: [] }
+          : { version: "team-roster-plan-v1", entries: [] },
         activeSeatId: access.seat.id,
         positionFamilies: canAdmin
           ? positionFamilies
@@ -5043,6 +5051,88 @@ export function registerEosRuntimeRoutes(app: Express): void {
         }
       });
       return { body: { applied: true, changes: preview } };
+    }),
+  );
+
+  app.post(
+    "/api/eos/companies/:companyId/team-roster-plan",
+    route(async (req) => {
+      const access = await companyAccess(req);
+      if (!mayAdminOrganization(access))
+        throw new EosRouteError(
+          403,
+          "team_roster_plan_denied",
+          "This operating role lacks organization-design authority for the team plan.",
+        );
+      const input = teamRosterPlanSchema.parse(req.body);
+      const mappedSeatIds = input.entries
+        .map((entry) => entry.seatId)
+        .filter((seatId): seatId is string => Boolean(seatId));
+      if (new Set(mappedSeatIds).size !== mappedSeatIds.length)
+        throw new EosRouteError(
+          400,
+          "team_roster_duplicate_seat",
+          "A role may be mapped to only one planned person. Resolve the duplicate before saving.",
+        );
+      if (mappedSeatIds.length) {
+        const activeSeats = await db
+          .select({ id: eosSeats.id })
+          .from(eosSeats)
+          .where(
+            and(
+              eq(eosSeats.companyId, access.company.id),
+              eq(eosSeats.status, "active"),
+              inArray(eosSeats.id, mappedSeatIds),
+            ),
+          );
+        if (activeSeats.length !== mappedSeatIds.length)
+          throw new EosRouteError(
+            400,
+            "team_roster_invalid_seat",
+            "Every planned role must be an active seat inside this company.",
+          );
+      }
+      const policy = await authorizeAction(req, access, {
+        authorityClass: "grant_access",
+        resource: "team_roster_plan",
+        actionKey: "team_roster_plan.update",
+        purpose: "map_existing_team_before_invitation",
+        classification: "restricted",
+        consequence: "material",
+        targetSeatId: access.seat.id,
+      });
+      const teamRosterPlan = {
+        version: "team-roster-plan-v1",
+        entries: input.entries,
+        updatedAt: new Date().toISOString(),
+        updatedByUserId: req.user.id,
+      };
+      await db.transaction(async (tx) => {
+        const existingProfile =
+          (access.company.founderProfile as Record<string, unknown>) || {};
+        await tx
+          .update(companies)
+          .set({ founderProfile: { ...existingProfile, teamRosterPlan } })
+          .where(eq(companies.id, access.company.id));
+        await tx.insert(eosAuditRecords).values({
+          id: randomUUID(),
+          companyId: access.company.id,
+          actorUserId: req.user.id,
+          action: "team_roster_plan.updated",
+          targetType: "team_roster_plan",
+          targetId: String(access.company.id),
+          traceId: policy.traceId,
+          correlationId: policy.correlationId,
+          result: "staged",
+          details: {
+            entryCount: input.entries.length,
+            mappedSeatCount: mappedSeatIds.length,
+            policyDecisionId: policy.decisionId,
+          },
+          createdAt: new Date(),
+        });
+      });
+      return { body: { teamRosterPlan } };
     }),
   );
 

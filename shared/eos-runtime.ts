@@ -3493,6 +3493,34 @@ export const membershipInvitationTokenSchema = z.object({
   token: z.string().min(32).max(512),
 });
 
+// An established organization may need to map a real team before any people
+// are invited into EOS. This is a planning record only: it never creates a
+// membership, changes a seat's occupant, or sends email. Those remain the
+// existing governed invitation and assignment flows.
+export const teamRosterPlanSchema = z.object({
+  entries: z
+    .array(
+      z
+        .object({
+          id: z.string().uuid(),
+          name: z.string().trim().max(160).default(""),
+          email: z.string().trim().email().max(320).optional().or(z.literal("")),
+          sourceTitle: z.string().trim().max(160).default(""),
+          reportsTo: z.string().trim().max(160).default(""),
+          seatId: z.string().uuid().nullable().default(null),
+        })
+        .superRefine((entry, context) => {
+          if (!entry.name && !entry.email)
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Each planned team member needs a name or work email.",
+              path: ["name"],
+            });
+        }),
+    )
+    .max(2000),
+});
+
 export const seatCreateSchema = z.object({
   title: z.string().min(1).max(120),
   kind: z.enum([
