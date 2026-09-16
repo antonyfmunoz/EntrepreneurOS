@@ -128,6 +128,7 @@ const NativeMarketingStudio = lazy(() => import("@/components/native-marketing-s
 const NativeCommerceStudio = lazy(() => import("@/components/native-commerce-studio").then((module) => ({ default: module.NativeCommerceStudio })));
 const NativeProjectsStudio = lazy(() => import("@/components/native-projects-studio").then((module) => ({ default: module.NativeProjectsStudio })));
 const NativeReputationStudio = lazy(() => import("@/components/native-reputation-studio").then((module) => ({ default: module.NativeReputationStudio })));
+const NativeAnalyticsStudio = lazy(() => import("@/components/native-analytics-studio").then((module) => ({ default: module.NativeAnalyticsStudio })));
 const NativeWorkflowComposer = lazy(() => import("@/components/native-workflow-composer").then((module) => ({ default: module.NativeWorkflowComposer })));
 const EndStateGovernanceControlCenter = lazy(() => import("@/components/end-state-governance-control-center").then((module) => ({ default: module.EndStateGovernanceControlCenter })));
 
@@ -1413,6 +1414,11 @@ export default function EosOverlayPage() {
   // Reputation tool grant so customer-facing records stay authority-bound.
   const mayOperateNativeReputation =
     canUseInstrument("reputation") && (isFounder || toolEntitlements.has("reputation"));
+  // Decision intelligence is founder-visible initially. A finance, operations,
+  // or executive role receives the same governed analytics surface only when
+  // its operating pack explicitly carries the Analytics tool.
+  const mayOperateNativeAnalytics =
+    canUseInstrument("analytics") && (isFounder || toolEntitlements.has("analytics"));
   // Workflow authorship changes how a company operates, so it is founder
   // capability by default and an explicit tool grant for any other role.
   // Viewing an Operations surface alone never grants this control.
@@ -10495,6 +10501,14 @@ export default function EosOverlayPage() {
                 root={root}
                 roleScopeKey={roleScopeKey}
                 activeSeatId={principalContext?.seatId || ""}
+                canExecute={effectiveAuthorityClasses.has("execute")}
+                canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
+            {mayOperateNativeAnalytics && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeAnalyticsStudio
+                root={root}
+                roleScopeKey={roleScopeKey}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
               />
