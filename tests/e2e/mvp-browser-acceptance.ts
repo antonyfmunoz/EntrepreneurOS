@@ -1945,6 +1945,7 @@ try {
     .waitFor();
   await desktop
     .locator("#command-objectives")
+    .filter({ hasText: "Prove repeatable customer value" })
     .getByRole("button", { name: "active", exact: true })
     .click();
   await desktop
