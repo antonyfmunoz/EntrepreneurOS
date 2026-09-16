@@ -50,6 +50,8 @@ export function UniversalLayout({
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [floatingPanelExpanded, setFloatingPanelExpanded] = useState(false);
+  const [reserveExpandedHudClearance, setReserveExpandedHudClearance] = useState(false);
+  const workspaceRef = useRef<HTMLElement>(null);
   const hasCustomLeft = leftRailItems !== undefined;
   const hasLeft = leftRailItems === undefined || leftRailItems.length > 0;
   const hasRight = Boolean(rightRailContent);
@@ -75,11 +77,32 @@ export function UniversalLayout({
       leadingAction={desktopLeftRailToggle}
     />
   );
+  const handleFloatingPanelExpandedChange = useCallback((expanded: boolean) => {
+    setFloatingPanelExpanded(expanded);
+    // A sticky HUD already takes up its natural space at the top of a fresh
+    // workspace. When a user expands it while reading a deep section, though,
+    // that section would otherwise remain behind the newly taller HUD. Reserve
+    // the expanded delta only in that scrolled state.
+    setReserveExpandedHudClearance(expanded && (workspaceRef.current?.scrollTop ?? 0) > 4);
+  }, []);
+
+  useEffect(() => {
+    const workspace = workspaceRef.current;
+    if (!workspace || !floatingPanelExpanded) return;
+
+    const updateExpandedHudClearance = () => {
+      setReserveExpandedHudClearance(workspace.scrollTop > 4);
+    };
+    workspace.addEventListener("scroll", updateExpandedHudClearance, { passive: true });
+    updateExpandedHudClearance();
+    return () => workspace.removeEventListener("scroll", updateExpandedHudClearance);
+  }, [floatingPanelExpanded]);
+
   const resolvedFloatingPanel = floatingPanel === false
     ? false
     : floatingPanel
       ? React.isValidElement<FloatingAiPanelProps>(floatingPanel) && floatingPanel.type === FloatingAIPanel
-        ? React.cloneElement(floatingPanel, { onExpandedChange: setFloatingPanelExpanded })
+        ? React.cloneElement(floatingPanel, { onExpandedChange: handleFloatingPanelExpandedChange })
         : floatingPanel
       : <FloatingAIPanel onExpandedChange={setFloatingPanelExpanded} />;
 
@@ -117,18 +140,18 @@ export function UniversalLayout({
           </aside>
         )}
 
-        <main className="relative min-w-0 flex-1 overflow-y-auto bg-white">
+        <main ref={workspaceRef} className="relative min-w-0 flex-1 overflow-y-auto bg-white">
           {resolvedFloatingPanel || null}
           {resolvedFloatingPanel && (
             <div
               aria-hidden="true"
               data-eos-decision-hud-clearance={floatingPanelExpanded ? "expanded" : "collapsed"}
               className={
-                // The HUD is sticky at top-3. Reserve that offset as well as
-                // its dynamic height so expanded controls cannot overlap the
-                // first visible workspace content.
+                // At the top of a workspace the HUD itself participates in
+                // layout. Mid-workspace, its sticky expanded state needs an
+                // explicit clearance so it cannot cover the visible section.
                 "pointer-events-none mt-3 transition-[height] duration-200 " +
-                (floatingPanelExpanded ? "h-7 sm:h-9" : "h-3")
+                (reserveExpandedHudClearance ? "h-32 sm:h-36" : "h-3")
               }
             />
           )}
