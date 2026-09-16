@@ -583,7 +583,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const imported = await api.post(`/api/eos/companies/${otherCompanyId}/instrument-imports`).send({ bundle: exported.body, conflictStrategy: "copy", idempotencyKey: "instrument:import:portable-bundle" }).expect(201);
     expect(imported.body).toMatchObject({ imported: 6, skipped: 0, linked: 1, replayed: false });
     const importedReplay = await api.post(`/api/eos/companies/${otherCompanyId}/instrument-imports`).send({ bundle: exported.body, conflictStrategy: "copy", idempotencyKey: "instrument:import:portable-bundle" }).expect(200);
-    expect(importedReplay.body).toMatchObject({ imported: 4, linked: 1, replayed: true });
+    expect(importedReplay.body).toMatchObject({ imported: 6, linked: 1, replayed: true });
     const importedProjection = await api.get(`/api/eos/companies/${otherCompanyId}/instruments`).expect(200);
     expect(importedProjection.body.objects).toHaveLength(6);
     expect(importedProjection.body.objects.every((item: any) => item.state === "draft" && item.version === 1 && item.evidenceIds.length === 0)).toBe(true);
