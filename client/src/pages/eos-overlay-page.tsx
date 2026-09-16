@@ -124,6 +124,7 @@ const NativeMessageHub = lazy(() => import("@/components/native-message-hub").th
 const NativeDocumentsStudio = lazy(() => import("@/components/native-documents-studio").then((module) => ({ default: module.NativeDocumentsStudio })));
 const NativeSheetsStudio = lazy(() => import("@/components/native-sheets-studio").then((module) => ({ default: module.NativeSheetsStudio })));
 const NativeCrmStudio = lazy(() => import("@/components/native-crm-studio").then((module) => ({ default: module.NativeCrmStudio })));
+const NativeMarketingStudio = lazy(() => import("@/components/native-marketing-studio").then((module) => ({ default: module.NativeMarketingStudio })));
 const NativeWorkflowComposer = lazy(() => import("@/components/native-workflow-composer").then((module) => ({ default: module.NativeWorkflowComposer })));
 const EndStateGovernanceControlCenter = lazy(() => import("@/components/end-state-governance-control-center").then((module) => ({ default: module.EndStateGovernanceControlCenter })));
 
@@ -1394,6 +1395,10 @@ export default function EosOverlayPage() {
   // its own governed work surface without inheriting founder-only controls.
   const mayOperateNativeCrm =
     canUseInstrument("crm") && (isFounder || toolEntitlements.has("crm"));
+  // Growth planning is founder-controlled by default; a non-founder needs the
+  // explicit Ads tool grant for campaign, audience, creative, and budget work.
+  const mayOperateNativeMarketing =
+    canUseInstrument("ads") && (isFounder || toolEntitlements.has("ads"));
   // Workflow authorship changes how a company operates, so it is founder
   // capability by default and an explicit tool grant for any other role.
   // Viewing an Operations surface alone never grants this control.
@@ -10439,6 +10444,14 @@ export default function EosOverlayPage() {
           <TabsContent value="work-room" className="space-y-6">
             {mayOperateNativeCrm && <Suspense fallback={<DeferredControlFallback />}>
               <NativeCrmStudio
+                root={root}
+                roleScopeKey={roleScopeKey}
+                canExecute={effectiveAuthorityClasses.has("execute")}
+                canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
+            {mayOperateNativeMarketing && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeMarketingStudio
                 root={root}
                 roleScopeKey={roleScopeKey}
                 canExecute={effectiveAuthorityClasses.has("execute")}
