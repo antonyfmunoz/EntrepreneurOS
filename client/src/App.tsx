@@ -37,6 +37,7 @@ const RecoveryCalculatorPage = lazy(() => import("@/pages/recovery-calculator-pa
 const NativeEsignPage = lazy(() => import("@/pages/native-esign-page"));
 const StakeholderPortalPage = lazy(() => import("@/pages/stakeholder-portal-page"));
 const LeadCapturePage = lazy(() => import("@/pages/lead-capture-page"));
+const PublicFunnelPage = lazy(() => import("@/pages/public-funnel-page"));
 const NotFoundPage = lazy(() => import("@/pages/not-found-page"));
 
 type CanonicalCompanySurface = "organization" | "intelligence" | "operations" | "work-room";
@@ -204,6 +205,17 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <Suspense fallback={<FullPageStatus title="Opening your form" description="Preparing this EOS intake point." />}>
           <LeadCapturePage />
+        </Suspense>
+        <Toaster />
+      </QueryClientProvider>
+    );
+  }
+
+  if (window.location.pathname.startsWith("/f/")) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <Suspense fallback={<FullPageStatus title="Opening your page" description="Preparing this EOS-owned funnel." />}>
+          <PublicFunnelPage />
         </Suspense>
         <Toaster />
       </QueryClientProvider>
