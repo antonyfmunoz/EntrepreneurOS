@@ -9312,8 +9312,8 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
 
   it("operates the native workflow, institutional-learning, stakeholder-portal, and conformance end-state controls", async () => {
     currentUserId = ownerId;
-    const [process] = await sql<{ id: string; accountable_seat_id: string; occupant_user_id: string | null; agent_mode: string }[]>`
-      SELECT process.id, process.accountable_seat_id, seat.occupant_user_id, seat.agent_mode
+    const [process] = await sql<{ id: string; accountable_seat_id: string; occupant_user_id: string | null; agent_mode: string; procedure_steps: Array<{ id: string; title: string }> }[]>`
+      SELECT process.id, process.accountable_seat_id, seat.occupant_user_id, seat.agent_mode, process.procedure_steps
       FROM eos_process_definitions process
       JOIN eos_seats seat ON seat.id = process.accountable_seat_id
       WHERE process.company_id = ${companyId} AND process.release_state = 'released'
@@ -9321,7 +9321,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       ORDER BY CASE process.qualification_state WHEN 'field_qualified' THEN 0 ELSE 1 END, process.created_at
       LIMIT 1`;
     const [evidence] = await sql<{ id: string }[]>`SELECT id FROM eos_evidence WHERE company_id = ${companyId} AND verification_state = 'verified' ORDER BY created_at LIMIT 1`;
-    expect(process?.id).toBeTruthy(); expect(evidence?.id).toBeTruthy();
+    expect(process?.id).toBeTruthy(); expect(process?.procedure_steps?.length).toBeGreaterThan(0); expect(evidence?.id).toBeTruthy();
 
     const skill = await api.post(`/api/eos/companies/${companyId}/skills`).send({
       skillKey: `fixture-skill-${randomUUID()}`, name: "Fixture governed skill", description: "Executes a bounded manual fixture step without an external effect.",
@@ -9335,7 +9335,14 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     await api.post(`/api/eos/companies/${companyId}/workflow-runs`).send({ processDefinitionId: process.id, executionMode: "manual", idempotencyKey: `integration-secret-${randomUUID()}`, input: { accessToken: "must-not-enter-the-workflow-ledger" }, classification: "confidential" }).expect(409).expect(({ body }) => expect(body.code).toBe("workflow_input_contains_credentials"));
     const started = await api.post(`/api/eos/companies/${companyId}/workflow-runs/${run.body.id}/transition`).send({ expectedVersion: 1, action: "start", note: "Start the bounded integration fixture from its immutable released process definition.", output: {}, evidenceIds: [], blocker: "" }).expect(200);
     await api.post(`/api/eos/companies/${companyId}/workflow-runs/${run.body.id}/skill-invocations`).send({ skillDefinitionId: skill.body.id, stepIndex: 0, idempotencyKey: `integration-skill-${randomUUID()}`, input: { fixture: true } }).expect(201);
-    const completedRun = await api.post(`/api/eos/companies/${companyId}/workflow-runs/${run.body.id}/transition`).send({ expectedVersion: started.body.version, action: "complete", note: "Complete the bounded fixture only with verified company Evidence attached to the run.", output: { fixture: "complete" }, evidenceIds: [evidence.id], blocker: "" }).expect(200);
+    await api.post(`/api/eos/companies/${companyId}/workflow-runs/${run.body.id}/transition`).send({ expectedVersion: started.body.version, action: "complete", note: "The run must not close before every bound process step has an explicit completion record.", output: { fixture: "incomplete" }, evidenceIds: [evidence.id], blocker: "" }).expect(409).expect(({ body }) => expect(body.code).toBe("workflow_steps_incomplete"));
+    let progressedRun = started.body;
+    for (let stepIndex = 0; stepIndex < process.procedure_steps.length; stepIndex += 1) {
+      const advanced = await api.post(`/api/eos/companies/${companyId}/workflow-runs/${run.body.id}/transition`).send({ expectedVersion: progressedRun.version, action: "advance_step", note: `Record completion of governed fixture step ${stepIndex + 1} before moving to the next process step.`, output: {}, evidenceIds: [], blocker: "" }).expect(200);
+      expect(advanced.body).toMatchObject({ state: "running", currentStep: stepIndex + 1 });
+      progressedRun = advanced.body;
+    }
+    const completedRun = await api.post(`/api/eos/companies/${companyId}/workflow-runs/${run.body.id}/transition`).send({ expectedVersion: progressedRun.version, action: "complete", note: "Complete the bounded fixture only with verified company Evidence attached to the run.", output: { fixture: "complete" }, evidenceIds: [evidence.id], blocker: "" }).expect(200);
     await api.post(`/api/eos/companies/${companyId}/workflow-runs/${run.body.id}/evaluation`).send({ expectedRunVersion: completedRun.body.version, outcome: "passed", scores: { correctness: 1, authorityCompliance: 1, evidenceQuality: 1, usefulness: 0.9, efficiency: 0.9 }, rationale: "The exact released process ran inside tenant and authority scope, preserved its event trail, and completed with verified Evidence.", evidenceIds: [evidence.id], learningProposal: "Retain the explicit Evidence gate and immutable run-event requirement in future skill revisions." }).expect(201);
     const workflowState = await api.get(`/api/eos/companies/${companyId}/workflow-runtime`).expect(200);
     expect(workflowState.body.runs.find((item: any) => item.id === run.body.id)).toMatchObject({ state: "completed", version: completedRun.body.version });

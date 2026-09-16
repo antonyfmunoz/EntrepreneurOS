@@ -2,7 +2,11 @@ import { z } from "zod";
 
 export const workflowExecutionModes = ["manual", "assisted", "delegated", "autonomous"] as const;
 export const workflowRunStates = ["queued", "running", "waiting_input", "waiting_approval", "blocked", "completed", "failed", "cancelled"] as const;
-export const workflowRunActions = ["start", "request_input", "request_approval", "block", "resume", "complete", "fail", "cancel"] as const;
+// A run is not merely a status ledger.  `advance_step` is the explicit,
+// auditable acknowledgement that the currently bound process step was
+// completed.  It deliberately keeps the run in `running`; it never implies
+// that a provider action occurred.
+export const workflowRunActions = ["start", "advance_step", "request_input", "request_approval", "block", "resume", "complete", "fail", "cancel"] as const;
 
 export const workflowRunCreateSchema = z.object({
   processDefinitionId: z.string().trim().min(1).max(200),
@@ -68,7 +72,7 @@ export const skillInvocationCreateSchema = z.object({
 export function nextWorkflowRunState(state: string, action: (typeof workflowRunActions)[number]) {
   const transitions: Record<string, Partial<Record<(typeof workflowRunActions)[number], string>>> = {
     queued: { start: "running", cancel: "cancelled", block: "blocked" },
-    running: { request_input: "waiting_input", request_approval: "waiting_approval", block: "blocked", complete: "completed", fail: "failed", cancel: "cancelled" },
+    running: { advance_step: "running", request_input: "waiting_input", request_approval: "waiting_approval", block: "blocked", complete: "completed", fail: "failed", cancel: "cancelled" },
     waiting_input: { resume: "running", block: "blocked", cancel: "cancelled" },
     waiting_approval: { resume: "running", block: "blocked", cancel: "cancelled" },
     blocked: { resume: "running", cancel: "cancelled" },
