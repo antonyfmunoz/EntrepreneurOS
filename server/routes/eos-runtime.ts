@@ -43,6 +43,8 @@ import {
   eosAuditRecords,
   eosCommunicationMessages,
   eosCommercialCases,
+  eosOutreachAttempts,
+  eosOutreachSequences,
   eosCustomerValueCycles,
   eosCustomerValueCycleEvents,
   eosCustomerValueProviderCheckpoints,
@@ -171,6 +173,8 @@ import {
   objectiveUpdateSchema,
   commercialCaseCreateSchema,
   commercialCaseUpdateSchema,
+  outreachAttemptCreateSchema,
+  outreachSequenceCreateSchema,
   customerValueCycleActionSchema,
   customerValueCycleCreateSchema,
   customerValueProviderContractRunSchema,
@@ -1230,6 +1234,45 @@ async function assertCommercialReferences(
       "commercial_reference_invalid",
       "Every linked party, offer, and case must belong to this organization.",
     );
+}
+
+async function assertOutreachReferences(
+  companyId: number,
+  relationshipId: string,
+  commercialCaseId?: string,
+) {
+  const [relationship, commercialCase] = await Promise.all([
+    db.query.eosStakeholderRelationships.findFirst({
+      where: and(
+        eq(eosStakeholderRelationships.id, relationshipId),
+        eq(eosStakeholderRelationships.companyId, companyId),
+      ),
+    }),
+    commercialCaseId
+      ? db.query.eosCommercialCases.findFirst({
+          where: and(
+            eq(eosCommercialCases.id, commercialCaseId),
+            eq(eosCommercialCases.companyId, companyId),
+          ),
+        })
+      : Promise.resolve(undefined),
+  ]);
+  if (!relationship || (commercialCaseId && !commercialCase))
+    throw new EosRouteError(
+      400,
+      "outreach_reference_invalid",
+      "The outreach relationship and commercial case must belong to this organization.",
+    );
+  if (
+    commercialCase &&
+    !(commercialCase.stakeholderIds as string[]).includes(relationship.stakeholderId)
+  )
+    throw new EosRouteError(
+      409,
+      "outreach_reference_graph_mismatch",
+      "The outreach relationship must belong to a party in the selected commercial case.",
+    );
+  return { relationship, commercialCase };
 }
 
 function identityReferenceHash(value: string): string {
@@ -7733,7 +7776,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
         access.seat.id,
         access.role,
       );
-      const [stakeholders, relationships, offers, cases, valueFlows, customerValueCycles] =
+      const [stakeholders, relationships, offers, cases, valueFlows, customerValueCycles, outreachSequences, outreachAttempts] =
         await Promise.all([
           db
             .select()
@@ -7765,6 +7808,16 @@ export function registerEosRuntimeRoutes(app: Express): void {
             .from(eosCustomerValueCycles)
             .where(eq(eosCustomerValueCycles.companyId, access.company.id))
             .orderBy(desc(eosCustomerValueCycles.updatedAt)),
+          db
+            .select()
+            .from(eosOutreachSequences)
+            .where(eq(eosOutreachSequences.companyId, access.company.id))
+            .orderBy(desc(eosOutreachSequences.updatedAt)),
+          db
+            .select()
+            .from(eosOutreachAttempts)
+            .where(eq(eosOutreachAttempts.companyId, access.company.id))
+            .orderBy(desc(eosOutreachAttempts.createdAt)),
         ]);
       const maySee = (record: {
         ownerSeatId: string;
@@ -7798,6 +7851,16 @@ export function registerEosRuntimeRoutes(app: Express): void {
           (!item.toStakeholderId || stakeholderIds.has(item.toStakeholderId)) &&
           (!item.offerId || offerIds.has(item.offerId)) &&
           (!item.commercialCaseId || caseIds.has(item.commercialCaseId)),
+      );
+      const visibleOutreachSequences = outreachSequences.filter(
+        (item) =>
+          maySee(item) &&
+          visibleRelationships.some((relationship) => relationship.id === item.relationshipId) &&
+          (!item.commercialCaseId || caseIds.has(item.commercialCaseId)),
+      );
+      const visibleOutreachSequenceIds = new Set(visibleOutreachSequences.map((item) => item.id));
+      const visibleOutreachAttempts = outreachAttempts.filter(
+        (item) => visibleOutreachSequenceIds.has(item.sequenceId) && visible.has(item.ownerSeatId),
       );
       const visibleCycles = customerValueCycles.filter(
         (item) =>
@@ -7838,6 +7901,10 @@ export function registerEosRuntimeRoutes(app: Express): void {
           offers: visibleOffers,
           cases: visibleCases,
           valueFlows: visibleFlows,
+          outreachSequences: visibleOutreachSequences.map((sequence) => ({
+            ...sequence,
+            attempts: visibleOutreachAttempts.filter((attempt) => attempt.sequenceId === sequence.id),
+          })),
           customerValueCycles: visibleCycles.map((cycle) => ({
             ...cycle,
             events: cycleEvents.filter((event) => event.cycleId === cycle.id),
@@ -7876,6 +7943,12 @@ export function registerEosRuntimeRoutes(app: Express): void {
                   item.state,
                 ),
             ).length,
+            activeOutreachSequences: visibleOutreachSequences.filter((item) =>
+              ["draft", "active", "paused"].includes(item.state),
+            ).length,
+            outreachAttemptsDue: visibleOutreachSequences.filter(
+              (item) => item.nextAttemptAt && item.nextAttemptAt.getTime() <= Date.now(),
+            ).length,
             activeCustomerValueCycles: visibleCycles.filter(
               (item) => !["commercial_rejected", "renewed", "closed", "cancelled"].includes(item.state),
             ).length,
@@ -7888,6 +7961,123 @@ export function registerEosRuntimeRoutes(app: Express): void {
           },
         },
       };
+    }),
+  );
+
+  app.post(
+    "/api/eos/companies/:companyId/outreach-sequences",
+    route(async (req) => {
+      const access = await companyAccess(req);
+      assertCommercialSurface(access);
+      const input = outreachSequenceCreateSchema.parse(req.body);
+      const visible = await visibleSeatIds(access.company.id, access.seat.id, access.role);
+      const ownerSeatId = input.ownerSeatId || access.seat.id;
+      await assertCommandOwnerSeat(access.company.id, ownerSeatId, visible);
+      const { relationship } = await assertOutreachReferences(
+        access.company.id,
+        input.relationshipId,
+        input.commercialCaseId,
+      );
+      if (!visible.has(relationship.ownerSeatId) || !mayAccessClassification(access, relationship.classification))
+        throw new EosRouteError(404, "outreach_relationship_not_found", "The selected relationship is outside this role's visible scope.");
+      const policy = await authorizeAction(req, access, {
+        authorityClass: "execute",
+        resource: "outreach_sequence",
+        actionKey: "outreach_sequence.create",
+        purpose: "operate_relationships",
+        classification: input.classification,
+        consequence: "routine",
+        targetSeatId: ownerSeatId,
+      });
+      const id = randomUUID();
+      const now = new Date();
+      const record = {
+        id,
+        companyId: access.company.id,
+        portfolioId: access.company.portfolioId,
+        sequenceKey: commandRecordKey("outreach", input.title, id),
+        title: input.title,
+        relationshipId: input.relationshipId,
+        commercialCaseId: input.commercialCaseId || null,
+        channel: input.channel,
+        state: "draft",
+        ownerSeatId,
+        purpose: input.purpose,
+        script: input.script,
+        consentBasis: input.consentBasis,
+        quietHours: input.quietHours,
+        cadence: input.cadence,
+        nextAttemptAt: input.nextAttemptAt ? new Date(input.nextAttemptAt) : null,
+        evidenceKeys: input.evidenceKeys,
+        sourceAuthority: input.sourceAuthority,
+        classification: input.classification,
+        recordedByUserId: req.user.id,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await db.transaction(async (tx) => {
+        await tx.insert(eosOutreachSequences).values(record);
+        await tx.insert(eosAuditRecords).values({
+          id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id,
+          action: "outreach_sequence.created", targetType: "outreach_sequence", targetId: id,
+          traceId: policy.traceId, correlationId: policy.correlationId, result: "draft",
+          details: { relationshipId: record.relationshipId, commercialCaseId: record.commercialCaseId, channel: record.channel, policyDecisionId: policy.decisionId }, createdAt: now,
+        });
+      });
+      return { status: 201, body: record };
+    }),
+  );
+
+  app.post(
+    "/api/eos/companies/:companyId/outreach-sequences/:sequenceId/attempts",
+    route(async (req) => {
+      const access = await companyAccess(req);
+      assertCommercialSurface(access);
+      const input = outreachAttemptCreateSchema.parse(req.body);
+      const [sequence] = await db.select().from(eosOutreachSequences).where(and(
+        eq(eosOutreachSequences.id, req.params.sequenceId),
+        eq(eosOutreachSequences.companyId, access.company.id),
+      ));
+      if (!sequence) throw new EosRouteError(404, "outreach_sequence_not_found", "Outreach sequence not found.");
+      if (sequence.sourceAuthority === "external_authoritative")
+        throw new EosRouteError(409, "external_projection_immutable", "External-authoritative outreach must be reconciled at its source.");
+      const visible = await visibleSeatIds(access.company.id, access.seat.id, access.role);
+      if (!visible.has(sequence.ownerSeatId) || !mayAccessClassification(access, sequence.classification))
+        throw new EosRouteError(404, "outreach_sequence_not_found", "Outreach sequence not found.");
+      const policy = await authorizeAction(req, access, {
+        authorityClass: "execute",
+        resource: "outreach_attempt",
+        actionKey: "outreach_attempt.record",
+        purpose: "operate_relationships",
+        classification: sequence.classification,
+        consequence: "routine",
+        targetSeatId: sequence.ownerSeatId,
+      });
+      const id = randomUUID();
+      const now = new Date();
+      const attemptedAt = input.attemptedAt ? new Date(input.attemptedAt) : now;
+      const nextAttemptAt = input.nextAttemptAt ? new Date(input.nextAttemptAt) : null;
+      const terminal = ["meeting_booked", "not_interested", "do_not_contact", "invalid_contact"].includes(input.outcome);
+      const record = {
+        id, companyId: access.company.id, sequenceId: sequence.id, ownerSeatId: sequence.ownerSeatId,
+        outcome: input.outcome, note: input.note, attemptedAt, nextAttemptAt,
+        providerReceiptReference: input.providerReceiptReference || "", recordedByUserId: req.user.id, createdAt: now,
+      };
+      await db.transaction(async (tx) => {
+        await tx.insert(eosOutreachAttempts).values(record);
+        await tx.update(eosOutreachSequences).set({
+          state: terminal ? "completed" : "active",
+          nextAttemptAt,
+          updatedAt: now,
+        }).where(eq(eosOutreachSequences.id, sequence.id));
+        await tx.insert(eosAuditRecords).values({
+          id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id,
+          action: "outreach_attempt.recorded", targetType: "outreach_attempt", targetId: id,
+          traceId: policy.traceId, correlationId: policy.correlationId, result: input.outcome,
+          details: { sequenceId: sequence.id, providerReceiptReference: Boolean(record.providerReceiptReference), policyDecisionId: policy.decisionId }, createdAt: now,
+        });
+      });
+      return { status: 201, body: record };
     }),
   );
 

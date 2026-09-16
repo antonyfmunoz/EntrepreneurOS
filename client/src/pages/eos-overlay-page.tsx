@@ -17,6 +17,7 @@ import {
   Home,
   Landmark,
   Link2,
+  Phone,
   BookOpen,
   Map,
   MessagesSquare,
@@ -780,6 +781,16 @@ export default function EosOverlayPage() {
   const [flowCaseId, setFlowCaseId] = useState("");
   const [flowAmount, setFlowAmount] = useState("");
   const [flowAgreementReference, setFlowAgreementReference] = useState("");
+  const [outreachTitle, setOutreachTitle] = useState("");
+  const [outreachRelationshipId, setOutreachRelationshipId] = useState("");
+  const [outreachCaseId, setOutreachCaseId] = useState("");
+  const [outreachChannel, setOutreachChannel] = useState("phone");
+  const [outreachPurpose, setOutreachPurpose] = useState("");
+  const [outreachScript, setOutreachScript] = useState("");
+  const [outreachConsentBasis, setOutreachConsentBasis] = useState("");
+  const [outreachSequenceId, setOutreachSequenceId] = useState("");
+  const [outreachOutcome, setOutreachOutcome] = useState("planned");
+  const [outreachNote, setOutreachNote] = useState("");
   const [customerCycleTitle, setCustomerCycleTitle] = useState("TEST-PRELIVE-Recovery-System-Rehearsal");
   const [customerCycleCaseId, setCustomerCycleCaseId] = useState("");
   const [customerCycleRelationshipId, setCustomerCycleRelationshipId] = useState("");
@@ -2752,6 +2763,41 @@ export default function EosOverlayPage() {
     },
     onSuccess: ({ authUrl }) => window.location.assign(authUrl),
     onError: (error, integration) => showMutationError(`${integration.name} connection`, error),
+  });
+
+  const outreachSequenceMutation = useMutation({
+    mutationFn: () => requestJson<JsonRecord>("POST", `${root}/outreach-sequences`, {
+      title: outreachTitle,
+      relationshipId: outreachRelationshipId,
+      ...(outreachCaseId ? { commercialCaseId: outreachCaseId } : {}),
+      channel: outreachChannel,
+      purpose: outreachPurpose,
+      script: outreachScript,
+      consentBasis: outreachConsentBasis,
+    }),
+    onSuccess: async (record) => {
+      setOutreachTitle("");
+      setOutreachPurpose("");
+      setOutreachScript("");
+      setOutreachConsentBasis("");
+      setOutreachSequenceId(record.id);
+      await commercialStateQuery.refetch();
+      toast({ title: "Native outreach sequence drafted", description: "EOS has not placed a call or sent a message. Record the next governed attempt when it occurs." });
+    },
+    onError: (error) => showMutationError("Outreach sequence creation", error),
+  });
+
+  const outreachAttemptMutation = useMutation({
+    mutationFn: () => requestJson<JsonRecord>("POST", `${root}/outreach-sequences/${outreachSequenceId}/attempts`, {
+      outcome: outreachOutcome,
+      note: outreachNote,
+    }),
+    onSuccess: async () => {
+      setOutreachNote("");
+      await commercialStateQuery.refetch();
+      toast({ title: "Outreach outcome recorded", description: "The relationship and its next action are now visible in EOS." });
+    },
+    onError: (error) => showMutationError("Outreach outcome", error),
   });
 
   const attachIntegrationMutation = useMutation({
@@ -7679,6 +7725,72 @@ export default function EosOverlayPage() {
                   <BriefcaseBusiness className="mr-2 h-4 w-4" />
                   Create validation mission
                 </Button>
+              </CardContent>
+            </Card>
+
+            <Card id="native-outreach-dialer" className="scroll-mt-40">
+              <CardHeader>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="flex items-center gap-2"><Phone className="h-5 w-5" />Native outreach &amp; dialer</CardTitle>
+                    <CardDescription className="mt-2 max-w-3xl">
+                      Build a consent-aware relationship outreach queue, prepare the call, and record each outcome here. EOS does not claim to place a phone call or send a message unless a separately qualified provider execution supplies its receipt.
+                    </CardDescription>
+                  </div>
+                  <Badge variant="outline">{commercialStateQuery.data?.counts?.activeOutreachSequences || 0} open queue{(commercialStateQuery.data?.counts?.activeOutreachSequences || 0) === 1 ? "" : "s"}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid gap-5 xl:grid-cols-2">
+                  <div className="space-y-3 rounded-xl border p-4">
+                    <p className="font-medium">Draft outreach sequence</p>
+                    <Input aria-label="Outreach title" value={outreachTitle} onChange={(event) => setOutreachTitle(event.target.value)} placeholder="Recovery follow-up or prospect outreach" />
+                    <select aria-label="Outreach relationship" value={outreachRelationshipId} onChange={(event) => setOutreachRelationshipId(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                      <option value="">Choose a relationship</option>
+                      {(commercialStateQuery.data?.relationships || []).filter((item: JsonRecord) => item.state !== "closed").map((item: JsonRecord) => {
+                        const party = (commercialStateQuery.data?.stakeholders || []).find((candidate: JsonRecord) => candidate.id === item.stakeholderId);
+                        return <option key={item.id} value={item.id}>{party?.name || "Withheld party"} · {item.title}</option>;
+                      })}
+                    </select>
+                    <select aria-label="Outreach commercial case" value={outreachCaseId} onChange={(event) => setOutreachCaseId(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                      <option value="">No linked commercial case</option>
+                      {(commercialStateQuery.data?.cases || []).filter((item: JsonRecord) => !["won", "lost", "closed", "disqualified"].includes(item.state)).map((item: JsonRecord) => <option key={item.id} value={item.id}>{item.title}</option>)}
+                    </select>
+                    <select aria-label="Outreach channel" value={outreachChannel} onChange={(event) => setOutreachChannel(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                      <option value="phone">Phone</option><option value="email">Email</option><option value="sms">SMS</option><option value="social">Social</option><option value="mixed">Mixed</option><option value="manual">Manual</option>
+                    </select>
+                    <Textarea aria-label="Outreach purpose" value={outreachPurpose} onChange={(event) => setOutreachPurpose(event.target.value)} placeholder="Why this relationship should be contacted now" />
+                    <Textarea aria-label="Outreach script" value={outreachScript} onChange={(event) => setOutreachScript(event.target.value)} placeholder="Call outline, discovery prompts, or approved talking points" />
+                    <Textarea aria-label="Outreach consent basis" value={outreachConsentBasis} onChange={(event) => setOutreachConsentBasis(event.target.value)} placeholder="Documented consent, existing relationship, or other applicable legal basis" />
+                    <Button className="w-full" disabled={!outreachTitle.trim() || !outreachRelationshipId || outreachPurpose.trim().length < 3 || outreachConsentBasis.trim().length < 3 || !effectiveAuthorityClasses.has("execute") || outreachSequenceMutation.isPending} onClick={() => outreachSequenceMutation.mutate()}>
+                      <Plus className="mr-2 h-4 w-4" />{outreachSequenceMutation.isPending ? "Drafting…" : "Draft native outreach sequence"}
+                    </Button>
+                  </div>
+                  <div className="space-y-3 rounded-xl border p-4">
+                    <p className="font-medium">Record outreach outcome</p>
+                    <select aria-label="Outreach sequence" value={outreachSequenceId} onChange={(event) => setOutreachSequenceId(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                      <option value="">Choose a native outreach sequence</option>
+                      {(commercialStateQuery.data?.outreachSequences || []).filter((item: JsonRecord) => !["completed", "cancelled"].includes(item.state)).map((item: JsonRecord) => <option key={item.id} value={item.id}>{item.title} · {item.channel}</option>)}
+                    </select>
+                    <select aria-label="Outreach outcome" value={outreachOutcome} onChange={(event) => setOutreachOutcome(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                      <option value="planned">Planned</option><option value="no_answer">No answer</option><option value="voicemail">Voicemail</option><option value="reached">Reached</option><option value="meeting_booked">Meeting booked</option><option value="follow_up">Follow up</option><option value="not_interested">Not interested</option><option value="do_not_contact">Do not contact</option><option value="invalid_contact">Invalid contact</option>
+                    </select>
+                    <Textarea aria-label="Outreach outcome note" value={outreachNote} onChange={(event) => setOutreachNote(event.target.value)} placeholder={outreachOutcome === "do_not_contact" ? "Record the instruction and its source" : "Outcome, next step, and material context"} />
+                    <Button className="w-full" variant="outline" disabled={!outreachSequenceId || (outreachOutcome === "do_not_contact" && !outreachNote.trim()) || !effectiveAuthorityClasses.has("execute") || outreachAttemptMutation.isPending} onClick={() => outreachAttemptMutation.mutate()}>
+                      <Check className="mr-2 h-4 w-4" />{outreachAttemptMutation.isPending ? "Recording…" : "Record outcome"}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">Provider receipts are intentionally not entered here. A real call or send must run through its qualified integration control and leave its own auditable receipt.</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {(commercialStateQuery.data?.outreachSequences || []).map((item: JsonRecord) => {
+                    const relationship = (commercialStateQuery.data?.relationships || []).find((candidate: JsonRecord) => candidate.id === item.relationshipId);
+                    const party = (commercialStateQuery.data?.stakeholders || []).find((candidate: JsonRecord) => candidate.id === relationship?.stakeholderId);
+                    const attempts = item.attempts || [];
+                    return <div key={item.id} className="rounded-xl border p-4"><div className="flex flex-wrap items-center gap-2"><StateBadge state={item.state} /><Badge variant="outline">{item.channel}</Badge><Badge variant="secondary">{party?.name || "Withheld party"}</Badge></div><p className="mt-3 font-semibold">{item.title}</p><p className="mt-1 text-sm text-muted-foreground">{item.purpose}</p><p className="mt-2 text-xs text-muted-foreground">{attempts.length ? `${attempts.length} recorded outcome${attempts.length === 1 ? "" : "s"} · latest: ${attempts[0].outcome.replaceAll("_", " ")}` : "No outreach outcome recorded yet."}</p></div>;
+                  })}
+                  {!commercialStateQuery.isLoading && !(commercialStateQuery.data?.outreachSequences || []).length && <p className="text-sm text-muted-foreground">No native outreach sequences are visible in this role scope.</p>}
+                </div>
               </CardContent>
             </Card>
 
