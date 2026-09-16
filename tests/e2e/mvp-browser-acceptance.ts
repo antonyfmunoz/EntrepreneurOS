@@ -1683,6 +1683,10 @@ try {
     throw new Error(
       "An employee without the Docs tool entitlement was offered the native Docs operator surface.",
     );
+  if (await desktop.getByTestId("native-sheets-studio").count())
+    throw new Error(
+      "An employee without the Sheets tool entitlement was offered the native Sheets operator surface.",
+    );
   if (await desktop.getByTestId("native-message-hub").count())
     throw new Error(
       "An employee without the Messages tool entitlement was offered the native Message Hub.",

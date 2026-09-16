@@ -122,6 +122,7 @@ const NativeFunnelStudio = lazy(() => import("@/components/native-funnel-studio"
 const NativeCalendarStudio = lazy(() => import("@/components/native-calendar-studio").then((module) => ({ default: module.NativeCalendarStudio })));
 const NativeMessageHub = lazy(() => import("@/components/native-message-hub").then((module) => ({ default: module.NativeMessageHub })));
 const NativeDocumentsStudio = lazy(() => import("@/components/native-documents-studio").then((module) => ({ default: module.NativeDocumentsStudio })));
+const NativeSheetsStudio = lazy(() => import("@/components/native-sheets-studio").then((module) => ({ default: module.NativeSheetsStudio })));
 const EndStateGovernanceControlCenter = lazy(() => import("@/components/end-state-governance-control-center").then((module) => ({ default: module.EndStateGovernanceControlCenter })));
 
 function DeferredControlFallback() {
@@ -1390,6 +1391,8 @@ export default function EosOverlayPage() {
   // role pack, exactly as they are for Calendar and other tools.
   const mayOperateNativeDocuments =
     canUseInstrument("docs") && (isFounder || toolEntitlements.has("docs"));
+  const mayOperateNativeSheets =
+    canUseInstrument("sheets") && (isFounder || toolEntitlements.has("sheets"));
   // A role's Work Room is its assigned operating queue, not a copy of every
   // company-wide control surface. Founder-owned growth controls are exposed
   // here; role communication continues through the hierarchical assistant
@@ -10530,6 +10533,14 @@ export default function EosOverlayPage() {
           <TabsContent value="work-room" className="space-y-6">
             {mayOperateNativeDocuments && <Suspense fallback={<DeferredControlFallback />}>
               <NativeDocumentsStudio
+                root={root}
+                roleScopeKey={roleScopeKey}
+                canExecute={effectiveAuthorityClasses.has("execute")}
+                canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
+            {mayOperateNativeSheets && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeSheetsStudio
                 root={root}
                 roleScopeKey={roleScopeKey}
                 canExecute={effectiveAuthorityClasses.has("execute")}
