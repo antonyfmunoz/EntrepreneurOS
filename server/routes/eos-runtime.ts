@@ -12914,6 +12914,145 @@ export function registerEosRuntimeRoutes(app: Express): void {
     }),
   );
 
+  app.post(
+    "/api/eos/companies/:companyId/manifests/:manifestId/blueprint-missions/materialize",
+    route(async (req) => {
+      const access = await companyAccess(req);
+      const { company } = access;
+      if (!mayManageOrganization(access.role))
+        throw new EosRouteError(
+          403,
+          "blueprint_mission_materialization_denied",
+          "Only the founder or Company CEO may create governed organization setup missions.",
+        );
+      await authorizeAction(req, access, {
+        authorityClass: "execute",
+        resource: "organization_manifest",
+        actionKey: "manifest.blueprint_missions.materialize",
+        purpose: "materialize_organization_blueprint_missions",
+        classification: "internal",
+        consequence: "routine",
+      });
+      const target = await db.query.eosManifestVersions.findFirst({
+        where: and(
+          eq(eosManifestVersions.id, req.params.manifestId),
+          eq(eosManifestVersions.companyId, company.id),
+        ),
+      });
+      if (!target)
+        throw new EosRouteError(
+          404,
+          "manifest_not_found",
+          "Organization manifest not found in this company.",
+        );
+      const manifest = manifestInputSchema.parse(target.manifest);
+      const plan = deriveOrganizationBlueprintPlan(manifest);
+      const lineagePrefix = `organization-blueprint:${target.id}:`;
+      const existing = await db
+        .select()
+        .from(eosWorkPackets)
+        .where(eq(eosWorkPackets.companyId, company.id));
+      const activeSeats = await db
+        .select()
+        .from(eosSeats)
+        .where(
+          and(
+            eq(eosSeats.companyId, company.id),
+            eq(eosSeats.status, "active"),
+          ),
+        );
+      const founderSeat = activeSeats.find((seat) => seat.kind === "founder");
+      const companyCeoSeat = activeSeats.find(
+        (seat) => seat.kind === "company_ceo",
+      );
+      const accountableSeatFor = (owner: string) => {
+        if (owner === "company_ceo") return companyCeoSeat || founderSeat || access.seat;
+        // The founder's named Executive Assistant operates through the
+        // founder-held seat until a distinct EA seat is explicitly created.
+        return founderSeat || access.seat;
+      };
+      const existingByMission = new Map(
+        existing
+          .filter((packet) => packet.sourceLineage.startsWith(lineagePrefix))
+          .map((packet) => [packet.sourceLineage.slice(lineagePrefix.length), packet]),
+      );
+      const now = new Date();
+      const { traceId, correlationId } = tracePair();
+      const created: Array<typeof eosWorkPackets.$inferSelect> = [];
+      await db.transaction(async (tx) => {
+        for (const mission of plan.setupMissions) {
+          if (existingByMission.has(mission.key)) continue;
+          const id = randomUUID();
+          const accountableSeat = accountableSeatFor(mission.owner);
+          const packet = {
+            id,
+            companyId: company.id,
+            createdByUserId: req.user.id,
+            accountableUserId: accountableSeat.occupantUserId || req.user.id,
+            accountableSeatId: accountableSeat.id,
+            title: `Setup · ${mission.title}`,
+            objective: mission.objective,
+            status: "ready",
+            priority: mission.key === "establish-customer-value-loop" ? "high" : "medium",
+            source: "compiler",
+            visibility: "company",
+            classification: "internal",
+            requiresApproval: false,
+            toolPack: ["Organization Compiler", "Org Studio", "Executive Assistant"],
+            evidenceRequirements: mission.completionEvidence,
+            capabilityInstanceId: null,
+            processDefinitionId: null,
+            resourceIds: [],
+            expectedOutput: mission.completionEvidence.join("; "),
+            acceptanceCriteria: `The required inputs are explicit and the named completion evidence is recorded for: ${mission.title}.`,
+            constraintsPolicies: "This setup mission cannot activate a company, grant authority, connect a provider, or claim operational proof outside the governed route for that effect.",
+            failureEscalationCompensation: "Keep the mission open, identify the missing input or evidence, and escalate through the role hierarchy.",
+            humanFallback: "Return the decision to the Founder through the Executive Assistant; do not infer unrecorded authority or completion.",
+            sourceLineage: `${lineagePrefix}${mission.key}`,
+            outputArtifactKeys: mission.completionEvidence,
+            traceId,
+            correlationId,
+            dueAt: null,
+            startedAt: null,
+            completedAt: null,
+            createdAt: now,
+            updatedAt: now,
+          };
+          await tx.insert(eosWorkPackets).values(packet);
+          created.push(packet);
+        }
+        await tx.insert(eosAuditRecords).values({
+          id: randomUUID(),
+          companyId: company.id,
+          actorUserId: req.user.id,
+          action: "manifest.blueprint_missions.materialized",
+          targetType: "organization_manifest",
+          targetId: target.id,
+          traceId,
+          correlationId,
+          result: created.length ? "missions_created" : "already_materialized",
+          details: {
+            manifestVersion: target.version,
+            createdMissionKeys: created.map((packet) => packet.sourceLineage.slice(lineagePrefix.length)),
+            existingMissionKeys: [...existingByMission.keys()],
+            externalEffectsExecuted: false,
+          },
+          createdAt: now,
+        });
+      });
+      return {
+        status: created.length ? 201 : 200,
+        body: {
+          manifestId: target.id,
+          planSchemaVersion: plan.schemaVersion,
+          created,
+          existing: [...existingByMission.values()],
+          externalEffectsExecuted: false,
+        },
+      };
+    }),
+  );
+
   app.get(
     "/api/eos/companies/:companyId/work-packets",
     route(async (req) => {

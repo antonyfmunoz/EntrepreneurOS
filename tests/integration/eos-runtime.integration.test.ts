@@ -2633,6 +2633,29 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         expect.objectContaining({ key: "reconcile-existing-systems", status: "not_started" }),
       ]),
     );
+    const materialized = await api
+      .post(
+        `/api/eos/companies/${companyId}/manifests/${draft.body.id}/blueprint-missions/materialize`,
+      )
+      .send({})
+      .expect(201);
+    expect(materialized.body.created).toHaveLength(4);
+    expect(materialized.body.created).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: "compiler",
+          status: "ready",
+          sourceLineage: expect.stringContaining("reconcile-existing-systems"),
+        }),
+      ]),
+    );
+    const repeatedMaterialization = await api
+      .post(
+        `/api/eos/companies/${companyId}/manifests/${draft.body.id}/blueprint-missions/materialize`,
+      )
+      .send({})
+      .expect(200);
+    expect(repeatedMaterialization.body.created).toHaveLength(0);
     for (const status of [
       "diagnostic",
       "proposed",

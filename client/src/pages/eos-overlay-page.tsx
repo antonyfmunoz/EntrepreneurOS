@@ -1388,6 +1388,22 @@ export default function EosOverlayPage() {
   const blueprintPlan = (manifest?.manifest?.blueprintPlan || null) as JsonRecord | null;
   const availableCompanyPackages = companyPackagesQuery.data || [];
   const packets = packetsQuery.data || [];
+  const blueprintMissionPackets = new Map<string, JsonRecord>(
+    blueprintPlan && manifest?.id
+      ? packets
+          .filter((packet: JsonRecord) =>
+            String(packet.sourceLineage || "").startsWith(
+              `organization-blueprint:${manifest.id}:`,
+            ),
+          )
+          .map((packet: JsonRecord) => [
+            String(packet.sourceLineage).slice(
+              `organization-blueprint:${manifest.id}:`.length,
+            ),
+            packet,
+          ])
+      : [],
+  );
   const approvals = approvalsQuery.data || [];
   const evidence = evidenceQuery.data || [];
   const activePackets = packets.filter(
@@ -1411,6 +1427,9 @@ export default function EosOverlayPage() {
     company?.assistantName ||
     "Assistant";
   const isFounder = principalContext?.role === "founder";
+  const canManageOrganizationBlueprint = ["founder", "company_ceo"].includes(
+    String(principalContext?.role || ""),
+  );
   const currentBlueprintKey = `${companyId}:${manifest?.id || "new"}:${company?.name || ""}:${company?.stage || ""}:${company?.offer || ""}`;
   const buildBlueprintDraft = (): OrganizationBlueprintDraft => {
     const manifestInput = (manifest?.manifest || {}) as JsonRecord;
@@ -1864,6 +1883,26 @@ export default function EosOverlayPage() {
       });
     },
     onError: (error) => showMutationError("Manifest compilation", error),
+  });
+
+  const materializeBlueprintMissionsMutation = useMutation({
+    mutationFn: () => {
+      if (!manifest?.id) throw new Error("Compile an organization manifest before creating setup missions.");
+      return requestJson<JsonRecord>(
+        "POST",
+        `${root}/manifests/${encodeURIComponent(String(manifest.id))}/blueprint-missions/materialize`,
+        {},
+      );
+    },
+    onSuccess: async (result) => {
+      await refresh();
+      const created = Array.isArray(result.created) ? result.created.length : 0;
+      toast({
+        title: created ? `${created} setup mission${created === 1 ? "" : "s"} created` : "Setup missions already exist",
+        description: "Each mission is governed work. Completing it still requires the named evidence and any separate authority or provider action.",
+      });
+    },
+    onError: (error) => showMutationError("Blueprint setup missions", error),
   });
 
   const companyPackageMutation = useMutation({
@@ -5116,19 +5155,45 @@ export default function EosOverlayPage() {
                       </Badge>
                     </div>
                     <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                      {(blueprintPlan.setupMissions || []).map((mission: JsonRecord) => (
-                        <div key={String(mission.key)} className="rounded-xl border bg-background p-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="font-medium">{mission.title}</p>
-                            <StateBadge state={String(mission.status || "not_started")} />
+                      {(blueprintPlan.setupMissions || []).map((mission: JsonRecord) => {
+                        const packet = blueprintMissionPackets.get(String(mission.key));
+                        return (
+                          <div key={String(mission.key)} className="rounded-xl border bg-background p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="font-medium">{mission.title}</p>
+                              <StateBadge state={String(packet?.status || mission.status || "not_started")} />
+                            </div>
+                            <p className="mt-2 text-sm text-muted-foreground">{mission.objective}</p>
+                            <p className="mt-3 text-xs text-muted-foreground">
+                              Owner: {String(mission.owner || "founder").replaceAll("_", " ")} · Evidence: {(mission.completionEvidence || []).join("; ")}
+                            </p>
+                            {packet && (
+                              <Button variant="link" size="sm" className="mt-2 h-auto px-0" onClick={() => setActiveTab("work-room")}>
+                                Open governed setup work →
+                              </Button>
+                            )}
                           </div>
-                          <p className="mt-2 text-sm text-muted-foreground">{mission.objective}</p>
-                          <p className="mt-3 text-xs text-muted-foreground">
-                            Owner: {String(mission.owner || "founder").replaceAll("_", " ")} · Evidence: {(mission.completionEvidence || []).join("; ")}
-                          </p>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
+                    {canManageOrganizationBlueprint && (
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <Button
+                          size="sm"
+                          onClick={() => materializeBlueprintMissionsMutation.mutate()}
+                          disabled={materializeBlueprintMissionsMutation.isPending}
+                        >
+                          {materializeBlueprintMissionsMutation.isPending
+                            ? "Creating setup missions…"
+                            : blueprintMissionPackets.size
+                              ? "Create remaining setup missions"
+                              : "Create governed setup missions"}
+                        </Button>
+                        <p className="text-xs text-muted-foreground">
+                          This creates tenant-scoped work packets only. It does not advance, approve, or complete any mission.
+                        </p>
+                      </div>
+                    )}
                     <p className="mt-3 text-xs text-muted-foreground">
                       {String(blueprintPlan.activationBoundary || "")}
                     </p>
