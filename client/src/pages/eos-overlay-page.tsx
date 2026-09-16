@@ -125,6 +125,7 @@ const NativeDocumentsStudio = lazy(() => import("@/components/native-documents-s
 const NativeSheetsStudio = lazy(() => import("@/components/native-sheets-studio").then((module) => ({ default: module.NativeSheetsStudio })));
 const NativeCrmStudio = lazy(() => import("@/components/native-crm-studio").then((module) => ({ default: module.NativeCrmStudio })));
 const NativeMarketingStudio = lazy(() => import("@/components/native-marketing-studio").then((module) => ({ default: module.NativeMarketingStudio })));
+const NativeCommerceStudio = lazy(() => import("@/components/native-commerce-studio").then((module) => ({ default: module.NativeCommerceStudio })));
 const NativeWorkflowComposer = lazy(() => import("@/components/native-workflow-composer").then((module) => ({ default: module.NativeWorkflowComposer })));
 const EndStateGovernanceControlCenter = lazy(() => import("@/components/end-state-governance-control-center").then((module) => ({ default: module.EndStateGovernanceControlCenter })));
 
@@ -1399,6 +1400,10 @@ export default function EosOverlayPage() {
   // explicit Ads tool grant for campaign, audience, creative, and budget work.
   const mayOperateNativeMarketing =
     canUseInstrument("ads") && (isFounder || toolEntitlements.has("ads"));
+  // Commerce is founder-controlled by default. A role receives this view only
+  // when its position has an explicit Commerce tool entitlement.
+  const mayOperateNativeCommerce =
+    canUseInstrument("commerce") && (isFounder || toolEntitlements.has("commerce"));
   // Workflow authorship changes how a company operates, so it is founder
   // capability by default and an explicit tool grant for any other role.
   // Viewing an Operations surface alone never grants this control.
@@ -10452,6 +10457,14 @@ export default function EosOverlayPage() {
             </Suspense>}
             {mayOperateNativeMarketing && <Suspense fallback={<DeferredControlFallback />}>
               <NativeMarketingStudio
+                root={root}
+                roleScopeKey={roleScopeKey}
+                canExecute={effectiveAuthorityClasses.has("execute")}
+                canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
+            {mayOperateNativeCommerce && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeCommerceStudio
                 root={root}
                 roleScopeKey={roleScopeKey}
                 canExecute={effectiveAuthorityClasses.has("execute")}
