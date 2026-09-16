@@ -1938,6 +1938,36 @@ try {
     throw new Error(
       `Company Mission did not materialize role-owned native workflow drafts: ${JSON.stringify(compiledBlueprint)}`,
     );
+  if (
+    !compiledBlueprint.blueprint?.nativeAssets?.length ||
+    compiledBlueprint.blueprint.nativeAssets.some((asset: {
+      state?: string;
+      object?: { state?: string; instrumentKey?: string; objectType?: string } | null;
+    }) => asset.state !== "drafted" || asset.object?.state !== "draft")
+  )
+    throw new Error(
+      `Company Mission did not materialize private native operating tool drafts: ${JSON.stringify(compiledBlueprint)}`,
+    );
+  const compilerReplay = await desktop.evaluate(async () => {
+    const companyId = window.location.pathname.match(/\/company\/(\d+)/)?.[1];
+    const blueprintKey = await fetch(`/api/eos/companies/${companyId}/company-blueprint`)
+      .then((response) => response.json())
+      .then((result) => result.blueprint?.key);
+    const response = await fetch(`/api/eos/companies/${companyId}/company-blueprint/instantiate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ blueprintKey }),
+    });
+    return { status: response.status, body: await response.json() };
+  });
+  if (
+    compilerReplay.status !== 201 ||
+    compilerReplay.body.createdNativeAssetIds?.length !== 0 ||
+    compilerReplay.body.preservedNativeAssetIds?.length !== compiledBlueprint.blueprint.nativeAssets.length
+  )
+    throw new Error(
+      `Company Mission compiler retry did not preserve native operating tool drafts: ${JSON.stringify(compilerReplay)}`,
+    );
   const newlyCreatedCompanyId = new URL(desktop.url()).pathname.match(/\/company\/(\d+)/)?.[1];
   if (!newlyCreatedCompanyId) throw new Error("Created company route did not include a company id.");
   await desktop.goto(`${origin}/company/${newlyCreatedCompanyId}#command`, {

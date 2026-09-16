@@ -34,4 +34,12 @@ describe("Company Mission blueprint handoff", () => {
     expect(runtime).toContain('releaseState: "draft"');
     expect(runtime).toContain("Do not transmit data to an external provider unless an explicit provider capability");
   });
+
+  it("also creates private native tool drafts without replacing an established company's edits", () => {
+    expect(runtime).toContain("materializeNativeBusinessStarters");
+    expect(runtime).toContain("createdNativeAssetIds");
+    expect(runtime).toContain("preservedNativeAssetIds");
+    expect(runtime).toContain('state: "draft"');
+    expect(runtime).toContain("Existing lifecycle controls still govern whether any form, site, or");
+  });
 });

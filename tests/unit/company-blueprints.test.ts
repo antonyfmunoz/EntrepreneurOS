@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { compileCompanyBlueprintStarters, companyBlueprintForBusinessModel, companyBlueprints } from "../../shared/company-blueprints";
 import { materializeNativeWorkflowStarter } from "../../shared/native-workflow-starters";
+import { materializeNativeBusinessStarters } from "../../shared/native-business-starters";
 
 describe("company operating blueprints", () => {
   it("maps business-model variables to one editable company formation", () => {
@@ -48,5 +49,27 @@ describe("company operating blueprints", () => {
     expect(workflow.purpose).toContain("B2B service companies");
     expect(workflow.steps.map((step) => step.toolKey)).toEqual(["crm", "crm", "calendar"]);
     expect(workflow.steps.some((step) => step.actionKind === "approval")).toBe(false);
+  });
+
+  it("materializes native operating tool drafts from the same company variables", () => {
+    const starters = materializeNativeBusinessStarters({
+      companyName: "Empyrean Studios",
+      offer: "Revenue recovery service",
+      targetCustomer: "B2B service companies",
+    });
+    expect(starters.map((starter) => `${starter.instrumentKey}:${starter.objectType}`)).toEqual([
+      "crm:pipeline",
+      "forms:form",
+      "websites:site",
+    ]);
+    expect(starters.find((starter) => starter.key === "commercial-pipeline")).toMatchObject({
+      title: "Revenue recovery service pipeline",
+      ownerRoleKey: "growth",
+      data: { compilerStarter: true, stages: ["Qualified", "Discovery", "Proposal", "Won", "Lost"] },
+    });
+    expect(starters.find((starter) => starter.key === "commercial-intake")?.data).toMatchObject({
+      publicCapture: true,
+      consentVersion: "native-eos-lead-capture-v1",
+    });
   });
 });
