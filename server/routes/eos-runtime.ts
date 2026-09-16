@@ -3179,6 +3179,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
             const supervisor = role.supervisorKey ? byTemplateKey.get(role.supervisorKey) : undefined;
             const [inserted] = await tx.insert(eosSeats).values({
               id: randomUUID(), companyId: access.company.id, title: role.title, kind: role.kind,
+              department: role.department,
               supervisorSeatId: supervisor?.id || access.seat.id, occupantUserId: null,
               agentName: role.agentName, agentMode: "autonomous", mandate: role.mandate,
               authority: { blueprintKey: blueprint.key, approval: "supervisor" }, toolEntitlements: canonicalToolEntitlements(role.tools),
@@ -3188,6 +3189,16 @@ export function registerEosRuntimeRoutes(app: Express): void {
             created.push(seat);
             await ensureSeatOperatingKernel(tx, access.company, seat, req.user.id);
           } else {
+            // Older compiled seats predate first-class department ownership.
+            // Backfill only the generic legacy value; a founder's explicit
+            // department design always remains authoritative.
+            if (seat.department === "General Management" && role.department !== "General Management") {
+              const [updated] = await tx.update(eosSeats)
+                .set({ department: role.department, updatedAt: new Date() })
+                .where(eq(eosSeats.id, seat.id))
+                .returning();
+              seat = updated;
+            }
             present.push(seat);
           }
           byTemplateKey.set(role.key, seat);
@@ -5303,6 +5314,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
             id: randomUUID(),
             companyId: access.company.id,
             title: input.title,
+            department: input.department,
             kind: input.kind,
             supervisorSeatId: input.supervisorSeatId || access.seat.id,
             occupantUserId: input.occupantUserId || null,

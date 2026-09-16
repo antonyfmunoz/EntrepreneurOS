@@ -165,6 +165,9 @@ function buildGraph(
                 />
                 <span className="font-semibold">{seat.title}</span>
               </div>
+              <p className="mt-1 text-[11px] font-medium uppercase tracking-wide text-primary/75">
+                {seat.department || "General Management"}
+              </p>
               <p className="mt-1 text-xs opacity-75">
                 {humanName
                   ? `${humanName} · assisted by ${seat.agentName}`
@@ -207,6 +210,7 @@ export default function OrgStudioPage() {
   const [view, setView] = useState<StudioView>("structure");
   const [selectedSeatId, setSelectedSeatId] = useState<string>();
   const [title, setTitle] = useState("");
+  const [department, setDepartment] = useState("Operations");
   const [agentName, setAgentName] = useState("");
   const [kind, setKind] = useState("functional_executive");
   const [supervisorSeatId, setSupervisorSeatId] = useState("");
@@ -248,6 +252,21 @@ export default function OrgStudioPage() {
     () => buildGraph(seats, organization.data?.memberships || [], selectedSeat?.id),
     [seats, organization.data?.memberships, selectedSeat?.id],
   );
+  const departments = useMemo<[string, RecordValue[]][]>(() => {
+    const groups = seats.reduce((accumulator: Map<string, RecordValue[]>, seat: RecordValue) => {
+      const name = String(seat.department || "General Management");
+      accumulator.set(name, [...(accumulator.get(name) || []), seat]);
+      return accumulator;
+    }, new Map<string, RecordValue[]>());
+    const entries: [string, RecordValue[]][] = [];
+    groups.forEach((departmentSeats: RecordValue[], departmentName: string) => {
+      entries.push([departmentName, departmentSeats]);
+    });
+    return entries.sort(
+      ([left]: [string, RecordValue[]], [right]: [string, RecordValue[]]) =>
+        left.localeCompare(right),
+    );
+  }, [seats]);
   const rosterEntries = organization.data?.teamRosterPlan?.entries || [];
   const rosterVersion = JSON.stringify(rosterEntries);
   useEffect(() => {
@@ -282,6 +301,7 @@ export default function OrgStudioPage() {
     mutationFn: () =>
       requestJson<RecordValue>("POST", `${root}/seats`, {
         title: title.trim(),
+        department: department.trim() || "General Management",
         kind,
         agentName: agentName.trim() || `${title.trim()} Agent`,
         supervisorSeatId: supervisorSeatId || activeSeat?.id,
@@ -297,6 +317,7 @@ export default function OrgStudioPage() {
       }),
     onSuccess: async (seat) => {
       setTitle("");
+      setDepartment("Operations");
       setAgentName("");
       setMandate("");
       setTools("");
@@ -851,36 +872,58 @@ export default function OrgStudioPage() {
           </section>
         )}
         {view === "structure" && (
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_330px]">
-            <div className="h-[620px] overflow-hidden rounded-2xl border bg-[#f9f8fc]">
-              <ReactFlow
-                nodes={graph.nodes}
-                edges={graph.edges}
-                fitView
-                fitViewOptions={{ padding: 0.25 }}
-                onNodeClick={(_, node) => setSelectedSeatId(node.id)}
-                nodesDraggable={false}
-                nodesConnectable={false}
-                elementsSelectable
-              >
-                <Background color="#e7e2f4" gap={18} />
-                <MiniMap
-                  nodeColor={(node) =>
-                    seatColor(
-                      seats.find((seat: RecordValue) => seat.id === node.id)
-                        ?.kind || "individual_contributor",
-                    )
-                  }
-                />
-                <Controls showInteractive={false} />
-              </ReactFlow>
+          <div className="space-y-5">
+            <section className="rounded-2xl border bg-white p-5">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <div>
+                  <p className="eos-label">Department coverage</p>
+                  <h2 className="mt-1 text-lg font-semibold">The operating functions behind this company</h2>
+                </div>
+                <p className="text-xs text-muted-foreground">Departments organize live role seats; they never broaden a role&apos;s authority.</p>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {departments.map(([departmentName, departmentSeats]) => (
+                  <div key={departmentName} className="rounded-xl border bg-muted/30 p-3">
+                    <p className="text-sm font-semibold">{departmentName}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{departmentSeats.length} role{departmentSeats.length === 1 ? "" : "s"} · {departmentSeats.filter((seat) => seat.occupantUserId).length} human-led</p>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {departmentSeats.map((seat) => <button type="button" key={seat.id} onClick={() => setSelectedSeatId(seat.id)} className="rounded-full bg-background px-2 py-1 text-xs hover:bg-primary/10 hover:text-primary">{seat.title}</button>)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_330px]">
+              <div className="h-[620px] overflow-hidden rounded-2xl border bg-[#f9f8fc]">
+                <ReactFlow
+                  nodes={graph.nodes}
+                  edges={graph.edges}
+                  fitView
+                  fitViewOptions={{ padding: 0.25 }}
+                  onNodeClick={(_, node) => setSelectedSeatId(node.id)}
+                  nodesDraggable={false}
+                  nodesConnectable={false}
+                  elementsSelectable
+                >
+                  <Background color="#e7e2f4" gap={18} />
+                  <MiniMap
+                    nodeColor={(node) =>
+                      seatColor(
+                        seats.find((seat: RecordValue) => seat.id === node.id)
+                          ?.kind || "individual_contributor",
+                      )
+                    }
+                  />
+                  <Controls showInteractive={false} />
+                </ReactFlow>
+              </div>
+              <SeatInspector
+                seat={selectedSeat}
+                memberships={organization.data?.memberships || []}
+                rolePacks={organization.data?.roleOperatingPacks || []}
+                view={view}
+              />
             </div>
-            <SeatInspector
-              seat={selectedSeat}
-              memberships={organization.data?.memberships || []}
-              rolePacks={organization.data?.roleOperatingPacks || []}
-              view={view}
-            />
           </div>
         )}
         {view === "team" && canDesign && (
@@ -937,6 +980,13 @@ export default function OrgStudioPage() {
                     value={title}
                     onChange={(event) => setTitle(event.target.value)}
                     placeholder="Head of Growth"
+                  />
+                </Field>
+                <Field label="Department" hint="The operating function this role belongs to. It organizes the live graph; authority remains role-specific.">
+                  <Input
+                    value={department}
+                    onChange={(event) => setDepartment(event.target.value)}
+                    placeholder="Growth & Revenue"
                   />
                 </Field>
                 <Field label="Role Agent name">
@@ -1509,6 +1559,11 @@ function SeatInspector({
         </span>
       </div>
       <div className="mt-5 space-y-4 text-sm">
+        <InspectorRow
+          icon={BriefcaseBusiness}
+          label="Department"
+          value={seat.department || "General Management"}
+        />
         <InspectorRow icon={Bot} label="Role Agent" value={seat.agentName} />
         <InspectorRow
           icon={UserRound}
@@ -1587,7 +1642,7 @@ function SeatCard({
       className={`rounded-2xl border bg-white p-5 text-left transition-colors ${selected ? "border-primary ring-1 ring-primary" : "hover:border-primary/40"}`}
     >
       <div className="flex items-center justify-between gap-4">
-        <span className="font-semibold">{seat.title}</span>
+        <span><span className="block font-semibold">{seat.title}</span><span className="mt-1 block text-xs text-primary/75">{seat.department || "General Management"}</span></span>
         <span className="text-xs text-muted-foreground">
           {seatLabel(seat.kind)}
         </span>

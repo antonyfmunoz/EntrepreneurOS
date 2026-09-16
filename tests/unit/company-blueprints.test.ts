@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { compiledOperatingFormation, compileCompanyBlueprintStarters, companyBlueprintForBusinessModel, companyBlueprints } from "../../shared/company-blueprints";
 import { materializeNativeWorkflowStarter } from "../../shared/native-workflow-starters";
 import { materializeNativeBusinessStarters } from "../../shared/native-business-starters";
-import { allowedSurfacesForRoleTools, canonicalToolEntitlements, reconcileLegacyToolEntitlements } from "../../shared/eos-runtime";
+import { allowedSurfacesForRoleTools, canonicalToolEntitlements, reconcileLegacyToolEntitlements, seatCreateSchema } from "../../shared/eos-runtime";
 
 describe("company operating blueprints", () => {
   it("maps business-model variables to one editable company formation", () => {
@@ -33,11 +33,35 @@ describe("company operating blueprints", () => {
   it("keeps every blueprint rooted in a Company CEO role with native tools", () => {
     for (const blueprint of companyBlueprints) {
       const ceo = blueprint.roles.find((role) => role.key === "company_ceo");
-      expect(ceo?.kind).toBe("company_ceo");
+      expect(ceo).toMatchObject({ kind: "company_ceo", department: "Executive" });
       expect(ceo?.tools.length).toBeGreaterThan(0);
-      expect(blueprint.roles.find((role) => role.key === "finance_capital")).toMatchObject({ kind: "functional_executive", supervisorKey: "company_ceo" });
-      expect(blueprint.roles.find((role) => role.key === "legal_governance")).toMatchObject({ kind: "functional_executive", supervisorKey: "company_ceo" });
+      expect(blueprint.roles.find((role) => role.key === "finance_capital")).toMatchObject({ kind: "functional_executive", department: "Finance", supervisorKey: "company_ceo" });
+      expect(blueprint.roles.find((role) => role.key === "legal_governance")).toMatchObject({ kind: "functional_executive", department: "Legal & Governance", supervisorKey: "company_ceo" });
+      expect(blueprint.roles.every((role) => role.department.trim().length > 0)).toBe(true);
     }
+  });
+
+  it("keeps department ownership explicit for both compiled and custom organizational roles", () => {
+    const customSeat = seatCreateSchema.parse({
+      title: "Client Delivery Lead",
+      department: "  Operations & Delivery  ",
+      kind: "functional_executive",
+      agentName: "Delivery Role Agent",
+      mandate: "Own reliable client delivery",
+      authority: {},
+      toolEntitlements: [],
+    });
+    expect(customSeat.department).toBe("Operations & Delivery");
+
+    const defaultedSeat = seatCreateSchema.parse({
+      title: "Founder",
+      kind: "company_ceo",
+      agentName: "Founder Role Agent",
+      mandate: "Set company direction",
+      authority: {},
+      toolEntitlements: [],
+    });
+    expect(defaultedSeat.department).toBe("General Management");
   });
 
   it("gives a finance-equipped role the capital surface without opening it to unrelated roles", () => {
