@@ -33,6 +33,12 @@ export const agentScheduleTransitionSchema = z.object({
   rationale: z.string().trim().min(20).max(4000),
 });
 
+export const agentScheduleManualRunSchema = z.object({
+  // A caller-generated key makes a retry of the same button press safe while
+  // still allowing a later, separately reviewed manual run.
+  idempotencyKey: z.string().trim().min(8).max(240),
+});
+
 export const agentEvaluationSchema = z.object({
   expectedRunVersion: z.number().int().positive(),
   outcome: z.enum(["passed", "needs_review", "failed"]),
