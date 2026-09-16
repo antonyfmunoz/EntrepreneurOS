@@ -12,6 +12,7 @@ import {
   updatePortfolioSchema,
 } from "@shared/schema";
 import { portfolioMembershipAdministrationSchema } from "@shared/eos-runtime";
+import { companyFounderProfileSchema } from "@shared/company-founder-profile";
 import { db } from "../db";
 import { hasEntitlement } from "../billing/stripe";
 import { mayAddTeamIdentity, teamSeatSummaryForOwner } from "../billing/team-seats";
@@ -377,7 +378,7 @@ export function registerPortfolioRoutes(app: Express): void {
       targetCustomer: z.string().trim().min(1).max(2_000).optional(),
       goals: z.string().optional(),
       assistantName: z.string().optional(),
-      founderProfile: z.record(z.unknown()).optional(),
+      founderProfile: companyFounderProfileSchema.optional(),
     });
     const bodySchema = z.union([attachSchema, createSchema]);
 

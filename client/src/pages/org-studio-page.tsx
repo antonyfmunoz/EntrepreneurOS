@@ -29,7 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest } from "@/lib/queryClient";
 import { eosRoleToolChoices } from "@shared/instrument-runtime";
-import { normalizedRosterRole, parseTeamRosterCsv } from "@shared/team-roster-csv";
+import { normalizedRosterRole, parseTeamRosterCsv, suggestedTeamRosterSeats } from "@shared/team-roster-csv";
 
 type RecordValue = Record<string, any>;
 type StudioView = "structure" | "tools" | "authority" | "team";
@@ -1178,6 +1178,14 @@ function TeamTransitionPlanner({
       .filter((invitation) => ["pending", "pending_delivery"].includes(invitation.status))
       .map((invitation) => invitation.seatId),
   );
+  const suggestedSeatIds = suggestedTeamRosterSeats(entries, seats.map((seat) => ({
+    id: String(seat.id),
+    title: typeof seat.title === "string" ? seat.title : "",
+    kind: typeof seat.kind === "string" ? seat.kind : "",
+  })), [
+    ...Array.from(occupiedSeatIds),
+    ...Array.from(pendingSeatIds),
+  ]);
   const mappedCount = entries.filter((entry) => entry.seatId).length;
   const addEntry = () =>
     onChange([
@@ -1258,6 +1266,7 @@ function TeamTransitionPlanner({
         )}
         {entries.map((entry) => {
           const targetSeat = seats.find((seat) => seat.id === entry.seatId);
+          const suggestedSeat = seats.find((seat) => seat.id === suggestedSeatIds.get(entry.id));
           const seatUnavailable = Boolean(
             entry.seatId && (occupiedSeatIds.has(entry.seatId) || pendingSeatIds.has(entry.seatId)),
           );
@@ -1305,6 +1314,12 @@ function TeamTransitionPlanner({
                       : `${targetSeat.agentName} will remain with this seat as the human’s assistant after acceptance.`
                     : "Choose a role seat when you are ready to map this person into the operating graph."}
                 </span>
+                {suggestedSeat && !targetSeat && (
+                  <span className="inline-flex items-center gap-2 rounded-full bg-primary/5 px-2.5 py-1 text-primary">
+                    Exact role match: {suggestedSeat.title}
+                    {canSave && <button type="button" className="font-medium underline underline-offset-2" onClick={() => update(entry.id, { seatId: suggestedSeat.id })}>Use match</button>}
+                  </span>
+                )}
                 {canSave && (
                   <Button size="sm" variant="outline" disabled={!canInvite || invitePending} onClick={() => onInvite(entry)}>
                     {invitePending ? "Sending…" : "Invite to mapped role"}

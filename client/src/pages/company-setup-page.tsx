@@ -1,7 +1,7 @@
 import { cloneElement, isValidElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, CheckCircle2, Circle, Network, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Circle, Network, Plus, Sparkles, Trash2 } from "lucide-react";
 import UniversalLayout from "@/components/layout/universal-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ type Company = {
   assumedBusinessNames?: string[]; stage?: string; type?: string; offer?: string; targetCustomer?: string;
   goals?: string; assistantName?: string; founderProfile?: Record<string, unknown>;
 };
+type TeamRosterEntry = { id: string; name: string; email: string; sourceTitle: string; reportsTo: string; seatId: null };
 
 const STAGES = [
   ["idea", "Idea"], ["pre-revenue", "Pre-revenue"], ["revenue", "Revenue"], ["scaling", "Scaling"], ["mature", "Mature"],
@@ -33,6 +34,21 @@ const FORMATIONS = [
 
 function profileString(profile: Record<string, unknown> | undefined, key: string) {
   return typeof profile?.[key] === "string" ? profile[key] as string : "";
+}
+
+function createTeamRosterEntry(): TeamRosterEntry {
+  return { id: crypto.randomUUID(), name: "", email: "", sourceTitle: "", reportsTo: "", seatId: null };
+}
+
+function stagedTeamRoster(profile: Record<string, unknown> | undefined): TeamRosterEntry[] {
+  const raw = profile?.teamRosterPlan;
+  const entries = raw && typeof raw === "object" && Array.isArray((raw as Record<string, unknown>).entries)
+    ? (raw as Record<string, unknown>).entries as Array<Record<string, unknown>>
+    : [];
+  return entries.flatMap((entry) => {
+    if (typeof entry.id !== "string") return [];
+    return [{ id: entry.id, name: typeof entry.name === "string" ? entry.name : "", email: typeof entry.email === "string" ? entry.email : "", sourceTitle: typeof entry.sourceTitle === "string" ? entry.sourceTitle : "", reportsTo: typeof entry.reportsTo === "string" ? entry.reportsTo : "", seatId: null }];
+  });
 }
 
 export default function CompanySetupPage() {
@@ -70,6 +86,7 @@ export default function CompanySetupPage() {
   const [goals, setGoals] = useState("");
   const [formation, setFormation] = useState<CompanyMissionInput["formation"]>();
   const [teamSnapshot, setTeamSnapshot] = useState("");
+  const [teamRoster, setTeamRoster] = useState<TeamRosterEntry[]>([]);
   const [compiledCompanyId, setCompiledCompanyId] = useState("");
   const hydratedCompany = useRef(false);
 
@@ -100,6 +117,7 @@ export default function CompanySetupPage() {
     const currentFormation = profileString(profile, "operatingFormation");
     if (["agent_first", "hybrid", "existing_team"].includes(currentFormation)) setFormation(currentFormation as CompanyMissionInput["formation"]);
     setTeamSnapshot(profileString(profile, "teamSnapshot"));
+    setTeamRoster(stagedTeamRoster(profile));
   }, [existingCompanyQuery.data, requestedPortfolioId]);
 
   const createPortfolio = useMutation<Portfolio, Error, { name: string; description?: string }>({
@@ -135,11 +153,16 @@ export default function CompanySetupPage() {
     if (currentStep === 4 && !goals.trim()) next.goals = "State at least one near-term outcome.";
     if (currentStep === 5) {
       if (!formation) next.formation = "Choose how this company operates today.";
-      if (formation && formation !== "agent_first" && teamSnapshot.trim().length < 10)
-        next.teamSnapshot = "Describe the current team so EOS can start with the real operating shape.";
+      const people = teamRoster.filter((entry) => entry.name.trim() || entry.email.trim());
+      if (formation && formation !== "agent_first" && teamSnapshot.trim().length < 10 && people.length === 0)
+        next.teamSnapshot = "Describe the current team or add at least one person below so EOS can start with the real operating shape.";
+      if (teamRoster.length > 2_000) next.teamRoster = "EOS supports up to 2,000 staged people in one company plan.";
+      teamRoster.forEach((entry, index) => {
+        if ((entry.name.trim() || entry.email.trim()) && entry.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(entry.email.trim())) next[`teamRoster-${index}`] = "Use a valid work email or leave this field blank.";
+      });
     }
     setErrors(next); return Object.keys(next).length === 0;
-  }, [currentStep, selectedPortfolioId, companyName, stage, businessModel, offer, targetCustomer, assistantName, founderVision, goals, formation, teamSnapshot]);
+  }, [currentStep, selectedPortfolioId, companyName, stage, businessModel, offer, targetCustomer, assistantName, founderVision, goals, formation, teamSnapshot, teamRoster]);
 
   const compileBlueprint = useMutation<Record<string, unknown>, Error, string>({
     mutationFn: async (companyId) =>
@@ -177,7 +200,8 @@ export default function CompanySetupPage() {
   const advance = () => { if (validateCurrentMission()) setCurrentStep((step) => Math.min(step + 1, companyMissionJourney.length - 1)); };
   const completeJourney = () => {
     if (!validateCurrentMission()) return;
-    const founderProfile = { vision: founderVision.trim(), values: founderValues.trim(), decisionStyle: decisionStyle.trim(), workingStyle: workingStyle.trim(), industry: industry.trim(), businessModel, operatingFormation: formation, teamSnapshot: teamSnapshot.trim(), setupJourneyVersion: "company-mission-journey-v1" };
+    const rosterEntries = teamRoster.map((entry) => ({ ...entry, name: entry.name.trim(), email: entry.email.trim().toLowerCase(), sourceTitle: entry.sourceTitle.trim(), reportsTo: entry.reportsTo.trim(), seatId: null })).filter((entry) => entry.name || entry.email);
+    const founderProfile = { vision: founderVision.trim(), values: founderValues.trim(), decisionStyle: decisionStyle.trim(), workingStyle: workingStyle.trim(), industry: industry.trim(), businessModel, operatingFormation: formation, teamSnapshot: teamSnapshot.trim(), ...(formation !== "agent_first" ? { teamRosterPlan: { version: "team-roster-plan-v1", entries: rosterEntries } } : {}), setupJourneyVersion: "company-mission-journey-v1" };
     saveCompany.mutate({
       name: companyName.trim(), legalName: legalName.trim() || companyName.trim(), assumedBusinessNames: parseAssumedBusinessNames(assumedBusinessNames),
       stage, type: businessModel, businessModel, offer: offer.trim(), targetCustomer: targetCustomer.trim(), goals: normalizeOptionalGoals(goals),
@@ -213,7 +237,7 @@ export default function CompanySetupPage() {
             {currentStep === 2 && <div className="grid max-w-3xl gap-6"><Field label="Operating stage" error={errors.stage}><RadioGroup value={stage} onValueChange={setStage} className="grid gap-2 sm:grid-cols-2">{STAGES.map(([value, label]) => <Choice key={value} value={value} label={label} selected={stage === value} />)}</RadioGroup></Field><Field label="Business model" error={errors.businessModel}><RadioGroup value={businessModel} onValueChange={setBusinessModel} className="grid gap-2 sm:grid-cols-2">{BUSINESS_MODELS.map(([value, label]) => <Choice key={value} value={value} label={label} selected={businessModel === value} />)}</RadioGroup></Field><div className="grid gap-5 sm:grid-cols-2"><Field label="Industry" hint="Optional but useful for relevant templates"><Input value={industry} onChange={(event) => setIndustry(event.target.value)} placeholder="Creative services" /></Field><Field label="Initial offer or value stream" error={errors.offer}><Input value={offer} onChange={(event) => setOffer(event.target.value)} placeholder="Revenue recovery service" /></Field></div><Field label="Primary customer or buyer" error={errors.targetCustomer}><Textarea value={targetCustomer} onChange={(event) => setTargetCustomer(event.target.value)} placeholder="Who does this company serve first?" /></Field></div>}
             {currentStep === 3 && <div className="grid max-w-3xl gap-5"><div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm"><Sparkles className="mb-2 h-5 w-5 text-primary"/><p className="font-medium">The EA is a founder-facing coordination role, not a hardcoded product character.</p><p className="mt-1 text-muted-foreground">It coordinates advisors and company agents within the authority you establish.</p></div><Field label="Executive Assistant name" error={errors.assistantName}><Input value={assistantName} onChange={(event) => setAssistantName(event.target.value)} placeholder="Choose the name you want to use" /></Field><Field label="Founder vision" error={errors.founderVision}><Textarea value={founderVision} onChange={(event) => setFounderVision(event.target.value)} placeholder="What are you building and what must remain true as it grows?" className="min-h-28" /></Field><div className="grid gap-5 sm:grid-cols-2"><Field label="Values and standards"><Textarea value={founderValues} onChange={(event) => setFounderValues(event.target.value)} placeholder="Principles the company must protect" /></Field><Field label="Decision style"><Textarea value={decisionStyle} onChange={(event) => setDecisionStyle(event.target.value)} placeholder="How recommendations should be prepared" /></Field></div><Field label="Working style"><Textarea value={workingStyle} onChange={(event) => setWorkingStyle(event.target.value)} placeholder="Cadence, communication preferences, and watchouts" /></Field></div>}
             {currentStep === 4 && <div className="max-w-3xl"><Field label="Near-term outcomes" hint="State what must become true next. EOS will turn these into objectives, measures, and governed work." error={errors.goals}><Textarea value={goals} onChange={(event) => setGoals(event.target.value)} placeholder="e.g. Validate the Revenue Recovery offer, close three retained clients, and establish a reliable delivery loop." className="min-h-44" /></Field></div>}
-            {currentStep === 5 && <div className="max-w-3xl space-y-4"><p className="text-sm text-muted-foreground">This is not permanent. It sets the initial shape of the company graph. People can be added later into existing seats, where the role agent becomes their assistant.</p><RadioGroup value={formation} onValueChange={(value) => setFormation(value as CompanyMissionInput["formation"])} className="space-y-3">{FORMATIONS.map(([value, title, description]) => <label key={value} className={`flex cursor-pointer gap-3 rounded-xl border p-5 ${formation === value ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:border-primary/40"}`}><RadioGroupItem value={value} /><span><span className="font-medium">{title}</span><span className="mt-1 block text-sm text-muted-foreground">{description}</span></span></label>)}</RadioGroup>{formation === "agent_first" && <div className="rounded-xl border bg-muted/40 p-4 text-sm text-muted-foreground">EOS will start with role agents. As people join, assign them to the existing seats in Org Studio; their role agent then shifts into assistant mode.</div>}{formation && formation !== "agent_first" && <Field label="Current team snapshot" hint="Describe the functions, key roles, reporting lines, and important vacancies. This is your starting operating reality; map individual people to seats in Org Studio after the blueprint is compiled." error={errors.teamSnapshot}><Textarea value={teamSnapshot} onChange={(event) => setTeamSnapshot(event.target.value)} placeholder="Example: Founder/CEO; one account director reporting to the founder; two delivery specialists; freelance designer; finance handled externally; no dedicated growth lead yet." className="min-h-36" /></Field>}{errors.formation && <p className="text-sm text-destructive">{errors.formation}</p>}</div>}
+            {currentStep === 5 && <div className="max-w-3xl space-y-4"><p className="text-sm text-muted-foreground">This is not permanent. It sets the initial shape of the company graph. People can be added later into existing seats, where the role agent becomes their assistant.</p><RadioGroup value={formation} onValueChange={(value) => setFormation(value as CompanyMissionInput["formation"])} className="space-y-3">{FORMATIONS.map(([value, title, description]) => <label key={value} className={`flex cursor-pointer gap-3 rounded-xl border p-5 ${formation === value ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:border-primary/40"}`}><RadioGroupItem value={value} /><span><span className="font-medium">{title}</span><span className="mt-1 block text-sm text-muted-foreground">{description}</span></span></label>)}</RadioGroup>{formation === "agent_first" && <div className="rounded-xl border bg-muted/40 p-4 text-sm text-muted-foreground">EOS will start with role agents. As people join, assign them to the existing seats in Org Studio; their role agent then shifts into assistant mode.</div>}{formation && formation !== "agent_first" && <><Field label="Current team snapshot" hint="Describe the functions, key roles, reporting lines, and important vacancies. This is your starting operating reality; map individual people to seats in Org Studio after the blueprint is compiled." error={errors.teamSnapshot}><Textarea value={teamSnapshot} onChange={(event) => setTeamSnapshot(event.target.value)} placeholder="Example: Founder/CEO; one account director reporting to the founder; two delivery specialists; freelance designer; finance handled externally; no dedicated growth lead yet." className="min-h-36" /></Field><section className="rounded-xl border bg-muted/30 p-4"><div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><p className="font-medium">Stage your existing team</p><p className="mt-1 text-sm text-muted-foreground">Add people now so the same setup journey carries your real organization into Org Studio. This is planning data only: EOS does not create accounts, send invitations, assign seats, or grant access here.</p></div><Button type="button" variant="outline" size="sm" onClick={() => setTeamRoster((current) => [...current, createTeamRosterEntry()])}><Plus className="mr-2 h-4 w-4" />Add person</Button></div>{teamRoster.length > 0 && <div className="mt-4 space-y-3">{teamRoster.map((entry, index) => <div key={entry.id} className="grid gap-3 rounded-lg border bg-background p-3 sm:grid-cols-2"><Input aria-label={`Team member ${index + 1} name`} value={entry.name} onChange={(event) => setTeamRoster((current) => current.map((item) => item.id === entry.id ? { ...item, name: event.target.value } : item))} placeholder="Full name"/><Input aria-label={`Team member ${index + 1} work email`} value={entry.email} onChange={(event) => setTeamRoster((current) => current.map((item) => item.id === entry.id ? { ...item, email: event.target.value } : item))} placeholder="Work email (optional)"/><Input aria-label={`Team member ${index + 1} current role`} value={entry.sourceTitle} onChange={(event) => setTeamRoster((current) => current.map((item) => item.id === entry.id ? { ...item, sourceTitle: event.target.value } : item))} placeholder="Current role"/><div className="flex gap-2"><Input aria-label={`Team member ${index + 1} reports to`} value={entry.reportsTo} onChange={(event) => setTeamRoster((current) => current.map((item) => item.id === entry.id ? { ...item, reportsTo: event.target.value } : item))} placeholder="Reports to"/><Button type="button" variant="ghost" size="icon" aria-label={`Remove team member ${index + 1}`} onClick={() => setTeamRoster((current) => current.filter((item) => item.id !== entry.id))}><Trash2 className="h-4 w-4" /></Button></div>{errors[`teamRoster-${index}`] && <p className="sm:col-span-2 text-sm text-destructive">{errors[`teamRoster-${index}`]}</p>}</div>)}</div>}{errors.teamRoster && <p className="mt-3 text-sm text-destructive">{errors.teamRoster}</p>}<p className="mt-3 text-xs text-muted-foreground">After EOS compiles the role graph, Org Studio suggests each person&apos;s stable seat. You review every mapping, then separately decide whether to invite them.</p></section></>}{errors.formation && <p className="text-sm text-destructive">{errors.formation}</p>}</div>}
             {currentStep === 6 && <div className="max-w-3xl space-y-5"><div className="rounded-xl border border-primary/20 bg-primary/5 p-5"><Network className="mb-3 h-6 w-6 text-primary"/><h3 className="font-semibold">Native first. Integrations when useful.</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">EOS will create the company’s native operating foundation now. Connect a CRM, accounting system, document service, or inbox later only to reconcile existing data or use a specialist external rail. No integration is required to use the company graph, roles, work, documents, or native instruments.</p></div><div className="rounded-xl bg-muted/50 p-5"><p className="font-medium">What happens next</p><ul className="mt-3 space-y-2 text-sm text-muted-foreground"><li>• Open Org Studio and shape the real reporting graph.</li><li>• Activate seats, role agents, responsibilities, and the tools each role needs.</li><li>• Use Systems only when an external provider adds value or holds historical data.</li></ul></div></div>}
           </div>
           <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between"><Button variant="ghost" disabled={currentStep === 0 || compileBlueprint.isPending} onClick={() => { setErrors({}); setCurrentStep((step) => Math.max(0, step - 1)); }}>Back</Button>{currentStep < companyMissionJourney.length - 1 ? <Button onClick={advance}>Continue <ArrowRight className="ml-2 h-4 w-4" /></Button> : <Button disabled={saveCompany.isPending || compileBlueprint.isPending} onClick={completeJourney}>{saveCompany.isPending ? "Saving company…" : compileBlueprint.isPending ? "Compiling business blueprint…" : existingCompanyId ? "Save and compile blueprint" : "Create company and compile blueprint"}<ArrowRight className="ml-2 h-4 w-4" /></Button>}</div>
