@@ -127,6 +127,7 @@ const NativeCrmStudio = lazy(() => import("@/components/native-crm-studio").then
 const NativeMarketingStudio = lazy(() => import("@/components/native-marketing-studio").then((module) => ({ default: module.NativeMarketingStudio })));
 const NativeCommerceStudio = lazy(() => import("@/components/native-commerce-studio").then((module) => ({ default: module.NativeCommerceStudio })));
 const NativeProjectsStudio = lazy(() => import("@/components/native-projects-studio").then((module) => ({ default: module.NativeProjectsStudio })));
+const NativeReputationStudio = lazy(() => import("@/components/native-reputation-studio").then((module) => ({ default: module.NativeReputationStudio })));
 const NativeWorkflowComposer = lazy(() => import("@/components/native-workflow-composer").then((module) => ({ default: module.NativeWorkflowComposer })));
 const EndStateGovernanceControlCenter = lazy(() => import("@/components/end-state-governance-control-center").then((module) => ({ default: module.EndStateGovernanceControlCenter })));
 
@@ -1408,6 +1409,10 @@ export default function EosOverlayPage() {
   const mayOperateNativeProjects =
     canUseInstrument("projects") && canUseInstrument("tasks") &&
     (isFounder || (toolEntitlements.has("projects") && toolEntitlements.has("tasks")));
+  // Reputation is founder-controlled by default. Other roles need an explicit
+  // Reputation tool grant so customer-facing records stay authority-bound.
+  const mayOperateNativeReputation =
+    canUseInstrument("reputation") && (isFounder || toolEntitlements.has("reputation"));
   // Workflow authorship changes how a company operates, so it is founder
   // capability by default and an explicit tool grant for any other role.
   // Viewing an Operations surface alone never grants this control.
@@ -10481,6 +10486,15 @@ export default function EosOverlayPage() {
                 roleScopeKey={roleScopeKey}
                 activeSeatId={principalContext?.seatId || ""}
                 seats={visibleSeats}
+                canExecute={effectiveAuthorityClasses.has("execute")}
+                canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
+            {mayOperateNativeReputation && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeReputationStudio
+                root={root}
+                roleScopeKey={roleScopeKey}
+                activeSeatId={principalContext?.seatId || ""}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
               />
