@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compileCompanyBlueprintStarters, companyBlueprintForBusinessModel, companyBlueprints } from "../../shared/company-blueprints";
+import { compiledOperatingFormation, compileCompanyBlueprintStarters, companyBlueprintForBusinessModel, companyBlueprints } from "../../shared/company-blueprints";
 import { materializeNativeWorkflowStarter } from "../../shared/native-workflow-starters";
 import { materializeNativeBusinessStarters } from "../../shared/native-business-starters";
 import { allowedSurfacesForRoleTools, canonicalToolEntitlements, reconcileLegacyToolEntitlements } from "../../shared/eos-runtime";
@@ -9,6 +9,25 @@ describe("company operating blueprints", () => {
     expect(companyBlueprintForBusinessModel("services").key).toBe("service_studio");
     expect(companyBlueprintForBusinessModel("saas").key).toBe("software_company");
     expect(companyBlueprintForBusinessModel("unknown").key).toBe("hybrid_company");
+  });
+
+  it("compiles the same institutional graph into a governed agent-first or team transition", () => {
+    expect(compiledOperatingFormation({ formation: "agent_first" })).toMatchObject({
+      formation: "agent_first",
+      agentSeatMode: "autonomous",
+      teamReconciliation: "not_required",
+      transitionState: "agent_operated",
+    });
+    expect(compiledOperatingFormation({
+      formation: "existing_team",
+      teamSnapshot: "Founder; account director; two delivery specialists",
+    })).toMatchObject({
+      formation: "existing_team",
+      agentSeatMode: "assistant_after_human_assignment",
+      teamReconciliation: "required",
+      transitionState: "team_mapping_required",
+      teamSnapshot: "Founder; account director; two delivery specialists",
+    });
   });
 
   it("keeps every blueprint rooted in a Company CEO role with native tools", () => {

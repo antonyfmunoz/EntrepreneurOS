@@ -160,6 +160,68 @@ export type CompanyBlueprintVariables = {
   goals?: string | null;
 };
 
+/**
+ * A company's starting formation changes the operating transition, not the
+ * underlying institutional roles.  The same Finance, Legal, CEO, commercial,
+ * and delivery seats exist whether a founder begins alone or imports an
+ * established team.  What changes is who initially operates those seats and
+ * what EOS must reconcile before anyone is invited or given authority.
+ */
+export type CompanyOperatingFormation = "agent_first" | "hybrid" | "existing_team";
+
+export type CompiledOperatingFormation = {
+  version: "company-operating-formation-v1";
+  formation: CompanyOperatingFormation;
+  title: string;
+  summary: string;
+  agentSeatMode: "autonomous" | "assistant_after_human_assignment";
+  teamReconciliation: "not_required" | "required";
+  transitionState: "agent_operated" | "team_mapping_required";
+  nextAction: string;
+  humanAssignmentRule: string;
+  teamSnapshot: string;
+};
+
+export function compiledOperatingFormation(input: {
+  formation?: string | null;
+  teamSnapshot?: string | null;
+}): CompiledOperatingFormation {
+  const formation: CompanyOperatingFormation = input.formation === "hybrid"
+    || input.formation === "existing_team"
+    ? input.formation
+    : "agent_first";
+  const teamSnapshot = input.teamSnapshot?.trim() || "";
+  if (formation === "agent_first") {
+    return {
+      version: "company-operating-formation-v1",
+      formation,
+      title: "Agent-first operating formation",
+      summary: "EOS starts each accountable role as an autonomous role agent while the founder retains authority and review control.",
+      agentSeatMode: "autonomous",
+      teamReconciliation: "not_required",
+      transitionState: "agent_operated",
+      nextAction: "Use the compiled role graph and native tools to run the first operating loop. Add a person only when that seat needs human judgment or capacity.",
+      humanAssignmentRule: "When a person is assigned to an existing seat, the role agent remains in that seat and changes to their assistant. The institutional role, authority boundary, queue, and evidence remain intact.",
+      teamSnapshot,
+    };
+  }
+  const existingTeam = formation === "existing_team";
+  return {
+    version: "company-operating-formation-v1",
+    formation,
+    title: existingTeam ? "Established-team operating formation" : "Hybrid operating formation",
+    summary: existingTeam
+      ? "EOS keeps the company’s existing people and reporting reality as a governed transition plan, then maps people into the stable native role graph."
+      : "EOS begins with people and role agents sharing the work, while each human assignment preserves the role agent as that person’s assistant.",
+    agentSeatMode: "assistant_after_human_assignment",
+    teamReconciliation: "required",
+    transitionState: "team_mapping_required",
+    nextAction: "Review the declared team in Org Studio, map each real person to one unoccupied EOS seat, then explicitly invite only the people who should receive access.",
+    humanAssignmentRule: "A roster entry is planning data only. EOS never grants access from an imported team list; after an explicit seat assignment, the role agent changes to assistant mode for that human occupant.",
+    teamSnapshot,
+  };
+}
+
 export type CompiledCompanyBlueprintStarter = CompanyBlueprintStarter & {
   statement: string;
   title: string;

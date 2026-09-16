@@ -333,7 +333,7 @@ import {
 } from "../company-compilation/notion-source-adapter";
 import { DeclarativeMaterializationError } from "../company-compilation/declarative-materializer";
 import { companyPackageParitySnapshot } from "../company-compilation/semantic-parity";
-import { compileCompanyBlueprintStarters, companyBlueprintForBusinessModel } from "@shared/company-blueprints";
+import { compiledOperatingFormation, compileCompanyBlueprintStarters, companyBlueprintForBusinessModel } from "@shared/company-blueprints";
 import { materializeNativeWorkflowStarter } from "@shared/native-workflow-starters";
 import { materializeNativeBusinessStarters } from "@shared/native-business-starters";
 
@@ -3015,14 +3015,23 @@ export function registerEosRuntimeRoutes(app: Express): void {
     "/api/eos/companies/:companyId/company-blueprint",
     route(async (req) => {
       const access = await companyAccess(req);
-      const businessModel = access.company.type || (access.company.founderProfile as Record<string, unknown>)?.businessModel as string | undefined;
+      const founderProfile = (access.company.founderProfile as Record<string, unknown>) || {};
+      const businessModel = access.company.type || founderProfile.businessModel as string | undefined;
       const blueprint = companyBlueprintForBusinessModel(businessModel);
       const visible = await visibleSeatIds(access.company.id, access.seat.id, access.role);
-      const [seats, processes, packets, instruments] = await Promise.all([
+      const formation = compiledOperatingFormation({
+        formation: typeof founderProfile.operatingFormation === "string" ? founderProfile.operatingFormation : null,
+        teamSnapshot: typeof founderProfile.teamSnapshot === "string" ? founderProfile.teamSnapshot : null,
+      });
+      const [seats, processes, packets, instruments, formationCapability] = await Promise.all([
         db.select().from(eosSeats).where(and(eq(eosSeats.companyId, access.company.id), eq(eosSeats.status, "active"))),
         db.select().from(eosProcessDefinitions).where(eq(eosProcessDefinitions.companyId, access.company.id)),
         db.select().from(eosWorkPackets).where(eq(eosWorkPackets.companyId, access.company.id)),
         db.select().from(eosInstrumentObjects).where(eq(eosInstrumentObjects.companyId, access.company.id)),
+        db.select().from(eosCapabilityInstances).where(and(
+          eq(eosCapabilityInstances.companyId, access.company.id),
+          eq(eosCapabilityInstances.capabilityInstanceKey, "eos_operating_formation"),
+        )).limit(1),
       ]);
       const starters = compileCompanyBlueprintStarters(blueprint, {
         offer: access.company.offer,
@@ -3035,8 +3044,16 @@ export function registerEosRuntimeRoutes(app: Express): void {
             key: blueprint.key,
             title: blueprint.title,
             description: blueprint.description,
-            operatingFormation: (access.company.founderProfile as Record<string, unknown>)?.operatingFormation || "agent_first",
-            teamSnapshot: (access.company.founderProfile as Record<string, unknown>)?.teamSnapshot || "",
+            operatingFormation: formation.formation,
+            teamSnapshot: formation.teamSnapshot,
+            formationPlan: {
+              ...formation,
+              state: formationCapability[0] ? "compiled" : "ready",
+              capabilityId: formationCapability[0]?.id || null,
+              teamTransitionPacketId: formation.teamReconciliation === "required"
+                ? `packet:company-formation:${access.company.id}:team-transition`
+                : null,
+            },
             roles: blueprint.roles.map((role) => {
               const seat = seats.find((candidate) => candidate.title === role.title && candidate.kind === role.kind);
               const recommendedToolEntitlements = canonicalToolEntitlements(role.tools);
@@ -3133,8 +3150,13 @@ export function registerEosRuntimeRoutes(app: Express): void {
       if (!mayAdminOrganization(access))
         throw new EosRouteError(403, "company_blueprint_manage_denied", "This role lacks authority to instantiate the company operating blueprint.");
       const input = z.object({ blueprintKey: z.string().trim().min(1).max(120).optional() }).strict().parse(req.body || {});
-      const businessModel = access.company.type || (access.company.founderProfile as Record<string, unknown>)?.businessModel as string | undefined;
+      const founderProfile = (access.company.founderProfile as Record<string, unknown>) || {};
+      const businessModel = access.company.type || founderProfile.businessModel as string | undefined;
       const blueprint = companyBlueprintForBusinessModel(businessModel);
+      const formation = compiledOperatingFormation({
+        formation: typeof founderProfile.operatingFormation === "string" ? founderProfile.operatingFormation : null,
+        teamSnapshot: typeof founderProfile.teamSnapshot === "string" ? founderProfile.teamSnapshot : null,
+      });
       if (input.blueprintKey && input.blueprintKey !== blueprint.key)
         throw new EosRouteError(409, "company_blueprint_context_mismatch", "This blueprint no longer matches the company business model. Update the Company Mission Journey first.");
       await authorizeAction(req, access, {
@@ -3170,6 +3192,107 @@ export function registerEosRuntimeRoutes(app: Express): void {
           }
           byTemplateKey.set(role.key, seat);
         }
+        // The chosen formation is a first-class company capability. The role
+        // graph stays institutionally stable across agent-first, hybrid, and
+        // established teams; the transition rules change. In particular,
+        // importing a roster never creates a membership or grants a person
+        // authority. A later explicit assignment changes that seat's existing
+        // role agent to the human operator's assistant.
+        const formationTrace = tracePair();
+        const formationCapabilityKey = "eos_operating_formation";
+        const formationCapabilityId = `capability:company-formation:${access.company.id}:${formationCapabilityKey}`;
+        const formationOwnerSeatId = byTemplateKey.get("company_ceo")?.id || access.seat.id;
+        const [existingFormationCapability] = await tx
+          .select()
+          .from(eosCapabilityInstances)
+          .where(and(
+            eq(eosCapabilityInstances.companyId, access.company.id),
+            eq(eosCapabilityInstances.capabilityInstanceKey, formationCapabilityKey),
+          ))
+          .limit(1);
+        const formationCapability = existingFormationCapability || (
+          await tx.insert(eosCapabilityInstances).values({
+            id: formationCapabilityId,
+            companyId: access.company.id,
+            portfolioId: access.company.portfolioId,
+            capabilityInstanceKey: formationCapabilityKey,
+            capabilityKey: formationCapabilityKey,
+            name: formation.title,
+            state: "active",
+            maturity: "defined",
+            accountableSeatId: formationOwnerSeatId,
+            activationTrigger: "A founder completes the shared Company Mission Journey and explicitly compiles the organization.",
+            deactivationTrigger: "A governed organization redesign supersedes this formation without deleting institutional role history.",
+            moduleIds: [1, 2, 3, 7],
+            agentKeys: Array.from(byTemplateKey.values()).map((seat) => `agent:${seat.id}:primary`),
+            humanOperatorKey: "",
+            systemKeys: ["eos.organization_runtime", "eos.role_agent_runtime"],
+            workflowKeys: formation.teamReconciliation === "required" ? ["team-roster-reconciliation"] : ["agent-first-operating-loop"],
+            metricKeys: ["seat-occupancy", "role-agent-mode"],
+            riskControlKeys: ["explicit-seat-assignment-required", "no-roster-implied-access"],
+            evidenceKeys: formation.teamSnapshot ? ["declared-team-snapshot"] : [],
+            sourceAuthority: "native_eos",
+            classification: "restricted",
+            recordedByUserId: req.user.id,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }).returning()
+        )[0];
+        const teamTransitionPacketId = `packet:company-formation:${access.company.id}:team-transition`;
+        let createdTeamTransitionPacketId: string | null = null;
+        if (formation.teamReconciliation === "required") {
+          const [existingTeamTransitionPacket] = await tx
+            .select({ id: eosWorkPackets.id })
+            .from(eosWorkPackets)
+            .where(and(eq(eosWorkPackets.id, teamTransitionPacketId), eq(eosWorkPackets.companyId, access.company.id)))
+            .limit(1);
+          if (!existingTeamTransitionPacket) {
+            await tx.insert(eosWorkPackets).values({
+              id: teamTransitionPacketId,
+              companyId: access.company.id,
+              createdByUserId: req.user.id,
+              accountableUserId: req.user.id,
+              accountableSeatId: formationOwnerSeatId,
+              title: "Map the existing team to the EOS organization",
+              objective: "Review the founder-declared operating reality and explicitly map each person to one appropriate unoccupied EOS seat before any invitation or authority assignment.",
+              status: "draft",
+              priority: "high",
+              source: "compiler",
+              visibility: "company",
+              classification: "restricted",
+              requiresApproval: false,
+              toolPack: ["org_studio", "messages", "documents"],
+              evidenceRequirements: ["Reviewed team roster plan", "Explicit seat mapping", "Named approval before each invitation"],
+              resourceIds: [],
+              capabilityInstanceId: formationCapability.id,
+              processDefinitionId: null,
+              expectedOutput: "A reviewed team transition plan that preserves the reporting graph and identifies only intentional human assignments.",
+              acceptanceCriteria: "Each planned person is mapped at most once, every mapped seat belongs to this company, and no access is created by the plan itself.",
+              constraintsPolicies: "Roster imports and prose snapshots are planning inputs, not identity proof, access grants, or authority grants.",
+              failureEscalationCompensation: "Leave ambiguous people or reporting lines unmapped and escalate the ambiguity to the founder or Company CEO Agent.",
+              humanFallback: "The founder or an authorized company executive reviews the proposed mapping before sending individual invitations.",
+              sourceLineage: JSON.stringify({ template: "company-operating-formation-v1", formation: formation.formation, teamSnapshot: formation.teamSnapshot }),
+              outputArtifactKeys: [],
+              traceId: formationTrace.traceId,
+              correlationId: formationTrace.correlationId,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+            createdTeamTransitionPacketId = teamTransitionPacketId;
+          }
+        }
+        const formationRuntime = {
+          ...formation,
+          capabilityId: formationCapability.id,
+          compiledAt: new Date().toISOString(),
+          compiledByUserId: req.user.id,
+          blueprintKey: blueprint.key,
+          roleSeatIds: Object.fromEntries(Array.from(byTemplateKey.entries()).map(([roleKey, seat]) => [roleKey, seat.id])),
+          teamTransitionPacketId: formation.teamReconciliation === "required" ? teamTransitionPacketId : null,
+        };
+        await tx.update(companies).set({
+          founderProfile: { ...founderProfile, operatingFormationRuntime: formationRuntime },
+        }).where(eq(companies.id, access.company.id));
         // The same intake variables that selected this formation now compile
         // into concrete native command and launch artifacts.  A provider is
         // neither read nor required here.  Stable identifiers make retrying
@@ -3508,6 +3631,9 @@ export function registerEosRuntimeRoutes(app: Express): void {
           details: {
             blueprintKey: blueprint.key,
             businessModel: businessModel || "hybrid",
+            operatingFormation: formation.formation,
+            formationCapabilityId: formationCapability.id,
+            teamTransitionPacketId: formation.teamReconciliation === "required" ? teamTransitionPacketId : null,
             createdSeatIds: created.map((seat) => seat.id),
             preservedSeatIds: present.map((seat) => seat.id),
             createdStarterObjectiveIds,
@@ -3518,7 +3644,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
             migratedLegacyNativeAssetIds,
           },
         });
-        return { blueprintKey: blueprint.key, created, present, starterArtifacts, createdStarterObjectiveIds, createdStarterPacketIds, createdStarterProcessIds, createdNativeAssetIds, preservedNativeAssetIds, migratedLegacyNativeAssetIds };
+        return { blueprintKey: blueprint.key, formation: formationRuntime, created, present, starterArtifacts, createdStarterObjectiveIds, createdStarterPacketIds, createdStarterProcessIds, createdTeamTransitionPacketId, createdNativeAssetIds, preservedNativeAssetIds, migratedLegacyNativeAssetIds };
       });
       return { status: 201, body: outcome };
     }),

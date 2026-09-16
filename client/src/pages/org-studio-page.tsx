@@ -268,7 +268,7 @@ export default function OrgStudioPage() {
     ) &&
     (blueprint.data?.blueprint?.nativeAssets || []).every(
       (asset: RecordValue) => asset.state === "drafted",
-    );
+    ) && blueprint.data?.blueprint?.formationPlan?.state === "compiled";
 
   const refresh = () =>
     Promise.all([
@@ -650,6 +650,37 @@ export default function OrgStudioPage() {
                   editable seat, role agent, operating pack, authority baseline,
                   reporting edge, and native tool surface—not an example card.
                 </p>
+                {blueprint.data.blueprint.formationPlan && (
+                  <div className="mt-4 max-w-3xl rounded-xl border border-primary/20 bg-background/70 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="eos-label">Operating formation</p>
+                        <p className="mt-1 text-sm font-medium">
+                          {blueprint.data.blueprint.formationPlan.title}
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {blueprint.data.blueprint.formationPlan.summary}
+                        </p>
+                        <p className="mt-3 text-xs text-muted-foreground">
+                          {blueprint.data.blueprint.formationPlan.humanAssignmentRule}
+                        </p>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs ${blueprint.data.blueprint.formationPlan.state === "compiled" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                        {blueprint.data.blueprint.formationPlan.state === "compiled" ? "Compiled" : "Ready to compile"}
+                      </span>
+                    </div>
+                    <div className="mt-4 flex flex-col gap-3 rounded-lg bg-muted/50 p-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        {blueprint.data.blueprint.formationPlan.nextAction}
+                      </p>
+                      {canDesign && blueprint.data.blueprint.formationPlan.teamReconciliation === "required" && (
+                        <Button size="sm" variant="outline" onClick={() => setView("team")}>
+                          Review team transition
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {blueprint.data.blueprint.teamSnapshot && (
                   <div className="mt-4 max-w-3xl rounded-xl border bg-background/70 p-4">
                     <p className="eos-label">Declared starting team</p>
