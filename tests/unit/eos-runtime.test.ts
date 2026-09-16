@@ -103,6 +103,7 @@ import {
   workPacketCreateSchema,
   visibilityPolicyFor,
 } from "../../shared/eos-runtime";
+import { normalizedRosterRole, parseTeamRosterCsv } from "../../shared/team-roster-csv";
 import { defaultAuthorityClassesForRole } from "../../server/role-kernel";
 
 const manifest = {
@@ -117,6 +118,14 @@ const manifest = {
 };
 
 describe("EOS overlay runtime contracts", () => {
+  it("parses a pasted existing-team roster without granting access", () => {
+    expect(parseTeamRosterCsv("Name,Work email,Current title,Reports to\nAlex Rivera,alex@example.test,Operations Director,Founder")).toEqual([
+      { name: "Alex Rivera", email: "alex@example.test", sourceTitle: "Operations Director", reportsTo: "Founder" },
+    ]);
+    expect(normalizedRosterRole("Operations Director")).toBe("operationsdirector");
+    expect(() => parseTeamRosterCsv("Current title\nOperations Director")).toThrow("Name or Work email");
+  });
+
   it("stages an established team without treating it as an access grant", () => {
     const seatId = "00000000-0000-4000-8000-000000000101";
     const plan = teamRosterPlanSchema.parse({

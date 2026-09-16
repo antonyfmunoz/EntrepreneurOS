@@ -29,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest } from "@/lib/queryClient";
 import { eosRoleToolChoices } from "@shared/instrument-runtime";
+import { normalizedRosterRole, parseTeamRosterCsv } from "@shared/team-roster-csv";
 
 type RecordValue = Record<string, any>;
 type StudioView = "structure" | "tools" | "authority" | "team";
@@ -214,6 +215,8 @@ export default function OrgStudioPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteSeatId, setInviteSeatId] = useState("");
   const [teamRoster, setTeamRoster] = useState<TeamRosterEntry[]>([]);
+  const [bulkRosterText, setBulkRosterText] = useState("");
+  const [bulkRosterError, setBulkRosterError] = useState("");
 
   const context = useQuery<RecordValue>({
     queryKey: [root, "context"],
@@ -363,6 +366,51 @@ export default function OrgStudioPage() {
       await refresh();
     },
   });
+  const importTeamRoster = () => {
+    try {
+      const imported = parseTeamRosterCsv(bulkRosterText);
+      if (teamRoster.length + imported.length > 2000)
+        throw new Error("EOS supports up to 2,000 staged people in one company plan.");
+      const occupiedSeatIds = new Set((organization.data?.memberships || []).map((member: RecordValue) => member.seatId));
+      const pendingSeatIds = new Set(
+        (organization.data?.invitations || [])
+          .filter((invitation: RecordValue) => ["pending", "pending_delivery"].includes(invitation.status))
+          .map((invitation: RecordValue) => invitation.seatId),
+      );
+      const takenSeatIds = new Set<string>(
+        teamRoster
+          .map((entry) => entry.seatId)
+          .filter((seatId): seatId is string => Boolean(seatId)),
+      );
+      occupiedSeatIds.forEach((seatId) => {
+        if (typeof seatId === "string") takenSeatIds.add(seatId);
+      });
+      pendingSeatIds.forEach((seatId) => {
+        if (typeof seatId === "string") takenSeatIds.add(seatId);
+      });
+      const rows = imported.map((row) => {
+        const normalizedTitle = normalizedRosterRole(row.sourceTitle);
+        const suggestedSeat = normalizedTitle
+          ? seats.find((seat: RecordValue) =>
+              !takenSeatIds.has(seat.id) &&
+              seat.kind !== "founder" &&
+              normalizedRosterRole(seat.title) === normalizedTitle,
+            )
+          : undefined;
+        if (suggestedSeat) takenSeatIds.add(suggestedSeat.id);
+        return {
+          id: crypto.randomUUID(),
+          ...row,
+          seatId: suggestedSeat?.id || null,
+        };
+      });
+      setTeamRoster((current) => [...current, ...rows]);
+      setBulkRosterText("");
+      setBulkRosterError("");
+    } catch (error) {
+      setBulkRosterError(error instanceof Error ? error.message : "EOS could not read that roster export.");
+    }
+  };
   const updateSeat = useMutation({
     mutationFn: (input: RecordValue) =>
       requestJson<RecordValue>("PATCH", `${root}/seats/${input.id}`, input),
@@ -816,9 +864,13 @@ export default function OrgStudioPage() {
             saveError={saveTeamRoster.isError}
             invitePending={invitePlannedMember.isPending}
             inviteError={invitePlannedMember.isError}
+            bulkRosterText={bulkRosterText}
+            bulkRosterError={bulkRosterError}
             onChange={setTeamRoster}
             onSave={() => saveTeamRoster.mutate()}
             onInvite={(entry) => invitePlannedMember.mutate(entry)}
+            onBulkRosterTextChange={setBulkRosterText}
+            onImport={importTeamRoster}
           />
         )}
         {(view === "tools" || view === "authority") && (
@@ -1061,9 +1113,13 @@ function TeamTransitionPlanner({
   saveError,
   invitePending,
   inviteError,
+  bulkRosterText,
+  bulkRosterError,
   onChange,
   onSave,
   onInvite,
+  onBulkRosterTextChange,
+  onImport,
 }: {
   canSave: boolean;
   seats: RecordValue[];
@@ -1075,9 +1131,13 @@ function TeamTransitionPlanner({
   saveError: boolean;
   invitePending: boolean;
   inviteError: boolean;
+  bulkRosterText: string;
+  bulkRosterError: string;
   onChange: (entries: TeamRosterEntry[]) => void;
   onSave: () => void;
   onInvite: (entry: TeamRosterEntry) => void;
+  onBulkRosterTextChange: (value: string) => void;
+  onImport: () => void;
 }) {
   const update = (id: string, patch: Partial<TeamRosterEntry>) =>
     onChange(entries.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)));
@@ -1127,6 +1187,31 @@ function TeamTransitionPlanner({
           <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{teamSnapshot}</p>
         </div>
       )}
+      {canSave && (
+        <div className="rounded-xl border bg-muted/20 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="font-medium">Import an existing team roster</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Paste CSV with a Name or Work email column. Current title and Reports to are optional. EOS only suggests exact title-to-seat matches; review every map before saving.
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full bg-background px-3 py-1 text-xs text-muted-foreground">Planning only</span>
+          </div>
+          <Textarea
+            className="mt-4 min-h-28 font-mono text-xs"
+            value={bulkRosterText}
+            onChange={(event) => onBulkRosterTextChange(event.target.value)}
+            placeholder={"Name,Work email,Current title,Reports to\nAlex Rivera,alex@example.com,Operations Director,Founder"}
+          />
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <Button type="button" variant="outline" disabled={!bulkRosterText.trim()} onClick={onImport}>
+              Add pasted roster to plan
+            </Button>
+            {bulkRosterError && <p className="text-sm text-destructive">{bulkRosterError}</p>}
+          </div>
+        </div>
+      )}
       {!canSave && (
         <div className="rounded-xl border border-amber-300/60 bg-amber-50 p-4 text-sm text-amber-950">
           You can inspect the company transition plan, but only the founder can
@@ -1148,7 +1233,7 @@ function TeamTransitionPlanner({
           const canInvite = Boolean(entry.email && entry.seatId && !seatUnavailable);
           return (
             <div key={entry.id} className="rounded-xl border bg-background p-4">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto] xl:items-end">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto] xl:items-end">
                 <Field label="Person">
                   <Input value={entry.name} onChange={(event) => update(entry.id, { name: event.target.value })} placeholder="Full name" />
                 </Field>
@@ -1157,6 +1242,9 @@ function TeamTransitionPlanner({
                 </Field>
                 <Field label="Current title">
                   <Input value={entry.sourceTitle} onChange={(event) => update(entry.id, { sourceTitle: event.target.value })} placeholder="Current responsibility" />
+                </Field>
+                <Field label="Reports to">
+                  <Input value={entry.reportsTo} onChange={(event) => update(entry.id, { reportsTo: event.target.value })} placeholder="Current manager" />
                 </Field>
                 <Field label="EOS role seat">
                   <select
