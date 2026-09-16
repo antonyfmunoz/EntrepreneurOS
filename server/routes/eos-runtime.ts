@@ -94,6 +94,7 @@ import {
   eosRoleOperatingPacks,
   eosSeats,
   eosObjectives,
+  eosInstrumentObjects,
   eosOfferPrograms,
   eosStakeholderRelationships,
   eosStakeholders,
@@ -325,6 +326,7 @@ import { DeclarativeMaterializationError } from "../company-compilation/declarat
 import { companyPackageParitySnapshot } from "../company-compilation/semantic-parity";
 import { compileCompanyBlueprintStarters, companyBlueprintForBusinessModel } from "@shared/company-blueprints";
 import { materializeNativeWorkflowStarter } from "@shared/native-workflow-starters";
+import { materializeNativeBusinessStarters } from "@shared/native-business-starters";
 
 function escapeHtml(value: string): string {
   return value.replace(
@@ -2896,10 +2898,11 @@ export function registerEosRuntimeRoutes(app: Express): void {
       const businessModel = access.company.type || (access.company.founderProfile as Record<string, unknown>)?.businessModel as string | undefined;
       const blueprint = companyBlueprintForBusinessModel(businessModel);
       const visible = await visibleSeatIds(access.company.id, access.seat.id, access.role);
-      const [seats, processes, packets] = await Promise.all([
+      const [seats, processes, packets, instruments] = await Promise.all([
         db.select().from(eosSeats).where(and(eq(eosSeats.companyId, access.company.id), eq(eosSeats.status, "active"))),
         db.select().from(eosProcessDefinitions).where(eq(eosProcessDefinitions.companyId, access.company.id)),
         db.select().from(eosWorkPackets).where(eq(eosWorkPackets.companyId, access.company.id)),
+        db.select().from(eosInstrumentObjects).where(eq(eosInstrumentObjects.companyId, access.company.id)),
       ]);
       const starters = compileCompanyBlueprintStarters(blueprint, {
         offer: access.company.offer,
@@ -2946,6 +2949,32 @@ export function registerEosRuntimeRoutes(app: Express): void {
                 workPacket: packet && ownerVisible ? {
                   id: packet.id,
                   status: packet.status,
+                } : null,
+              };
+            }),
+            nativeAssets: materializeNativeBusinessStarters({
+              companyName: access.company.name,
+              offer: access.company.offer || "",
+              targetCustomer: access.company.targetCustomer || "",
+            }).map((starter) => {
+              const objectKey = `company-blueprint:${blueprint.key}:${starter.key}`;
+              const object = instruments.find((candidate) => candidate.instrumentKey === starter.instrumentKey && candidate.objectKey === objectKey);
+              const ownerVisible = !object || (visible.has(object.ownerSeatId) && mayAccessClassification(access, object.classification));
+              return {
+                key: starter.key,
+                title: starter.title,
+                summary: starter.summary,
+                instrumentKey: starter.instrumentKey,
+                objectType: starter.objectType,
+                ownerRoleKey: starter.ownerRoleKey,
+                state: object ? "drafted" : "ready",
+                visible: ownerVisible,
+                object: object && ownerVisible ? {
+                  id: object.id,
+                  state: object.state,
+                  version: object.version,
+                  instrumentKey: object.instrumentKey,
+                  objectType: object.objectType,
                 } : null,
               };
             }),
@@ -3059,6 +3088,8 @@ export function registerEosRuntimeRoutes(app: Express): void {
         const createdStarterObjectiveIds: string[] = [];
         const createdStarterPacketIds: string[] = [];
         const createdStarterProcessIds: string[] = [];
+        const createdNativeAssetIds: string[] = [];
+        const preservedNativeAssetIds: string[] = [];
         const starterArtifacts: Array<{ key: string; objectiveId: string; workPacketId: string; processDefinitionId: string; ownerSeatId: string }> = [];
         const trace = tracePair();
         for (const starter of starters) {
@@ -3201,6 +3232,64 @@ export function registerEosRuntimeRoutes(app: Express): void {
           }
           starterArtifacts.push({ key: starter.key, objectiveId, workPacketId: packetId, processDefinitionId: process.id, ownerSeatId });
         }
+        // These are the native operating tools selected by formation—not a
+        // provider fallback. They begin as drafts, retain a stable company
+        // identity, and are never overwritten by a later formation retry.
+        // Existing lifecycle controls still govern whether any form, site, or
+        // commercial object becomes active or publicly reachable.
+        const nativeAssets = materializeNativeBusinessStarters({
+          companyName: access.company.name,
+          offer: access.company.offer || "",
+          targetCustomer: access.company.targetCustomer || "",
+        });
+        const existingNativeAssets = await tx
+          .select()
+          .from(eosInstrumentObjects)
+          .where(eq(eosInstrumentObjects.companyId, access.company.id));
+        for (const starter of nativeAssets) {
+          const objectKey = `company-blueprint:${blueprint.key}:${starter.key}`;
+          const existing = existingNativeAssets.find((candidate) => candidate.instrumentKey === starter.instrumentKey && candidate.objectKey === objectKey);
+          if (existing) {
+            preservedNativeAssetIds.push(existing.id);
+            continue;
+          }
+          const ownerSeatId = byTemplateKey.get(starter.ownerRoleKey)?.id || byTemplateKey.get("company_ceo")?.id || access.seat.id;
+          const now = new Date();
+          const projection = {
+            schemaVersion: "eos.instrument-object.v1",
+            companyId: access.company.id,
+            instrumentKey: starter.instrumentKey,
+            objectType: starter.objectType,
+            objectKey,
+            title: starter.title,
+            summary: starter.summary,
+            state: "draft",
+            classification: "confidential",
+            visibility: "organization",
+            ownerSeatId,
+            data: starter.data,
+            sourceReference: {
+              authority: "native_eos",
+              capability: "company_blueprint_starter",
+              blueprintKey: blueprint.key,
+              starterKey: starter.key,
+            },
+            evidenceIds: [],
+            version: 1,
+          };
+          const id = `instrument:company-blueprint:${access.company.id}:${blueprint.key}:${starter.key}`;
+          await tx.insert(eosInstrumentObjects).values({
+            id,
+            ...projection,
+            parentObjectId: null,
+            contentSha256: jsonContentHash(projection),
+            recordedByUserId: req.user.id,
+            createdAt: now,
+            updatedAt: now,
+            archivedAt: null,
+          });
+          createdNativeAssetIds.push(id);
+        }
         await tx.insert(eosAuditRecords).values({
           id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id,
           action: "company_blueprint.instantiated", targetType: "company_blueprint", targetId: blueprint.key,
@@ -3213,9 +3302,11 @@ export function registerEosRuntimeRoutes(app: Express): void {
             createdStarterObjectiveIds,
             createdStarterPacketIds,
             createdStarterProcessIds,
+            createdNativeAssetIds,
+            preservedNativeAssetIds,
           },
         });
-        return { blueprintKey: blueprint.key, created, present, starterArtifacts, createdStarterObjectiveIds, createdStarterPacketIds, createdStarterProcessIds };
+        return { blueprintKey: blueprint.key, created, present, starterArtifacts, createdStarterObjectiveIds, createdStarterPacketIds, createdStarterProcessIds, createdNativeAssetIds, preservedNativeAssetIds };
       });
       return { status: 201, body: outcome };
     }),
