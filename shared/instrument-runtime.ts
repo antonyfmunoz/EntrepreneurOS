@@ -4,6 +4,7 @@ export const eosInstrumentKeys = [
   "docs", "files", "sheets", "slides", "tables", "forms", "calendar", "search", "canvas",
   "tasks", "projects", "workflows", "crm", "messages", "conference_rooms", "ai", "knowledge",
   "memory", "analytics", "learning", "progression", "commerce", "finance", "ads", "reputation",
+  "websites",
 ] as const;
 
 export const eosInstrumentKeySchema = z.enum(eosInstrumentKeys);
@@ -39,6 +40,7 @@ export const eosInstrumentManifest: Record<EosInstrumentKey, {
   finance: { label: "Finance", objectTypes: ["account", "plan", "transaction", "reconciliation", "obligation"], purpose: "Govern financial sources, plans, flows, reconciliations, and obligations." },
   ads: { label: "Ads", objectTypes: ["account", "campaign", "ad_group", "creative", "audience", "budget", "placement"], purpose: "Control paid-media state, authority, spend, and performance evidence." },
   reputation: { label: "Reputation", objectTypes: ["review", "review_request", "response", "testimonial", "rating_summary"], purpose: "Manage reviews, responses, testimonials, and reputation evidence." },
+  websites: { label: "Websites / Funnels", objectTypes: ["site", "page", "funnel", "section"], purpose: "Publish owned pages and funnel journeys that route consented demand into EOS without an external page builder." },
 };
 
 export const eosInstrumentStates = ["draft", "active", "paused", "completed", "cancelled", "archived"] as const;
@@ -192,6 +194,7 @@ export const instrumentActivationRequirements: Partial<Record<EosInstrumentKey, 
   finance: { account: ["accountType", "currency"], plan: ["periodStart", "periodEnd", "lines"], transaction: ["accountObjectId", "amountMinor", "occurredAt"], reconciliation: ["sourceObjectIds", "evidenceIds"], obligation: ["counterpartyReference", "dueAt", "amountMinor"] },
   ads: { account: ["providerReference", "currency"], campaign: ["objective", "budgetMinor", "currency"], ad_group: ["campaignObjectId", "audienceObjectIds"], creative: ["claim", "assetObjectIds"], audience: ["definition", "sourceObjectIds"], budget: ["campaignObjectId", "limitMinor", "currency"], placement: ["campaignObjectId", "channel"] },
   reputation: { review: ["rating", "sourceReference", "receivedAt"], review_request: ["relationshipObjectId", "channel", "consentReference"], response: ["reviewObjectId", "body", "approvedBySeatId"], testimonial: ["body", "consentReference", "evidenceIds"], rating_summary: ["sourceReviewObjectIds", "averageRating", "generatedAt"] },
+  websites: { site: ["brandName"], page: ["headline", "path"], funnel: ["headline", "primaryCtaLabel", "captureFormObjectId"], section: ["pageObjectId", "content"] },
 };
 
 const dateFieldNames = new Set(["startsAt", "endsAt", "targetAt", "startedAt", "submittedAt", "generatedAt", "observedAt", "occurredAt", "dueAt", "receivedAt", "periodStart", "periodEnd"]);

@@ -14,9 +14,9 @@ import {
 
 describe("canonical EOS instrument runtime", () => {
   it("contains the complete required Notion instrument manifest", () => {
-    expect(eosInstrumentKeys).toHaveLength(25);
+    expect(eosInstrumentKeys).toHaveLength(26);
     expect(eosInstrumentKeys).toEqual(expect.arrayContaining([
-      "docs", "files", "sheets", "slides", "conference_rooms", "finance", "ads", "reputation",
+      "docs", "files", "sheets", "slides", "conference_rooms", "finance", "ads", "reputation", "websites",
     ]));
     expect(instrumentManifestProjection()).toHaveLength(eosInstrumentKeys.length);
     for (const key of eosInstrumentKeys) {

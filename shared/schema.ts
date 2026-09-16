@@ -4624,7 +4624,7 @@ export const eosInstrumentObjects = pgTable("eos_instrument_objects", {
   uniqueIndex("eos_instrument_objects_company_key_idx").on(table.companyId, table.instrumentKey, table.objectKey),
   index("eos_instrument_objects_company_state_idx").on(table.companyId, table.instrumentKey, table.state, table.updatedAt),
   index("eos_instrument_objects_parent_idx").on(table.companyId, table.parentObjectId),
-  check("eos_instrument_objects_instrument_check", sql`${table.instrumentKey} IN ('docs','files','sheets','slides','tables','forms','calendar','search','canvas','tasks','projects','workflows','crm','messages','conference_rooms','ai','knowledge','memory','analytics','learning','progression','commerce','finance','ads','reputation')`),
+  check("eos_instrument_objects_instrument_check", sql`${table.instrumentKey} IN ('docs','files','sheets','slides','tables','forms','calendar','search','canvas','tasks','projects','workflows','crm','messages','conference_rooms','ai','knowledge','memory','analytics','learning','progression','commerce','finance','ads','reputation','websites')`),
   check("eos_instrument_objects_state_check", sql`${table.state} IN ('draft','active','paused','completed','cancelled','archived')`),
   check("eos_instrument_objects_classification_check", sql`${table.classification} IN ('internal','confidential','restricted')`),
   check("eos_instrument_objects_visibility_check", sql`${table.visibility} IN ('seat','team','organization','portfolio')`),

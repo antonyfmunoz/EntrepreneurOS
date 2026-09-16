@@ -118,6 +118,7 @@ const ArtifactClosureControlCenter = lazy(() => import("@/components/artifact-cl
 const NativeOperatingControlCenter = lazy(() => import("@/components/native-operating-control-center").then((module) => ({ default: module.NativeOperatingControlCenter })));
 const CanonicalInstrumentControlCenter = lazy(() => import("@/components/canonical-instrument-control-center").then((module) => ({ default: module.CanonicalInstrumentControlCenter })));
 const LeadCaptureStudio = lazy(() => import("@/components/lead-capture-studio").then((module) => ({ default: module.LeadCaptureStudio })));
+const NativeFunnelStudio = lazy(() => import("@/components/native-funnel-studio").then((module) => ({ default: module.NativeFunnelStudio })));
 const EndStateGovernanceControlCenter = lazy(() => import("@/components/end-state-governance-control-center").then((module) => ({ default: module.EndStateGovernanceControlCenter })));
 
 function DeferredControlFallback() {
@@ -10507,6 +10508,13 @@ export default function EosOverlayPage() {
           <TabsContent value="work-room" className="space-y-6">
             {mayOperateFounderGrowthTools && canUseInstrument("forms") && canUseInstrument("crm") && <Suspense fallback={<DeferredControlFallback />}>
               <LeadCaptureStudio
+                root={root}
+                canExecute={effectiveAuthorityClasses.has("execute")}
+                canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
+            {mayOperateFounderGrowthTools && canUseInstrument("forms") && canUseInstrument("crm") && canUseInstrument("websites") && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeFunnelStudio
                 root={root}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}

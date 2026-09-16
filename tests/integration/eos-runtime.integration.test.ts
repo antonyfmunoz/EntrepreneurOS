@@ -502,8 +502,8 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
   it("operates canonical instruments through tenant-safe commands, versions, relationships, and immutable events", async () => {
     currentUserId = ownerId;
     const manifest = await api.get(`/api/eos/companies/${companyId}/instruments`).expect(200);
-    expect(manifest.body.manifest).toHaveLength(25);
-    expect(manifest.body.manifest.map((item: any) => item.key)).toEqual(expect.arrayContaining(["docs", "sheets", "slides", "conference_rooms", "ads", "reputation"]));
+    expect(manifest.body.manifest).toHaveLength(26);
+    expect(manifest.body.manifest.map((item: any) => item.key)).toEqual(expect.arrayContaining(["docs", "sheets", "slides", "conference_rooms", "ads", "reputation", "websites"]));
 
     const createPayload = {
       instrumentKey: "docs",
@@ -530,6 +530,23 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const activated = await api.post(`/api/eos/companies/${companyId}/instrument-objects/${created.body.object.id}/transitions`).send({ expectedVersion: 2, state: "active", rationale: "Founder approves use in the synthetic qualification workspace.", evidenceIds: [], idempotencyKey: "instrument:transition:qualification-document:active" }).expect(200);
     expect(activated.body.object).toMatchObject({ state: "active", version: 3 });
 
+    const captureForm = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({
+      instrumentKey: "forms", objectType: "form", objectKey: "form:public-funnel-fixture", title: "Public funnel fixture form", summary: "Synthetic consented intake point.", classification: "confidential", visibility: "organization",
+      data: { publicCapture: true, questions: [{ id: "email", label: "Work email", type: "email", required: true, options: [] }], consentVersion: "integration-v1", consentLabel: "I consent to be contacted about this request.", confirmationMessage: "Recorded." },
+      sourceReference: { authority: "native_eos", capability: "native_funnel_fixture" }, evidenceIds: [], idempotencyKey: "instrument:create:public-funnel-form",
+    }).expect(201);
+    await api.post(`/api/eos/companies/${companyId}/instrument-objects/${captureForm.body.object.id}/transitions`).send({ expectedVersion: 1, state: "active", rationale: "Founder publishes the synthetic native intake point for public funnel qualification.", evidenceIds: [], idempotencyKey: "instrument:transition:public-funnel-form:active" }).expect(200);
+    const funnel = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({
+      instrumentKey: "websites", objectType: "funnel", objectKey: "funnel:public-fixture", title: "Public funnel fixture", summary: "Synthetic EOS-owned landing page.", classification: "confidential", visibility: "organization",
+      data: { publicFunnel: true, headline: "A native EOS public funnel", supportingCopy: "A public page routes a visitor into a consented native EOS form.", primaryCtaLabel: "Request a review", captureFormObjectId: captureForm.body.object.id },
+      sourceReference: { authority: "native_eos", capability: "native_website_funnel" }, evidenceIds: [], idempotencyKey: "instrument:create:public-funnel",
+    }).expect(201);
+    await api.post(`/api/eos/companies/${companyId}/instrument-objects/${funnel.body.object.id}/transitions`).send({ expectedVersion: 1, state: "active", rationale: "Founder publishes the synthetic native EOS funnel after its intake point is active.", evidenceIds: [], idempotencyKey: "instrument:transition:public-funnel:active" }).expect(200);
+    const publicFunnel = await api.get(`/api/public/funnels/${funnel.body.object.id}`).expect(200);
+    expect(publicFunnel.headers["x-robots-tag"]).toContain("noindex");
+    expect(publicFunnel.body).toMatchObject({ schemaVersion: "eos.public-funnel.v1", funnel: { id: funnel.body.object.id, headline: "A native EOS public funnel", primaryCtaLabel: "Request a review", captureUrl: `/capture/${captureForm.body.object.id}` } });
+    expect(JSON.stringify(publicFunnel.body)).not.toMatch(/ownerSeatId|sourceReference|evidenceIds|policyDecision/i);
+
     const campaign = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({ instrumentKey: "ads", objectType: "campaign", objectKey: "campaign:synthetic", title: "Synthetic campaign", summary: "No provider dispatch or spend.", classification: "restricted", visibility: "organization", data: { externalEffectsExecuted: false, budgetMinor: 0 }, sourceReference: {}, evidenceIds: [], idempotencyKey: "instrument:create:synthetic-campaign" }).expect(201);
     const link = await api.post(`/api/eos/companies/${companyId}/instrument-links`).send({ sourceObjectId: campaign.body.object.id, targetObjectId: created.body.object.id, relationshipType: "uses_brief", metadata: { synthetic: true }, idempotencyKey: "instrument:link:campaign-brief" }).expect(201);
     expect(link.body.link).toMatchObject({ relationshipType: "uses_brief" });
@@ -542,18 +559,18 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const exported = await api.get(`/api/eos/companies/${companyId}/instrument-export`).expect(200);
     expect(exported.headers["content-disposition"]).toContain("eos-instruments-company.json");
     expect(exported.body).toMatchObject({ schemaVersion: "eos.instrument-bundle.v1" });
-    expect(exported.body.objects).toHaveLength(2);
+    expect(exported.body.objects).toHaveLength(4);
     expect(exported.body.links).toHaveLength(1);
     expect(JSON.stringify(exported.body)).not.toContain(created.body.object.id);
     expect(JSON.stringify(exported.body)).not.toContain(link.body.link.id);
 
     currentUserId = otherId;
     const imported = await api.post(`/api/eos/companies/${otherCompanyId}/instrument-imports`).send({ bundle: exported.body, conflictStrategy: "copy", idempotencyKey: "instrument:import:portable-bundle" }).expect(201);
-    expect(imported.body).toMatchObject({ imported: 2, skipped: 0, linked: 1, replayed: false });
+    expect(imported.body).toMatchObject({ imported: 4, skipped: 0, linked: 1, replayed: false });
     const importedReplay = await api.post(`/api/eos/companies/${otherCompanyId}/instrument-imports`).send({ bundle: exported.body, conflictStrategy: "copy", idempotencyKey: "instrument:import:portable-bundle" }).expect(200);
-    expect(importedReplay.body).toMatchObject({ imported: 2, linked: 1, replayed: true });
+    expect(importedReplay.body).toMatchObject({ imported: 4, linked: 1, replayed: true });
     const importedProjection = await api.get(`/api/eos/companies/${otherCompanyId}/instruments`).expect(200);
-    expect(importedProjection.body.objects).toHaveLength(2);
+    expect(importedProjection.body.objects).toHaveLength(4);
     expect(importedProjection.body.objects.every((item: any) => item.state === "draft" && item.version === 1 && item.evidenceIds.length === 0)).toBe(true);
     expect(importedProjection.body.links).toHaveLength(1);
 
