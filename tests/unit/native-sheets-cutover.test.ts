@@ -18,6 +18,8 @@ describe("native sheets cutover", () => {
     expect(sheetsStudio).toContain("parentObjectId: selectedWorkbook.id");
     expect(sheetsStudio).toContain("contains_worksheet");
     expect(sheetsStudio).toContain("Save new version");
+    expect(sheetsStudio).toContain("New worksheet");
+    expect(sheetsStudio).toContain("beginNewWorksheet");
   });
 
   it("keeps formulas and chart views as inspectable native records", () => {
