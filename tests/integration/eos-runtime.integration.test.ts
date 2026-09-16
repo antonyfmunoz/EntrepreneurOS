@@ -547,6 +547,21 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(publicFunnel.body).toMatchObject({ schemaVersion: "eos.public-funnel.v1", funnel: { id: funnel.body.object.id, headline: "A native EOS public funnel", primaryCtaLabel: "Request a review", captureUrl: `/capture/${captureForm.body.object.id}` } });
     expect(JSON.stringify(publicFunnel.body)).not.toMatch(/ownerSeatId|sourceReference|evidenceIds|policyDecision/i);
 
+    const site = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({
+      instrumentKey: "websites", objectType: "site", objectKey: "site:public-fixture", title: "Public site fixture", summary: "Synthetic EOS-owned website.", classification: "confidential", visibility: "organization",
+      data: { brandName: "Fixture Studio" }, sourceReference: { authority: "native_eos", capability: "native_website" }, evidenceIds: [], idempotencyKey: "instrument:create:public-site",
+    }).expect(201);
+    await api.post(`/api/eos/companies/${companyId}/instrument-objects/${site.body.object.id}/transitions`).send({ expectedVersion: 1, state: "active", rationale: "Founder publishes the synthetic native site.", evidenceIds: [], idempotencyKey: "instrument:transition:public-site:active" }).expect(200);
+    const page = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({
+      instrumentKey: "websites", objectType: "page", objectKey: "page:public-fixture", title: "Public page fixture", summary: "Synthetic EOS-owned public page.", classification: "confidential", visibility: "organization",
+      data: { publicPage: true, siteObjectId: site.body.object.id, headline: "A native EOS public page", supportingCopy: "Owned public copy without an external site builder.", primaryCtaLabel: "Open intake", primaryCtaHref: `/capture/${captureForm.body.object.id}`, path: "/fixture" }, sourceReference: { authority: "native_eos", capability: "native_website_page" }, evidenceIds: [], idempotencyKey: "instrument:create:public-page",
+    }).expect(201);
+    await api.post(`/api/eos/companies/${companyId}/instrument-objects/${page.body.object.id}/transitions`).send({ expectedVersion: 1, state: "active", rationale: "Founder publishes the synthetic native public page.", evidenceIds: [], idempotencyKey: "instrument:transition:public-page:active" }).expect(200);
+    const publicPage = await api.get(`/api/public/pages/${page.body.object.id}`).expect(200);
+    expect(publicPage.headers["x-robots-tag"]).toContain("noindex");
+    expect(publicPage.body).toMatchObject({ schemaVersion: "eos.public-page.v1", page: { id: page.body.object.id, siteName: "Fixture Studio", headline: "A native EOS public page", primaryCtaHref: `/capture/${captureForm.body.object.id}` } });
+    expect(JSON.stringify(publicPage.body)).not.toMatch(/ownerSeatId|sourceReference|evidenceIds|policyDecision/i);
+
     const campaign = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({ instrumentKey: "ads", objectType: "campaign", objectKey: "campaign:synthetic", title: "Synthetic campaign", summary: "No provider dispatch or spend.", classification: "restricted", visibility: "organization", data: { externalEffectsExecuted: false, budgetMinor: 0 }, sourceReference: {}, evidenceIds: [], idempotencyKey: "instrument:create:synthetic-campaign" }).expect(201);
     const link = await api.post(`/api/eos/companies/${companyId}/instrument-links`).send({ sourceObjectId: campaign.body.object.id, targetObjectId: created.body.object.id, relationshipType: "uses_brief", metadata: { synthetic: true }, idempotencyKey: "instrument:link:campaign-brief" }).expect(201);
     expect(link.body.link).toMatchObject({ relationshipType: "uses_brief" });
@@ -559,18 +574,18 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const exported = await api.get(`/api/eos/companies/${companyId}/instrument-export`).expect(200);
     expect(exported.headers["content-disposition"]).toContain("eos-instruments-company.json");
     expect(exported.body).toMatchObject({ schemaVersion: "eos.instrument-bundle.v1" });
-    expect(exported.body.objects).toHaveLength(4);
+    expect(exported.body.objects).toHaveLength(6);
     expect(exported.body.links).toHaveLength(1);
     expect(JSON.stringify(exported.body)).not.toContain(created.body.object.id);
     expect(JSON.stringify(exported.body)).not.toContain(link.body.link.id);
 
     currentUserId = otherId;
     const imported = await api.post(`/api/eos/companies/${otherCompanyId}/instrument-imports`).send({ bundle: exported.body, conflictStrategy: "copy", idempotencyKey: "instrument:import:portable-bundle" }).expect(201);
-    expect(imported.body).toMatchObject({ imported: 4, skipped: 0, linked: 1, replayed: false });
+    expect(imported.body).toMatchObject({ imported: 6, skipped: 0, linked: 1, replayed: false });
     const importedReplay = await api.post(`/api/eos/companies/${otherCompanyId}/instrument-imports`).send({ bundle: exported.body, conflictStrategy: "copy", idempotencyKey: "instrument:import:portable-bundle" }).expect(200);
-    expect(importedReplay.body).toMatchObject({ imported: 4, linked: 1, replayed: true });
+    expect(importedReplay.body).toMatchObject({ imported: 6, linked: 1, replayed: true });
     const importedProjection = await api.get(`/api/eos/companies/${otherCompanyId}/instruments`).expect(200);
-    expect(importedProjection.body.objects).toHaveLength(4);
+    expect(importedProjection.body.objects).toHaveLength(6);
     expect(importedProjection.body.objects.every((item: any) => item.state === "draft" && item.version === 1 && item.evidenceIds.length === 0)).toBe(true);
     expect(importedProjection.body.links).toHaveLength(1);
 

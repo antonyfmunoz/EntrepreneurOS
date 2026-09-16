@@ -38,6 +38,7 @@ const NativeEsignPage = lazy(() => import("@/pages/native-esign-page"));
 const StakeholderPortalPage = lazy(() => import("@/pages/stakeholder-portal-page"));
 const LeadCapturePage = lazy(() => import("@/pages/lead-capture-page"));
 const PublicFunnelPage = lazy(() => import("@/pages/public-funnel-page"));
+const PublicSitePage = lazy(() => import("@/pages/public-site-page"));
 const NotFoundPage = lazy(() => import("@/pages/not-found-page"));
 
 type CanonicalCompanySurface = "organization" | "intelligence" | "operations" | "work-room";
@@ -220,6 +221,10 @@ function App() {
         <Toaster />
       </QueryClientProvider>
     );
+  }
+
+  if (window.location.pathname.startsWith("/p/")) {
+    return <QueryClientProvider client={queryClient}><Suspense fallback={<FullPageStatus title="Opening your page" description="Preparing this EOS-owned site." />}><PublicSitePage /></Suspense><Toaster /></QueryClientProvider>;
   }
 
   if (!isClerkConfigured()) {
