@@ -49,6 +49,7 @@ export function NativeOperatingControlCenter({
   const [advisorContext, setAdvisorContext] = useState("");
   const [scheduleName, setScheduleName] = useState("");
   const [scheduleSubjectId, setScheduleSubjectId] = useState("");
+  const [scheduleProcessId, setScheduleProcessId] = useState("");
   const [scheduleCadence, setScheduleCadence] = useState("daily");
 
   const runtime = useQuery<Json>({ queryKey: [root, "workflow-runtime"], queryFn: () => request("GET", `${root}/workflow-runtime`) });
@@ -119,11 +120,11 @@ export function NativeOperatingControlCenter({
         name: scheduleName,
         seatId: scheduleSeat.id,
         authoritySubjectId: scheduleSubjectId,
-        processDefinitionId: selectedProcessId,
+        processDefinitionId: scheduleProcessId,
         triggerKind: scheduleCadence === "manual" ? "manual" : "schedule",
         cadence: scheduleCadence,
         eventTypes: [],
-        executionMode: scheduleSeat?.occupantUserId ? "assisted" : "autonomous",
+        executionMode: scheduleExecutionMode,
         inputTemplate: { source: "native_operating_instrument" },
         ...(scheduleCadence === "manual" ? {} : { nextRunAt: now.toISOString() }),
         maxRunsPerDay: 24,
@@ -131,7 +132,7 @@ export function NativeOperatingControlCenter({
         classification: "confidential",
       });
     },
-    onSuccess: async () => { setScheduleName(""); await refresh(); },
+    onSuccess: async () => { setScheduleName(""); setScheduleProcessId(""); await refresh(); },
   });
   const scheduleTransition = useMutation({
     mutationFn: (schedule: Json) => request<Json>("PATCH", `${root}/agent-schedules/${schedule.id}/state`, { expectedVersion: schedule.version, state: schedule.state === "active" ? "paused" : "active", rationale: "The operator reviewed the exact seat, Authority Subject, released process, execution mode, cadence, and runtime limits." }),
@@ -142,6 +143,12 @@ export function NativeOperatingControlCenter({
   const handoffCounts = handoffs.data?.gapCounts || { P0: 0, P1: 0, P2: 0 };
   const activeDeliberation = council.data?.deliberations?.find((item: Json) => !["decided", "calibrated", "failed"].includes(item.state));
   const availableSubjects = useMemo(() => authoritySubjects.filter((subject) => subject.subjectType === "agent" && subject.status === "active" && subject.verificationStatus === "verified" && subject.seatId), [authoritySubjects]);
+  const scheduleProcesses = useMemo(
+    () => releasedProcesses.filter((process) => process.accountableSeatId === scheduleSeat?.id),
+    [releasedProcesses, scheduleSeat?.id],
+  );
+  const scheduleProcess = scheduleProcesses.find((process) => process.id === scheduleProcessId);
+  const scheduleExecutionMode = scheduleSeat?.occupantUserId ? "assisted" : "autonomous";
 
   return (
     <Card className="border-primary/20 shadow-[0_10px_34px_rgba(106,55,212,0.08)]">
@@ -182,7 +189,29 @@ export function NativeOperatingControlCenter({
           </TabsContent>
 
           <TabsContent value="agents" className="space-y-4 pt-4">
-            <div className="grid gap-3 lg:grid-cols-4"><Input value={scheduleName} onChange={(event) => setScheduleName(event.target.value)} placeholder="Schedule name" /><select aria-label="Scheduled role agent" className="h-10 rounded-md border bg-background px-3 text-sm" value={scheduleSubjectId} onChange={(event) => setScheduleSubjectId(event.target.value)}><option value="">Choose verified Role Agent</option>{availableSubjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.displayName}</option>)}</select><select aria-label="Schedule cadence" className="h-10 rounded-md border bg-background px-3 text-sm" value={scheduleCadence} onChange={(event) => setScheduleCadence(event.target.value)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="manual">Manual</option></select><Button disabled={!canDecide || !scheduleName || !scheduleSubject || !selectedProcessId || createSchedule.isPending} onClick={() => createSchedule.mutate()}>Create schedule</Button></div>
+            <div className="rounded-xl border bg-muted/20 p-4">
+              <div className="mb-3">
+                <p className="text-sm font-medium">Create governed Role Agent schedule</p>
+                <p className="mt-1 text-xs text-muted-foreground">Choose the exact verified Role Agent first. EOS then limits the process list to work for that role, so a schedule cannot accidentally bind a different department's process.</p>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-5">
+                <Input value={scheduleName} onChange={(event) => setScheduleName(event.target.value)} placeholder="Schedule name" />
+                <select aria-label="Scheduled role agent" className="h-10 rounded-md border bg-background px-3 text-sm" value={scheduleSubjectId} onChange={(event) => { setScheduleSubjectId(event.target.value); setScheduleProcessId(""); }}>
+                  <option value="">Choose verified Role Agent</option>
+                  {availableSubjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.displayName}</option>)}
+                </select>
+                <select aria-label="Scheduled released process" className="h-10 rounded-md border bg-background px-3 text-sm" value={scheduleProcessId} disabled={!scheduleSubject} onChange={(event) => setScheduleProcessId(event.target.value)}>
+                  <option value="">{scheduleSubject ? "Choose this role's released process" : "Choose a Role Agent first"}</option>
+                  {scheduleProcesses.map((process) => <option key={process.id} value={process.id}>{process.name} · v{process.version}</option>)}
+                </select>
+                <select aria-label="Schedule cadence" className="h-10 rounded-md border bg-background px-3 text-sm" value={scheduleCadence} onChange={(event) => setScheduleCadence(event.target.value)}>
+                  <option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="manual">Manual</option>
+                </select>
+                <Button disabled={!canDecide || !scheduleName || !scheduleSubject || !scheduleProcess || createSchedule.isPending} onClick={() => createSchedule.mutate()}>Create schedule</Button>
+              </div>
+              {scheduleSubject && !scheduleProcesses.length && <p className="mt-3 text-sm text-muted-foreground">This Role Agent has no implemented, released process assigned yet. Assign and release its process in Org Studio before scheduling it.</p>}
+              {scheduleSubject && scheduleProcess && <p className="mt-3 rounded-lg border bg-background p-3 text-xs text-muted-foreground"><span className="font-medium text-foreground">Scope preview:</span> {scheduleSubject.displayName} will run {scheduleProcess.name} as {scheduleExecutionMode} work on a {scheduleCadence} cadence. External effects remain blocked unless a separately authorized provider action produces its own receipt.</p>}
+            </div>
             <div className="grid gap-3 md:grid-cols-2">{(agents.data?.schedules || []).map((schedule: Json) => <div key={schedule.id} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{schedule.name}</p><p className="mt-1 text-xs text-muted-foreground">{schedule.cadence} · {schedule.executionMode}</p></div><Badge variant="outline">{schedule.state}</Badge></div><Button className="mt-4" size="sm" variant="outline" disabled={!canDecide || schedule.state === "retired" || scheduleTransition.isPending} onClick={() => scheduleTransition.mutate(schedule)}>{schedule.state === "active" ? "Pause" : "Activate"}</Button></div>)}</div>
           </TabsContent>
 
