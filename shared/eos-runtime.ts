@@ -4707,11 +4707,16 @@ const nativeToolAliases: Readonly<Record<string, string>> = {
 };
 
 export function canonicalToolEntitlements(values: readonly string[] | null | undefined): string[] {
-  return Array.from(new Set((values || [])
+  const tools = new Set((values || [])
     .filter((value): value is string => typeof value === "string")
     .map((value) => value.trim())
     .filter(Boolean)
-    .map((value) => nativeToolAliases[value.toLowerCase()] || value.toLowerCase())));
+    .map((value) => nativeToolAliases[value.toLowerCase()] || value.toLowerCase()));
+  // Outreach operates on a governed company relationship, so Dialer is never
+  // a free-standing phone widget. Selecting it equips the same seat with the
+  // native CRM context needed to respect ownership, consent, and suppression.
+  if (tools.has("dialer")) tools.add("crm");
+  return Array.from(tools);
 }
 
 /**
@@ -4721,11 +4726,13 @@ export function canonicalToolEntitlements(values: readonly string[] | null | und
  * instead of silently losing role-specific language.
  */
 export function reconcileLegacyToolEntitlements(values: readonly string[] | null | undefined): string[] {
-  return Array.from(new Set((values || [])
+  const tools = new Set((values || [])
     .filter((value): value is string => typeof value === "string")
     .map((value) => value.trim())
     .filter(Boolean)
-    .map((value) => nativeToolAliases[value.toLowerCase()] || value)));
+    .map((value) => nativeToolAliases[value.toLowerCase()] || value));
+  if (tools.has("dialer")) tools.add("crm");
+  return Array.from(tools);
 }
 
 export const toolEntitlementReconciliationSchema = z.object({

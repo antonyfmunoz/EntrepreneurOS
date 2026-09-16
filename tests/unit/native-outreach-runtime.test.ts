@@ -43,8 +43,8 @@ describe("native outreach and dialer runtime", () => {
   });
 
   it("treats Dialer as a real role capability rather than a display label", () => {
-    expect(canonicalToolEntitlements(["CRM", "Sales outreach", "Sales Calendar"]))
-      .toEqual(["crm", "dialer", "calendar"]);
+    expect(canonicalToolEntitlements(["Sales outreach", "Sales Calendar"]))
+      .toEqual(["dialer", "calendar", "crm"]);
     expect(allowedSurfacesForRoleTools("functional_executive", ["CRM", "Dialer"]))
       .toContain("commercial");
     expect(allowedSurfacesForRoleTools("functional_executive", ["Documents"]))
