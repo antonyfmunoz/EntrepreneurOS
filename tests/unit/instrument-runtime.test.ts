@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   eosInstrumentKeys,
   eosInstrumentManifest,
+  eosRoleToolChoices,
   instrumentManifestProjection,
   instrumentActivationFindings,
   instrumentDomainFindings,
@@ -24,6 +25,19 @@ describe("canonical EOS instrument runtime", () => {
       expect(eosInstrumentManifest[key].objectTypes.length).toBeGreaterThan(0);
       expect(eosInstrumentManifest[key].purpose.length).toBeGreaterThan(10);
     }
+  });
+
+  it("makes every native instrument assignable from a role's Org Studio tool pack", () => {
+    expect(eosRoleToolChoices.map((tool) => tool.key)).toEqual(
+      expect.arrayContaining(eosInstrumentKeys),
+    );
+    expect(eosRoleToolChoices).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "dialer", group: "Commercial" }),
+        expect.objectContaining({ key: "websites", group: "Growth & public presence" }),
+        expect.objectContaining({ key: "conference_rooms", group: "Work & collaboration" }),
+      ]),
+    );
   });
 
   it("rejects object types that do not belong to the selected instrument", () => {

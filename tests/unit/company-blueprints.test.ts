@@ -87,6 +87,19 @@ describe("company operating blueprints", () => {
     ])).toEqual(["crm", "docs", "calendar", "ads", "projects"]);
   });
 
+  it("equips compiled growth roles to operate the native demand engine they own", () => {
+    for (const blueprint of companyBlueprints) {
+      const growth = blueprint.roles.find((role) => ["growth", "brand_growth"].includes(role.key));
+      if (!growth) continue;
+      const nativeTools = canonicalToolEntitlements(growth.tools);
+      expect(nativeTools).toEqual(expect.arrayContaining(["crm", "forms", "websites"]));
+      const commercialStarter = blueprint.starters.find((starter) => starter.ownerRoleKey === growth.key);
+      expect(canonicalToolEntitlements(commercialStarter?.tools || [])).toEqual(
+        expect.arrayContaining(["crm", "forms", "websites"]),
+      );
+    }
+  });
+
   it("repairs only recognized legacy labels while preserving custom role language for review", () => {
     expect(reconcileLegacyToolEntitlements([
       "CRM", "Content Calendar", "Client scorecard", "CRM",
