@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -31,7 +31,15 @@ import { apiRequest } from "@/lib/queryClient";
 import { eosRoleToolChoices } from "@shared/instrument-runtime";
 
 type RecordValue = Record<string, any>;
-type StudioView = "structure" | "tools" | "authority";
+type StudioView = "structure" | "tools" | "authority" | "team";
+type TeamRosterEntry = {
+  id: string;
+  name: string;
+  email: string;
+  sourceTitle: string;
+  reportsTo: string;
+  seatId: string | null;
+};
 
 function toolKeys(value: string) {
   return new Set(
@@ -129,6 +137,7 @@ function reportingDepth(
 
 function buildGraph(
   seats: RecordValue[],
+  memberships: RecordValue[],
   selectedSeatId?: string,
 ): { nodes: Node[]; edges: Edge[] } {
   const byId = new Map(seats.map((seat) => [seat.id, seat]));
@@ -139,7 +148,9 @@ function buildGraph(
   }
   const nodes: Node[] = [];
   Array.from(byDepth.entries()).forEach(([depth, level]) => {
-    level.forEach((seat: RecordValue, index: number) =>
+    level.forEach((seat: RecordValue, index: number) => {
+      const occupant = memberships.find((member) => member.seatId === seat.id);
+      const humanName = occupant?.fullName || occupant?.email;
       nodes.push({
         id: seat.id,
         position: { x: 70 + index * 270, y: 60 + depth * 180 },
@@ -154,10 +165,9 @@ function buildGraph(
                 <span className="font-semibold">{seat.title}</span>
               </div>
               <p className="mt-1 text-xs opacity-75">
-                {seat.agentMode === "assistant"
-                  ? "Human-directed · "
-                  : "Agent-operated · "}
-                {seat.agentName}
+                {humanName
+                  ? `${humanName} · assisted by ${seat.agentName}`
+                  : `Agent-operated · ${seat.agentName}`}
               </p>
             </div>
           ),
@@ -173,8 +183,8 @@ function buildGraph(
           background: selectedSeatId === seat.id ? "#f4efff" : "#fff",
           boxShadow: "0 4px 12px rgba(47,29,80,.08)",
         },
-      }),
-    );
+      });
+    });
   });
   const edges: Edge[] = seats
     .filter((seat) => seat.supervisorSeatId && byId.has(seat.supervisorSeatId))
@@ -203,6 +213,7 @@ export default function OrgStudioPage() {
   const [tools, setTools] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteSeatId, setInviteSeatId] = useState("");
+  const [teamRoster, setTeamRoster] = useState<TeamRosterEntry[]>([]);
 
   const context = useQuery<RecordValue>({
     queryKey: [root, "context"],
@@ -225,14 +236,29 @@ export default function OrgStudioPage() {
   // executives can inspect the graph when visibility allows, but cannot be
   // shown controls that the API will correctly reject for this company.
   const canDesign = ["founder", "company_ceo"].includes(role);
+  const canPlanTeam = canDesign;
   const selectedSeat =
     seats.find((seat: RecordValue) => seat.id === selectedSeatId) ||
     activeSeat ||
     seats[0];
   const graph = useMemo(
-    () => buildGraph(seats, selectedSeat?.id),
-    [seats, selectedSeat?.id],
+    () => buildGraph(seats, organization.data?.memberships || [], selectedSeat?.id),
+    [seats, organization.data?.memberships, selectedSeat?.id],
   );
+  const rosterEntries = organization.data?.teamRosterPlan?.entries || [];
+  const rosterVersion = JSON.stringify(rosterEntries);
+  useEffect(() => {
+    setTeamRoster(
+      rosterEntries.map((entry: RecordValue) => ({
+        id: entry.id,
+        name: entry.name || "",
+        email: entry.email || "",
+        sourceTitle: entry.sourceTitle || "",
+        reportsTo: entry.reportsTo || "",
+        seatId: entry.seatId || null,
+      })),
+    );
+  }, [rosterVersion]);
   const formationComplete =
     (blueprint.data?.blueprint?.roles || []).every(
       (role: RecordValue) => role.state === "instantiated",
@@ -312,6 +338,28 @@ export default function OrgStudioPage() {
     onSuccess: async () => {
       setInviteEmail("");
       setInviteSeatId("");
+      await refresh();
+    },
+  });
+  const saveTeamRoster = useMutation({
+    mutationFn: () =>
+      requestJson<RecordValue>("POST", `${root}/team-roster-plan`, {
+        entries: teamRoster,
+      }),
+    onSuccess: async () => {
+      await refresh();
+    },
+  });
+  const invitePlannedMember = useMutation({
+    mutationFn: (entry: TeamRosterEntry) =>
+      requestJson<RecordValue>("POST", `${root}/invitations`, {
+        email: entry.email.trim().toLowerCase(),
+        seatId: entry.seatId,
+        purpose: "operate",
+        classificationCeiling: "internal",
+        portfolioScope: false,
+      }),
+    onSuccess: async () => {
       await refresh();
     },
   });
@@ -466,6 +514,13 @@ export default function OrgStudioPage() {
             onClick={() => setView("authority")}
             label="Authority & coverage"
           />
+          {canDesign && (
+            <StudioTab
+              active={view === "team"}
+              onClick={() => setView("team")}
+              label="Team transition"
+            />
+          )}
         </div>
         {canDesign && view === "tools" && (
           <section className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-5 sm:p-6">
@@ -749,7 +804,24 @@ export default function OrgStudioPage() {
             />
           </div>
         )}
-        {view !== "structure" && (
+        {view === "team" && canDesign && (
+          <TeamTransitionPlanner
+            canSave={canPlanTeam}
+            seats={seats}
+            memberships={organization.data?.memberships || []}
+            invitations={organization.data?.invitations || []}
+            teamSnapshot={blueprint.data?.blueprint?.teamSnapshot || ""}
+            entries={teamRoster}
+            saving={saveTeamRoster.isPending}
+            saveError={saveTeamRoster.isError}
+            invitePending={invitePlannedMember.isPending}
+            inviteError={invitePlannedMember.isError}
+            onChange={setTeamRoster}
+            onSave={() => saveTeamRoster.mutate()}
+            onInvite={(entry) => invitePlannedMember.mutate(entry)}
+          />
+        )}
+        {(view === "tools" || view === "authority") && (
           <div className="grid gap-4 lg:grid-cols-2">
             {seats.map((seat: RecordValue) => (
               <SeatCard
@@ -975,6 +1047,177 @@ function StudioTab({
     >
       {label}
     </Button>
+  );
+}
+
+function TeamTransitionPlanner({
+  canSave,
+  seats,
+  memberships,
+  invitations,
+  teamSnapshot,
+  entries,
+  saving,
+  saveError,
+  invitePending,
+  inviteError,
+  onChange,
+  onSave,
+  onInvite,
+}: {
+  canSave: boolean;
+  seats: RecordValue[];
+  memberships: RecordValue[];
+  invitations: RecordValue[];
+  teamSnapshot: string;
+  entries: TeamRosterEntry[];
+  saving: boolean;
+  saveError: boolean;
+  invitePending: boolean;
+  inviteError: boolean;
+  onChange: (entries: TeamRosterEntry[]) => void;
+  onSave: () => void;
+  onInvite: (entry: TeamRosterEntry) => void;
+}) {
+  const update = (id: string, patch: Partial<TeamRosterEntry>) =>
+    onChange(entries.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)));
+  const occupiedSeatIds = new Set(memberships.map((member) => member.seatId));
+  const pendingSeatIds = new Set(
+    invitations
+      .filter((invitation) => ["pending", "pending_delivery"].includes(invitation.status))
+      .map((invitation) => invitation.seatId),
+  );
+  const mappedCount = entries.filter((entry) => entry.seatId).length;
+  const addEntry = () =>
+    onChange([
+      ...entries,
+      {
+        id: crypto.randomUUID(),
+        name: "",
+        email: "",
+        sourceTitle: "",
+        reportsTo: "",
+        seatId: null,
+      },
+    ]);
+
+  return (
+    <section className="space-y-5 rounded-2xl border bg-white p-5 sm:p-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="eos-label">Established-team transition</p>
+          <h2 className="mt-1 text-xl font-semibold">Map people before access is granted</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+            This is the same Company Mission and operating graph used by a new
+            agent-first business. Stage your existing people against EOS roles
+            first; saving this plan never sends an email, creates a membership,
+            or displaces an agent. A deliberate role invitation is the only
+            step that gives a person access and turns that role agent into their assistant.
+          </p>
+        </div>
+        <div className="grid shrink-0 grid-cols-3 gap-2 text-center text-xs">
+          <MetricChip value={entries.length} label="planned" />
+          <MetricChip value={mappedCount} label="mapped" />
+          <MetricChip value={memberships.length} label="active people" />
+        </div>
+      </div>
+      {teamSnapshot && (
+        <div className="rounded-xl border bg-muted/40 p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Mission input</p>
+          <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{teamSnapshot}</p>
+        </div>
+      )}
+      {!canSave && (
+        <div className="rounded-xl border border-amber-300/60 bg-amber-50 p-4 text-sm text-amber-950">
+          You can inspect the company transition plan, but only the founder can
+          change it. EOS keeps a company’s initial identity and access plan under founder authority.
+        </div>
+      )}
+      <div className="space-y-3">
+        {entries.length === 0 && (
+          <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
+            No people are staged yet. Add the real team one person at a time,
+            or start agent-first and add people only when the company is ready.
+          </div>
+        )}
+        {entries.map((entry) => {
+          const targetSeat = seats.find((seat) => seat.id === entry.seatId);
+          const seatUnavailable = Boolean(
+            entry.seatId && (occupiedSeatIds.has(entry.seatId) || pendingSeatIds.has(entry.seatId)),
+          );
+          const canInvite = Boolean(entry.email && entry.seatId && !seatUnavailable);
+          return (
+            <div key={entry.id} className="rounded-xl border bg-background p-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto] xl:items-end">
+                <Field label="Person">
+                  <Input value={entry.name} onChange={(event) => update(entry.id, { name: event.target.value })} placeholder="Full name" />
+                </Field>
+                <Field label="Work email">
+                  <Input type="email" value={entry.email} onChange={(event) => update(entry.id, { email: event.target.value })} placeholder="person@company.com" />
+                </Field>
+                <Field label="Current title">
+                  <Input value={entry.sourceTitle} onChange={(event) => update(entry.id, { sourceTitle: event.target.value })} placeholder="Current responsibility" />
+                </Field>
+                <Field label="EOS role seat">
+                  <select
+                    value={entry.seatId || ""}
+                    onChange={(event) => update(entry.id, { seatId: event.target.value || null })}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="">Map later</option>
+                    {seats.filter((seat) => seat.kind !== "founder").map((seat) => (
+                      <option key={seat.id} value={seat.id} disabled={occupiedSeatIds.has(seat.id) || pendingSeatIds.has(seat.id)}>
+                        {seat.title}{occupiedSeatIds.has(seat.id) ? " · occupied" : pendingSeatIds.has(seat.id) ? " · invitation pending" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                {canSave && (
+                  <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => onChange(entries.filter((candidate) => candidate.id !== entry.id))}>
+                    Remove
+                  </Button>
+                )}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+                <span>
+                  {targetSeat
+                    ? seatUnavailable
+                      ? "This role already has a person or pending invitation. Resolve it before inviting anyone else."
+                      : `${targetSeat.agentName} will remain with this seat as the human’s assistant after acceptance.`
+                    : "Choose a role seat when you are ready to map this person into the operating graph."}
+                </span>
+                {canSave && (
+                  <Button size="sm" variant="outline" disabled={!canInvite || invitePending} onClick={() => onInvite(entry)}>
+                    {invitePending ? "Sending…" : "Invite to mapped role"}
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {canSave && (
+        <div className="flex flex-wrap items-center gap-3 border-t pt-5">
+          <Button variant="outline" onClick={addEntry}>
+            <Plus className="mr-2 h-4 w-4" /> Add person to plan
+          </Button>
+          <Button disabled={saving || entries.some((entry) => !entry.name && !entry.email)} onClick={onSave}>
+            {saving ? "Saving team plan…" : "Save team plan"}
+          </Button>
+          {saveError && <p className="text-sm text-destructive">EOS could not save the team plan. Check each row and try again.</p>}
+          {inviteError && <p className="text-sm text-destructive">The invitation could not be sent. Check the mapped seat and work email.</p>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MetricChip({ value, label }: { value: number; label: string }) {
+  return (
+    <div className="rounded-lg bg-muted px-3 py-2">
+      <p className="text-base font-semibold text-foreground">{value}</p>
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+    </div>
   );
 }
 function SparklesIcon() {
