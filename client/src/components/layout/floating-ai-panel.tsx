@@ -21,7 +21,10 @@ export default function FloatingAIPanel({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="pointer-events-none sticky top-3 z-40 h-0 px-3 sm:px-6 lg:px-10" aria-label="Executive decision control HUD">
+    <div
+      className="pointer-events-none sticky top-3 z-40 px-3 sm:px-6 lg:px-10"
+      aria-label="Executive decision control HUD"
+    >
       <div className="eos-glass pointer-events-auto mx-auto w-full max-w-4xl overflow-hidden rounded-2xl border border-primary/20 shadow-[0_12px_34px_rgba(106,55,212,0.16)]">
         <button
           type="button"
