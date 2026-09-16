@@ -13034,7 +13034,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
           details: {
             manifestVersion: target.version,
             createdMissionKeys: created.map((packet) => packet.sourceLineage.slice(lineagePrefix.length)),
-            existingMissionKeys: [...existingByMission.keys()],
+            existingMissionKeys: Array.from(existingByMission.keys()),
             externalEffectsExecuted: false,
           },
           createdAt: now,
@@ -13046,7 +13046,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
           manifestId: target.id,
           planSchemaVersion: plan.schemaVersion,
           created,
-          existing: [...existingByMission.values()],
+          existing: Array.from(existingByMission.values()),
           externalEffectsExecuted: false,
         },
       };

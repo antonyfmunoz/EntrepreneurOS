@@ -1388,7 +1388,7 @@ export default function EosOverlayPage() {
   const blueprintPlan = (manifest?.manifest?.blueprintPlan || null) as JsonRecord | null;
   const availableCompanyPackages = companyPackagesQuery.data || [];
   const packets = packetsQuery.data || [];
-  const blueprintMissionPackets = new Map<string, JsonRecord>(
+  const blueprintMissionPackets = new globalThis.Map<string, JsonRecord>(
     blueprintPlan && manifest?.id
       ? packets
           .filter((packet: JsonRecord) =>
