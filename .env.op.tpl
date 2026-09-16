@@ -62,6 +62,12 @@ SLACK_REDIRECT_URI=https://entrepreneuros.net/api/auth/slack/callback
 # GOHIGHLEVEL_CLIENT_SECRET=1Password Production GOHIGHLEVEL_CLIENT_SECRET
 # GOHIGHLEVEL_INSTALLATION_URL=https://marketplace.gohighlevel.com/oauth/chooselocation?...
 # GOHIGHLEVEL_REDIRECT_URI=https://localhost:5000/api/auth/gohighlevel/callback
+# DocuSign is a company-scoped OAuth connection. The exact registered callback
+# returns to the Systems workspace, where EOS attaches the selected DocuSign
+# account under role, approval, audit, and recovery controls.
+DOCUSIGN_CLIENT_ID=op://EntrepreneurOS/Production/DOCUSIGN_CLIENT_ID
+DOCUSIGN_CLIENT_SECRET=op://EntrepreneurOS/Production/DOCUSIGN_CLIENT_SECRET
+DOCUSIGN_REDIRECT_URI=op://EntrepreneurOS/Production/DOCUSIGN_REDIRECT_URI
 # Projection-owned UMH federation. Leave UMH_FEDERATION_ENABLED false until a
 # local installation row and the corresponding UMH public signing key exist.
 UMH_FEDERATION_ENABLED=false
