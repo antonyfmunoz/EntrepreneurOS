@@ -8,6 +8,15 @@ export type NativeBusinessStarter = {
   data: Record<string, unknown>;
 };
 
+/**
+ * A compiler starter can point to another starter by its stable template key.
+ * The company compiler resolves this marker to the UUID of the actual object
+ * it creates. Keeping the template key here avoids embedding a tenant's
+ * runtime identifiers in the shared business-in-a-box library.
+ */
+export type NativeBusinessStarterReference = { starterAssetId: string };
+export const nativeBusinessStarterReference = (starterAssetId: string): NativeBusinessStarterReference => ({ starterAssetId });
+
 export function materializeNativeBusinessStarters(input: { companyName: string; offer: string; targetCustomer: string }) : readonly NativeBusinessStarter[] {
   const companyName = input.companyName.trim() || "This company";
   const offer = input.offer.trim() || "the declared offer";
@@ -16,5 +25,45 @@ export function materializeNativeBusinessStarters(input: { companyName: string; 
     { key: "commercial-pipeline", instrumentKey: "crm", objectType: "pipeline", title: `${offer} pipeline`, summary: `Native commercial pipeline for ${targetCustomer}.`, ownerRoleKey: "growth", data: { stages: ["Qualified", "Discovery", "Proposal", "Won", "Lost"], compilerStarter: true } },
     { key: "commercial-intake", instrumentKey: "forms", objectType: "form", title: `${offer} discovery`, summary: `Private native intake draft for ${targetCustomer}.`, ownerRoleKey: "growth", data: { publicCapture: true, compilerStarter: true, questions: [{ id: "name", label: "Full name", type: "short_text", required: true, options: [] }, { id: "email", label: "Work email", type: "email", required: true, options: [] }, { id: "company", label: "Company", type: "short_text", required: false, options: [] }, { id: "goals", label: "What are you looking to accomplish?", type: "long_text", required: false, options: [] }], consentVersion: "native-eos-lead-capture-v1", consentLabel: `I agree that ${companyName} may use my information to respond to my request.`, confirmationMessage: "Thank you. Your request has been received." } },
     { key: "company-site", instrumentKey: "websites", objectType: "site", title: companyName, summary: "EOS-owned native website draft.", ownerRoleKey: "growth", data: { brandName: companyName, compilerStarter: true } },
+    {
+      key: "commercial-page",
+      instrumentKey: "websites",
+      objectType: "page",
+      title: `${offer} · Start here`,
+      summary: `Native public-page draft for ${targetCustomer}.`,
+      ownerRoleKey: "growth",
+      data: {
+        publicPage: true,
+        compilerStarter: true,
+        siteObjectId: nativeBusinessStarterReference("company-site"),
+        headline: `${offer} for ${targetCustomer}`,
+        supportingCopy: `Start a focused conversation with ${companyName} about ${offer}.`,
+        primaryCtaLabel: "Start a conversation",
+        primaryCtaTarget: "capture_form",
+        primaryCtaTargetId: nativeBusinessStarterReference("commercial-intake"),
+        primaryCtaHref: "",
+        path: "/start",
+        sections: [
+          { id: "outcomes", kind: "outcomes", title: "What changes", body: "A focused next step based on your current context.", items: [] },
+          { id: "steps", kind: "steps", title: "How it works", body: "", items: ["Share your context", "Review the recommended next step"] },
+        ],
+      },
+    },
+    {
+      key: "commercial-funnel",
+      instrumentKey: "websites",
+      objectType: "funnel",
+      title: `${offer} · Discovery funnel`,
+      summary: `Native funnel draft that routes ${targetCustomer} into EOS intake.`,
+      ownerRoleKey: "growth",
+      data: {
+        publicFunnel: true,
+        compilerStarter: true,
+        headline: `${offer} for ${targetCustomer}`,
+        supportingCopy: `Tell ${companyName} what you are trying to accomplish and receive the right next step.`,
+        primaryCtaLabel: "Start discovery",
+        captureFormObjectId: nativeBusinessStarterReference("commercial-intake"),
+      },
+    },
   ];
 }

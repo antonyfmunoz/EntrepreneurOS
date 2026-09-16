@@ -2476,6 +2476,30 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       (seat: { title: string }) => seat.title === "Growth & Revenue",
     );
     expect(growthSeat).toBeTruthy();
+    expect(instantiated.body.createdNativeAssetIds).toHaveLength(5);
+    expect(instantiated.body.createdNativeAssetIds.every((id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))).toBe(true);
+    const nativeAssets = await sql<Array<{ id: string; objectKey: string; data: Record<string, unknown> }>>`
+      SELECT id, object_key AS "objectKey", data
+      FROM eos_instrument_objects
+      WHERE company_id = ${blueprintCompany.id}
+        AND object_key LIKE 'company-blueprint:service_studio:%'
+    `;
+    const starter = (key: string) => nativeAssets.find((asset) => asset.objectKey === `company-blueprint:service_studio:${key}`)!;
+    expect(starter("commercial-page").data).toMatchObject({
+      siteObjectId: starter("company-site").id,
+      primaryCtaTarget: "capture_form",
+      primaryCtaTargetId: starter("commercial-intake").id,
+      path: "/start",
+    });
+    expect(starter("commercial-funnel").data).toMatchObject({
+      captureFormObjectId: starter("commercial-intake").id,
+    });
+    const compilerReplay = await api
+      .post(`/api/eos/companies/${blueprintCompany.id}/company-blueprint/instantiate`)
+      .send({ blueprintKey: "service_studio" })
+      .expect(201);
+    expect(compilerReplay.body.createdNativeAssetIds).toHaveLength(0);
+    expect(compilerReplay.body.preservedNativeAssetIds).toHaveLength(5);
 
     // Simulate an established company that compiled before the native funnel
     // tools were added, while preserving its deliberate custom entitlement.
