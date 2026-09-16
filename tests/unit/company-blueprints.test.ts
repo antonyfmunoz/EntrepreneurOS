@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { compileCompanyBlueprintStarters, companyBlueprintForBusinessModel, companyBlueprints } from "../../shared/company-blueprints";
 import { materializeNativeWorkflowStarter } from "../../shared/native-workflow-starters";
 import { materializeNativeBusinessStarters } from "../../shared/native-business-starters";
-import { canonicalToolEntitlements, reconcileLegacyToolEntitlements } from "../../shared/eos-runtime";
+import { allowedSurfacesForRoleTools, canonicalToolEntitlements, reconcileLegacyToolEntitlements } from "../../shared/eos-runtime";
 
 describe("company operating blueprints", () => {
   it("maps business-model variables to one editable company formation", () => {
@@ -16,7 +16,14 @@ describe("company operating blueprints", () => {
       const ceo = blueprint.roles.find((role) => role.key === "company_ceo");
       expect(ceo?.kind).toBe("company_ceo");
       expect(ceo?.tools.length).toBeGreaterThan(0);
+      expect(blueprint.roles.find((role) => role.key === "finance_capital")).toMatchObject({ kind: "functional_executive", supervisorKey: "company_ceo" });
+      expect(blueprint.roles.find((role) => role.key === "legal_governance")).toMatchObject({ kind: "functional_executive", supervisorKey: "company_ceo" });
     }
+  });
+
+  it("gives a finance-equipped role the capital surface without opening it to unrelated roles", () => {
+    expect(allowedSurfacesForRoleTools("functional_executive", ["Finance"])).toContain("capital");
+    expect(allowedSurfacesForRoleTools("functional_executive", ["Documents"])).not.toContain("capital");
   });
 
   it("turns founder-entered variables into company-specific native starter artifacts", () => {
