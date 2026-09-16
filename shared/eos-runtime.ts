@@ -106,6 +106,24 @@ export const workPacketCreateSchema = z.object({
     .default([]),
 });
 
+/**
+ * A Conference Room decision is not a work item by itself. This contract
+ * makes the handoff explicit: an attendee turns one recorded decision into
+ * one accountable Work Packet, with the decision retained as its lineage.
+ */
+export const conferenceDecisionWorkPacketCreateSchema = z.object({
+  expectedDecisionVersion: z.number().int().positive(),
+  title: z.string().trim().min(3).max(200),
+  objective: z.string().trim().min(3).max(2000),
+  priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
+  dueAt: z.string().datetime().optional(),
+  requiresApproval: z.boolean().default(false),
+  accountableSeatId: z.string().uuid(),
+  evidenceRequirements: z.array(z.string().trim().min(1).max(300)).max(20).default([]),
+  expectedOutput: z.string().trim().max(3000).default(""),
+  acceptanceCriteria: z.string().trim().max(3000).default(""),
+});
+
 export const objectiveRecordTypes = [
   "objective",
   "constraint",
