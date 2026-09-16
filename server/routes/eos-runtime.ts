@@ -3027,6 +3027,8 @@ export function registerEosRuntimeRoutes(app: Express): void {
             key: blueprint.key,
             title: blueprint.title,
             description: blueprint.description,
+            operatingFormation: (access.company.founderProfile as Record<string, unknown>)?.operatingFormation || "agent_first",
+            teamSnapshot: (access.company.founderProfile as Record<string, unknown>)?.teamSnapshot || "",
             roles: blueprint.roles.map((role) => {
               const seat = seats.find((candidate) => candidate.title === role.title && candidate.kind === role.kind);
               const recommendedToolEntitlements = canonicalToolEntitlements(role.tools);

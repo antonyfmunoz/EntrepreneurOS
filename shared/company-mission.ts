@@ -33,6 +33,12 @@ export type CompanyMissionInput = {
   workingStyle?: string;
   goals?: string;
   formation?: "agent_first" | "hybrid" | "existing_team";
+  /**
+   * A founder-entered description of the current operating team. It gives an
+   * established company the same compiler input as a new company without
+   * pretending that a provider import is its organization chart.
+   */
+  teamSnapshot?: string;
 };
 
 export type CompanyMissionDefinition = {
@@ -92,7 +98,8 @@ export const companyMissionJourney: readonly CompanyMissionDefinition[] = [
     purpose: "Start agent-first, describe a hybrid team, or map the existing team. Human hires later occupy the same seats and direct their role agents.",
     prerequisite: "strategic_outcomes",
     unlocks: "Org Studio, role seats, role agents, and role-aware workspaces.",
-    isComplete: (input) => Boolean(input.formation),
+    isComplete: (input) => Boolean(input.formation)
+      && (input.formation === "agent_first" || present(input.teamSnapshot)),
   },
   {
     key: "systems_reconciliation",

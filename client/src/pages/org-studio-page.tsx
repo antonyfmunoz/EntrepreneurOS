@@ -547,6 +547,18 @@ export default function OrgStudioPage() {
                   editable seat, role agent, operating pack, authority baseline,
                   reporting edge, and native tool surface—not an example card.
                 </p>
+                {blueprint.data.blueprint.teamSnapshot && (
+                  <div className="mt-4 max-w-3xl rounded-xl border bg-background/70 p-4">
+                    <p className="eos-label">Declared starting team</p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                      {blueprint.data.blueprint.teamSnapshot}
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Use the graph below to map people to seats. A human-occupied
+                      seat keeps its role agent as that person&apos;s assistant.
+                    </p>
+                  </div>
+                )}
                 <div className="mt-4 flex flex-wrap gap-2">
                   {(blueprint.data.blueprint.roles || []).map(
                     (role: RecordValue) => (
