@@ -20,6 +20,7 @@
     "payments:inspect": "tsx scripts/inspect-company-payment-bindings.ts",
     "release:verify": "tsx scripts/verify-release-env.ts",
     "release:evidence:verify": "tsx scripts/verify-production-promotion-evidence.ts",
+    "release:controls:record": "tsx scripts/record-release-qualified-controls.ts",
     "evidence:create": "tsx scripts/create-qualification-evidence.ts",
     "test": "vitest run",
     "test:watch": "vitest",

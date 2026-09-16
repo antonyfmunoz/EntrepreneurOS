@@ -466,6 +466,9 @@ try {
     Set-FreshProductionBearerToken
     npm run test:e2e:production:authenticated
     if ($LASTEXITCODE -ne 0) { throw "Signed-in role and isolation smoke failed." }
+    $env:EOS_QUALIFICATION_EVIDENCE_URI = $qualifiedRun.html_url
+    npm run release:controls:record
+    if ($LASTEXITCODE -ne 0) { throw "Release-qualified controls could not be recorded after successful smoke checks." }
   } catch {
     $promotionError = $_.Exception.Message
     Write-Warning "Promotion or smoke qualification failed; restoring the exact qualified rollback image."
