@@ -324,6 +324,7 @@ import {
 import { DeclarativeMaterializationError } from "../company-compilation/declarative-materializer";
 import { companyPackageParitySnapshot } from "../company-compilation/semantic-parity";
 import { compileCompanyBlueprintStarters, companyBlueprintForBusinessModel } from "@shared/company-blueprints";
+import { materializeNativeWorkflowStarter } from "@shared/native-workflow-starters";
 
 function escapeHtml(value: string): string {
   return value.replace(
@@ -2895,7 +2896,16 @@ export function registerEosRuntimeRoutes(app: Express): void {
       const businessModel = access.company.type || (access.company.founderProfile as Record<string, unknown>)?.businessModel as string | undefined;
       const blueprint = companyBlueprintForBusinessModel(businessModel);
       const visible = await visibleSeatIds(access.company.id, access.seat.id, access.role);
-      const seats = await db.select().from(eosSeats).where(and(eq(eosSeats.companyId, access.company.id), eq(eosSeats.status, "active")));
+      const [seats, processes, packets] = await Promise.all([
+        db.select().from(eosSeats).where(and(eq(eosSeats.companyId, access.company.id), eq(eosSeats.status, "active"))),
+        db.select().from(eosProcessDefinitions).where(eq(eosProcessDefinitions.companyId, access.company.id)),
+        db.select().from(eosWorkPackets).where(eq(eosWorkPackets.companyId, access.company.id)),
+      ]);
+      const starters = compileCompanyBlueprintStarters(blueprint, {
+        offer: access.company.offer,
+        targetCustomer: access.company.targetCustomer,
+        goals: access.company.goals,
+      });
       return {
         body: {
           blueprint: {
@@ -2909,6 +2919,34 @@ export function registerEosRuntimeRoutes(app: Express): void {
                 state: seat ? "instantiated" : "ready",
                 visible: !seat || visible.has(seat.id),
                 seatId: seat?.id || null,
+              };
+            }),
+            launchArtifacts: starters.map((starter) => {
+              const processKey = `company-blueprint:${blueprint.key}:${starter.key}`;
+              const process = processes
+                .filter((candidate) => candidate.processKey === processKey)
+                .sort((left, right) => right.version - left.version)[0];
+              const packetId = `packet:company-blueprint:${access.company.id}:${blueprint.key}:${starter.key}`;
+              const packet = packets.find((candidate) => candidate.id === packetId);
+              const ownerVisible = !process || (visible.has(process.accountableSeatId) && mayAccessClassification(access, process.classification));
+              return {
+                key: starter.key,
+                title: starter.title,
+                ownerRoleKey: starter.ownerRoleKey,
+                workflowTemplateKey: starter.workflowTemplateKey,
+                state: process ? "drafted" : "ready",
+                visible: ownerVisible,
+                process: process && ownerVisible ? {
+                  id: process.id,
+                  name: process.name,
+                  qualificationState: process.qualificationState,
+                  releaseState: process.releaseState,
+                  version: process.version,
+                } : null,
+                workPacket: packet && ownerVisible ? {
+                  id: packet.id,
+                  status: packet.status,
+                } : null,
               };
             }),
           },
@@ -2971,14 +3009,132 @@ export function registerEosRuntimeRoutes(app: Express): void {
           targetCustomer: access.company.targetCustomer,
           goals: access.company.goals,
         });
+        // Every company can run its own native workflows before, alongside, or
+        // without an external stack. This core capability is deliberately not
+        // a provider binding: it is the governed EOS workflow surface that
+        // the compiler uses for the company-specific drafts below.
+        const workflowCapabilityKey = "eos_native_workflows";
+        const workflowCapabilityId = `capability:company-blueprint:${access.company.id}:${workflowCapabilityKey}`;
+        const [existingWorkflowCapability] = await tx
+          .select()
+          .from(eosCapabilityInstances)
+          .where(
+            and(
+              eq(eosCapabilityInstances.companyId, access.company.id),
+              eq(eosCapabilityInstances.capabilityInstanceKey, workflowCapabilityKey),
+            ),
+          )
+          .limit(1);
+        const workflowCapability = existingWorkflowCapability || (
+          await tx
+            .insert(eosCapabilityInstances)
+            .values({
+              id: workflowCapabilityId,
+              companyId: access.company.id,
+              portfolioId: access.company.portfolioId,
+              capabilityInstanceKey: workflowCapabilityKey,
+              capabilityKey: workflowCapabilityKey,
+              name: "Native workflows and automations",
+              state: "active",
+              maturity: "defined",
+              accountableSeatId: byTemplateKey.get("company_ceo")?.id || access.seat.id,
+              activationTrigger: "A company formation or authorized operator needs an EOS-native workflow.",
+              deactivationTrigger: "A governed company decision retires the native workflow capability.",
+              moduleIds: [2, 6, 7],
+              agentKeys: [],
+              humanOperatorKey: "",
+              systemKeys: ["eos.workflow_runtime"],
+              workflowKeys: starters.map((starter) => starter.workflowTemplateKey),
+              metricKeys: [],
+              riskControlKeys: ["no_unverified_external_effect"],
+              evidenceKeys: [],
+              sourceAuthority: "native_eos",
+              classification: "internal",
+              recordedByUserId: req.user.id,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .returning()
+        )[0];
         const createdStarterObjectiveIds: string[] = [];
         const createdStarterPacketIds: string[] = [];
-        const starterArtifacts: Array<{ key: string; objectiveId: string; workPacketId: string; ownerSeatId: string }> = [];
+        const createdStarterProcessIds: string[] = [];
+        const starterArtifacts: Array<{ key: string; objectiveId: string; workPacketId: string; processDefinitionId: string; ownerSeatId: string }> = [];
         const trace = tracePair();
         for (const starter of starters) {
           const ownerSeatId = byTemplateKey.get(starter.ownerRoleKey)?.id || byTemplateKey.get("company_ceo")?.id || access.seat.id;
           const objectiveId = `objective:company-blueprint:${access.company.id}:${blueprint.key}:${starter.key}`;
           const packetId = `packet:company-blueprint:${access.company.id}:${blueprint.key}:${starter.key}`;
+          const processKey = `company-blueprint:${blueprint.key}:${starter.key}`;
+          const [existingProcess] = await tx
+            .select()
+            .from(eosProcessDefinitions)
+            .where(
+              and(
+                eq(eosProcessDefinitions.companyId, access.company.id),
+                eq(eosProcessDefinitions.processKey, processKey),
+              ),
+            )
+            .orderBy(desc(eosProcessDefinitions.version))
+            .limit(1);
+          const workflow = materializeNativeWorkflowStarter(starter.workflowTemplateKey, {
+            companyName: access.company.name,
+            offer: starter.variables.offer,
+            targetCustomer: starter.variables.targetCustomer,
+            goal: starter.variables.goal,
+          });
+          const process = existingProcess || (
+            await tx
+              .insert(eosProcessDefinitions)
+              .values({
+                id: `process:company-blueprint:${access.company.id}:${blueprint.key}:${starter.key}:1`,
+                companyId: access.company.id,
+                portfolioId: access.company.portfolioId,
+                processKey,
+                name: workflow.name,
+                version: 1,
+                qualificationState: "mapped",
+                releaseState: "draft",
+                capabilityInstanceId: workflowCapability.id,
+                workflowKey: starter.workflowTemplateKey,
+                purpose: workflow.purpose,
+                intendedOutcome: workflow.outcome,
+                templateAncestry: `company-blueprint:${blueprint.key}:${starter.key} > native_workflow_starter.${starter.workflowTemplateKey}.v1`,
+                applicableOverlays: [],
+                triggerCondition: workflow.trigger,
+                accountableSeatId: ownerSeatId,
+                supportingActorKeys: [],
+                requiredAuthority: Array.from(new Set(workflow.steps.map((step) => step.authorityClass))),
+                disclosureScope: "internal",
+                prerequisites: ["An active company seat and effective role authority are required."],
+                requiredInputs: [starter.statement],
+                toolSystemBoundaries: Array.from(new Set(workflow.steps.map((step) => step.toolKey))),
+                procedureSteps: workflow.steps.map((step, index) => ({ ...step, id: `starter-${starter.key}-${index + 1}` })),
+                branchConditions: workflow.branches,
+                approvalGates: Array.from(new Set([
+                  ...workflow.approvals,
+                  ...workflow.steps.filter((step) => step.actionKind === "approval").map((step) => `${step.title}: ${step.completionCriteria}`),
+                ])),
+                prohibitedActions: ["Do not transmit data to an external provider unless an explicit provider capability, matching authority, and governed provider binding exist."],
+                requiredOutputs: [starter.successExitCriteria, workflow.outcome],
+                evidenceRequirements: ["Observed execution result", "Named accountable owner"],
+                qualityCriteria: ["Each step is completed only by the required authority and retained in the immutable run trail."],
+                sla: "",
+                emittedEvents: ["workflow.run.recorded"],
+                failurePaths: Array.from(new Set(workflow.steps.map((step) => step.onFailure))),
+                terminalCriteria: [workflow.outcome],
+                trainingPrerequisites: [],
+                acceptanceTests: ["An authorized fixture operator completes the normal native path without asserting an external effect."],
+                reviewerKeys: ["founder", starter.ownerRoleKey],
+                sourceAuthority: "native_eos",
+                classification: "internal",
+                recordedByUserId: req.user.id,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              })
+              .returning()
+          )[0];
+          if (!existingProcess) createdStarterProcessIds.push(process.id);
           const [existingObjective] = await tx.select().from(eosObjectives).where(and(eq(eosObjectives.id, objectiveId), eq(eosObjectives.companyId, access.company.id))).limit(1);
           if (!existingObjective) {
             await tx.insert(eosObjectives).values({
@@ -3027,12 +3183,14 @@ export function registerEosRuntimeRoutes(app: Express): void {
               toolPack: starter.tools,
               evidenceRequirements: ["Named accountable owner", "Accepted output or reviewed operating evidence"],
               resourceIds: [],
+              capabilityInstanceId: workflowCapability.id,
+              processDefinitionId: process.id,
               expectedOutput: starter.successExitCriteria,
               acceptanceCriteria: "An authorized role activates and completes the packet using the declared native tools and attributable evidence.",
               constraintsPolicies: "No external provider effect is implied by this native starter packet.",
               failureEscalationCompensation: "Pause, record the missing evidence or authority, and escalate through the company reporting graph.",
               humanFallback: "The assigned human or founder may direct the role agent and approve consequential changes.",
-              sourceLineage: JSON.stringify({ template: `company-blueprint:${blueprint.key}:${starter.key}`, workflowTemplateKey: starter.workflowTemplateKey, variables: starter.variables }),
+              sourceLineage: JSON.stringify({ template: `company-blueprint:${blueprint.key}:${starter.key}`, workflowTemplateKey: starter.workflowTemplateKey, processDefinitionId: process.id, variables: starter.variables }),
               outputArtifactKeys: [],
               traceId: trace.traceId,
               correlationId: trace.correlationId,
@@ -3041,7 +3199,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
             });
             createdStarterPacketIds.push(packetId);
           }
-          starterArtifacts.push({ key: starter.key, objectiveId, workPacketId: packetId, ownerSeatId });
+          starterArtifacts.push({ key: starter.key, objectiveId, workPacketId: packetId, processDefinitionId: process.id, ownerSeatId });
         }
         await tx.insert(eosAuditRecords).values({
           id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id,
@@ -3054,9 +3212,10 @@ export function registerEosRuntimeRoutes(app: Express): void {
             preservedSeatIds: present.map((seat) => seat.id),
             createdStarterObjectiveIds,
             createdStarterPacketIds,
+            createdStarterProcessIds,
           },
         });
-        return { blueprintKey: blueprint.key, created, present, starterArtifacts, createdStarterObjectiveIds, createdStarterPacketIds };
+        return { blueprintKey: blueprint.key, created, present, starterArtifacts, createdStarterObjectiveIds, createdStarterPacketIds, createdStarterProcessIds };
       });
       return { status: 201, body: outcome };
     }),

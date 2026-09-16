@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { compileCompanyBlueprintStarters, companyBlueprintForBusinessModel, companyBlueprints } from "../../shared/company-blueprints";
+import { materializeNativeWorkflowStarter } from "../../shared/native-workflow-starters";
 
 describe("company operating blueprints", () => {
   it("maps business-model variables to one editable company formation", () => {
@@ -33,5 +34,19 @@ describe("company operating blueprints", () => {
     expect(starters[0].statement).toContain("Revenue recovery service");
     expect(starters[0].statement).toContain("B2B service companies");
     expect(starters[1].statement).toContain("Validate the offer");
+  });
+
+  it("turns the matching shared workflow pattern into an editable company-specific native draft", () => {
+    const workflow = materializeNativeWorkflowStarter("lead-to-discovery", {
+      companyName: "Empyrean Studios",
+      offer: "Revenue recovery service",
+      targetCustomer: "B2B service companies",
+      goal: "Validate the offer",
+    });
+    expect(workflow.name).toContain("Empyrean Studios");
+    expect(workflow.name).toContain("Revenue recovery service");
+    expect(workflow.purpose).toContain("B2B service companies");
+    expect(workflow.steps.map((step) => step.toolKey)).toEqual(["crm", "crm", "calendar"]);
+    expect(workflow.steps.some((step) => step.actionKind === "approval")).toBe(false);
   });
 });

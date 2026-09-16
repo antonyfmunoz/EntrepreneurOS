@@ -25,4 +25,13 @@ describe("Company Mission blueprint handoff", () => {
     expect(runtime).toContain('source: "compiler"');
     expect(runtime).toContain("No external provider effect is implied by this native starter packet.");
   });
+
+  it("links each compiled launch packet to an editable native workflow draft instead of a template label", () => {
+    expect(runtime).toContain("materializeNativeWorkflowStarter");
+    expect(runtime).toContain('capabilityInstanceKey: workflowCapabilityKey');
+    expect(runtime).toContain("createdStarterProcessIds");
+    expect(runtime).toContain("processDefinitionId: process.id");
+    expect(runtime).toContain('releaseState: "draft"');
+    expect(runtime).toContain("Do not transmit data to an external provider unless an explicit provider capability");
+  });
 });
