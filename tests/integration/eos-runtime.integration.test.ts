@@ -536,6 +536,19 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       sourceReference: { authority: "native_eos", capability: "native_funnel_fixture" }, evidenceIds: [], idempotencyKey: "instrument:create:public-funnel-form",
     }).expect(201);
     await api.post(`/api/eos/companies/${companyId}/instrument-objects/${captureForm.body.object.id}/transitions`).send({ expectedVersion: 1, state: "active", rationale: "Founder publishes the synthetic native intake point for public funnel qualification.", evidenceIds: [], idempotencyKey: "instrument:transition:public-funnel-form:active" }).expect(200);
+    const firstLeadSubmission = await api.post(`/api/public/lead-forms/${captureForm.body.object.id}/submissions`).send({ answers: { email: "fixture-lead@example.com" }, consent: true }).expect(201);
+    expect(firstLeadSubmission.headers["x-robots-tag"]).toContain("noindex");
+    expect(firstLeadSubmission.body).toMatchObject({ schemaVersion: "eos.public-lead-submission.v1", accepted: true });
+    const repeatedLeadSubmission = await api.post(`/api/public/lead-forms/${captureForm.body.object.id}/submissions`).send({ answers: { email: "FIXTURE-LEAD@example.com" }, consent: true }).expect(201);
+    expect(repeatedLeadSubmission.body).toMatchObject({ accepted: true });
+    expect(repeatedLeadSubmission.body).not.toHaveProperty("reconciled");
+    const capturedCrm = await api.get(`/api/eos/companies/${companyId}/instruments/crm`).expect(200);
+    const capturedPeople = capturedCrm.body.objects.filter((object: any) => object.objectType === "person" && object.data?.email === "fixture-lead@example.com");
+    expect(capturedPeople).toHaveLength(1);
+    const capturedRelationships = capturedCrm.body.objects.filter((object: any) => object.objectType === "relationship" && object.data?.personObjectId === capturedPeople[0].id && object.data?.relationshipType === "lead");
+    expect(capturedRelationships).toHaveLength(1);
+    const capturedForms = await api.get(`/api/eos/companies/${companyId}/instruments/forms`).expect(200);
+    expect(capturedForms.body.objects.filter((object: any) => object.objectType === "submission" && object.data?.formObjectId === captureForm.body.object.id)).toHaveLength(2);
     const funnel = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({
       instrumentKey: "websites", objectType: "funnel", objectKey: "funnel:public-fixture", title: "Public funnel fixture", summary: "Synthetic EOS-owned landing page.", classification: "confidential", visibility: "organization",
       data: { publicFunnel: true, headline: "A native EOS public funnel", supportingCopy: "A public page routes a visitor into a consented native EOS form.", primaryCtaLabel: "Request a review", captureFormObjectId: captureForm.body.object.id },
@@ -579,20 +592,20 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const exported = await api.get(`/api/eos/companies/${companyId}/instrument-export`).expect(200);
     expect(exported.headers["content-disposition"]).toContain("eos-instruments-company.json");
     expect(exported.body).toMatchObject({ schemaVersion: "eos.instrument-bundle.v1" });
-    expect(exported.body.objects).toHaveLength(6);
-    expect(exported.body.links).toHaveLength(1);
+    expect(exported.body.objects).toHaveLength(10);
+    expect(exported.body.links).toHaveLength(6);
     expect(JSON.stringify(exported.body)).not.toContain(created.body.object.id);
     expect(JSON.stringify(exported.body)).not.toContain(link.body.link.id);
 
     currentUserId = otherId;
     const imported = await api.post(`/api/eos/companies/${otherCompanyId}/instrument-imports`).send({ bundle: exported.body, conflictStrategy: "copy", idempotencyKey: "instrument:import:portable-bundle" }).expect(201);
-    expect(imported.body).toMatchObject({ imported: 6, skipped: 0, linked: 1, replayed: false });
+    expect(imported.body).toMatchObject({ imported: 10, skipped: 0, linked: 6, replayed: false });
     const importedReplay = await api.post(`/api/eos/companies/${otherCompanyId}/instrument-imports`).send({ bundle: exported.body, conflictStrategy: "copy", idempotencyKey: "instrument:import:portable-bundle" }).expect(200);
-    expect(importedReplay.body).toMatchObject({ imported: 6, linked: 1, replayed: true });
+    expect(importedReplay.body).toMatchObject({ imported: 10, linked: 6, replayed: true });
     const importedProjection = await api.get(`/api/eos/companies/${otherCompanyId}/instruments`).expect(200);
-    expect(importedProjection.body.objects).toHaveLength(6);
+    expect(importedProjection.body.objects).toHaveLength(10);
     expect(importedProjection.body.objects.every((item: any) => item.state === "draft" && item.version === 1 && item.evidenceIds.length === 0)).toBe(true);
-    expect(importedProjection.body.links).toHaveLength(1);
+    expect(importedProjection.body.links).toHaveLength(6);
 
     await expect(sql`UPDATE eos_instrument_events SET event_type = 'tampered' WHERE object_id = ${created.body.object.id}`).rejects.toThrow(/append-only/i);
     await api.get(`/api/eos/companies/${companyId}/instruments`).expect(404);
