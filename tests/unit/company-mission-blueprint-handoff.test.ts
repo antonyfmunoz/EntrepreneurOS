@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const missionPage = readFileSync(new URL("../../client/src/pages/company-setup-page.tsx", import.meta.url), "utf8");
 const runtime = readFileSync(new URL("../../server/routes/eos-runtime.ts", import.meta.url), "utf8");
+const orgStudio = readFileSync(new URL("../../client/src/pages/org-studio-page.tsx", import.meta.url), "utf8");
 
 describe("Company Mission blueprint handoff", () => {
   it("compiles the native company blueprint immediately after the shared intake is saved", () => {
@@ -47,5 +48,14 @@ describe("Company Mission blueprint handoff", () => {
     expect(runtime).toContain("canonicalToolEntitlements(role.tools)");
     expect(runtime).toContain("canonicalToolEntitlements(input.toolEntitlements)");
     expect(runtime).toContain("grant:${seat.id}:baseline");
+  });
+
+  it("lets a founder preview and explicitly apply legacy role-tool repairs without rewriting custom labels", () => {
+    expect(runtime).toContain('"/api/eos/companies/:companyId/organization-runtime/tool-entitlements/reconcile"');
+    expect(runtime).toContain("reconcileLegacyToolEntitlements");
+    expect(runtime).toContain('action: "seat.tool_entitlements_reconciled"');
+    expect(orgStudio).toContain("Keep tools and authority in sync");
+    expect(orgStudio).toContain("Review role tools");
+    expect(orgStudio).toContain("Apply ${roleToolChanges.length} repair");
   });
 });
