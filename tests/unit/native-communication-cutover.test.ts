@@ -6,6 +6,7 @@ const security = readFileSync(new URL("../../server/middleware/api-security.ts",
 const canonicalRuntime = readFileSync(new URL("../../server/routes/eos-runtime.ts", import.meta.url), "utf8");
 const instrumentRuntime = readFileSync(new URL("../../server/routes/instrument-runtime.ts", import.meta.url), "utf8");
 const overlay = readFileSync(new URL("../../client/src/pages/eos-overlay-page.tsx", import.meta.url), "utf8");
+const messageHub = readFileSync(new URL("../../client/src/components/native-message-hub.tsx", import.meta.url), "utf8");
 
 describe("native communication authority cutover", () => {
   it("does not register legacy global agent or assistant route modules", () => {
@@ -37,5 +38,8 @@ describe("native communication authority cutover", () => {
     expect(instrumentRuntime).toContain("message_conversation_membership_required");
     expect(instrumentRuntime).toContain("message_parent_required");
     expect(instrumentRuntime).toContain("messageConversationParticipants");
+    expect(messageHub).toContain("eligibleNativeConversationSeats");
+    expect(messageHub).toContain("Reporting-line participants");
+    expect(messageHub).toContain("role assistant to route the request");
   });
 });

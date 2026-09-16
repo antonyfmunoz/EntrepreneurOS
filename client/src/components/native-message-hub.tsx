@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { MessageCircleMore, MessagesSquare, Plus, RefreshCw, Send, ShieldCheck, UsersRound } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -11,7 +11,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type Json = Record<string, any>;
-type Seat = { id: string; title: string; agentName: string; status?: string; supervisorSeatId?: string | null };
+export type NativeMessageSeat = { id: string; title: string; agentName: string; status?: string; supervisorSeatId?: string | null };
+
+/**
+ * Keep the chooser honest with the same direct-reporting-line boundary that
+ * the server enforces. Cross-chain work is deliberately routed through the
+ * role assistant instead of presenting a choice which will fail on submit.
+ */
+export function eligibleNativeConversationSeats(activeSeatId: string, seats: NativeMessageSeat[]) {
+  const activeSeat = seats.find((seat) => seat.id === activeSeatId);
+  if (!activeSeat) return [];
+  return seats.filter((seat) => seat.status !== "inactive" && (
+    seat.id === activeSeatId ||
+    seat.supervisorSeatId === activeSeatId ||
+    activeSeat.supervisorSeatId === seat.id
+  ));
+}
 
 function commandKey(prefix: string) {
   const suffix = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -38,7 +53,7 @@ export function NativeMessageHub({ root, roleScopeKey, activeSeatId, seats, canE
   root: string;
   roleScopeKey: string;
   activeSeatId: string;
-  seats: Seat[];
+  seats: NativeMessageSeat[];
   canExecute: boolean;
   canDecide: boolean;
 }) {
@@ -63,13 +78,30 @@ export function NativeMessageHub({ root, roleScopeKey, activeSeatId, seats, canE
   const messages = useMemo(() => objects.filter((item) => item.objectType === "message" && item.data?.conversationObjectId === selectedConversation?.id), [objects, selectedConversation?.id]);
   const threads = useMemo(() => objects.filter((item) => item.objectType === "thread" && item.data?.conversationObjectId === selectedConversation?.id), [objects, selectedConversation?.id]);
   const selectedChannel = channels.find((item) => item.key === channel)!;
+  const eligibleSeats = useMemo(
+    () => eligibleNativeConversationSeats(activeSeatId, seats),
+    [activeSeatId, seats],
+  );
+  const adjacentSeats = useMemo(
+    () => eligibleSeats.filter((seat) => seat.id !== activeSeatId),
+    [activeSeatId, eligibleSeats],
+  );
+  const conversationParticipantSeatIds = useMemo(
+    () => Array.from(new Set([activeSeatId, ...participantSeatIds].filter(Boolean))),
+    [activeSeatId, participantSeatIds],
+  );
+
+  useEffect(() => {
+    const allowed = new Set(adjacentSeats.map((seat) => seat.id));
+    setParticipantSeatIds((current) => current.filter((seatId) => allowed.has(seatId)));
+  }, [adjacentSeats]);
 
   const refresh = async () => queryClient.invalidateQueries({ queryKey: [root, roleScopeKey, "native-messages"] });
   const createConversation = useMutation({
     mutationFn: async () => (await apiRequest("POST", `${root}/instrument-objects`, {
       instrumentKey: "messages", objectType: "conversation", objectKey: `conversation:${safeKey(conversationTitle)}:${Date.now()}`,
       title: conversationTitle.trim(), summary: conversationPurpose.trim(), classification: "confidential", visibility: "team",
-        data: { participantSeatIds }, sourceReference: { authority: "native_eos" }, evidenceIds: [], idempotencyKey: commandKey("message-conversation"),
+        data: { participantSeatIds: conversationParticipantSeatIds }, sourceReference: { authority: "native_eos" }, evidenceIds: [], idempotencyKey: commandKey("message-conversation"),
     })).json(),
     onSuccess: async (result) => { setSelectedConversationId(result.object.id); setConversationTitle(""); setConversationPurpose(""); setParticipantSeatIds([]); await refresh(); },
     onError: (cause: Error) => setError(cause.message),
@@ -125,7 +157,7 @@ export function NativeMessageHub({ root, roleScopeKey, activeSeatId, seats, canE
     <CardContent className="space-y-5">
       {error && <Alert variant="destructive"><AlertTitle>Message command not applied</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
       <div className="grid gap-5 xl:grid-cols-2">
-        <section className="rounded-xl border p-4"><div className="flex items-center gap-2"><UsersRound className="h-4 w-4 text-primary" /><h3 className="font-semibold">1. Start a governed conversation</h3></div><p className="mt-1 text-sm text-muted-foreground">Include yourself and only adjacent seats in the reporting line: your direct manager and/or your direct reports. The server enforces this boundary; it does not create a provider account or external group chat.</p><div className="mt-4 grid gap-3"><div><Label htmlFor="message-conversation-title">Conversation name</Label><Input id="message-conversation-title" className="mt-1" value={conversationTitle} onChange={(event) => setConversationTitle(event.target.value)} placeholder="Revenue recovery operating thread" /></div><div><Label htmlFor="message-conversation-purpose">Purpose</Label><Textarea id="message-conversation-purpose" className="mt-1" value={conversationPurpose} onChange={(event) => setConversationPurpose(event.target.value)} placeholder="What work, decision, or coordination belongs here?" /></div><div><p className="text-sm font-medium">Visible participants</p><div className="mt-2 flex flex-wrap gap-2">{seats.filter((seat) => seat.status !== "inactive").map((seat) => <label key={seat.id} className="flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-1.5 text-xs"><input type="checkbox" checked={participantSeatIds.includes(seat.id)} onChange={() => toggleSeat(seat.id)} />{seat.title}{seat.id === activeSeatId ? " (you)" : ""}</label>)}</div></div><Button disabled={!canExecute || conversationTitle.trim().length < 2 || participantSeatIds.length < 2 || !participantSeatIds.includes(activeSeatId) || createConversation.isPending} onClick={() => createConversation.mutate()}><Plus className="mr-2 h-4 w-4" />{createConversation.isPending ? "Creating conversation…" : "Create native conversation"}</Button></div><div className="mt-4 space-y-2">{conversations.map((conversation) => <button type="button" key={conversation.id} onClick={() => setSelectedConversationId(conversation.id)} className={`w-full rounded-lg border p-3 text-left ${selectedConversation?.id === conversation.id ? "border-primary bg-primary/5" : "bg-muted/30"}`}><div className="flex justify-between gap-3"><span className="font-medium">{conversation.title}</span><Badge variant={stateVariant(conversation.state)}>{conversation.state}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{conversation.summary || "No purpose recorded"} · {Array.isArray(conversation.data?.participantSeatIds) ? conversation.data.participantSeatIds.length : 0} seats</p></button>)}{!conversations.length && <p className="py-3 text-sm text-muted-foreground">No native conversations yet.</p>}</div></section>
+        <section className="rounded-xl border p-4"><div className="flex items-center gap-2"><UsersRound className="h-4 w-4 text-primary" /><h3 className="font-semibold">1. Start a governed conversation</h3></div><p className="mt-1 text-sm text-muted-foreground">You are included automatically. Select only a direct manager or direct report; non-adjacent work belongs with your role assistant, which coordinates through the reporting chain.</p><div className="mt-4 grid gap-3"><div><Label htmlFor="message-conversation-title">Conversation name</Label><Input id="message-conversation-title" className="mt-1" value={conversationTitle} onChange={(event) => setConversationTitle(event.target.value)} placeholder="Revenue recovery operating thread" /></div><div><Label htmlFor="message-conversation-purpose">Purpose</Label><Textarea id="message-conversation-purpose" className="mt-1" value={conversationPurpose} onChange={(event) => setConversationPurpose(event.target.value)} placeholder="What work, decision, or coordination belongs here?" /></div><div><p className="text-sm font-medium">Reporting-line participants</p><div className="mt-2 flex flex-wrap gap-2">{eligibleSeats.map((seat) => <label key={seat.id} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-xs ${seat.id === activeSeatId ? "bg-muted/50" : "cursor-pointer"}`}><input type="checkbox" checked={seat.id === activeSeatId || participantSeatIds.includes(seat.id)} disabled={seat.id === activeSeatId} onChange={() => toggleSeat(seat.id)} />{seat.title}{seat.id === activeSeatId ? " (you)" : ""}</label>)}</div>{!adjacentSeats.length && <p className="mt-2 text-xs text-muted-foreground">No active direct manager or report is available in this role scope. Use your role assistant to route the request.</p>}</div><Button disabled={!canExecute || conversationTitle.trim().length < 2 || conversationParticipantSeatIds.length < 2 || createConversation.isPending} onClick={() => createConversation.mutate()}><Plus className="mr-2 h-4 w-4" />{createConversation.isPending ? "Creating conversation…" : "Create native conversation"}</Button></div><div className="mt-4 space-y-2">{conversations.map((conversation) => <button type="button" key={conversation.id} onClick={() => setSelectedConversationId(conversation.id)} className={`w-full rounded-lg border p-3 text-left ${selectedConversation?.id === conversation.id ? "border-primary bg-primary/5" : "bg-muted/30"}`}><div className="flex justify-between gap-3"><span className="font-medium">{conversation.title}</span><Badge variant={stateVariant(conversation.state)}>{conversation.state}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{conversation.summary || "No purpose recorded"} · {Array.isArray(conversation.data?.participantSeatIds) ? conversation.data.participantSeatIds.length : 0} seats</p></button>)}{!conversations.length && <p className="py-3 text-sm text-muted-foreground">No native conversations yet.</p>}</div></section>
         <section className="rounded-xl border p-4"><div className="flex items-center gap-2"><Send className="h-4 w-4 text-primary" /><h3 className="font-semibold">2. Record a message or delivery intent</h3></div><p className="mt-1 text-sm text-muted-foreground">Native EOS messages are stored in this conversation. Choosing an external channel records a governed intent only; it never claims an email, Slack, SMS, or social post was sent.</p><div className="mt-4 grid gap-3"><div><Label htmlFor="message-channel">Channel</Label><select id="message-channel" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={channel} onChange={(event) => setChannel(event.target.value as typeof channel)}>{channels.map((item) => <option key={item.key} value={item.key}>{item.label} — {item.detail}</option>)}</select></div><div><Label htmlFor="message-body">Message</Label><Textarea id="message-body" className="mt-1" value={messageBody} onChange={(event) => setMessageBody(event.target.value)} placeholder="Write the accountable update, request, decision context, or handoff." /></div><Button disabled={!canExecute || !selectedConversation || messageBody.trim().length < 1 || createMessage.isPending} onClick={() => createMessage.mutate()}><Send className="mr-2 h-4 w-4" />{createMessage.isPending ? "Recording…" : channel === "native_eos" ? "Record native message" : "Create governed delivery intent"}</Button><div className="border-t pt-3"><Label htmlFor="message-thread-title">Open a focused thread</Label><div className="mt-1 flex gap-2"><Input id="message-thread-title" value={threadTitle} onChange={(event) => setThreadTitle(event.target.value)} placeholder="Pricing exception review" /><Button variant="outline" disabled={!canExecute || !selectedConversation || threadTitle.trim().length < 2 || createThread.isPending} onClick={() => createThread.mutate()}><MessageCircleMore className="mr-2 h-4 w-4" />Thread</Button></div></div></div></section>
       </div>
       <section className="rounded-xl border p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Conversation ledger</p><h3 className="mt-1 font-semibold">{selectedConversation ? selectedConversation.title : "Choose a conversation"}</h3></div>{selectedConversation?.state === "draft" && <Button size="sm" variant="outline" disabled={!canDecide || activate.isPending} onClick={() => activate.mutate(selectedConversation)}>Activate conversation</Button>}</div>{selectedConversation && <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]"><div className="space-y-3">{messages.map((message) => <article key={message.id} className="rounded-xl bg-muted/50 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><Badge variant="outline">{String(message.data?.channelType || "native_eos").replaceAll("_", " ")}</Badge><Badge variant={message.data?.deliveryState === "provider_intent" ? "secondary" : "default"}>{message.data?.deliveryState === "provider_intent" ? "provider intent" : "native record"}</Badge></div><span className="text-xs text-muted-foreground">{new Date(message.createdAt).toLocaleString()}</span></div><p className="mt-3 whitespace-pre-wrap text-sm">{message.data?.body || message.summary}</p>{message.state === "draft" && <Button size="sm" variant="outline" className="mt-3" disabled={!canDecide || activate.isPending} onClick={() => activate.mutate(message)}>Activate record</Button>}</article>)}{!messages.length && <p className="py-4 text-sm text-muted-foreground">No messages recorded in this conversation.</p>}</div><aside className="rounded-xl border bg-muted/30 p-3"><p className="text-sm font-medium">Threads</p><div className="mt-3 space-y-2">{threads.map((thread) => <div key={thread.id} className="rounded-lg bg-background p-3"><div className="flex justify-between gap-2"><span className="text-sm font-medium">{thread.title}</span><Badge variant={stateVariant(thread.state)}>{thread.state}</Badge></div>{thread.state === "draft" && <Button size="sm" variant="ghost" className="mt-2 h-7 px-2 text-xs" disabled={!canDecide || activate.isPending} onClick={() => activate.mutate(thread)}>Activate</Button>}</div>)}{!threads.length && <p className="text-xs text-muted-foreground">No focused threads yet.</p>}</div></aside></div>}</section>
