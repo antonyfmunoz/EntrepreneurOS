@@ -121,6 +121,7 @@ const LeadCaptureStudio = lazy(() => import("@/components/lead-capture-studio").
 const NativeFunnelStudio = lazy(() => import("@/components/native-funnel-studio").then((module) => ({ default: module.NativeFunnelStudio })));
 const NativeCalendarStudio = lazy(() => import("@/components/native-calendar-studio").then((module) => ({ default: module.NativeCalendarStudio })));
 const NativeMessageHub = lazy(() => import("@/components/native-message-hub").then((module) => ({ default: module.NativeMessageHub })));
+const ConferenceRoomControlCenter = lazy(() => import("@/components/conference-room-control-center").then((module) => ({ default: module.ConferenceRoomControlCenter })));
 const NativeDocumentsStudio = lazy(() => import("@/components/native-documents-studio").then((module) => ({ default: module.NativeDocumentsStudio })));
 const NativeSheetsStudio = lazy(() => import("@/components/native-sheets-studio").then((module) => ({ default: module.NativeSheetsStudio })));
 const NativeCrmStudio = lazy(() => import("@/components/native-crm-studio").then((module) => ({ default: module.NativeCrmStudio })));
@@ -1387,6 +1388,12 @@ export default function EosOverlayPage() {
   // pack explicitly grants the Messages tool.
   const mayOperateNativeMessages =
     canUseInstrument("messages") && toolEntitlements.has("messages");
+  // Conference Rooms are a native operating context for decisions, not a
+  // founder-only dashboard. Founders receive the starting capability; another
+  // role sees it only when its governed role pack assigns the same tool.
+  const mayOperateConferenceRooms =
+    canUseInstrument("conference_rooms") &&
+    (isFounder || toolEntitlements.has("conference_rooms"));
   // Docs are a foundational operating surface.  Founders receive the native
   // starting capability; other seats must be explicitly equipped by their
   // role pack, exactly as they are for Calendar and other tools.
@@ -10543,6 +10550,14 @@ export default function EosOverlayPage() {
               <NativeCalendarStudio
                 root={root}
                 roleScopeKey={roleScopeKey}
+                canExecute={effectiveAuthorityClasses.has("execute")}
+                canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
+            {mayOperateConferenceRooms && <Suspense fallback={<DeferredControlFallback />}>
+              <ConferenceRoomControlCenter
+                root={root}
+                seats={visibleSeats}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
               />
