@@ -15,6 +15,9 @@ function headers(res: Response) {
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
 }
+function pagePayload(page: typeof eosInstrumentObjects.$inferSelect, siteName: string, companyName: string, definition: z.infer<typeof publicPageSchema>) {
+  return { schemaVersion: "eos.public-page.v1", page: { id: page.id, siteName, companyName, headline: definition.headline, supportingCopy: definition.supportingCopy, primaryCtaLabel: definition.primaryCtaLabel, primaryCtaHref: definition.primaryCtaHref, path: definition.path } };
+}
 function route(handler: (req: Request, res: Response) => Promise<void>) {
   return async (req: Request, res: Response, next: (error?: unknown) => void) => {
     try { await handler(req, res); }
@@ -37,6 +40,27 @@ export function registerPublicSiteRoutes(app: Express): void {
     if (!site || !siteData.success) { res.status(404).json({ code: "public_site_unavailable", message: "This EOS site is unavailable." }); return; }
     const [company] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, page.companyId)).limit(1);
     headers(res);
-    res.json({ schemaVersion: "eos.public-page.v1", page: { id: page.id, siteName: siteData.data.brandName, companyName: company?.name || "Organization", headline: definition.data.headline, supportingCopy: definition.data.supportingCopy, primaryCtaLabel: definition.data.primaryCtaLabel, primaryCtaHref: definition.data.primaryCtaHref, path: definition.data.path } });
+    res.json(pagePayload(page, siteData.data.brandName, company?.name || "Organization", definition.data));
+  }));
+
+  // Public routes resolve only a published site and a published page that
+  // belongs to that same company/site pair.  The configured path is therefore
+  // a usable native URL, not just descriptive page metadata.
+  app.get("/api/public/sites/:siteId/page", route(async (req, res) => {
+    const siteId = z.string().uuid().parse(req.params.siteId);
+    const path = pathSchema.parse(req.query.path);
+    const [site] = await db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.id, siteId), eq(eosInstrumentObjects.instrumentKey, "websites"), eq(eosInstrumentObjects.objectType, "site"), eq(eosInstrumentObjects.state, "active"))).limit(1);
+    const siteData = publicSiteSchema.safeParse(site?.data);
+    if (!site || !siteData.success) { res.status(404).json({ code: "public_site_unavailable", message: "This EOS site is unavailable." }); return; }
+    const candidates = await db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, site.companyId), eq(eosInstrumentObjects.instrumentKey, "websites"), eq(eosInstrumentObjects.objectType, "page"), eq(eosInstrumentObjects.state, "active")));
+    const page = candidates.find((candidate) => {
+      const definition = publicPageSchema.safeParse(candidate.data);
+      return definition.success && definition.data.siteObjectId === site.id && definition.data.path === path;
+    });
+    const definition = publicPageSchema.safeParse(page?.data);
+    if (!page || !definition.success) { res.status(404).json({ code: "public_page_unavailable", message: "This EOS page is unavailable." }); return; }
+    const [company] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, site.companyId)).limit(1);
+    headers(res);
+    res.json(pagePayload(page, siteData.data.brandName, company?.name || "Organization", definition.data));
   }));
 }

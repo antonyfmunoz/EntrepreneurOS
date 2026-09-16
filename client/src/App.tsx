@@ -223,7 +223,7 @@ function App() {
     );
   }
 
-  if (window.location.pathname.startsWith("/p/")) {
+  if (window.location.pathname.startsWith("/p/") || window.location.pathname.startsWith("/s/")) {
     return <QueryClientProvider client={queryClient}><Suspense fallback={<FullPageStatus title="Opening your page" description="Preparing this EOS-owned site." />}><PublicSitePage /></Suspense><Toaster /></QueryClientProvider>;
   }
 

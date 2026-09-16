@@ -561,6 +561,11 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(publicPage.headers["x-robots-tag"]).toContain("noindex");
     expect(publicPage.body).toMatchObject({ schemaVersion: "eos.public-page.v1", page: { id: page.body.object.id, siteName: "Fixture Studio", headline: "A native EOS public page", primaryCtaHref: `/capture/${captureForm.body.object.id}` } });
     expect(JSON.stringify(publicPage.body)).not.toMatch(/ownerSeatId|sourceReference|evidenceIds|policyDecision/i);
+    const routedPublicPage = await api.get(`/api/public/sites/${site.body.object.id}/page?path=%2Ffixture`).expect(200);
+    expect(routedPublicPage.headers["x-robots-tag"]).toContain("noindex");
+    expect(routedPublicPage.body).toMatchObject({ schemaVersion: "eos.public-page.v1", page: { id: page.body.object.id, siteName: "Fixture Studio", path: "/fixture" } });
+    expect(JSON.stringify(routedPublicPage.body)).not.toMatch(/ownerSeatId|sourceReference|evidenceIds|policyDecision/i);
+    await api.get(`/api/public/sites/${site.body.object.id}/page?path=%2Funknown`).expect(404);
 
     const campaign = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({ instrumentKey: "ads", objectType: "campaign", objectKey: "campaign:synthetic", title: "Synthetic campaign", summary: "No provider dispatch or spend.", classification: "restricted", visibility: "organization", data: { externalEffectsExecuted: false, budgetMinor: 0 }, sourceReference: {}, evidenceIds: [], idempotencyKey: "instrument:create:synthetic-campaign" }).expect(201);
     const link = await api.post(`/api/eos/companies/${companyId}/instrument-links`).send({ sourceObjectId: campaign.body.object.id, targetObjectId: created.body.object.id, relationshipType: "uses_brief", metadata: { synthetic: true }, idempotencyKey: "instrument:link:campaign-brief" }).expect(201);

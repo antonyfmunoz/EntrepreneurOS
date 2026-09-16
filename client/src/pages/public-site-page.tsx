@@ -3,10 +3,17 @@ import { ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type PublicPage = { id: string; siteName: string; companyName: string; headline: string; supportingCopy: string; primaryCtaLabel: string; primaryCtaHref: string; path: string };
-function pageId() { return decodeURIComponent(window.location.pathname.replace(/^\/p\//, "").split("/")[0] || ""); }
+function pageTarget() {
+  const pathname = window.location.pathname;
+  if (pathname.startsWith("/p/")) return { key: decodeURIComponent(pathname.replace(/^\/p\//, "").split("/")[0] || ""), url: "/api/public/pages/" + encodeURIComponent(decodeURIComponent(pathname.replace(/^\/p\//, "").split("/")[0] || "")) };
+  const segments = pathname.replace(/^\/s\//, "").split("/");
+  const siteId = decodeURIComponent(segments.shift() || "");
+  const path = "/" + segments.map(decodeURIComponent).filter(Boolean).join("/");
+  return { key: siteId + ":" + path, url: "/api/public/sites/" + encodeURIComponent(siteId) + "/page?path=" + encodeURIComponent(path) };
+}
 export default function PublicSitePage() {
-  const id = pageId();
-  const query = useQuery<{ page: PublicPage }>({ queryKey: ["public-page", id], queryFn: async () => { const response = await fetch("/api/public/pages/" + encodeURIComponent(id)); const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body.message || "This page is unavailable."); return body; }, retry: false });
+  const target = pageTarget();
+  const query = useQuery<{ page: PublicPage }>({ queryKey: ["public-page", target.key], queryFn: async () => { const response = await fetch(target.url); const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body.message || "This page is unavailable."); return body; }, retry: false });
   const page = query.data?.page;
   if (query.isLoading) return <main className="grid min-h-screen place-items-center bg-slate-950 p-6"><Loader2 className="h-7 w-7 animate-spin text-violet-300" /></main>;
   if (!page) return <main className="grid min-h-screen place-items-center bg-slate-950 p-6 text-white"><section className="w-full max-w-lg rounded-3xl border border-white/10 bg-white/5 p-8"><p className="text-sm font-medium text-violet-200">EOS public site</p><h1 className="mt-2 text-2xl font-semibold">This page is unavailable</h1><p className="mt-3 text-slate-300">{query.error instanceof Error ? query.error.message : "The link may be incomplete or unpublished."}</p></section></main>;
