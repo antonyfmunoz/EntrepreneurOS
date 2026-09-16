@@ -32,11 +32,16 @@ export const workflowRunTransitionSchema = z.object({
   evidenceIds: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
   approvalId: z.string().trim().min(1).max(200).optional(),
   blocker: z.string().trim().max(2000).default(""),
+  // A condition is never inferred from prose or an AI response. The operator
+  // explicitly records the observed outcome and EOS stores the selected edge.
+  conditionOutcome: z.boolean().optional(),
 }).superRefine((value, context) => {
   if (["block", "fail"].includes(value.action) && !value.blocker)
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["blocker"], message: "Blocked or failed execution requires a named cause." });
   if (value.action === "request_approval" && !value.approvalId)
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["approvalId"], message: "Approval wait requires an approval request." });
+  if (value.conditionOutcome !== undefined && value.action !== "advance_step")
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["conditionOutcome"], message: "A condition outcome is valid only when advancing a workflow step." });
 });
 
 export const skillDefinitionCreateSchema = z.object({

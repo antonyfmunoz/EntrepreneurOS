@@ -22,6 +22,7 @@ import {
   workflowRunCreateSchema,
   workflowRunTransitionSchema,
 } from "@shared/workflow-runtime";
+import { resolveWorkflowNextStep, WorkflowRoutingError } from "@shared/workflow-routing";
 import { allowedSurfacesFor } from "@shared/eos-runtime";
 import { db } from "../db";
 import { nativeContractContentSha256 } from "../esign/template-generation";
@@ -74,7 +75,7 @@ async function requireEvidence(companyId: number, evidenceIds: string[], require
 function appendRunEventValues(input: {
   runId: string; companyId: number; sequence: number; action: string; fromState: string; toState: string;
   actorSeatId: string; actorUserId: string; note: string; policyDecisionId: string; evidenceIds?: string[]; approvalId?: string | null; blocker?: string;
-  currentStepBefore?: number; currentStepAfter?: number;
+  currentStepBefore?: number; currentStepAfter?: number; conditionOutcome?: boolean;
 }) {
   const projection = {
     schemaVersion: "eos.workflow-run-event.v1",
@@ -90,6 +91,7 @@ function appendRunEventValues(input: {
     blocker: input.blocker || "",
     currentStepBefore: input.currentStepBefore ?? null,
     currentStepAfter: input.currentStepAfter ?? null,
+    conditionOutcome: input.conditionOutcome ?? null,
     policyDecisionId: input.policyDecisionId,
     recordedAt: new Date().toISOString(),
   };
@@ -209,12 +211,24 @@ export function registerWorkflowRuntimeRoutes(app: Express): void {
     if (!nextState) throw new EosRouteError(409, "workflow_run_transition_invalid", `Workflow run cannot ${input.action} from ${run.state}.`);
     const [process] = await db.select().from(eosProcessDefinitions).where(eq(eosProcessDefinitions.id, run.processDefinitionId)).limit(1);
     if (!process) throw new EosRouteError(409, "workflow_process_unavailable", "The immutable process bound to this run is no longer available.");
-    const processSteps = Array.isArray(process.procedureSteps) ? process.procedureSteps : [];
+    const processSteps = Array.isArray(process.procedureSteps) ? process.procedureSteps as Array<Record<string, unknown>> : [];
     const requirements = Array.isArray(process?.evidenceRequirements) ? process.evidenceRequirements : [];
     if (input.action === "advance_step" && run.currentStep >= processSteps.length)
       throw new EosRouteError(409, "workflow_steps_exhausted", "Every step in the bound process is already complete. Complete, block, or cancel the run instead.");
     if (input.action === "complete" && run.currentStep < processSteps.length)
       throw new EosRouteError(409, "workflow_steps_incomplete", `Complete step ${run.currentStep + 1} of ${processSteps.length} before closing this run.`);
+    const currentStep = input.action === "advance_step" ? processSteps[run.currentStep] : null;
+    if (currentStep && String(currentStep.authorityClass || "execute") === "decide") {
+      await authorizeAction(req, access, {
+        authorityClass: "decide",
+        resource: "workflow_run",
+        actionKey: "workflow_run.advance_decision_step",
+        purpose: "advance_decision_gated_workflow_step",
+        classification: run.classification,
+        consequence: "material",
+        targetSeatId: access.seat.id,
+      });
+    }
     await requireEvidence(access.company.id, input.evidenceIds, input.action === "complete");
     if (input.action === "complete" && requirements.length && !input.evidenceIds.length) throw new EosRouteError(409, "workflow_completion_evidence_required", "This process requires verified completion evidence.");
     if (run.state === "waiting_approval" && input.action === "resume") {
@@ -226,13 +240,21 @@ export function registerWorkflowRuntimeRoutes(app: Express): void {
       if (!approval || (run.workPacketId && approval.workPacketId !== run.workPacketId)) throw new EosRouteError(409, "workflow_approval_invalid", "Approval must belong to this company and bound Work Packet.");
     }
     const now = new Date(); const nextVersion = run.version + 1;
-    const nextStep = input.action === "advance_step" ? run.currentStep + 1 : run.currentStep;
-    const event = appendRunEventValues({ runId: run.id, companyId: access.company.id, sequence: nextVersion, action: input.action, fromState: run.state, toState: nextState, actorSeatId: access.seat.id, actorUserId: req.user.id, note: input.note, policyDecisionId: policy.decisionId, evidenceIds: input.evidenceIds, approvalId: input.approvalId || run.approvalId, blocker: input.blocker, currentStepBefore: run.currentStep, currentStepAfter: nextStep });
+    let nextStep = run.currentStep;
+    if (input.action === "advance_step") {
+      try {
+        nextStep = resolveWorkflowNextStep(processSteps, run.currentStep, input.conditionOutcome);
+      } catch (error) {
+        if (error instanceof WorkflowRoutingError) throw new EosRouteError(409, error.code, error.message);
+        throw error;
+      }
+    }
+    const event = appendRunEventValues({ runId: run.id, companyId: access.company.id, sequence: nextVersion, action: input.action, fromState: run.state, toState: nextState, actorSeatId: access.seat.id, actorUserId: req.user.id, note: input.note, policyDecisionId: policy.decisionId, evidenceIds: input.evidenceIds, approvalId: input.approvalId || run.approvalId, blocker: input.blocker, currentStepBefore: run.currentStep, currentStepAfter: nextStep, conditionOutcome: input.conditionOutcome });
     const [updated] = await db.transaction(async (tx) => {
       await tx.insert(eosWorkflowRunEvents).values(event);
       const rows = await tx.update(eosWorkflowRuns).set({ state: nextState, currentStep: nextStep, output: input.action === "complete" ? input.output : run.output, evidenceIds: input.evidenceIds.length ? input.evidenceIds : run.evidenceIds, approvalId: input.approvalId || run.approvalId, blocker: input.blocker, version: nextVersion, startedAt: input.action === "start" ? now : run.startedAt, completedAt: ["completed", "failed", "cancelled"].includes(nextState) ? now : null, updatedAt: now }).where(and(eq(eosWorkflowRuns.id, run.id), eq(eosWorkflowRuns.version, run.version), eq(eosWorkflowRuns.state, run.state))).returning();
       if (!rows[0]) throw new EosRouteError(409, "workflow_run_concurrent_change", "The workflow run changed before the transition completed.");
-      await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: `workflow_run.${input.action}`, targetType: "workflow_run", targetId: run.id, traceId: policy.traceId, correlationId: policy.correlationId, result: nextState, details: { from: run.state, to: nextState, currentStepBefore: run.currentStep, currentStepAfter: nextStep, version: nextVersion, policyDecisionId: policy.decisionId }, createdAt: now });
+      await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: `workflow_run.${input.action}`, targetType: "workflow_run", targetId: run.id, traceId: policy.traceId, correlationId: policy.correlationId, result: nextState, details: { from: run.state, to: nextState, currentStepBefore: run.currentStep, currentStepAfter: nextStep, conditionOutcome: input.conditionOutcome ?? null, version: nextVersion, policyDecisionId: policy.decisionId }, createdAt: now });
       return rows;
     });
     res.json(updated);

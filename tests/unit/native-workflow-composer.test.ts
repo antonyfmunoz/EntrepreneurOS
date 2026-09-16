@@ -25,6 +25,11 @@ describe("native no-code workflow composition", () => {
       toolKey: "operations",
     });
     expect(processCreateSchema.parse({ ...process, procedureSteps: [{ ...process.procedureSteps[0], actionKind: "native", authorityClass: "decide", toolKey: "crm", onFailure: "Stop and send the decision to the accountable role." }] }).procedureSteps[0]).toMatchObject({ actionKind: "native", authorityClass: "decide", toolKey: "crm" });
+    expect(processCreateSchema.parse({ ...process, procedureSteps: [
+      { ...process.procedureSteps[0], id: "condition", actionKind: "condition", conditionKey: "lead-qualified", onTrueStepId: "proposal", onFalseStepId: "nurture" },
+      { ...process.procedureSteps[0], id: "proposal" },
+      { ...process.procedureSteps[0], id: "nurture" },
+    ] }).procedureSteps[0]).toMatchObject({ conditionKey: "lead-qualified", onTrueStepId: "proposal", onFalseStepId: "nurture" });
   });
 
   it("provides a role-gated native multi-step composer instead of a provider-dependent automation card", () => {
@@ -33,6 +38,9 @@ describe("native no-code workflow composition", () => {
     expect(composer).toContain("New version");
     expect(composer).toContain("approval");
     expect(composer).toContain("condition");
+    expect(composer).toContain("If yes, go to…");
+    expect(composer).toContain("If no, go to…");
+    expect(composer).toContain("Routes may only move forward");
     expect(composer).toContain("Workflow step ${index + 1} type");
     expect(composer).toContain("Do not transmit data to an external provider");
     expect(overlay).toContain("mayOperateNativeWorkflows");
