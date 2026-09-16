@@ -56,6 +56,10 @@ async function instrumentAccess(req: Request, authorityClass: "view" | "execute"
     classification,
     consequence: authorityClass === "decide" ? "material" : "routine",
     targetSeatId: access.seat.id,
+    // Instrument routes must enforce the same role-tool boundary used by the
+    // Work Room. Without this, a seat could bypass a hidden surface by calling
+    // its generic instrument endpoint directly.
+    toolKey: key,
   });
   return { access, key, policy };
 }

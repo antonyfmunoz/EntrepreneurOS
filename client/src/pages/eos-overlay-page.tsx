@@ -123,6 +123,7 @@ const NativeCalendarStudio = lazy(() => import("@/components/native-calendar-stu
 const NativeMessageHub = lazy(() => import("@/components/native-message-hub").then((module) => ({ default: module.NativeMessageHub })));
 const NativeDocumentsStudio = lazy(() => import("@/components/native-documents-studio").then((module) => ({ default: module.NativeDocumentsStudio })));
 const NativeSheetsStudio = lazy(() => import("@/components/native-sheets-studio").then((module) => ({ default: module.NativeSheetsStudio })));
+const NativeCrmStudio = lazy(() => import("@/components/native-crm-studio").then((module) => ({ default: module.NativeCrmStudio })));
 const EndStateGovernanceControlCenter = lazy(() => import("@/components/end-state-governance-control-center").then((module) => ({ default: module.EndStateGovernanceControlCenter })));
 
 function DeferredControlFallback() {
@@ -1393,6 +1394,11 @@ export default function EosOverlayPage() {
     canUseInstrument("docs") && (isFounder || toolEntitlements.has("docs"));
   const mayOperateNativeSheets =
     canUseInstrument("sheets") && (isFounder || toolEntitlements.has("sheets"));
+  // CRM belongs to the founder's initial operating set and to a role that has
+  // explicitly received the CRM tool. A sales or account role therefore gets
+  // its own governed work surface without inheriting founder-only controls.
+  const mayOperateNativeCrm =
+    canUseInstrument("crm") && (isFounder || toolEntitlements.has("crm"));
   // A role's Work Room is its assigned operating queue, not a copy of every
   // company-wide control surface. Founder-owned growth controls are exposed
   // here; role communication continues through the hierarchical assistant
@@ -10531,6 +10537,14 @@ export default function EosOverlayPage() {
           </TabsContent>
 
           <TabsContent value="work-room" className="space-y-6">
+            {mayOperateNativeCrm && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeCrmStudio
+                root={root}
+                roleScopeKey={roleScopeKey}
+                canExecute={effectiveAuthorityClasses.has("execute")}
+                canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
             {mayOperateNativeDocuments && <Suspense fallback={<DeferredControlFallback />}>
               <NativeDocumentsStudio
                 root={root}
