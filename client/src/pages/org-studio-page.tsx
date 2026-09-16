@@ -28,72 +28,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest } from "@/lib/queryClient";
+import { eosRoleToolChoices } from "@shared/instrument-runtime";
 
 type RecordValue = Record<string, any>;
 type StudioView = "structure" | "tools" | "authority";
-
-const roleToolChoices = [
-  {
-    key: "crm",
-    label: "CRM",
-    detail: "Relationships, pipeline, and commercial context",
-  },
-  {
-    key: "dialer",
-    label: "Dialer",
-    detail: "Consent-aware outreach queue and outcomes",
-  },
-  {
-    key: "calendar",
-    label: "Calendar",
-    detail: "Native booking, availability, and commitments",
-  },
-  {
-    key: "messages",
-    label: "Messages",
-    detail: "Role-scoped communication hub",
-  },
-  {
-    key: "docs",
-    label: "Docs",
-    detail: "Native documents and operating records",
-  },
-  {
-    key: "sheets",
-    label: "Sheets",
-    detail: "Native structured analysis and planning",
-  },
-  {
-    key: "projects",
-    label: "Projects",
-    detail: "Delivery and accountable project state",
-  },
-  {
-    key: "tasks",
-    label: "Tasks",
-    detail: "Assigned role work and follow-through",
-  },
-  {
-    key: "workflows",
-    label: "Workflows",
-    detail: "Governed no-code operating flows",
-  },
-  {
-    key: "analytics",
-    label: "Analytics",
-    detail: "Role-relevant measures and intelligence",
-  },
-  {
-    key: "finance",
-    label: "Finance",
-    detail: "Capital and finance control surface",
-  },
-  {
-    key: "conference_rooms",
-    label: "Conference rooms",
-    detail: "Decision and deliberation rooms",
-  },
-] as const;
 
 function toolKeys(value: string) {
   return new Set(
@@ -144,21 +82,35 @@ function RoleToolPicker({
   onChange: (value: string) => void;
 }) {
   const selected = toolKeys(value);
+  const groups = Array.from(
+    new Set(eosRoleToolChoices.map((tool) => tool.group)),
+  );
   return (
-    <div className="grid gap-2 sm:grid-cols-2">
-      {roleToolChoices.map((tool) => (
-        <button
-          key={tool.key}
-          type="button"
-          aria-pressed={selected.has(tool.key)}
-          onClick={() => onChange(toggleTool(value, tool.key))}
-          className={`rounded-xl border p-3 text-left transition-colors ${selected.has(tool.key) ? "border-primary bg-primary/5 ring-1 ring-primary" : "bg-background hover:border-primary/40"}`}
-        >
-          <span className="block text-sm font-medium">{tool.label}</span>
-          <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
-            {tool.detail}
-          </span>
-        </button>
+    <div className="space-y-4">
+      {groups.map((group) => (
+        <section key={group} aria-label={`${group} native tools`}>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
+            {group}
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {eosRoleToolChoices
+              .filter((tool) => tool.group === group)
+              .map((tool) => (
+                <button
+                  key={tool.key}
+                  type="button"
+                  aria-pressed={selected.has(tool.key)}
+                  onClick={() => onChange(toggleTool(value, tool.key))}
+                  className={`rounded-xl border p-3 text-left transition-colors ${selected.has(tool.key) ? "border-primary bg-primary/5 ring-1 ring-primary" : "bg-background hover:border-primary/40"}`}
+                >
+                  <span className="block text-sm font-medium">{tool.label}</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                    {tool.detail}
+                  </span>
+                </button>
+              ))}
+          </div>
+        </section>
       ))}
     </div>
   );
@@ -334,6 +286,20 @@ export default function OrgStudioPage() {
       await refresh();
     },
   });
+  const applyRecommendedRoleTools = useMutation({
+    mutationFn: (roleKeys: string[]) =>
+      requestJson<RecordValue>(
+        "POST",
+        `${root}/company-blueprint/role-tools/apply`,
+        {
+          blueprintKey: blueprint.data?.blueprint?.key,
+          roleKeys,
+        },
+      ),
+    onSuccess: async () => {
+      await refresh();
+    },
+  });
   const inviteHuman = useMutation({
     mutationFn: () =>
       requestJson<RecordValue>("POST", `${root}/invitations`, {
@@ -368,6 +334,16 @@ export default function OrgStudioPage() {
     },
   });
   const roleToolChanges = reconcileRoleTools.data?.changes || [];
+  const rolesMissingBlueprintTools = (blueprint.data?.blueprint?.roles || [])
+    .filter(
+      (role: RecordValue) =>
+        role.seatId && (role.missingRecommendedToolEntitlements || []).length,
+    );
+  const missingBlueprintToolCount = rolesMissingBlueprintTools.reduce(
+    (total: number, role: RecordValue) =>
+      total + role.missingRecommendedToolEntitlements.length,
+    0,
+  );
 
   const navigation: UniversalLayoutLeftRailItem[] = [
     {
@@ -580,6 +556,9 @@ export default function OrgStudioPage() {
                       >
                         {role.state === "instantiated" ? "✓ " : ""}
                         {role.title}
+                        {(role.missingRecommendedToolEntitlements || []).length
+                          ? ` · ${role.missingRecommendedToolEntitlements.length} tool${role.missingRecommendedToolEntitlements.length === 1 ? "" : "s"} available`
+                          : ""}
                       </span>
                     ),
                   )}
@@ -663,7 +642,7 @@ export default function OrgStudioPage() {
                 )}
               </div>
               {canDesign && (
-                <div className="shrink-0">
+                <div className="flex shrink-0 flex-col items-stretch gap-2">
                   <Button
                     disabled={
                       instantiateBlueprint.isPending || formationComplete
@@ -679,6 +658,35 @@ export default function OrgStudioPage() {
                     <p className="mt-2 max-w-xs text-xs text-destructive">
                       The company formation could not be applied. Refresh the
                       graph and try again.
+                    </p>
+                  )}
+                  {rolesMissingBlueprintTools.length > 0 && (
+                    <>
+                      <Button
+                        variant="outline"
+                        disabled={applyRecommendedRoleTools.isPending}
+                        onClick={() =>
+                          applyRecommendedRoleTools.mutate(
+                            rolesMissingBlueprintTools.map(
+                              (role: RecordValue) => role.key,
+                            ),
+                          )
+                        }
+                      >
+                        {applyRecommendedRoleTools.isPending
+                          ? "Applying native tools…"
+                          : `Apply ${missingBlueprintToolCount} recommended native tool${missingBlueprintToolCount === 1 ? "" : "s"}`}
+                      </Button>
+                      <p className="max-w-xs text-xs text-muted-foreground">
+                        Adds the current blueprint baseline to existing roles;
+                        it never removes custom or manually assigned tools.
+                      </p>
+                    </>
+                  )}
+                  {applyRecommendedRoleTools.isError && (
+                    <p className="max-w-xs text-xs text-destructive">
+                      EOS could not apply the recommended native tools. Refresh
+                      the graph and try again.
                     </p>
                   )}
                 </div>
@@ -812,8 +820,12 @@ export default function OrgStudioPage() {
                     className="mt-3"
                     value={tools}
                     onChange={(event) => setTools(event.target.value)}
-                    placeholder="Optional custom tool labels, comma-separated"
+                    placeholder="Optional custom operating-pack labels, comma-separated"
                   />
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Custom labels document the role’s operating pack; only
+                    selected native tools grant access to their EOS records.
+                  </p>
                 </Field>
               </div>
               <div className="mt-5 flex items-center gap-3">
@@ -1026,8 +1038,12 @@ function SelectedSeatEditor({
             className="mt-3"
             value={tools}
             onChange={(event) => setTools(event.target.value)}
-            placeholder="Optional custom tool labels"
+            placeholder="Optional custom operating-pack labels"
           />
+          <p className="mt-2 text-xs text-muted-foreground">
+            Custom labels are descriptive. Native tool selections control
+            access to EOS records.
+          </p>
         </Field>
         <Field label="Reports to">
           <select

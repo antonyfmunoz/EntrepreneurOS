@@ -3029,11 +3029,22 @@ export function registerEosRuntimeRoutes(app: Express): void {
             description: blueprint.description,
             roles: blueprint.roles.map((role) => {
               const seat = seats.find((candidate) => candidate.title === role.title && candidate.kind === role.kind);
+              const recommendedToolEntitlements = canonicalToolEntitlements(role.tools);
+              const currentToolEntitlements = canonicalToolEntitlements(
+                Array.isArray(seat?.toolEntitlements)
+                  ? seat.toolEntitlements.filter((tool): tool is string => typeof tool === "string")
+                  : [],
+              );
               return {
                 ...role,
                 state: seat ? "instantiated" : "ready",
                 visible: !seat || visible.has(seat.id),
                 seatId: seat?.id || null,
+                recommendedToolEntitlements,
+                currentToolEntitlements,
+                missingRecommendedToolEntitlements: recommendedToolEntitlements.filter(
+                  (tool) => !currentToolEntitlements.includes(tool),
+                ),
               };
             }),
             launchArtifacts: starters.map((starter) => {
@@ -3421,6 +3432,105 @@ export function registerEosRuntimeRoutes(app: Express): void {
         return { blueprintKey: blueprint.key, created, present, starterArtifacts, createdStarterObjectiveIds, createdStarterPacketIds, createdStarterProcessIds, createdNativeAssetIds, preservedNativeAssetIds };
       });
       return { status: 201, body: outcome };
+    }),
+  );
+
+  app.post(
+    "/api/eos/companies/:companyId/company-blueprint/role-tools/apply",
+    route(async (req) => {
+      const access = await companyAccess(req);
+      if (!mayAdminOrganization(access))
+        throw new EosRouteError(
+          403,
+          "company_blueprint_manage_denied",
+          "This role lacks authority to apply a company blueprint's native tool baseline.",
+        );
+      const input = z.object({
+        blueprintKey: z.string().trim().min(1).max(120),
+        roleKeys: z.array(z.string().trim().min(1).max(120)).min(1).max(40),
+      }).strict().parse(req.body || {});
+      const businessModel = access.company.type || (access.company.founderProfile as Record<string, unknown>)?.businessModel as string | undefined;
+      const blueprint = companyBlueprintForBusinessModel(businessModel);
+      if (input.blueprintKey !== blueprint.key)
+        throw new EosRouteError(
+          409,
+          "company_blueprint_context_mismatch",
+          "This blueprint no longer matches the company business model. Update the Company Mission Journey first.",
+        );
+      const requestedRoleKeys = Array.from(new Set(input.roleKeys));
+      const selectedRoles = blueprint.roles.filter((role) => requestedRoleKeys.includes(role.key));
+      if (selectedRoles.length !== requestedRoleKeys.length)
+        throw new EosRouteError(
+          400,
+          "company_blueprint_role_unknown",
+          "Every selected role must belong to this company's current blueprint.",
+        );
+      await authorizeAction(req, access, {
+        authorityClass: "grant_access",
+        resource: "organization",
+        actionKey: "company_blueprint.apply_role_tools",
+        purpose: "apply_recommended_native_role_tools",
+        classification: "restricted",
+        consequence: "material",
+      });
+      const trace = tracePair();
+      const outcome = await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${access.company.id}, 24713)`);
+        const seats = await tx
+          .select()
+          .from(eosSeats)
+          .where(and(eq(eosSeats.companyId, access.company.id), eq(eosSeats.status, "active")));
+        const updated: Array<{ roleKey: string; seatId: string; addedToolEntitlements: string[] }> = [];
+        const alreadyAligned: string[] = [];
+        const notInstantiated: string[] = [];
+        for (const role of selectedRoles) {
+          const seat = seats.find((candidate) => candidate.title === role.title && candidate.kind === role.kind);
+          if (!seat) {
+            notInstantiated.push(role.key);
+            continue;
+          }
+          const current = canonicalToolEntitlements(
+            Array.isArray(seat.toolEntitlements)
+              ? seat.toolEntitlements.filter((tool): tool is string => typeof tool === "string")
+              : [],
+          );
+          const recommended = canonicalToolEntitlements(role.tools);
+          const addedToolEntitlements = recommended.filter((tool) => !current.includes(tool));
+          if (!addedToolEntitlements.length) {
+            alreadyAligned.push(role.key);
+            continue;
+          }
+          await tx
+            .update(eosSeats)
+            .set({
+              toolEntitlements: canonicalToolEntitlements([...current, ...recommended]),
+              updatedAt: new Date(),
+            })
+            .where(eq(eosSeats.id, seat.id));
+          updated.push({ roleKey: role.key, seatId: seat.id, addedToolEntitlements });
+        }
+        await tx.insert(eosAuditRecords).values({
+          id: randomUUID(),
+          companyId: access.company.id,
+          actorUserId: req.user.id,
+          action: "company_blueprint.role_tools_applied",
+          targetType: "company_blueprint",
+          targetId: blueprint.key,
+          traceId: trace.traceId,
+          correlationId: trace.correlationId,
+          result: "applied",
+          details: {
+            blueprintKey: blueprint.key,
+            requestedRoleKeys,
+            updated,
+            alreadyAligned,
+            notInstantiated,
+            preservation: "Existing role tools were retained; this action only added missing canonical baseline tools.",
+          },
+        });
+        return { blueprintKey: blueprint.key, updated, alreadyAligned, notInstantiated };
+      });
+      return { body: outcome };
     }),
   );
 

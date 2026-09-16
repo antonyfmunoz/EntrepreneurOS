@@ -2452,6 +2452,94 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     }
   });
 
+  it("applies only missing native tool baseline to an already-instantiated blueprint role", async () => {
+    currentUserId = ownerId;
+    const [blueprintCompany] = await sql<{ id: number }[]>`
+      INSERT INTO companies (
+        owner_user_id, portfolio_id, name, type, stage, offer, target_customer, goals
+      ) VALUES (
+        ${ownerId}, ${portfolioId}, 'Blueprint Tool Baseline Fixture', 'services', 'MVP',
+        'Revenue recovery service', 'B2B service companies', 'Validate the offer'
+      )
+      RETURNING id
+    `;
+    const blueprint = await api
+      .get(`/api/eos/companies/${blueprintCompany.id}/company-blueprint`)
+      .expect(200);
+    expect(blueprint.body.blueprint.key).toBe("service_studio");
+
+    const instantiated = await api
+      .post(`/api/eos/companies/${blueprintCompany.id}/company-blueprint/instantiate`)
+      .send({ blueprintKey: "service_studio" })
+      .expect(201);
+    const growthSeat = instantiated.body.created.find(
+      (seat: { title: string }) => seat.title === "Growth & Revenue",
+    );
+    expect(growthSeat).toBeTruthy();
+
+    // Simulate an established company that compiled before the native funnel
+    // tools were added, while preserving its deliberate custom entitlement.
+    await sql`
+      UPDATE eos_seats
+      SET tool_entitlements = ${JSON.stringify([
+        "crm",
+        "dialer",
+        "calendar",
+        "messages",
+        "docs",
+        "analytics",
+        "local_campaign_review",
+      ])}::jsonb
+      WHERE id = ${growthSeat.id}
+    `;
+
+    const before = await api
+      .get(`/api/eos/companies/${blueprintCompany.id}/company-blueprint`)
+      .expect(200);
+    const growthBefore = before.body.blueprint.roles.find(
+      (role: { key: string }) => role.key === "growth",
+    );
+    expect(growthBefore.missingRecommendedToolEntitlements).toEqual(
+      expect.arrayContaining(["forms", "websites"]),
+    );
+
+    const applied = await api
+      .post(`/api/eos/companies/${blueprintCompany.id}/company-blueprint/role-tools/apply`)
+      .send({ blueprintKey: "service_studio", roleKeys: ["growth"] })
+      .expect(200);
+    expect(applied.body.updated).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          roleKey: "growth",
+          seatId: growthSeat.id,
+          addedToolEntitlements: expect.arrayContaining(["forms", "websites"]),
+        }),
+      ]),
+    );
+
+    const [updatedSeat] = await sql<{ toolEntitlements: string[] }[]>`
+      SELECT tool_entitlements AS "toolEntitlements"
+      FROM eos_seats
+      WHERE id = ${growthSeat.id}
+    `;
+    expect(updatedSeat.toolEntitlements).toEqual(
+      expect.arrayContaining(["crm", "forms", "websites", "local_campaign_review"]),
+    );
+
+    const replay = await api
+      .post(`/api/eos/companies/${blueprintCompany.id}/company-blueprint/role-tools/apply`)
+      .send({ blueprintKey: "service_studio", roleKeys: ["growth"] })
+      .expect(200);
+    expect(replay.body.alreadyAligned).toContain("growth");
+
+    currentUserId = otherId;
+    await api
+      .post(`/api/eos/companies/${blueprintCompany.id}/company-blueprint/role-tools/apply`)
+      .send({ blueprintKey: "service_studio", roleKeys: ["growth"] })
+      .expect(404);
+    currentUserId = ownerId;
+  });
+
   it("compiles and activates an organization, then completes an evidence-bearing approved mission", async () => {
     const context = await api
       .get(`/api/eos/companies/${companyId}/context`)

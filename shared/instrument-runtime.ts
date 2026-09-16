@@ -43,6 +43,66 @@ export const eosInstrumentManifest: Record<EosInstrumentKey, {
   websites: { label: "Websites / Funnels", objectTypes: ["site", "page", "funnel", "section"], purpose: "Publish owned pages and funnel journeys that route consented demand into EOS without an external page builder." },
 };
 
+/**
+ * The complete native tool catalog used by Org Studio. A role's operating
+ * pack must be able to express every EOS-owned capability, not merely the
+ * first dozen that happened to be available when the studio was created.
+ *
+ * `dialer` remains a separate entry because it is a governed outbound action
+ * on CRM relationships rather than a standalone instrument. The canonical
+ * entitlement normalizer adds CRM whenever Dialer is selected.
+ */
+export type EosRoleToolChoice = {
+  key: string;
+  label: string;
+  detail: string;
+  group: "Commercial" | "Work & collaboration" | "Knowledge & intelligence" | "Operations & finance" | "Growth & public presence";
+};
+
+const instrumentToolGroups: Record<EosInstrumentKey, EosRoleToolChoice["group"]> = {
+  docs: "Work & collaboration",
+  files: "Work & collaboration",
+  sheets: "Work & collaboration",
+  slides: "Work & collaboration",
+  tables: "Work & collaboration",
+  forms: "Commercial",
+  calendar: "Work & collaboration",
+  search: "Knowledge & intelligence",
+  canvas: "Work & collaboration",
+  tasks: "Work & collaboration",
+  projects: "Work & collaboration",
+  workflows: "Operations & finance",
+  crm: "Commercial",
+  messages: "Work & collaboration",
+  conference_rooms: "Work & collaboration",
+  ai: "Knowledge & intelligence",
+  knowledge: "Knowledge & intelligence",
+  memory: "Knowledge & intelligence",
+  analytics: "Knowledge & intelligence",
+  learning: "Knowledge & intelligence",
+  progression: "Knowledge & intelligence",
+  commerce: "Commercial",
+  finance: "Operations & finance",
+  ads: "Growth & public presence",
+  reputation: "Growth & public presence",
+  websites: "Growth & public presence",
+};
+
+export const eosRoleToolChoices: readonly EosRoleToolChoice[] = [
+  {
+    key: "dialer",
+    label: "Dialer",
+    detail: "Consent-aware outreach queue, calling controls, and attributable outcomes.",
+    group: "Commercial",
+  },
+  ...eosInstrumentKeys.map((key) => ({
+    key,
+    label: eosInstrumentManifest[key].label,
+    detail: eosInstrumentManifest[key].purpose,
+    group: instrumentToolGroups[key],
+  })),
+];
+
 export const eosInstrumentStates = ["draft", "active", "paused", "completed", "cancelled", "archived"] as const;
 export const eosInstrumentStateSchema = z.enum(eosInstrumentStates);
 export const eosInstrumentClassificationSchema = z.enum(["internal", "confidential", "restricted"]);
