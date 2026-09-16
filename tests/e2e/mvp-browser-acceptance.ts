@@ -1671,6 +1671,14 @@ try {
     .getByText("Complete the customer handoff checklist", { exact: true })
     .first()
     .waitFor();
+  if (
+    await desktop
+      .getByRole("heading", { name: "Native Calendar & Booking", exact: true })
+      .count()
+  )
+    throw new Error(
+      "An employee without the Calendar tool entitlement was offered the native Calendar operator surface.",
+    );
   await desktop
     .getByText("Submit the customer handoff for manager review", {
       exact: true,

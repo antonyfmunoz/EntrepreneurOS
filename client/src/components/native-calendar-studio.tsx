@@ -38,8 +38,9 @@ function formatTime(value?: string) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
-export function NativeCalendarStudio({ root, canExecute, canDecide }: {
+export function NativeCalendarStudio({ root, roleScopeKey, canExecute, canDecide }: {
   root: string;
+  roleScopeKey: string;
   canExecute: boolean;
   canDecide: boolean;
 }) {
@@ -61,7 +62,9 @@ export function NativeCalendarStudio({ root, canExecute, canDecide }: {
   const [error, setError] = useState("");
 
   const query = useQuery<Json>({
-    queryKey: [root, "native-calendar"],
+    // Calendar data is role-scoped. Never reuse a prior seat's query cache
+    // after a role switch, even when both seats belong to the same company.
+    queryKey: [root, roleScopeKey, "native-calendar"],
     queryFn: async () => (await apiRequest("GET", `${root}/instruments/calendar`)).json(),
   });
   const objects: Json[] = query.data?.objects || [];
@@ -74,7 +77,7 @@ export function NativeCalendarStudio({ root, canExecute, canDecide }: {
   const selectedEvent = events.find((item) => item.id === selectedEventId) || calendarEvents[0];
   const eventBookings = bookings.filter((item) => item.data?.eventObjectId === selectedEvent?.id);
   const relevantAvailability = availability.filter((item) => item.data?.calendarObjectId === selectedCalendar?.id);
-  const refresh = async () => queryClient.invalidateQueries({ queryKey: [root, "native-calendar"] });
+  const refresh = async () => queryClient.invalidateQueries({ queryKey: [root, roleScopeKey, "native-calendar"] });
 
   const createCalendar = useMutation({
     mutationFn: async () => (await apiRequest("POST", `${root}/instrument-objects`, {

@@ -1369,6 +1369,15 @@ export default function EosOverlayPage() {
   );
   const canUseInstrument = (instrumentKey: string) =>
     visibleInstrumentKeys.has(instrumentKey);
+  const toolEntitlements = new Set<string>(
+    principalContext?.toolEntitlements || [],
+  );
+  // Reading a governed instrument is not an entitlement to operate its UI.
+  // Founder ownership grants the initial native operating set; every other
+  // role must be explicitly assigned the calendar tool through its role pack.
+  const mayOperateNativeCalendar =
+    canUseInstrument("calendar") &&
+    (isFounder || toolEntitlements.has("calendar"));
   // A role's Work Room is its assigned operating queue, not a copy of every
   // company-wide control surface. Founder-owned growth controls are exposed
   // here; role communication continues through the hierarchical assistant
@@ -10507,9 +10516,10 @@ export default function EosOverlayPage() {
           </TabsContent>
 
           <TabsContent value="work-room" className="space-y-6">
-            {canUseInstrument("calendar") && <Suspense fallback={<DeferredControlFallback />}>
+            {mayOperateNativeCalendar && <Suspense fallback={<DeferredControlFallback />}>
               <NativeCalendarStudio
                 root={root}
+                roleScopeKey={roleScopeKey}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
               />
