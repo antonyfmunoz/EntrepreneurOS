@@ -126,6 +126,7 @@ const NativeSheetsStudio = lazy(() => import("@/components/native-sheets-studio"
 const NativeCrmStudio = lazy(() => import("@/components/native-crm-studio").then((module) => ({ default: module.NativeCrmStudio })));
 const NativeMarketingStudio = lazy(() => import("@/components/native-marketing-studio").then((module) => ({ default: module.NativeMarketingStudio })));
 const NativeCommerceStudio = lazy(() => import("@/components/native-commerce-studio").then((module) => ({ default: module.NativeCommerceStudio })));
+const NativeProjectsStudio = lazy(() => import("@/components/native-projects-studio").then((module) => ({ default: module.NativeProjectsStudio })));
 const NativeWorkflowComposer = lazy(() => import("@/components/native-workflow-composer").then((module) => ({ default: module.NativeWorkflowComposer })));
 const EndStateGovernanceControlCenter = lazy(() => import("@/components/end-state-governance-control-center").then((module) => ({ default: module.EndStateGovernanceControlCenter })));
 
@@ -1404,6 +1405,9 @@ export default function EosOverlayPage() {
   // when its position has an explicit Commerce tool entitlement.
   const mayOperateNativeCommerce =
     canUseInstrument("commerce") && (isFounder || toolEntitlements.has("commerce"));
+  const mayOperateNativeProjects =
+    canUseInstrument("projects") && canUseInstrument("tasks") &&
+    (isFounder || (toolEntitlements.has("projects") && toolEntitlements.has("tasks")));
   // Workflow authorship changes how a company operates, so it is founder
   // capability by default and an explicit tool grant for any other role.
   // Viewing an Operations surface alone never grants this control.
@@ -10467,6 +10471,16 @@ export default function EosOverlayPage() {
               <NativeCommerceStudio
                 root={root}
                 roleScopeKey={roleScopeKey}
+                canExecute={effectiveAuthorityClasses.has("execute")}
+                canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
+            {mayOperateNativeProjects && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeProjectsStudio
+                root={root}
+                roleScopeKey={roleScopeKey}
+                activeSeatId={principalContext?.seatId || ""}
+                seats={visibleSeats}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
               />
