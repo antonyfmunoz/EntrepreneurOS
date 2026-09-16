@@ -1111,6 +1111,7 @@ export const eosSeats = pgTable("eos_seats", {
   companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   kind: text("kind").notNull(),
+  department: text("department").notNull().default("General Management"),
   positionAgreementId: text("position_agreement_id").references(() => eosPositionAgreements.id, { onDelete: "set null" }),
   supervisorSeatId: text("supervisor_seat_id"),
   occupantUserId: text("occupant_user_id").references(() => users.id, { onDelete: "set null" }),

@@ -127,6 +127,7 @@ export async function ensureSeatOperatingKernel(
     canonicalKey: seat.kind,
     name: seat.kind.replaceAll("_", " ").replace(/\b\w/g, (letter: string) => letter.toUpperCase()),
     titleRoot: seat.title,
+    department: seat.department,
     dominantResult: agreementContract.resultStatement,
     applicability: { companyId: company.id, legacyKind: seat.kind },
     activationConditions: ["Activated because an accountable seat exists."],

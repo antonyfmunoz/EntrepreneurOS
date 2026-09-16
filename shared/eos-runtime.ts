@@ -3523,6 +3523,7 @@ export const teamRosterPlanSchema = z.object({
 
 export const seatCreateSchema = z.object({
   title: z.string().min(1).max(120),
+  department: z.string().trim().min(1).max(160).default("General Management"),
   kind: z.enum([
     "portfolio_executive",
     "company_ceo",
@@ -3544,6 +3545,7 @@ export const seatCreateSchema = z.object({
 // the role agent can reliably switch between autonomous and assistant modes.
 export const seatUpdateSchema = z.object({
   title: z.string().min(1).max(120).optional(),
+  department: z.string().trim().min(1).max(160).optional(),
   agentName: z.string().min(1).max(80).optional(),
   mandate: z.string().max(2000).optional(),
   toolEntitlements: z.array(z.string().min(1).max(120)).max(100).optional(),
