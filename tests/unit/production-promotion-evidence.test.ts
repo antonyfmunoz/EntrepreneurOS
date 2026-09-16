@@ -73,4 +73,17 @@ describe("production promotion evidence", () => {
       "approval.approvedByUserId",
     ]));
   });
+
+  it("does not accept local recovery receipts as production promotion evidence", () => {
+    const localOnly = structuredClone(valid);
+    localOnly.database.backup.receiptRef = "backup:local-encrypted/eos-release";
+    localOnly.database.migrationRehearsal.receiptRef = "run:local/migration-rehearsal";
+    localOnly.database.restoreRehearsal.receiptRef = "restore:localhost/rehearsal";
+
+    expect(productionPromotionEvidenceIssues(localOnly, expected)).toEqual(expect.arrayContaining([
+      "database.backup.receiptRef",
+      "database.migrationRehearsal.receiptRef",
+      "database.restoreRehearsal.receiptRef",
+    ]));
+  });
 });
