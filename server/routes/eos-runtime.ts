@@ -130,6 +130,7 @@ import { eosInstrumentKeys } from "@shared/instrument-runtime";
 import {
   approvalDecisionSchema,
   allowedSurfacesFor,
+  allowedSurfacesForRoleTools,
   canonicalToolEntitlements,
   reconcileLegacyToolEntitlements,
   authoritySubjectCreateSchema,
@@ -937,8 +938,12 @@ function activeClassificationCeiling(access: {
 function compiledAllowedSurfaces(access: {
   role: EosSeatKind;
   classificationCeiling: string;
+  effectiveAuthority?: { toolEntitlements?: unknown };
 }) {
-  return allowedSurfacesFor(access.role).filter(
+  const toolEntitlements = Array.isArray(access.effectiveAuthority?.toolEntitlements)
+    ? access.effectiveAuthority.toolEntitlements.filter((tool): tool is string => typeof tool === "string")
+    : [];
+  return allowedSurfacesForRoleTools(access.role, toolEntitlements).filter(
     (surface) =>
       !["talent", "systems"].includes(surface) ||
       withinClassificationCeiling("confidential", access.classificationCeiling),
@@ -1273,8 +1278,12 @@ function assertMutableOperationsProjection(record: {
     );
 }
 
-function assertFinanceSurface(access: { role: EosSeatKind }) {
-  if (!allowedSurfacesFor(access.role).includes("capital"))
+function assertFinanceSurface(access: {
+  role: EosSeatKind;
+  classificationCeiling: string;
+  effectiveAuthority?: { toolEntitlements?: unknown };
+}) {
+  if (!compiledAllowedSurfaces(access).includes("capital"))
     throw new EosRouteError(
       403,
       "finance_scope_denied",

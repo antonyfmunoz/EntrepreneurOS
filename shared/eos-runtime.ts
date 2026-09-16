@@ -4600,6 +4600,23 @@ export function allowedSurfacesFor(role: EosSeatKind): readonly string[] {
   return surfacePolicies[role];
 }
 
+/**
+ * Role level supplies the default workspace, while the explicit native-tool
+ * contract can safely add a specialist control surface. This is what lets a
+ * Finance seat operate finance without granting every functional executive
+ * access to capital, and keeps the organization graph—not a UI shortcut—the
+ * source of role visibility.
+ */
+export function allowedSurfacesForRoleTools(
+  role: EosSeatKind,
+  toolEntitlements: readonly string[] | null | undefined,
+): readonly string[] {
+  const surfaces = new Set(allowedSurfacesFor(role));
+  const tools = new Set(canonicalToolEntitlements(toolEntitlements));
+  if (tools.has("finance")) surfaces.add("capital");
+  return Array.from(surfaces);
+}
+
 // Role designers use familiar names such as "CRM" and "Documents". Policy
 // enforcement, however, must receive the canonical native tool key that the
 // API routes authorize. Keep this translation at the organizational boundary
