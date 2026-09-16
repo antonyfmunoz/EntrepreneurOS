@@ -131,6 +131,7 @@ import {
   approvalDecisionSchema,
   allowedSurfacesFor,
   canonicalToolEntitlements,
+  reconcileLegacyToolEntitlements,
   authoritySubjectCreateSchema,
   authoritySubjectIsEffective,
   authoritySubjectTransitionSchema,
@@ -267,6 +268,7 @@ import {
   riskControlCreateSchema,
   riskControlUpdateSchema,
   roleAssignmentCreateSchema,
+  toolEntitlementReconciliationSchema,
   roleOperatingPackUpdateSchema,
   selectAdvisorSeats,
   selectOperatingAssignment,
@@ -4648,6 +4650,99 @@ export function registerEosRuntimeRoutes(app: Express): void {
         return updated;
       });
       return { body: outcome };
+    }),
+  );
+
+  app.post(
+    "/api/eos/companies/:companyId/organization-runtime/tool-entitlements/reconcile",
+    route(async (req) => {
+      const access = await companyAccess(req);
+      if (!mayAdminOrganization(access))
+        throw new EosRouteError(
+          403,
+          "organization_manage_denied",
+          "This operating role lacks organization-design and access-grant authority.",
+        );
+      const input = toolEntitlementReconciliationSchema.parse(req.body);
+      const seats = await db
+        .select()
+        .from(eosSeats)
+        .where(
+          and(
+            eq(eosSeats.companyId, access.company.id),
+            eq(eosSeats.status, "active"),
+          ),
+        )
+        .orderBy(eosSeats.createdAt);
+      const changes = seats
+        .map((seat) => {
+          const from = Array.isArray(seat.toolEntitlements)
+            ? seat.toolEntitlements.filter(
+                (tool): tool is string => typeof tool === "string",
+              )
+            : [];
+          const to = reconcileLegacyToolEntitlements(from);
+          return { seat, from, to };
+        })
+        .filter(
+          ({ from, to }) => JSON.stringify(from) !== JSON.stringify(to),
+        );
+
+      const preview = changes.map(({ seat, from, to }) => ({
+        seatId: seat.id,
+        title: seat.title,
+        from,
+        to,
+      }));
+      if (!input.apply || changes.length === 0)
+        return { body: { applied: false, changes: preview } };
+
+      const policies = await Promise.all(
+        changes.map(({ seat }) =>
+          authorizeAction(req, access, {
+            authorityClass: "grant_access",
+            resource: "seat",
+            actionKey: "seat.update",
+            purpose: "reconcile_native_role_tools",
+            classification: "restricted",
+            consequence: "material",
+            targetSeatId: seat.id,
+          }),
+        ),
+      );
+      await db.transaction(async (tx) => {
+        for (let index = 0; index < changes.length; index += 1) {
+          const change = changes[index];
+          const policy = policies[index];
+          await tx
+            .update(eosSeats)
+            .set({ toolEntitlements: change.to, updatedAt: new Date() })
+            .where(eq(eosSeats.id, change.seat.id));
+          await tx
+            .update(eosAuthorityGrants)
+            .set({ toolEntitlements: change.to, updatedAt: new Date() })
+            .where(
+              and(
+                eq(eosAuthorityGrants.id, `grant:${change.seat.id}:baseline`),
+                eq(eosAuthorityGrants.companyId, access.company.id),
+              ),
+            );
+          await tx.insert(eosAuditRecords).values({
+            id: randomUUID(),
+            companyId: access.company.id,
+            actorUserId: req.user.id,
+            action: "seat.tool_entitlements_reconciled",
+            targetType: "seat",
+            targetId: change.seat.id,
+            traceId: policy.traceId,
+            correlationId: policy.correlationId,
+            result: "active",
+            details: { from: change.from, to: change.to, policyDecisionId: policy.decisionId },
+            createdAt: new Date(),
+          });
+        }
+      });
+      return { body: { applied: true, changes: preview } };
     }),
   );
 

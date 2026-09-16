@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { compileCompanyBlueprintStarters, companyBlueprintForBusinessModel, companyBlueprints } from "../../shared/company-blueprints";
 import { materializeNativeWorkflowStarter } from "../../shared/native-workflow-starters";
 import { materializeNativeBusinessStarters } from "../../shared/native-business-starters";
-import { canonicalToolEntitlements } from "../../shared/eos-runtime";
+import { canonicalToolEntitlements, reconcileLegacyToolEntitlements } from "../../shared/eos-runtime";
 
 describe("company operating blueprints", () => {
   it("maps business-model variables to one editable company formation", () => {
@@ -78,5 +78,11 @@ describe("company operating blueprints", () => {
     expect(canonicalToolEntitlements([
       "CRM", "Documents", "Content Calendar", "Campaigns", "Roadmap", "CRM",
     ])).toEqual(["crm", "docs", "calendar", "ads", "projects"]);
+  });
+
+  it("repairs only recognized legacy labels while preserving custom role language for review", () => {
+    expect(reconcileLegacyToolEntitlements([
+      "CRM", "Content Calendar", "Client scorecard", "CRM",
+    ])).toEqual(["crm", "calendar", "Client scorecard"]);
   });
 });

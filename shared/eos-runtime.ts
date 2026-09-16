@@ -4638,6 +4638,24 @@ export function canonicalToolEntitlements(values: readonly string[] | null | und
     .map((value) => nativeToolAliases[value.toLowerCase()] || value.toLowerCase())));
 }
 
+/**
+ * Safely repairs the display-style aliases created before role tools used the
+ * canonical policy keys. Unlike normal entry normalization, it deliberately
+ * leaves unfamiliar custom labels untouched so a founder can review them
+ * instead of silently losing role-specific language.
+ */
+export function reconcileLegacyToolEntitlements(values: readonly string[] | null | undefined): string[] {
+  return Array.from(new Set((values || [])
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => nativeToolAliases[value.toLowerCase()] || value)));
+}
+
+export const toolEntitlementReconciliationSchema = z.object({
+  apply: z.boolean().default(false),
+});
+
 export type EosNextActionReason =
   "organization_setup" | "approval" | "active_work" | "new_work";
 

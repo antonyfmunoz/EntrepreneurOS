@@ -214,7 +214,11 @@ if (-not $env:MIGRATION_DATABASE_URL) {
 }
 
 function Set-FreshProductionBearerToken {
-  if ($env:EOS_NONINTERACTIVE_RELEASE -eq "true") {
+  # A release runner that can mint an administrator smoke token is inherently
+  # noninteractive. Treat it that way even if a local environment template
+  # does not carry the generic noninteractive flag; otherwise PowerShell can
+  # block at a hidden Read-Host after a healthy Fly promotion.
+  if ($env:EOS_NONINTERACTIVE_RELEASE -eq "true" -or $env:EOS_PRODUCTION_ACTIVE_ADMIN_SESSION_SMOKE -eq "true") {
     if ($env:EOS_PRODUCTION_ACTIVE_ADMIN_SESSION_SMOKE -eq "true") {
       $mintTokenScript = @'
 const { createClerkClient } = require("@clerk/backend");

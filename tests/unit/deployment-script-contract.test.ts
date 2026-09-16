@@ -198,6 +198,11 @@ describe("production deployment script contract", () => {
     expect(firstTokenPrompt).toBeLessThan(firstAuthenticatedSmoke);
   });
 
+  it("treats an approved active-administrator smoke runner as noninteractive", () => {
+    expect(deployScript).toContain('$env:EOS_PRODUCTION_ACTIVE_ADMIN_SESSION_SMOKE -eq "true"');
+    expect(deployScript).toContain('$env:EOS_NONINTERACTIVE_RELEASE -eq "true" -or $env:EOS_PRODUCTION_ACTIVE_ADMIN_SESSION_SMOKE -eq "true"');
+  });
+
   it("can consume an explicitly approved, local-only browser handoff only at the authenticated smoke boundary", () => {
     expect(deployScript).toContain('$env:EOS_PRODUCTION_BROWSER_CLIPBOARD_HANDOFF -eq "true"');
     expect(deployScript).toContain("Awaiting a fresh Clerk session through the approved local browser handoff.");
