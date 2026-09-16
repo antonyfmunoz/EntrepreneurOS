@@ -223,7 +223,19 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
   app.get("/api/eos/companies/:companyId/instruments/:instrumentKey", route(async (req, res) => {
     const { access, key } = await instrumentAccess(req, "view", req.params.instrumentKey, "instrument.read", "internal");
     const objects = await db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.instrumentKey, key))).orderBy(desc(eosInstrumentObjects.updatedAt));
-    res.json({ schemaVersion: "eos.instrument-runtime.v1", instrument: instrumentManifestProjection().find((item) => item.key === key), objects: await visibleObjectSet(access, objects) });
+    const visible = await visibleObjectSet(access, objects);
+    // A focused native tool must be able to explain how its own governed
+    // records changed without requiring access to the whole company-wide
+    // instrument manifest.  This is particularly important for Documents:
+    // a role can review its authorized version history while still being
+    // unable to browse unrelated Finance, CRM, or People records.
+    const visibleIds = visible.map((object) => object.id);
+    const events = visibleIds.length
+      ? await db.select().from(eosInstrumentEvents)
+        .where(and(eq(eosInstrumentEvents.companyId, access.company.id), inArray(eosInstrumentEvents.objectId, visibleIds)))
+        .orderBy(desc(eosInstrumentEvents.createdAt))
+      : [];
+    res.json({ schemaVersion: "eos.instrument-runtime.v1", instrument: instrumentManifestProjection().find((item) => item.key === key), objects: visible, events: events.slice(0, 250) });
   }));
 
   app.get("/api/eos/companies/:companyId/instrument-search", route(async (req, res) => {
