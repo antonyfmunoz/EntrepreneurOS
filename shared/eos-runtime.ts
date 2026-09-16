@@ -562,6 +562,14 @@ export const commercialSourceAuthorities = [
   "reconciled",
 ] as const;
 
+// Native sales outreach is deliberately separate from a telephony provider.
+// EOS can plan, govern, and record relationship outreach on its own; a future
+// provider execution may be linked as evidence, but cannot be implied merely
+// by drafting a call plan or logging an outcome.
+export const outreachChannels = ["phone", "email", "sms", "social", "mixed", "manual"] as const;
+export const outreachSequenceStates = ["draft", "active", "paused", "completed", "cancelled"] as const;
+export const outreachAttemptOutcomes = ["planned", "no_answer", "voicemail", "reached", "meeting_booked", "follow_up", "not_interested", "do_not_contact", "invalid_contact"] as const;
+
 const commercialRecordBase = z.object({
   ownerSeatId: z.string().uuid().optional(),
   classification: z
@@ -657,6 +665,32 @@ export const commercialCaseUpdateSchema = commercialCaseFields
     (value) => Object.keys(value).length > 0,
     "At least one commercial case field is required.",
   );
+
+export const outreachSequenceCreateSchema = commercialRecordBase.extend({
+  title: z.string().trim().min(3).max(300),
+  relationshipId: z.string().uuid(),
+  commercialCaseId: z.string().uuid().optional(),
+  channel: z.enum(outreachChannels).default("phone"),
+  purpose: z.string().trim().min(3).max(3000),
+  script: z.string().trim().max(8000).default(""),
+  consentBasis: z.string().trim().min(3).max(2000),
+  quietHours: z.string().trim().max(500).default(""),
+  cadence: z.string().trim().max(1000).default(""),
+  nextAttemptAt: z.string().datetime().optional(),
+});
+
+export const outreachAttemptCreateSchema = z.object({
+  outcome: z.enum(outreachAttemptOutcomes),
+  note: z.string().trim().max(5000).default(""),
+  attemptedAt: z.string().datetime().optional(),
+  nextAttemptAt: z.string().datetime().optional(),
+  providerReceiptReference: z.string().trim().max(2000).optional(),
+}).superRefine((value, context) => {
+  if (value.outcome === "planned" && value.providerReceiptReference)
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["providerReceiptReference"], message: "A planned outreach attempt cannot claim a provider receipt." });
+  if (value.outcome === "do_not_contact" && !value.note.trim())
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["note"], message: "Record the source or rationale for a do-not-contact instruction." });
+});
 
 export const offerProgramCreateSchema = commercialRecordBase.extend({
   name: z.string().trim().min(2).max(300),
