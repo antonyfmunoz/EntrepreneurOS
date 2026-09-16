@@ -133,7 +133,7 @@ export type CompanyBlueprintVariables = {
 export type CompiledCompanyBlueprintStarter = CompanyBlueprintStarter & {
   statement: string;
   title: string;
-  variables: Record<"offer" | "targetCustomer", string>;
+  variables: Record<"offer" | "targetCustomer" | "goal", string>;
 };
 
 function firstGoal(value?: string | null) {
@@ -163,6 +163,6 @@ export function compileCompanyBlueprintStarters(
     statement: starter.key === "commercial-foundation"
       ? `Validate and operate a measurable path for ${offer} with ${targetCustomer}. ${starter.statement}`
       : `${starter.statement} The first declared outcome is: ${goal}.`,
-    variables: { offer, targetCustomer },
+    variables: { offer, targetCustomer, goal },
   }));
 }

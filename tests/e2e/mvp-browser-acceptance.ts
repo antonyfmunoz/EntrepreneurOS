@@ -1923,6 +1923,21 @@ try {
     throw new Error(
       `Company Mission did not compile the native operating blueprint: ${JSON.stringify(compiledBlueprint)}`,
     );
+  if (
+    !compiledBlueprint.blueprint?.launchArtifacts?.length ||
+    compiledBlueprint.blueprint.launchArtifacts.some((artifact: {
+      state?: string;
+      process?: { releaseState?: string; qualificationState?: string } | null;
+      workPacket?: { status?: string } | null;
+    }) =>
+      artifact.state !== "drafted" ||
+      artifact.process?.releaseState !== "draft" ||
+      artifact.process?.qualificationState !== "mapped" ||
+      artifact.workPacket?.status !== "draft")
+  )
+    throw new Error(
+      `Company Mission did not materialize role-owned native workflow drafts: ${JSON.stringify(compiledBlueprint)}`,
+    );
   const newlyCreatedCompanyId = new URL(desktop.url()).pathname.match(/\/company\/(\d+)/)?.[1];
   if (!newlyCreatedCompanyId) throw new Error("Created company route did not include a company id.");
   await desktop.goto(`${origin}/company/${newlyCreatedCompanyId}#command`, {
