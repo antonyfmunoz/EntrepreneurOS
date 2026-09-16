@@ -1,10 +1,28 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Background, Controls, MiniMap, ReactFlow, type Edge, type Node } from "@xyflow/react";
+import {
+  Background,
+  Controls,
+  MiniMap,
+  ReactFlow,
+  type Edge,
+  type Node,
+} from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Bot, BriefcaseBusiness, Crown, Network, Plus, RefreshCw, UserRound, Wrench } from "lucide-react";
-import UniversalLayout, { type UniversalLayoutLeftRailItem } from "@/components/layout/universal-layout";
+import {
+  Bot,
+  BriefcaseBusiness,
+  Crown,
+  Network,
+  Plus,
+  RefreshCw,
+  UserRound,
+  Wrench,
+} from "lucide-react";
+import UniversalLayout, {
+  type UniversalLayoutLeftRailItem,
+} from "@/components/layout/universal-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,11 +32,96 @@ import { apiRequest } from "@/lib/queryClient";
 type RecordValue = Record<string, any>;
 type StudioView = "structure" | "tools" | "authority";
 
-async function requestJson<T>(method: "GET" | "POST" | "PATCH", url: string, body?: unknown): Promise<T> {
+const roleToolChoices = [
+  {
+    key: "crm",
+    label: "CRM",
+    detail: "Relationships, pipeline, and commercial context",
+  },
+  {
+    key: "dialer",
+    label: "Dialer",
+    detail: "Consent-aware outreach queue and outcomes",
+  },
+  {
+    key: "calendar",
+    label: "Calendar",
+    detail: "Native booking, availability, and commitments",
+  },
+  {
+    key: "messages",
+    label: "Messages",
+    detail: "Role-scoped communication hub",
+  },
+  {
+    key: "docs",
+    label: "Docs",
+    detail: "Native documents and operating records",
+  },
+  {
+    key: "sheets",
+    label: "Sheets",
+    detail: "Native structured analysis and planning",
+  },
+  {
+    key: "projects",
+    label: "Projects",
+    detail: "Delivery and accountable project state",
+  },
+  {
+    key: "tasks",
+    label: "Tasks",
+    detail: "Assigned role work and follow-through",
+  },
+  {
+    key: "workflows",
+    label: "Workflows",
+    detail: "Governed no-code operating flows",
+  },
+  {
+    key: "analytics",
+    label: "Analytics",
+    detail: "Role-relevant measures and intelligence",
+  },
+  {
+    key: "finance",
+    label: "Finance",
+    detail: "Capital and finance control surface",
+  },
+  {
+    key: "conference_rooms",
+    label: "Conference rooms",
+    detail: "Decision and deliberation rooms",
+  },
+] as const;
+
+function toolKeys(value: string) {
+  return new Set(
+    value
+      .split(",")
+      .map((tool) => tool.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+function toggleTool(value: string, key: string) {
+  const current = toolKeys(value);
+  if (current.has(key)) current.delete(key);
+  else current.add(key);
+  return Array.from(current).join(", ");
+}
+
+async function requestJson<T>(
+  method: "GET" | "POST" | "PATCH",
+  url: string,
+  body?: unknown,
+): Promise<T> {
   const scoped = new URL(url, window.location.origin);
   const seatId = new URLSearchParams(window.location.search).get("seat");
   if (seatId) scoped.searchParams.set("seatId", seatId);
-  return (await apiRequest(method, `${scoped.pathname}${scoped.search}`, body)).json();
+  return (
+    await apiRequest(method, `${scoped.pathname}${scoped.search}`, body)
+  ).json();
 }
 
 function seatColor(kind: string) {
@@ -29,16 +132,53 @@ function seatColor(kind: string) {
   return "#64748b";
 }
 
-function seatLabel(kind: string) { return kind.replaceAll("_", " "); }
+function seatLabel(kind: string) {
+  return kind.replaceAll("_", " ");
+}
 
-function reportingDepth(seat: RecordValue, byId: Map<string, RecordValue>, seen = new Set<string>()): number {
+function RoleToolPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const selected = toolKeys(value);
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      {roleToolChoices.map((tool) => (
+        <button
+          key={tool.key}
+          type="button"
+          aria-pressed={selected.has(tool.key)}
+          onClick={() => onChange(toggleTool(value, tool.key))}
+          className={`rounded-xl border p-3 text-left transition-colors ${selected.has(tool.key) ? "border-primary bg-primary/5 ring-1 ring-primary" : "bg-background hover:border-primary/40"}`}
+        >
+          <span className="block text-sm font-medium">{tool.label}</span>
+          <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+            {tool.detail}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function reportingDepth(
+  seat: RecordValue,
+  byId: Map<string, RecordValue>,
+  seen = new Set<string>(),
+): number {
   if (!seat.supervisorSeatId || seen.has(seat.id)) return 0;
   seen.add(seat.id);
   const supervisor = byId.get(seat.supervisorSeatId);
   return supervisor ? 1 + reportingDepth(supervisor, byId, seen) : 0;
 }
 
-function buildGraph(seats: RecordValue[], selectedSeatId?: string): { nodes: Node[]; edges: Edge[] } {
+function buildGraph(
+  seats: RecordValue[],
+  selectedSeatId?: string,
+): { nodes: Node[]; edges: Edge[] } {
   const byId = new Map(seats.map((seat) => [seat.id, seat]));
   const byDepth = new Map<number, RecordValue[]>();
   for (const seat of seats) {
@@ -47,14 +187,53 @@ function buildGraph(seats: RecordValue[], selectedSeatId?: string): { nodes: Nod
   }
   const nodes: Node[] = [];
   Array.from(byDepth.entries()).forEach(([depth, level]) => {
-    level.forEach((seat: RecordValue, index: number) => nodes.push({
-      id: seat.id,
-      position: { x: 70 + index * 270, y: 60 + depth * 180 },
-      data: { label: <div className="min-w-[180px]"><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: seatColor(seat.kind) }} /><span className="font-semibold">{seat.title}</span></div><p className="mt-1 text-xs opacity-75">{seat.agentMode === "assistant" ? "Human-directed · " : "Agent-operated · "}{seat.agentName}</p></div> },
-      style: { width: 220, borderRadius: 14, border: selectedSeatId === seat.id ? "2px solid #6a37d4" : "1px solid #d9d7e0", padding: 12, background: selectedSeatId === seat.id ? "#f4efff" : "#fff", boxShadow: "0 4px 12px rgba(47,29,80,.08)" },
-    }));
+    level.forEach((seat: RecordValue, index: number) =>
+      nodes.push({
+        id: seat.id,
+        position: { x: 70 + index * 270, y: 60 + depth * 180 },
+        data: {
+          label: (
+            <div className="min-w-[180px]">
+              <div className="flex items-center gap-2">
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: seatColor(seat.kind) }}
+                />
+                <span className="font-semibold">{seat.title}</span>
+              </div>
+              <p className="mt-1 text-xs opacity-75">
+                {seat.agentMode === "assistant"
+                  ? "Human-directed · "
+                  : "Agent-operated · "}
+                {seat.agentName}
+              </p>
+            </div>
+          ),
+        },
+        style: {
+          width: 220,
+          borderRadius: 14,
+          border:
+            selectedSeatId === seat.id
+              ? "2px solid #6a37d4"
+              : "1px solid #d9d7e0",
+          padding: 12,
+          background: selectedSeatId === seat.id ? "#f4efff" : "#fff",
+          boxShadow: "0 4px 12px rgba(47,29,80,.08)",
+        },
+      }),
+    );
   });
-  const edges: Edge[] = seats.filter((seat) => seat.supervisorSeatId && byId.has(seat.supervisorSeatId)).map((seat) => ({ id: `${seat.supervisorSeatId}-${seat.id}`, source: seat.supervisorSeatId, target: seat.id, type: "smoothstep", animated: false, style: { stroke: "#9d84de", strokeWidth: 1.5 } }));
+  const edges: Edge[] = seats
+    .filter((seat) => seat.supervisorSeatId && byId.has(seat.supervisorSeatId))
+    .map((seat) => ({
+      id: `${seat.supervisorSeatId}-${seat.id}`,
+      source: seat.supervisorSeatId,
+      target: seat.id,
+      type: "smoothstep",
+      animated: false,
+      style: { stroke: "#9d84de", strokeWidth: 1.5 },
+    }));
   return { nodes, edges };
 }
 
@@ -73,52 +252,117 @@ export default function OrgStudioPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteSeatId, setInviteSeatId] = useState("");
 
-  const context = useQuery<RecordValue>({ queryKey: [root, "context"], queryFn: () => requestJson("GET", `${root}/context`) });
-  const organization = useQuery<RecordValue>({ queryKey: [root, "organization-runtime"], queryFn: () => requestJson("GET", `${root}/organization-runtime`) });
-  const blueprint = useQuery<RecordValue>({ queryKey: [root, "company-blueprint"], queryFn: () => requestJson("GET", `${root}/company-blueprint`) });
+  const context = useQuery<RecordValue>({
+    queryKey: [root, "context"],
+    queryFn: () => requestJson("GET", `${root}/context`),
+  });
+  const organization = useQuery<RecordValue>({
+    queryKey: [root, "organization-runtime"],
+    queryFn: () => requestJson("GET", `${root}/organization-runtime`),
+  });
+  const blueprint = useQuery<RecordValue>({
+    queryKey: [root, "company-blueprint"],
+    queryFn: () => requestJson("GET", `${root}/company-blueprint`),
+  });
   const seats = organization.data?.seats || [];
-  const activeSeat = seats.find((seat: RecordValue) => seat.id === organization.data?.activeSeatId);
+  const activeSeat = seats.find(
+    (seat: RecordValue) => seat.id === organization.data?.activeSeatId,
+  );
   const role = context.data?.principalContext?.role;
   // Match the server's organization-management authority exactly. Portfolio
   // executives can inspect the graph when visibility allows, but cannot be
   // shown controls that the API will correctly reject for this company.
   const canDesign = ["founder", "company_ceo"].includes(role);
-  const selectedSeat = seats.find((seat: RecordValue) => seat.id === selectedSeatId) || activeSeat || seats[0];
-  const graph = useMemo(() => buildGraph(seats, selectedSeat?.id), [seats, selectedSeat?.id]);
-  const formationComplete = (blueprint.data?.blueprint?.roles || []).every((role: RecordValue) => role.state === "instantiated")
-    && (blueprint.data?.blueprint?.nativeAssets || []).every((asset: RecordValue) => asset.state === "drafted");
+  const selectedSeat =
+    seats.find((seat: RecordValue) => seat.id === selectedSeatId) ||
+    activeSeat ||
+    seats[0];
+  const graph = useMemo(
+    () => buildGraph(seats, selectedSeat?.id),
+    [seats, selectedSeat?.id],
+  );
+  const formationComplete =
+    (blueprint.data?.blueprint?.roles || []).every(
+      (role: RecordValue) => role.state === "instantiated",
+    ) &&
+    (blueprint.data?.blueprint?.nativeAssets || []).every(
+      (asset: RecordValue) => asset.state === "drafted",
+    );
 
-  const refresh = () => Promise.all([
-    queryClient.invalidateQueries({ queryKey: [root, "context"] }),
-    queryClient.invalidateQueries({ queryKey: [root, "organization-runtime"] }),
-    queryClient.invalidateQueries({ queryKey: [root, "company-blueprint"] }),
-  ]);
+  const refresh = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: [root, "context"] }),
+      queryClient.invalidateQueries({
+        queryKey: [root, "organization-runtime"],
+      }),
+      queryClient.invalidateQueries({ queryKey: [root, "company-blueprint"] }),
+    ]);
   const createSeat = useMutation({
-    mutationFn: () => requestJson<RecordValue>("POST", `${root}/seats`, {
-      title: title.trim(), kind, agentName: agentName.trim() || `${title.trim()} Agent`,
-      supervisorSeatId: supervisorSeatId || activeSeat?.id, mandate: mandate.trim(),
-      authority: { approval: "supervisor", visibility: kind === "manager" ? "reporting_tree" : "seat" },
-      toolEntitlements: tools.split(",").map((tool) => tool.trim()).filter(Boolean),
-    }),
-    onSuccess: async (seat) => { setTitle(""); setAgentName(""); setMandate(""); setTools(""); setSelectedSeatId(seat.id); await refresh(); },
+    mutationFn: () =>
+      requestJson<RecordValue>("POST", `${root}/seats`, {
+        title: title.trim(),
+        kind,
+        agentName: agentName.trim() || `${title.trim()} Agent`,
+        supervisorSeatId: supervisorSeatId || activeSeat?.id,
+        mandate: mandate.trim(),
+        authority: {
+          approval: "supervisor",
+          visibility: kind === "manager" ? "reporting_tree" : "seat",
+        },
+        toolEntitlements: tools
+          .split(",")
+          .map((tool) => tool.trim())
+          .filter(Boolean),
+      }),
+    onSuccess: async (seat) => {
+      setTitle("");
+      setAgentName("");
+      setMandate("");
+      setTools("");
+      setSelectedSeatId(seat.id);
+      await refresh();
+    },
   });
   const instantiateBlueprint = useMutation({
-    mutationFn: () => requestJson<RecordValue>("POST", `${root}/company-blueprint/instantiate`, { blueprintKey: blueprint.data?.blueprint?.key }),
-    onSuccess: async () => { await refresh(); },
+    mutationFn: () =>
+      requestJson<RecordValue>(
+        "POST",
+        `${root}/company-blueprint/instantiate`,
+        { blueprintKey: blueprint.data?.blueprint?.key },
+      ),
+    onSuccess: async () => {
+      await refresh();
+    },
   });
   const inviteHuman = useMutation({
-    mutationFn: () => requestJson<RecordValue>("POST", `${root}/invitations`, {
-      email: inviteEmail.trim().toLowerCase(), seatId: inviteSeatId, purpose: "operate",
-      classificationCeiling: "internal", portfolioScope: false,
-    }),
-    onSuccess: async () => { setInviteEmail(""); setInviteSeatId(""); await refresh(); },
+    mutationFn: () =>
+      requestJson<RecordValue>("POST", `${root}/invitations`, {
+        email: inviteEmail.trim().toLowerCase(),
+        seatId: inviteSeatId,
+        purpose: "operate",
+        classificationCeiling: "internal",
+        portfolioScope: false,
+      }),
+    onSuccess: async () => {
+      setInviteEmail("");
+      setInviteSeatId("");
+      await refresh();
+    },
   });
   const updateSeat = useMutation({
-    mutationFn: (input: RecordValue) => requestJson<RecordValue>("PATCH", `${root}/seats/${input.id}`, input),
-    onSuccess: async () => { await refresh(); },
+    mutationFn: (input: RecordValue) =>
+      requestJson<RecordValue>("PATCH", `${root}/seats/${input.id}`, input),
+    onSuccess: async () => {
+      await refresh();
+    },
   });
   const reconcileRoleTools = useMutation({
-    mutationFn: (apply: boolean) => requestJson<RecordValue>("POST", `${root}/organization-runtime/tool-entitlements/reconcile`, { apply }),
+    mutationFn: (apply: boolean) =>
+      requestJson<RecordValue>(
+        "POST",
+        `${root}/organization-runtime/tool-entitlements/reconcile`,
+        { apply },
+      ),
     onSuccess: async (result) => {
       if (result.applied) await refresh();
     },
@@ -126,37 +370,814 @@ export default function OrgStudioPage() {
   const roleToolChanges = reconcileRoleTools.data?.changes || [];
 
   const navigation: UniversalLayoutLeftRailItem[] = [
-    { icon: BriefcaseBusiness, label: "Workspace", href: `/company/${companyId}` },
-    { icon: Network, label: "Org Studio", href: `/company/${companyId}/org-studio`, active: true },
-    { icon: Crown, label: "Company Mission", href: `/company-setup?companyId=${companyId}` },
+    {
+      icon: BriefcaseBusiness,
+      label: "Workspace",
+      href: `/company/${companyId}`,
+    },
+    {
+      icon: Network,
+      label: "Org Studio",
+      href: `/company/${companyId}/org-studio`,
+      active: true,
+    },
+    {
+      icon: Crown,
+      label: "Company Mission",
+      href: `/company-setup?companyId=${companyId}`,
+    },
   ];
 
-  if (context.isLoading || organization.isLoading) return <UniversalLayout title="Org Studio" leftRailItems={navigation} floatingPanel={false}><p className="p-6 text-sm text-muted-foreground">Compiling the visible company graph…</p></UniversalLayout>;
-  if (context.isError || organization.isError) return <UniversalLayout title="Org Studio" leftRailItems={navigation} floatingPanel={false}><div className="m-6 rounded-xl border border-destructive/30 bg-destructive/5 p-5"><p className="font-medium">The company graph could not be loaded.</p><Button className="mt-3" variant="outline" onClick={() => refresh()}>Retry</Button></div></UniversalLayout>;
-  if (!(context.data?.principalContext?.allowedSurfaces || []).includes("organization")) return <UniversalLayout title="Org Studio" leftRailItems={navigation} floatingPanel={false}><div className="m-6 rounded-xl border p-5"><p className="font-medium">This role does not have access to Org Studio.</p><p className="mt-2 text-sm text-muted-foreground">EOS keeps roles, their people, and their authority visible only where the reporting and disclosure policy permits it.</p><Button className="mt-4" asChild><Link href={`/company/${companyId}`}>Return to my workspace</Link></Button></div></UniversalLayout>;
+  if (context.isLoading || organization.isLoading)
+    return (
+      <UniversalLayout
+        title="Org Studio"
+        leftRailItems={navigation}
+        floatingPanel={false}
+      >
+        <p className="p-6 text-sm text-muted-foreground">
+          Compiling the visible company graph…
+        </p>
+      </UniversalLayout>
+    );
+  if (context.isError || organization.isError)
+    return (
+      <UniversalLayout
+        title="Org Studio"
+        leftRailItems={navigation}
+        floatingPanel={false}
+      >
+        <div className="m-6 rounded-xl border border-destructive/30 bg-destructive/5 p-5">
+          <p className="font-medium">The company graph could not be loaded.</p>
+          <Button className="mt-3" variant="outline" onClick={() => refresh()}>
+            Retry
+          </Button>
+        </div>
+      </UniversalLayout>
+    );
+  if (
+    !(context.data?.principalContext?.allowedSurfaces || []).includes(
+      "organization",
+    )
+  )
+    return (
+      <UniversalLayout
+        title="Org Studio"
+        leftRailItems={navigation}
+        floatingPanel={false}
+      >
+        <div className="m-6 rounded-xl border p-5">
+          <p className="font-medium">
+            This role does not have access to Org Studio.
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            EOS keeps roles, their people, and their authority visible only
+            where the reporting and disclosure policy permits it.
+          </p>
+          <Button className="mt-4" asChild>
+            <Link href={`/company/${companyId}`}>Return to my workspace</Link>
+          </Button>
+        </div>
+      </UniversalLayout>
+    );
 
-  return <UniversalLayout title="Org Studio" companyName={context.data?.company?.name} companyHref={`/company/${companyId}`} portfolioName={context.data?.portfolio?.name} portfolioHref={context.data?.portfolio?.id ? `/portfolios/${context.data.portfolio.id}` : "/portfolios"} roleName={context.data?.principalContext?.seat} leftRailItems={navigation} floatingPanel={false}>
-    <section className="space-y-6">
-      <header className="flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-end lg:justify-between"><div><p className="eos-label">Company Operating Graph</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Org Studio</h1><p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">The organization is a live operating graph: departments, roles, humans, agents, responsibilities, tools, authority, and reporting relationships all refer to the same company reality.</p></div><Button variant="outline" onClick={() => refresh()}><RefreshCw className="mr-2 h-4 w-4" />Refresh graph</Button></header>
-      <div className="flex flex-wrap gap-2 rounded-xl bg-muted/50 p-2"><StudioTab active={view === "structure"} onClick={() => setView("structure")} label="Structure" /><StudioTab active={view === "tools"} onClick={() => setView("tools")} label="Role tools" /><StudioTab active={view === "authority"} onClick={() => setView("authority")} label="Authority & coverage" /></div>
-      {canDesign && view === "tools" && <section className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-5 sm:p-6"><div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><p className="eos-label">Role-tool alignment</p><h2 className="mt-1 text-xl font-semibold">Keep tools and authority in sync</h2><p className="mt-2 max-w-3xl text-sm text-muted-foreground">Review any older display-style tool names before EOS maps them to the native policy keys that actually control access. Custom tool labels are left unchanged.</p>{reconcileRoleTools.data && roleToolChanges.length === 0 && <p className="mt-3 text-sm font-medium text-primary">Every active role already uses the current native tool keys.</p>}{roleToolChanges.length > 0 && <div className="mt-4 space-y-2">{roleToolChanges.map((change: RecordValue) => <div key={change.seatId} className="rounded-lg bg-white/80 px-3 py-2 text-sm"><span className="font-medium">{change.title}</span><span className="ml-2 text-muted-foreground">{(change.from || []).join(", ")} → {(change.to || []).join(", ")}</span></div>)}</div>}{reconcileRoleTools.isError && <p className="mt-3 text-sm text-destructive">EOS could not prepare that reconciliation. Refresh the graph and try again.</p>}</div><div className="flex shrink-0 flex-wrap gap-2"><Button variant="outline" disabled={reconcileRoleTools.isPending} onClick={() => reconcileRoleTools.mutate(false)}>{reconcileRoleTools.isPending ? "Checking…" : "Review role tools"}</Button>{roleToolChanges.length > 0 && <Button disabled={reconcileRoleTools.isPending} onClick={() => reconcileRoleTools.mutate(true)}>{reconcileRoleTools.isPending ? "Applying…" : `Apply ${roleToolChanges.length} repair${roleToolChanges.length === 1 ? "" : "s"}`}</Button>}</div></div></section>}
-      {blueprint.data?.blueprint && <section className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-5 sm:p-6"><div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><p className="eos-label">Business in a box · configured for this company</p><h2 className="mt-1 text-xl font-semibold">{blueprint.data.blueprint.title}</h2><p className="mt-2 max-w-3xl text-sm text-muted-foreground">{blueprint.data.blueprint.description} Each role becomes an editable seat, role agent, operating pack, authority baseline, reporting edge, and native tool surface—not an example card.</p><div className="mt-4 flex flex-wrap gap-2">{(blueprint.data.blueprint.roles || []).map((role: RecordValue) => <span key={role.key} className={`rounded-full px-2.5 py-1 text-xs ${role.state === "instantiated" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>{role.state === "instantiated" ? "✓ " : ""}{role.title}</span>)}</div>{(blueprint.data.blueprint.launchArtifacts || []).filter((artifact: RecordValue) => artifact.visible).length > 0 && <div className="mt-5 rounded-xl border border-primary/15 bg-white/80 p-4"><p className="text-sm font-medium">Compiled launch workflows</p><p className="mt-1 text-xs text-muted-foreground">Each company input has become a role-owned native workflow draft plus its linked launch packet. Review or edit it in Operations; it cannot run or create an external effect until the existing authority, evidence, and release controls are satisfied.</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{(blueprint.data.blueprint.launchArtifacts || []).filter((artifact: RecordValue) => artifact.visible).map((artifact: RecordValue) => <Link key={artifact.key} href={`/company/${companyId}#operations`} className="rounded-lg bg-muted/70 px-3 py-2 text-sm transition-colors hover:bg-muted"><span className="block font-medium">{artifact.process?.name || artifact.title}</span><span className="mt-1 block text-xs text-muted-foreground">{artifact.process ? `Draft workflow · v${artifact.process.version} · ${artifact.process.qualificationState.replaceAll("_", " ")}` : "Workflow starter ready to compile"}</span><span className="mt-2 block text-xs font-medium text-primary">Open in Operations →</span></Link>)}</div></div>}{(blueprint.data.blueprint.nativeAssets || []).filter((asset: RecordValue) => asset.visible).length > 0 && <div className="mt-5 rounded-xl border border-primary/15 bg-white/80 p-4"><p className="text-sm font-medium">Compiled native operating tools</p><p className="mt-1 text-xs text-muted-foreground">These editable CRM, intake, and website drafts belong to this company. They are native EOS records—not provider placeholders—and remain private until an authorized operator completes their normal activation controls.</p><div className="mt-3 grid gap-2 sm:grid-cols-3">{(blueprint.data.blueprint.nativeAssets || []).filter((asset: RecordValue) => asset.visible).map((asset: RecordValue) => <Link key={asset.key} href={`/company/${companyId}#work-room`} className="rounded-lg bg-muted/70 px-3 py-2 text-sm transition-colors hover:bg-muted"><span className="block font-medium">{asset.title}</span><span className="mt-1 block text-xs text-muted-foreground">{asset.object ? `Draft ${asset.instrumentKey} tool · v${asset.object.version}` : "Tool starter ready to compile"}</span><span className="mt-2 block text-xs font-medium text-primary">Open in Work Room →</span></Link>)}</div></div>}</div>{canDesign && <div className="shrink-0"><Button disabled={instantiateBlueprint.isPending || formationComplete} onClick={() => instantiateBlueprint.mutate()}><SparklesIcon />{instantiateBlueprint.isPending ? "Applying company formation…" : "Apply missing formation assets"}</Button>{instantiateBlueprint.isError && <p className="mt-2 max-w-xs text-xs text-destructive">The company formation could not be applied. Refresh the graph and try again.</p>}</div>}</div></section>}
-      {view === "structure" && <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_330px]"><div className="h-[620px] overflow-hidden rounded-2xl border bg-[#f9f8fc]"><ReactFlow nodes={graph.nodes} edges={graph.edges} fitView fitViewOptions={{ padding: 0.25 }} onNodeClick={(_, node) => setSelectedSeatId(node.id)} nodesDraggable={false} nodesConnectable={false} elementsSelectable><Background color="#e7e2f4" gap={18} /><MiniMap nodeColor={(node) => seatColor((seats.find((seat: RecordValue) => seat.id === node.id)?.kind) || "individual_contributor")} /><Controls showInteractive={false} /></ReactFlow></div><SeatInspector seat={selectedSeat} memberships={organization.data?.memberships || []} rolePacks={organization.data?.roleOperatingPacks || []} view={view} /></div>}
-      {view !== "structure" && <div className="grid gap-4 lg:grid-cols-2">{seats.map((seat: RecordValue) => <SeatCard key={seat.id} seat={seat} selected={seat.id === selectedSeat?.id} view={view} onClick={() => setSelectedSeatId(seat.id)} />)}</div>}
-      {canDesign && <section className="grid gap-5 xl:grid-cols-2"><div className="rounded-2xl border bg-white p-5 sm:p-6"><div><p className="eos-label">Modify the company in place</p><h2 className="mt-1 text-xl font-semibold">Add an accountable role</h2><p className="mt-1 text-sm text-muted-foreground">This creates a real seat, reporting edge, Role Agent, role operating pack, and baseline authority—rather than a decorative chart node.</p></div><div className="mt-6 grid gap-4"><Field label="Role title"><Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Head of Growth" /></Field><Field label="Role Agent name"><Input value={agentName} onChange={(event) => setAgentName(event.target.value)} placeholder="Defaults to Head of Growth Agent" /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Role level"><select value={kind} onChange={(event) => setKind(event.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="company_ceo">Company CEO</option><option value="functional_executive">Functional executive</option><option value="manager">Manager</option><option value="individual_contributor">Individual contributor</option><option value="external">External collaborator</option></select></Field><Field label="Reports to"><select value={supervisorSeatId} onChange={(event) => setSupervisorSeatId(event.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="">My active seat</option>{seats.map((seat: RecordValue) => <option key={seat.id} value={seat.id}>{seat.title}</option>)}</select></Field></div><Field label="Accountable result"><Textarea value={mandate} onChange={(event) => setMandate(event.target.value)} placeholder="The result this role owns, not a list of activity." /></Field><Field label="Native tools this role needs" hint="Comma-separated. These become visible in the role’s workspace."><Textarea value={tools} onChange={(event) => setTools(event.target.value)} placeholder="CRM, Calendar, Documents" /></Field></div><div className="mt-5 flex items-center gap-3"><Button disabled={!title.trim() || createSeat.isPending} onClick={() => createSeat.mutate()}><Plus className="mr-2 h-4 w-4" />{createSeat.isPending ? "Creating role…" : "Create role in graph"}</Button>{createSeat.isError && <p className="text-sm text-destructive">The role could not be created. Check the reporting role and try again.</p>}</div></div><div className="rounded-2xl border bg-white p-5 sm:p-6"><div><p className="eos-label">Human + agent hybrid</p><h2 className="mt-1 text-xl font-semibold">Place a person in an existing role</h2><p className="mt-1 text-sm text-muted-foreground">Invite a person into a live seat. They must accept the exact role; after acceptance the role agent stays with the seat as their assistant.</p></div><div className="mt-6 grid gap-4"><Field label="Work email"><Input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="person@company.com" /></Field><Field label="Role seat"><select value={inviteSeatId} onChange={(event) => setInviteSeatId(event.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="">Choose an unoccupied role</option>{seats.filter((seat: RecordValue) => !seat.occupantUserId && seat.kind !== "founder" && !(organization.data?.invitations || []).some((invitation: RecordValue) => invitation.seatId === seat.id && ["pending", "pending_delivery"].includes(invitation.status))).map((seat: RecordValue) => <option key={seat.id} value={seat.id}>{seat.title} · {seat.agentName}</option>)}</select></Field></div><div className="mt-5"><Button variant="secondary" disabled={!inviteEmail.includes("@") || !inviteSeatId || inviteHuman.isPending} onClick={() => inviteHuman.mutate()}><UserRound className="mr-2 h-4 w-4" />{inviteHuman.isPending ? "Sending invitation…" : "Send role invitation"}</Button>{inviteHuman.isError && <p className="mt-2 text-sm text-destructive">The invitation could not be sent. Review the email and selected role.</p>}</div></div></section>}
-      {canDesign && selectedSeat && <details className="rounded-2xl border bg-white p-5"><summary className="cursor-pointer font-semibold">Edit selected role · {selectedSeat.title}</summary><form className="mt-5 grid gap-4 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); const values = new FormData(event.currentTarget); updateSeat.mutate({ id: selectedSeat.id, title: values.get("title"), agentName: values.get("agentName"), mandate: values.get("mandate"), toolEntitlements: String(values.get("tools") || "").split(",").map((item) => item.trim()).filter(Boolean), supervisorSeatId: String(values.get("supervisorSeatId") || "") || null }); }}><Field label="Role title"><Input name="title" defaultValue={selectedSeat.title} /></Field><Field label="Role Agent name"><Input name="agentName" defaultValue={selectedSeat.agentName} /></Field><Field label="Accountable result"><Textarea name="mandate" defaultValue={selectedSeat.mandate || ""} /></Field><Field label="Native tools"><Input name="tools" defaultValue={(selectedSeat.toolEntitlements || []).join(", ")} /></Field><Field label="Reports to"><select name="supervisorSeatId" defaultValue={selectedSeat.supervisorSeatId || ""} disabled={selectedSeat.kind === "founder"}><option value="">No supervisor</option>{seats.filter((seat: RecordValue) => seat.id !== selectedSeat.id).map((seat: RecordValue) => <option key={seat.id} value={seat.id}>{seat.title}</option>)}</select></Field><div className="flex items-end"><Button type="submit" disabled={updateSeat.isPending}>Save role changes</Button></div>{updateSeat.isError && <p className="text-sm text-destructive">EOS could not update this role. Review its reporting line and authority.</p>}</form></details>}
-    </section>
-  </UniversalLayout>;
+  return (
+    <UniversalLayout
+      title="Org Studio"
+      companyName={context.data?.company?.name}
+      companyHref={`/company/${companyId}`}
+      portfolioName={context.data?.portfolio?.name}
+      portfolioHref={
+        context.data?.portfolio?.id
+          ? `/portfolios/${context.data.portfolio.id}`
+          : "/portfolios"
+      }
+      roleName={context.data?.principalContext?.seat}
+      leftRailItems={navigation}
+      floatingPanel={false}
+    >
+      <section className="space-y-6">
+        <header className="flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="eos-label">Company Operating Graph</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+              Org Studio
+            </h1>
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+              The organization is a live operating graph: departments, roles,
+              humans, agents, responsibilities, tools, authority, and reporting
+              relationships all refer to the same company reality.
+            </p>
+          </div>
+          <Button variant="outline" onClick={() => refresh()}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh graph
+          </Button>
+        </header>
+        <div className="flex flex-wrap gap-2 rounded-xl bg-muted/50 p-2">
+          <StudioTab
+            active={view === "structure"}
+            onClick={() => setView("structure")}
+            label="Structure"
+          />
+          <StudioTab
+            active={view === "tools"}
+            onClick={() => setView("tools")}
+            label="Role tools"
+          />
+          <StudioTab
+            active={view === "authority"}
+            onClick={() => setView("authority")}
+            label="Authority & coverage"
+          />
+        </div>
+        {canDesign && view === "tools" && (
+          <section className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-5 sm:p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="eos-label">Role-tool alignment</p>
+                <h2 className="mt-1 text-xl font-semibold">
+                  Keep tools and authority in sync
+                </h2>
+                <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+                  Review any older display-style tool names before EOS maps them
+                  to the native policy keys that actually control access. Custom
+                  tool labels are left unchanged.
+                </p>
+                {reconcileRoleTools.data && roleToolChanges.length === 0 && (
+                  <p className="mt-3 text-sm font-medium text-primary">
+                    Every active role already uses the current native tool keys.
+                  </p>
+                )}
+                {roleToolChanges.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {roleToolChanges.map((change: RecordValue) => (
+                      <div
+                        key={change.seatId}
+                        className="rounded-lg bg-white/80 px-3 py-2 text-sm"
+                      >
+                        <span className="font-medium">{change.title}</span>
+                        <span className="ml-2 text-muted-foreground">
+                          {(change.from || []).join(", ")} →{" "}
+                          {(change.to || []).join(", ")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {reconcileRoleTools.isError && (
+                  <p className="mt-3 text-sm text-destructive">
+                    EOS could not prepare that reconciliation. Refresh the graph
+                    and try again.
+                  </p>
+                )}
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  disabled={reconcileRoleTools.isPending}
+                  onClick={() => reconcileRoleTools.mutate(false)}
+                >
+                  {reconcileRoleTools.isPending
+                    ? "Checking…"
+                    : "Review role tools"}
+                </Button>
+                {roleToolChanges.length > 0 && (
+                  <Button
+                    disabled={reconcileRoleTools.isPending}
+                    onClick={() => reconcileRoleTools.mutate(true)}
+                  >
+                    {reconcileRoleTools.isPending
+                      ? "Applying…"
+                      : `Apply ${roleToolChanges.length} repair${roleToolChanges.length === 1 ? "" : "s"}`}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+        {blueprint.data?.blueprint && (
+          <section className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-5 sm:p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="eos-label">
+                  Business in a box · configured for this company
+                </p>
+                <h2 className="mt-1 text-xl font-semibold">
+                  {blueprint.data.blueprint.title}
+                </h2>
+                <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+                  {blueprint.data.blueprint.description} Each role becomes an
+                  editable seat, role agent, operating pack, authority baseline,
+                  reporting edge, and native tool surface—not an example card.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {(blueprint.data.blueprint.roles || []).map(
+                    (role: RecordValue) => (
+                      <span
+                        key={role.key}
+                        className={`rounded-full px-2.5 py-1 text-xs ${role.state === "instantiated" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}
+                      >
+                        {role.state === "instantiated" ? "✓ " : ""}
+                        {role.title}
+                      </span>
+                    ),
+                  )}
+                </div>
+                {(blueprint.data.blueprint.launchArtifacts || []).filter(
+                  (artifact: RecordValue) => artifact.visible,
+                ).length > 0 && (
+                  <div className="mt-5 rounded-xl border border-primary/15 bg-white/80 p-4">
+                    <p className="text-sm font-medium">
+                      Compiled launch workflows
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Each company input has become a role-owned native workflow
+                      draft plus its linked launch packet. Review or edit it in
+                      Operations; it cannot run or create an external effect
+                      until the existing authority, evidence, and release
+                      controls are satisfied.
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {(blueprint.data.blueprint.launchArtifacts || [])
+                        .filter((artifact: RecordValue) => artifact.visible)
+                        .map((artifact: RecordValue) => (
+                          <Link
+                            key={artifact.key}
+                            href={`/company/${companyId}#operations`}
+                            className="rounded-lg bg-muted/70 px-3 py-2 text-sm transition-colors hover:bg-muted"
+                          >
+                            <span className="block font-medium">
+                              {artifact.process?.name || artifact.title}
+                            </span>
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              {artifact.process
+                                ? `Draft workflow · v${artifact.process.version} · ${artifact.process.qualificationState.replaceAll("_", " ")}`
+                                : "Workflow starter ready to compile"}
+                            </span>
+                            <span className="mt-2 block text-xs font-medium text-primary">
+                              Open in Operations →
+                            </span>
+                          </Link>
+                        ))}
+                    </div>
+                  </div>
+                )}
+                {(blueprint.data.blueprint.nativeAssets || []).filter(
+                  (asset: RecordValue) => asset.visible,
+                ).length > 0 && (
+                  <div className="mt-5 rounded-xl border border-primary/15 bg-white/80 p-4">
+                    <p className="text-sm font-medium">
+                      Compiled native operating tools
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      These editable CRM, intake, and website drafts belong to
+                      this company. They are native EOS records—not provider
+                      placeholders—and remain private until an authorized
+                      operator completes their normal activation controls.
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      {(blueprint.data.blueprint.nativeAssets || [])
+                        .filter((asset: RecordValue) => asset.visible)
+                        .map((asset: RecordValue) => (
+                          <Link
+                            key={asset.key}
+                            href={`/company/${companyId}#work-room`}
+                            className="rounded-lg bg-muted/70 px-3 py-2 text-sm transition-colors hover:bg-muted"
+                          >
+                            <span className="block font-medium">
+                              {asset.title}
+                            </span>
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              {asset.object
+                                ? `Draft ${asset.instrumentKey} tool · v${asset.object.version}`
+                                : "Tool starter ready to compile"}
+                            </span>
+                            <span className="mt-2 block text-xs font-medium text-primary">
+                              Open in Work Room →
+                            </span>
+                          </Link>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {canDesign && (
+                <div className="shrink-0">
+                  <Button
+                    disabled={
+                      instantiateBlueprint.isPending || formationComplete
+                    }
+                    onClick={() => instantiateBlueprint.mutate()}
+                  >
+                    <SparklesIcon />
+                    {instantiateBlueprint.isPending
+                      ? "Applying company formation…"
+                      : "Apply missing formation assets"}
+                  </Button>
+                  {instantiateBlueprint.isError && (
+                    <p className="mt-2 max-w-xs text-xs text-destructive">
+                      The company formation could not be applied. Refresh the
+                      graph and try again.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+        {view === "structure" && (
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_330px]">
+            <div className="h-[620px] overflow-hidden rounded-2xl border bg-[#f9f8fc]">
+              <ReactFlow
+                nodes={graph.nodes}
+                edges={graph.edges}
+                fitView
+                fitViewOptions={{ padding: 0.25 }}
+                onNodeClick={(_, node) => setSelectedSeatId(node.id)}
+                nodesDraggable={false}
+                nodesConnectable={false}
+                elementsSelectable
+              >
+                <Background color="#e7e2f4" gap={18} />
+                <MiniMap
+                  nodeColor={(node) =>
+                    seatColor(
+                      seats.find((seat: RecordValue) => seat.id === node.id)
+                        ?.kind || "individual_contributor",
+                    )
+                  }
+                />
+                <Controls showInteractive={false} />
+              </ReactFlow>
+            </div>
+            <SeatInspector
+              seat={selectedSeat}
+              memberships={organization.data?.memberships || []}
+              rolePacks={organization.data?.roleOperatingPacks || []}
+              view={view}
+            />
+          </div>
+        )}
+        {view !== "structure" && (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {seats.map((seat: RecordValue) => (
+              <SeatCard
+                key={seat.id}
+                seat={seat}
+                selected={seat.id === selectedSeat?.id}
+                view={view}
+                onClick={() => setSelectedSeatId(seat.id)}
+              />
+            ))}
+          </div>
+        )}
+        {canDesign && (
+          <section className="grid gap-5 xl:grid-cols-2">
+            <div className="rounded-2xl border bg-white p-5 sm:p-6">
+              <div>
+                <p className="eos-label">Modify the company in place</p>
+                <h2 className="mt-1 text-xl font-semibold">
+                  Add an accountable role
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  This creates a real seat, reporting edge, Role Agent, role
+                  operating pack, and baseline authority—rather than a
+                  decorative chart node.
+                </p>
+              </div>
+              <div className="mt-6 grid gap-4">
+                <Field label="Role title">
+                  <Input
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    placeholder="Head of Growth"
+                  />
+                </Field>
+                <Field label="Role Agent name">
+                  <Input
+                    value={agentName}
+                    onChange={(event) => setAgentName(event.target.value)}
+                    placeholder="Defaults to Head of Growth Agent"
+                  />
+                </Field>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Role level">
+                    <select
+                      value={kind}
+                      onChange={(event) => setKind(event.target.value)}
+                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    >
+                      <option value="company_ceo">Company CEO</option>
+                      <option value="functional_executive">
+                        Functional executive
+                      </option>
+                      <option value="manager">Manager</option>
+                      <option value="individual_contributor">
+                        Individual contributor
+                      </option>
+                      <option value="external">External collaborator</option>
+                    </select>
+                  </Field>
+                  <Field label="Reports to">
+                    <select
+                      value={supervisorSeatId}
+                      onChange={(event) =>
+                        setSupervisorSeatId(event.target.value)
+                      }
+                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    >
+                      <option value="">My active seat</option>
+                      {seats.map((seat: RecordValue) => (
+                        <option key={seat.id} value={seat.id}>
+                          {seat.title}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+                <Field label="Accountable result">
+                  <Textarea
+                    value={mandate}
+                    onChange={(event) => setMandate(event.target.value)}
+                    placeholder="The result this role owns, not a list of activity."
+                  />
+                </Field>
+                <Field
+                  label="Native tool kit"
+                  hint="Pick the capabilities this role actually operates. The selected tools—not a page shortcut—govern its workspace."
+                >
+                  <RoleToolPicker value={tools} onChange={setTools} />
+                  <Textarea
+                    className="mt-3"
+                    value={tools}
+                    onChange={(event) => setTools(event.target.value)}
+                    placeholder="Optional custom tool labels, comma-separated"
+                  />
+                </Field>
+              </div>
+              <div className="mt-5 flex items-center gap-3">
+                <Button
+                  disabled={!title.trim() || createSeat.isPending}
+                  onClick={() => createSeat.mutate()}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  {createSeat.isPending
+                    ? "Creating role…"
+                    : "Create role in graph"}
+                </Button>
+                {createSeat.isError && (
+                  <p className="text-sm text-destructive">
+                    The role could not be created. Check the reporting role and
+                    try again.
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="rounded-2xl border bg-white p-5 sm:p-6">
+              <div>
+                <p className="eos-label">Human + agent hybrid</p>
+                <h2 className="mt-1 text-xl font-semibold">
+                  Place a person in an existing role
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Invite a person into a live seat. They must accept the exact
+                  role; after acceptance the role agent stays with the seat as
+                  their assistant.
+                </p>
+              </div>
+              <div className="mt-6 grid gap-4">
+                <Field label="Work email">
+                  <Input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(event) => setInviteEmail(event.target.value)}
+                    placeholder="person@company.com"
+                  />
+                </Field>
+                <Field label="Role seat">
+                  <select
+                    value={inviteSeatId}
+                    onChange={(event) => setInviteSeatId(event.target.value)}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="">Choose an unoccupied role</option>
+                    {seats
+                      .filter(
+                        (seat: RecordValue) =>
+                          !seat.occupantUserId &&
+                          seat.kind !== "founder" &&
+                          !(organization.data?.invitations || []).some(
+                            (invitation: RecordValue) =>
+                              invitation.seatId === seat.id &&
+                              ["pending", "pending_delivery"].includes(
+                                invitation.status,
+                              ),
+                          ),
+                      )
+                      .map((seat: RecordValue) => (
+                        <option key={seat.id} value={seat.id}>
+                          {seat.title} · {seat.agentName}
+                        </option>
+                      ))}
+                  </select>
+                </Field>
+              </div>
+              <div className="mt-5">
+                <Button
+                  variant="secondary"
+                  disabled={
+                    !inviteEmail.includes("@") ||
+                    !inviteSeatId ||
+                    inviteHuman.isPending
+                  }
+                  onClick={() => inviteHuman.mutate()}
+                >
+                  <UserRound className="mr-2 h-4 w-4" />
+                  {inviteHuman.isPending
+                    ? "Sending invitation…"
+                    : "Send role invitation"}
+                </Button>
+                {inviteHuman.isError && (
+                  <p className="mt-2 text-sm text-destructive">
+                    The invitation could not be sent. Review the email and
+                    selected role.
+                  </p>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+        {canDesign && selectedSeat && (
+          <SelectedSeatEditor
+            key={selectedSeat.id}
+            seat={selectedSeat}
+            seats={seats}
+            saving={updateSeat.isPending}
+            error={updateSeat.isError}
+            onSave={(input) => updateSeat.mutate(input)}
+          />
+        )}
+      </section>
+    </UniversalLayout>
+  );
 }
 
-function StudioTab({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) { return <Button type="button" size="sm" variant={active ? "default" : "ghost"} onClick={onClick}>{label}</Button>; }
-function SparklesIcon() { return <span className="mr-2 text-base leading-none" aria-hidden="true">✦</span>; }
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) { return <label className="block"><span className="eos-label">{label}</span>{hint && <span className="mt-1 block text-xs text-muted-foreground">{hint}</span>}<span className="mt-2 block">{children}</span></label>; }
-function SeatInspector({ seat, memberships, rolePacks }: { seat?: RecordValue; memberships: RecordValue[]; rolePacks: RecordValue[]; view: StudioView }) {
-  if (!seat) return <aside className="rounded-2xl border bg-white p-5"><p className="text-sm text-muted-foreground">Select a role in the graph to inspect it.</p></aside>;
+function StudioTab({
+  active,
+  onClick,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant={active ? "default" : "ghost"}
+      onClick={onClick}
+    >
+      {label}
+    </Button>
+  );
+}
+function SparklesIcon() {
+  return (
+    <span className="mr-2 text-base leading-none" aria-hidden="true">
+      ✦
+    </span>
+  );
+}
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="eos-label">{label}</span>
+      {hint && (
+        <span className="mt-1 block text-xs text-muted-foreground">{hint}</span>
+      )}
+      <span className="mt-2 block">{children}</span>
+    </label>
+  );
+}
+
+function SelectedSeatEditor({
+  seat,
+  seats,
+  saving,
+  error,
+  onSave,
+}: {
+  seat: RecordValue;
+  seats: RecordValue[];
+  saving: boolean;
+  error: boolean;
+  onSave: (input: RecordValue) => void;
+}) {
+  const [tools, setTools] = useState((seat.toolEntitlements || []).join(", "));
+  return (
+    <details className="rounded-2xl border bg-white p-5">
+      <summary className="cursor-pointer font-semibold">
+        Edit selected role · {seat.title}
+      </summary>
+      <form
+        className="mt-5 grid gap-4 md:grid-cols-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const values = new FormData(event.currentTarget);
+          onSave({
+            id: seat.id,
+            title: values.get("title"),
+            agentName: values.get("agentName"),
+            mandate: values.get("mandate"),
+            toolEntitlements: tools
+              .split(",")
+              .map((item: string) => item.trim())
+              .filter(Boolean),
+            supervisorSeatId:
+              String(values.get("supervisorSeatId") || "") || null,
+          });
+        }}
+      >
+        <Field label="Role title">
+          <Input name="title" defaultValue={seat.title} />
+        </Field>
+        <Field label="Role Agent name">
+          <Input name="agentName" defaultValue={seat.agentName} />
+        </Field>
+        <Field label="Accountable result">
+          <Textarea name="mandate" defaultValue={seat.mandate || ""} />
+        </Field>
+        <Field
+          label="Native tool kit"
+          hint="Select the native capabilities this role operates. Custom labels remain available when required."
+        >
+          <RoleToolPicker value={tools} onChange={setTools} />
+          <Input
+            className="mt-3"
+            value={tools}
+            onChange={(event) => setTools(event.target.value)}
+            placeholder="Optional custom tool labels"
+          />
+        </Field>
+        <Field label="Reports to">
+          <select
+            name="supervisorSeatId"
+            defaultValue={seat.supervisorSeatId || ""}
+            disabled={seat.kind === "founder"}
+          >
+            <option value="">No supervisor</option>
+            {seats
+              .filter((candidate: RecordValue) => candidate.id !== seat.id)
+              .map((candidate: RecordValue) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.title}
+                </option>
+              ))}
+          </select>
+        </Field>
+        <div className="flex items-end">
+          <Button type="submit" disabled={saving}>
+            Save role changes
+          </Button>
+        </div>
+        {error && (
+          <p className="text-sm text-destructive">
+            EOS could not update this role. Review its reporting line and
+            authority.
+          </p>
+        )}
+      </form>
+    </details>
+  );
+}
+function SeatInspector({
+  seat,
+  memberships,
+  rolePacks,
+}: {
+  seat?: RecordValue;
+  memberships: RecordValue[];
+  rolePacks: RecordValue[];
+  view: StudioView;
+}) {
+  if (!seat)
+    return (
+      <aside className="rounded-2xl border bg-white p-5">
+        <p className="text-sm text-muted-foreground">
+          Select a role in the graph to inspect it.
+        </p>
+      </aside>
+    );
   const occupant = memberships.find((member) => member.seatId === seat.id);
-  const pack = rolePacks.find((item) => item.seatId === seat.id && item.status === "active");
-  return <aside className="rounded-2xl border bg-white p-5"><div className="flex items-start justify-between gap-3"><div><p className="eos-label">{seatLabel(seat.kind)}</p><h2 className="mt-1 text-xl font-semibold">{seat.title}</h2></div><span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">{seat.agentMode === "assistant" ? "hybrid" : "agent-operated"}</span></div><div className="mt-5 space-y-4 text-sm"><InspectorRow icon={Bot} label="Role Agent" value={seat.agentName} /><InspectorRow icon={UserRound} label="Human director" value={occupant ? (occupant.fullName || occupant.email) : "No human occupant"} /><InspectorRow icon={BriefcaseBusiness} label="Accountable result" value={seat.mandate || "Awaiting mandate"} /><InspectorRow icon={Wrench} label="Tools" value={(seat.toolEntitlements || []).length ? seat.toolEntitlements.join(", ") : "No tool entitlements assigned"} /><InspectorRow icon={Network} label="Role operating pack" value={pack ? `v${pack.version} · ${pack.status}` : "Will be compiled when this role is created"} /></div></aside>;
+  const pack = rolePacks.find(
+    (item) => item.seatId === seat.id && item.status === "active",
+  );
+  return (
+    <aside className="rounded-2xl border bg-white p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="eos-label">{seatLabel(seat.kind)}</p>
+          <h2 className="mt-1 text-xl font-semibold">{seat.title}</h2>
+        </div>
+        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+          {seat.agentMode === "assistant" ? "hybrid" : "agent-operated"}
+        </span>
+      </div>
+      <div className="mt-5 space-y-4 text-sm">
+        <InspectorRow icon={Bot} label="Role Agent" value={seat.agentName} />
+        <InspectorRow
+          icon={UserRound}
+          label="Human director"
+          value={
+            occupant ? occupant.fullName || occupant.email : "No human occupant"
+          }
+        />
+        <InspectorRow
+          icon={BriefcaseBusiness}
+          label="Accountable result"
+          value={seat.mandate || "Awaiting mandate"}
+        />
+        <InspectorRow
+          icon={Wrench}
+          label="Tools"
+          value={
+            (seat.toolEntitlements || []).length
+              ? seat.toolEntitlements.join(", ")
+              : "No tool entitlements assigned"
+          }
+        />
+        <InspectorRow
+          icon={Network}
+          label="Role operating pack"
+          value={
+            pack
+              ? `v${pack.version} · ${pack.status}`
+              : "Will be compiled when this role is created"
+          }
+        />
+      </div>
+    </aside>
+  );
 }
-function InspectorRow({ icon: Icon, label, value }: { icon: typeof Bot; label: string; value: string }) { return <div><div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"><Icon className="h-3.5 w-3.5" />{label}</div><p className="mt-1 leading-relaxed">{value}</p></div>; }
-function SeatCard({ seat, selected, view, onClick }: { seat: RecordValue; selected: boolean; view: StudioView; onClick: () => void }) { const content = view === "tools" ? ((seat.toolEntitlements || []).length ? seat.toolEntitlements.join(", ") : "No native tools assigned") : `${seat.agentMode === "assistant" ? "Human-directed role agent" : "Autonomous role agent"} · ${seat.mandate || "Mandate awaiting definition"}`; return <button type="button" onClick={onClick} className={`rounded-2xl border bg-white p-5 text-left transition-colors ${selected ? "border-primary ring-1 ring-primary" : "hover:border-primary/40"}`}><div className="flex items-center justify-between gap-4"><span className="font-semibold">{seat.title}</span><span className="text-xs text-muted-foreground">{seatLabel(seat.kind)}</span></div><p className="mt-2 text-sm text-muted-foreground">{content}</p></button>; }
+function InspectorRow({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Bot;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </div>
+      <p className="mt-1 leading-relaxed">{value}</p>
+    </div>
+  );
+}
+function SeatCard({
+  seat,
+  selected,
+  view,
+  onClick,
+}: {
+  seat: RecordValue;
+  selected: boolean;
+  view: StudioView;
+  onClick: () => void;
+}) {
+  const content =
+    view === "tools"
+      ? (seat.toolEntitlements || []).length
+        ? seat.toolEntitlements.join(", ")
+        : "No native tools assigned"
+      : `${seat.agentMode === "assistant" ? "Human-directed role agent" : "Autonomous role agent"} · ${seat.mandate || "Mandate awaiting definition"}`;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-2xl border bg-white p-5 text-left transition-colors ${selected ? "border-primary ring-1 ring-primary" : "hover:border-primary/40"}`}
+    >
+      <div className="flex items-center justify-between gap-4">
+        <span className="font-semibold">{seat.title}</span>
+        <span className="text-xs text-muted-foreground">
+          {seatLabel(seat.kind)}
+        </span>
+      </div>
+      <p className="mt-2 text-sm text-muted-foreground">{content}</p>
+    </button>
+  );
+}

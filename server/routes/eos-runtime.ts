@@ -1292,12 +1292,44 @@ function assertMutableCommercialProjection(record: {
     );
 }
 
-function assertCommercialSurface(access: { role: EosSeatKind }) {
-  if (!allowedSurfacesFor(access.role).includes("commercial"))
+function assertCommercialSurface(access: {
+  role: EosSeatKind;
+  classificationCeiling: string;
+  effectiveAuthority?: { toolEntitlements?: unknown };
+}) {
+  if (!compiledAllowedSurfaces(access).includes("commercial"))
     throw new EosRouteError(
       403,
       "commercial_scope_denied",
       "Stakeholder and commercial control is outside this role's compiled workspace.",
+    );
+}
+
+function assertCommercialTool(
+  access: {
+    role: EosSeatKind;
+    classificationCeiling: string;
+    seat: { toolEntitlements?: unknown };
+    effectiveAuthority?: { toolEntitlements?: unknown };
+  },
+  tool: string,
+) {
+  assertCommercialSurface(access);
+  // A founder is the company-level initial operator. Every other role must
+  // receive the native tool from its editable Org Studio contract; neither a
+  // broad commercial page nor a UI route is a substitute for that grant.
+  if (access.role === "founder") return;
+  const assigned = canonicalToolEntitlements([
+    ...(Array.isArray(access.seat.toolEntitlements) ? access.seat.toolEntitlements : []),
+    ...(Array.isArray(access.effectiveAuthority?.toolEntitlements)
+      ? access.effectiveAuthority.toolEntitlements
+      : []),
+  ]);
+  if (!assigned.includes(tool))
+    throw new EosRouteError(
+      403,
+      "commercial_tool_not_entitled",
+      `This role has not been assigned the native ${tool} tool in Org Studio.`,
     );
 }
 
@@ -7968,7 +8000,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
     "/api/eos/companies/:companyId/outreach-sequences",
     route(async (req) => {
       const access = await companyAccess(req);
-      assertCommercialSurface(access);
+      assertCommercialTool(access, "dialer");
       const input = outreachSequenceCreateSchema.parse(req.body);
       const visible = await visibleSeatIds(access.company.id, access.seat.id, access.role);
       const ownerSeatId = input.ownerSeatId || access.seat.id;
@@ -8032,7 +8064,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
     "/api/eos/companies/:companyId/outreach-sequences/:sequenceId/attempts",
     route(async (req) => {
       const access = await companyAccess(req);
-      assertCommercialSurface(access);
+      assertCommercialTool(access, "dialer");
       const input = outreachAttemptCreateSchema.parse(req.body);
       const [sequence] = await db.select().from(eosOutreachSequences).where(and(
         eq(eosOutreachSequences.id, req.params.sequenceId),
