@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Express, Request, Response } from "express";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z, ZodError } from "zod";
 import { companies, eosAuditRecords, eosInstrumentCommands, eosInstrumentEvents, eosInstrumentLinks, eosInstrumentObjects } from "@shared/schema";
 import { nativeContractContentSha256 } from "../esign/template-generation";
@@ -128,39 +128,59 @@ export function registerPublicLeadCaptureRoutes(app: Express): void {
     )).orderBy(desc(eosInstrumentCommands.completedAt)).limit(1);
     if (!activation?.policyDecisionId) throw new PublicLeadCaptureError(409, "lead_capture_activation_evidence_missing", "This form is active but has no publish authorization record. Pause it and republish through EOS.");
 
-    const now = new Date(); const submissionId = randomUUID(); const personId = randomUUID(); const relationshipId = randomUUID();
-    const submissionCommandId = randomUUID(); const personCommandId = randomUUID(); const relationshipCommandId = randomUUID();
+    const now = new Date(); const submissionId = randomUUID();
+    const submissionCommandId = randomUUID();
     const leadName = answerFor(input.answers, ["name", "full_name", "fullName", "first_name", "firstName"]) || "New lead";
     const email = answerFor(input.answers, ["email", "email_address", "emailAddress"]);
     const companyName = answerFor(input.answers, ["company", "company_name", "organization"]);
     const sourceReference = { authority: "public_eos_lead_capture", formObjectId: form.id, consentVersion: definition.consentVersion, capturedAt: now.toISOString(), externalActor: "unverified_public_submitter" };
     const common = { companyId: form.companyId, classification: "confidential", visibility: "organization", ownerSeatId: form.ownerSeatId, parentObjectId: null, evidenceIds: [], version: 1, recordedByUserId: form.recordedByUserId, createdAt: now, updatedAt: now, archivedAt: null, state: "active" } as const;
     const submissionProjection = { ...common, id: submissionId, instrumentKey: "forms", objectType: "submission", objectKey: "submission:" + form.id + ":" + submissionId, title: "Lead capture · " + leadName, summary: "Public submission for " + form.title + ".", data: { formObjectId: form.id, responses: input.answers, submittedAt: now.toISOString(), consent: true, consentVersion: definition.consentVersion }, sourceReference };
-    const personProjection = { ...common, id: personId, instrumentKey: "crm", objectType: "person", objectKey: "lead:" + form.id + ":" + personId, title: leadName, summary: email || companyName || "Lead captured by " + form.title + ".", data: { displayName: leadName, email, companyName, sourceFormObjectId: form.id, submissionObjectId: submissionId }, sourceReference };
-    const relationshipProjection = { ...common, id: relationshipId, instrumentKey: "crm", objectType: "relationship", objectKey: "lead-relationship:" + form.id + ":" + relationshipId, title: "Lead · " + leadName, summary: "Commercial lead relationship created from " + form.title + ".", data: { personObjectId: personId, relationshipType: "lead", sourceFormObjectId: form.id, submissionObjectId: submissionId }, sourceReference };
+    const normalizedEmail = email.trim().toLowerCase();
     await db.transaction(async (tx) => {
-      const objects = [submissionProjection, personProjection, relationshipProjection].map((projection) => ({ ...projection, contentSha256: nativeContractContentSha256(projection) }));
+      // E-mail is the only public identity attribute safe enough to use for an
+      // automatic reconciliation. Lock on it to prevent two concurrent form
+      // posts from creating parallel CRM people for the same known contact.
+      if (normalizedEmail) await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`public-lead:${form.companyId}:${normalizedEmail}`}))`);
+      const [existingPerson] = normalizedEmail ? await tx.select().from(eosInstrumentObjects).where(and(
+        eq(eosInstrumentObjects.companyId, form.companyId), eq(eosInstrumentObjects.instrumentKey, "crm"), eq(eosInstrumentObjects.objectType, "person"), eq(eosInstrumentObjects.state, "active"),
+        sql`lower(${eosInstrumentObjects.data}->>'email') = ${normalizedEmail}`,
+      )).limit(1) : [];
+      const personProjection = existingPerson || { ...common, id: randomUUID(), instrumentKey: "crm", objectType: "person", objectKey: "lead:" + form.id + ":" + randomUUID(), title: leadName, summary: email || companyName || "Lead captured by " + form.title + ".", data: { displayName: leadName, email, companyName, sourceFormObjectId: form.id, submissionObjectId: submissionId }, sourceReference };
+      const [existingRelationship] = existingPerson ? await tx.select().from(eosInstrumentObjects).where(and(
+        eq(eosInstrumentObjects.companyId, form.companyId), eq(eosInstrumentObjects.instrumentKey, "crm"), eq(eosInstrumentObjects.objectType, "relationship"), eq(eosInstrumentObjects.state, "active"),
+        sql`${eosInstrumentObjects.data}->>'personObjectId' = ${personProjection.id}`,
+        sql`${eosInstrumentObjects.data}->>'relationshipType' = 'lead'`,
+      )).limit(1) : [];
+      const relationshipProjection = existingRelationship || { ...common, id: randomUUID(), instrumentKey: "crm", objectType: "relationship", objectKey: "lead-relationship:" + form.id + ":" + randomUUID(), title: "Lead · " + leadName, summary: "Commercial lead relationship created from " + form.title + ".", data: { personObjectId: personProjection.id, relationshipType: "lead", sourceFormObjectId: form.id, submissionObjectId: submissionId }, sourceReference };
+      const objects = [submissionProjection, ...(existingPerson ? [] : [personProjection]), ...(existingRelationship ? [] : [relationshipProjection])].map((projection) => ({ ...projection, contentSha256: nativeContractContentSha256(projection) }));
       await tx.insert(eosInstrumentObjects).values(objects);
       const commands = [
         { id: submissionCommandId, instrumentKey: "forms", objectId: submissionId, commandType: "public_submission.recorded", result: { objectId: submissionId, state: "active" } },
-        { id: personCommandId, instrumentKey: "crm", objectId: personId, commandType: "public_lead.person_created", result: { objectId: personId, state: "active" } },
-        { id: relationshipCommandId, instrumentKey: "crm", objectId: relationshipId, commandType: "public_lead.relationship_created", result: { objectId: relationshipId, state: "active" } },
+        ...(!existingPerson ? [{ id: randomUUID(), instrumentKey: "crm", objectId: personProjection.id, commandType: "public_lead.person_created", result: { objectId: personProjection.id, state: "active" } }] : []),
+        ...(!existingRelationship ? [{ id: randomUUID(), instrumentKey: "crm", objectId: relationshipProjection.id, commandType: "public_lead.relationship_created", result: { objectId: relationshipProjection.id, state: "active" } }] : []),
       ].map((command) => ({ ...command, companyId: form.companyId, idempotencyKey: command.commandType + ":" + command.objectId, expectedVersion: null, payload: { formObjectId: form.id, source: "unverified_public_submitter" }, state: "completed", policyDecisionId: activation.policyDecisionId, requestedByUserId: form.recordedByUserId, createdAt: now, completedAt: now }));
       await tx.insert(eosInstrumentCommands).values(commands);
       const events = [
         { object: submissionProjection, commandId: submissionCommandId, eventType: "public_submission.recorded" },
-        { object: personProjection, commandId: personCommandId, eventType: "public_lead.person_created" },
-        { object: relationshipProjection, commandId: relationshipCommandId, eventType: "public_lead.relationship_created" },
+        ...(!existingPerson ? [{ object: personProjection, commandId: commands.find((command) => command.objectId === personProjection.id)!.id, eventType: "public_lead.person_created" }] : []),
+        ...(!existingRelationship ? [{ object: relationshipProjection, commandId: commands.find((command) => command.objectId === relationshipProjection.id)!.id, eventType: "public_lead.relationship_created" }] : []),
       ].map(({ object, commandId, eventType }) => ({ id: randomUUID(), companyId: form.companyId, instrumentKey: object.instrumentKey, objectId: object.id, commandId, eventType, fromState: null, toState: "active", objectVersion: 1, payload: { formObjectId: form.id, source: "unverified_public_submitter" }, evidenceIds: [], contentSha256: eventHash({ companyId: form.companyId, objectId: object.id, commandId, eventType, formObjectId: form.id }), recordedByUserId: form.recordedByUserId, createdAt: now }));
       await tx.insert(eosInstrumentEvents).values(events);
       await tx.insert(eosInstrumentLinks).values([
         { id: randomUUID(), companyId: form.companyId, sourceObjectId: form.id, targetObjectId: submissionId, relationshipType: "received", metadata: { source: "public_eos_capture" }, createdByUserId: form.recordedByUserId, createdAt: now },
-        { id: randomUUID(), companyId: form.companyId, sourceObjectId: submissionId, targetObjectId: personId, relationshipType: "identified", metadata: { source: "public_eos_capture" }, createdByUserId: form.recordedByUserId, createdAt: now },
-        { id: randomUUID(), companyId: form.companyId, sourceObjectId: personId, targetObjectId: relationshipId, relationshipType: "has_relationship", metadata: { source: "public_eos_capture" }, createdByUserId: form.recordedByUserId, createdAt: now },
+        { id: randomUUID(), companyId: form.companyId, sourceObjectId: submissionId, targetObjectId: personProjection.id, relationshipType: "identified", metadata: { source: "public_eos_capture", reconciled: Boolean(existingPerson) }, createdByUserId: form.recordedByUserId, createdAt: now },
+        // The person-to-relationship edge is durable topology, not an event
+        // log. A repeated capture gets its own submission edges above but must
+        // not attempt to duplicate this already-established relationship.
+        ...(!existingRelationship ? [{ id: randomUUID(), companyId: form.companyId, sourceObjectId: personProjection.id, targetObjectId: relationshipProjection.id, relationshipType: "has_relationship", metadata: { source: "public_eos_capture", reconciled: false }, createdByUserId: form.recordedByUserId, createdAt: now }] : []),
       ]);
-      await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: form.companyId, actorUserId: form.recordedByUserId, action: "lead_capture.public_submission_recorded", targetType: "lead_capture_form", targetId: form.id, traceId: "public:" + submissionId, correlationId: submissionId, result: "captured_unverified", details: { actorType: "unverified_public_submitter", formObjectId: form.id, submissionObjectId: submissionId, crmPersonObjectId: personId, crmRelationshipObjectId: relationshipId, consentVersion: definition.consentVersion, activationPolicyDecisionId: activation.policyDecisionId }, createdAt: now });
+      await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: form.companyId, actorUserId: form.recordedByUserId, action: "lead_capture.public_submission_recorded", targetType: "lead_capture_form", targetId: form.id, traceId: "public:" + submissionId, correlationId: submissionId, result: "captured_unverified", details: { actorType: "unverified_public_submitter", formObjectId: form.id, submissionObjectId: submissionId, crmPersonObjectId: personProjection.id, crmRelationshipObjectId: relationshipProjection.id, reconciledExistingPerson: Boolean(existingPerson), reconciledExistingRelationship: Boolean(existingRelationship), consentVersion: definition.consentVersion, activationPolicyDecisionId: activation.policyDecisionId }, createdAt: now });
     });
     publicHeaders(res);
+    // Never disclose reconciliation to an untrusted public submitter: that
+    // would turn the form into an account-enumeration oracle. The result is
+    // retained in the internal audit record instead.
     res.status(201).json({ schemaVersion: "eos.public-lead-submission.v1", accepted: true, confirmationMessage: definition.confirmationMessage });
   }));
 }
