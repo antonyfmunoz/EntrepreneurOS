@@ -33,6 +33,7 @@ describe("native no-code workflow composition", () => {
     expect(composer).toContain("New version");
     expect(composer).toContain("approval");
     expect(composer).toContain("condition");
+    expect(composer).toContain("Workflow step ${index + 1} type");
     expect(composer).toContain("Do not transmit data to an external provider");
     expect(overlay).toContain("mayOperateNativeWorkflows");
     expect(overlay).toContain('toolEntitlements.has("workflows")');
