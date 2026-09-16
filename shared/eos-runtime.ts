@@ -1123,6 +1123,20 @@ const processStepSchema = z.object({
   authorityClass: z.enum(["view", "execute", "decide"]).default("execute"),
   toolKey: z.string().trim().min(1).max(200).default("operations"),
   onFailure: z.string().trim().min(3).max(2000).default("Stop, preserve the current state, and escalate to the accountable role."),
+  // Conditional paths are declared against immutable step ids. They stay
+  // forward-only at runtime, which makes a no-code route inspectable,
+  // deterministic, and impossible to turn into an unbounded loop by accident.
+  conditionKey: z.string().trim().max(200).default(""),
+  onTrueStepId: z.string().trim().max(100).default(""),
+  onFalseStepId: z.string().trim().max(100).default(""),
+}).superRefine((value, context) => {
+  const hasRoute = Boolean(value.conditionKey || value.onTrueStepId || value.onFalseStepId);
+  if (hasRoute && value.actionKind !== "condition")
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["actionKind"], message: "Only a condition step may declare conditional routes." });
+  if (value.actionKind === "condition" && (value.onTrueStepId || value.onFalseStepId) && !value.conditionKey)
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["conditionKey"], message: "A routed condition needs a condition key." });
+  if (value.actionKind === "condition" && Boolean(value.onTrueStepId) !== Boolean(value.onFalseStepId))
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["onTrueStepId"], message: "A routed condition needs both yes and no destinations." });
 });
 export const processCreateSchema = operationsRecordBase.extend({
   capabilityInstanceId: z.string().uuid(),
