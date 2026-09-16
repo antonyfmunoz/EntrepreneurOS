@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Bot, ChevronLeft, ChevronRight, X } from "lucide-react";
 import Header from "./header";
 import LeftRail from "./left-rail";
-import FloatingAIPanel from "./floating-ai-panel";
+import FloatingAIPanel, { type FloatingAiPanelProps } from "./floating-ai-panel";
 import { useRailCollapse } from "@/hooks/use-rail-collapse";
 
 export interface UniversalLayoutLeftRailItem {
@@ -49,6 +49,7 @@ export function UniversalLayout({
   const right = useRailCollapse("ui.rightRail.collapsed");
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
+  const [floatingPanelExpanded, setFloatingPanelExpanded] = useState(false);
   const hasCustomLeft = leftRailItems !== undefined;
   const hasLeft = leftRailItems === undefined || leftRailItems.length > 0;
   const hasRight = Boolean(rightRailContent);
@@ -74,6 +75,13 @@ export function UniversalLayout({
       leadingAction={desktopLeftRailToggle}
     />
   );
+  const resolvedFloatingPanel = floatingPanel === false
+    ? false
+    : floatingPanel
+      ? React.isValidElement<FloatingAiPanelProps>(floatingPanel) && floatingPanel.type === FloatingAIPanel
+        ? React.cloneElement(floatingPanel, { onExpandedChange: setFloatingPanelExpanded })
+        : floatingPanel
+      : <FloatingAIPanel onExpandedChange={setFloatingPanelExpanded} />;
 
   return (
     <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-[#f5f6f7] text-foreground">
@@ -110,12 +118,22 @@ export function UniversalLayout({
         )}
 
         <main className="relative min-w-0 flex-1 overflow-y-auto bg-white">
-          {floatingPanel === false ? null : floatingPanel ?? <FloatingAIPanel />}
+          {resolvedFloatingPanel || null}
+          {resolvedFloatingPanel && (
+            <div
+              aria-hidden="true"
+              data-eos-decision-hud-clearance={floatingPanelExpanded ? "expanded" : "collapsed"}
+              className={
+                "pointer-events-none transition-[height] duration-200 " +
+                (floatingPanelExpanded ? "h-7 sm:h-9" : "h-3")
+              }
+            />
+          )}
           <div className={
             "mx-auto w-full max-w-[1600px] " +
             (floatingPanel === false
               ? "px-3 py-5 sm:px-6 lg:px-10 lg:py-8"
-              : "px-3 pb-5 pt-4 sm:px-6 sm:pb-6 sm:pt-4 lg:px-10 lg:pb-8 lg:pt-4")
+              : "px-3 pb-5 pt-0 sm:px-6 sm:pb-6 sm:pt-0 lg:px-10 lg:pb-8 lg:pt-0")
           }>
             {children}
           </div>

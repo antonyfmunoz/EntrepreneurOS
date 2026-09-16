@@ -89,6 +89,12 @@ try {
   await decisionHud
     .getByRole("button", { name: /Next: Advance the organization manifest/ })
     .click();
+  const hudClearance = desktop.locator("[data-eos-decision-hud-clearance='expanded']");
+  await hudClearance.waitFor();
+  const expandedHudBox = await decisionHud.boundingBox();
+  const clearanceBox = await hudClearance.boundingBox();
+  if (!expandedHudBox || !clearanceBox || clearanceBox.y < expandedHudBox.y + expandedHudBox.height - 1)
+    throw new Error("Expanding the decision HUD did not reserve workspace clearance beneath the sticky control.");
   await decisionHud
     .getByRole("button", { name: "Continue organization setup", exact: true })
     .click();
@@ -100,6 +106,11 @@ try {
   const primaryNavigation = desktop.getByRole("navigation", {
     name: "EOS primary navigation",
   });
+  const navigationToggle = primaryNavigation.getByRole("button", { name: "Collapse left rail", exact: true });
+  await navigationToggle.waitFor();
+  const navigationFirstControl = primaryNavigation.locator("li").first();
+  if (await navigationFirstControl.getByRole("button", { name: "Collapse left rail", exact: true }).count() !== 1)
+    throw new Error("The left-rail collapse control is not a dedicated navigation control above Home.");
   if (
     await primaryNavigation
       .getByRole("link", { name: "Portfolio", exact: true })

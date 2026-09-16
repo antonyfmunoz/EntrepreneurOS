@@ -1,13 +1,18 @@
 import { useState } from "react";
 import { AlertTriangle, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 
-interface FloatingAiPanelProps {
+export interface FloatingAiPanelProps {
   assistantName?: string;
   seatName?: string;
   openWork?: number;
   approvals?: number;
   nextAction?: string;
   children?: React.ReactNode;
+  /**
+   * The layout uses this to reserve workspace clearance while the decision
+   * HUD is open. A sticky control must never obscure the workspace beneath it.
+   */
+  onExpandedChange?: (expanded: boolean) => void;
 }
 
 export default function FloatingAIPanel({
@@ -17,6 +22,7 @@ export default function FloatingAIPanel({
   approvals = 0,
   nextAction = "Review the current operating context",
   children,
+  onExpandedChange,
 }: FloatingAiPanelProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -24,11 +30,17 @@ export default function FloatingAIPanel({
     <div
       className="pointer-events-none sticky top-3 z-40 px-3 sm:px-6 lg:px-10"
       aria-label="Executive decision control HUD"
+      data-eos-decision-hud
+      data-expanded={expanded ? "true" : "false"}
     >
       <div className="eos-glass pointer-events-auto mx-auto w-full max-w-4xl overflow-hidden rounded-2xl border border-primary/20 shadow-[0_12px_34px_rgba(106,55,212,0.16)]">
         <button
           type="button"
-          onClick={() => setExpanded((value) => !value)}
+          onClick={() => setExpanded((value) => {
+            const next = !value;
+            onExpandedChange?.(next);
+            return next;
+          })}
           className="flex min-h-14 w-full flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 text-left sm:px-6"
           aria-expanded={expanded}
         >
