@@ -119,6 +119,7 @@ const NativeOperatingControlCenter = lazy(() => import("@/components/native-oper
 const CanonicalInstrumentControlCenter = lazy(() => import("@/components/canonical-instrument-control-center").then((module) => ({ default: module.CanonicalInstrumentControlCenter })));
 const LeadCaptureStudio = lazy(() => import("@/components/lead-capture-studio").then((module) => ({ default: module.LeadCaptureStudio })));
 const NativeFunnelStudio = lazy(() => import("@/components/native-funnel-studio").then((module) => ({ default: module.NativeFunnelStudio })));
+const NativeCalendarStudio = lazy(() => import("@/components/native-calendar-studio").then((module) => ({ default: module.NativeCalendarStudio })));
 const EndStateGovernanceControlCenter = lazy(() => import("@/components/end-state-governance-control-center").then((module) => ({ default: module.EndStateGovernanceControlCenter })));
 
 function DeferredControlFallback() {
@@ -1368,6 +1369,15 @@ export default function EosOverlayPage() {
   );
   const canUseInstrument = (instrumentKey: string) =>
     visibleInstrumentKeys.has(instrumentKey);
+  const toolEntitlements = new Set<string>(
+    principalContext?.toolEntitlements || [],
+  );
+  // Reading a governed instrument is not an entitlement to operate its UI.
+  // Founder ownership grants the initial native operating set; every other
+  // role must be explicitly assigned the calendar tool through its role pack.
+  const mayOperateNativeCalendar =
+    canUseInstrument("calendar") &&
+    (isFounder || toolEntitlements.has("calendar"));
   // A role's Work Room is its assigned operating queue, not a copy of every
   // company-wide control surface. Founder-owned growth controls are exposed
   // here; role communication continues through the hierarchical assistant
@@ -10506,6 +10516,14 @@ export default function EosOverlayPage() {
           </TabsContent>
 
           <TabsContent value="work-room" className="space-y-6">
+            {mayOperateNativeCalendar && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeCalendarStudio
+                root={root}
+                roleScopeKey={roleScopeKey}
+                canExecute={effectiveAuthorityClasses.has("execute")}
+                canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
             {mayOperateFounderGrowthTools && canUseInstrument("forms") && canUseInstrument("crm") && <Suspense fallback={<DeferredControlFallback />}>
               <LeadCaptureStudio
                 root={root}
