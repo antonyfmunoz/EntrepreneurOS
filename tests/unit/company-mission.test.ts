@@ -18,6 +18,16 @@ describe("Company Mission Journey", () => {
     expect(nextCompanyMission({ portfolioId: "1" })?.key).toBe("company_identity");
   });
 
+  it("keeps the same journey for an established team while requiring its starting shape", () => {
+    const established = {
+      portfolioId: "1", companyName: "Empyrean Creative", stage: "revenue", businessModel: "services",
+      offer: "Revenue recovery", targetCustomer: "Professional services firms", assistantName: "Henna",
+      founderVision: "Build enduring creative institutions", goals: "Close three retained clients", formation: "existing_team" as const,
+    };
+    expect(nextCompanyMission(established)?.key).toBe("operating_formation");
+    expect(nextCompanyMission({ ...established, teamSnapshot: "Founder; account director; two delivery specialists; growth seat vacant." })).toBeNull();
+  });
+
   it("normalizes assumed business names without duplicates", () => {
     expect(parseAssumedBusinessNames("Empyrean Studios, Empyrean Studios,  Empyrean Creative "))
       .toEqual(["Empyrean Studios", "Empyrean Creative"]);
