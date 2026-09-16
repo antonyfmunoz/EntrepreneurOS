@@ -2736,7 +2736,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       .expect(200);
     expect(audit.body.map((item: any) => item.action)).toEqual(
       expect.arrayContaining([
-        "manifest.compiled",
+        "manifest.compiled_from_company_mission",
         "manifest.activated",
         "work_packet.created",
         "approval.decided",
