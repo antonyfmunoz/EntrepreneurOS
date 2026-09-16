@@ -157,6 +157,65 @@ async function assertNativeMessageCreate(
   }
 }
 
+/**
+ * Conference Rooms are native decision environments. Their records must form
+ * one auditable chain (room → meeting → decision) and a named decision-maker
+ * must actually have attended the meeting they are recorded against.
+ */
+async function assertNativeConferenceRoomCreate(
+  access: Awaited<ReturnType<typeof companyAccess>>,
+  input: {
+    instrumentKey: string;
+    objectType: string;
+    data: Record<string, unknown>;
+    parentObjectId?: string;
+  },
+) {
+  if (input.instrumentKey !== "conference_rooms" || !["meeting", "decision"].includes(input.objectType)) return;
+  const data = recordValue(input.data);
+  if (input.objectType === "meeting") {
+    const roomObjectId = typeof data.roomObjectId === "string" ? data.roomObjectId : "";
+    if (!roomObjectId || input.parentObjectId !== roomObjectId)
+      throw new EosRouteError(400, "conference_meeting_room_required", "A native meeting must be nested beneath its named Conference Room.");
+    const [room] = await db.select().from(eosInstrumentObjects).where(and(
+      eq(eosInstrumentObjects.id, roomObjectId),
+      eq(eosInstrumentObjects.companyId, access.company.id),
+      eq(eosInstrumentObjects.instrumentKey, "conference_rooms"),
+      eq(eosInstrumentObjects.objectType, "room"),
+    )).limit(1);
+    if (!room) throw new EosRouteError(409, "conference_meeting_room_invalid", "The selected Conference Room must exist inside this company.");
+    const supplied = data.participantSeatIds;
+    if (!Array.isArray(supplied) || !supplied.length || supplied.some((seatId) => typeof seatId !== "string"))
+      throw new EosRouteError(400, "conference_meeting_participants_required", "A native meeting needs at least one named active company participant.");
+    const participantSeatIds = supplied as string[];
+    if (new Set(participantSeatIds).size !== participantSeatIds.length)
+      throw new EosRouteError(400, "conference_meeting_participants_duplicate", "Meeting participants must be unique.");
+    const activeSeats = await db.select({ id: eosSeats.id }).from(eosSeats).where(and(
+      eq(eosSeats.companyId, access.company.id),
+      eq(eosSeats.status, "active"),
+      inArray(eosSeats.id, participantSeatIds),
+    ));
+    if (activeSeats.length !== participantSeatIds.length)
+      throw new EosRouteError(409, "conference_meeting_participant_scope_invalid", "Every meeting participant must be an active seat in this company.");
+    return;
+  }
+
+  const meetingObjectId = typeof data.meetingObjectId === "string" ? data.meetingObjectId : "";
+  const decidedBySeatId = typeof data.decidedBySeatId === "string" ? data.decidedBySeatId : "";
+  if (!meetingObjectId || input.parentObjectId !== meetingObjectId || !decidedBySeatId)
+    throw new EosRouteError(400, "conference_decision_context_required", "A decision must be nested beneath its meeting and name the participant who made it.");
+  const [meeting] = await db.select().from(eosInstrumentObjects).where(and(
+    eq(eosInstrumentObjects.id, meetingObjectId),
+    eq(eosInstrumentObjects.companyId, access.company.id),
+    eq(eosInstrumentObjects.instrumentKey, "conference_rooms"),
+    eq(eosInstrumentObjects.objectType, "meeting"),
+  )).limit(1);
+  if (!meeting) throw new EosRouteError(409, "conference_decision_meeting_invalid", "The selected governing meeting must exist inside this company.");
+  const participants = recordValue(meeting.data).participantSeatIds;
+  if (!Array.isArray(participants) || !participants.includes(decidedBySeatId))
+    throw new EosRouteError(409, "conference_decision_maker_invalid", "The recorded decision-maker must be a named participant in the governing meeting.");
+}
+
 async function visibleObjectSet(access: Awaited<ReturnType<typeof companyAccess>>, objects: typeof eosInstrumentObjects.$inferSelect[]) {
   const seatIds = await visibleSeatIds(access.company.id, access.seat.id, access.role);
   const messageConversationParticipants = new Map<string, Set<string>>(
@@ -378,6 +437,7 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     const replay = await replayCommand(access.company.id, input.idempotencyKey, input.instrumentKey, "object.create");
     if (replay) { res.status(200).json(replay); return; }
     await assertNativeMessageCreate(access, input);
+    await assertNativeConferenceRoomCreate(access, input);
     await checkedEvidence(access.company.id, input.evidenceIds);
     if (input.parentObjectId) {
       const [parent] = await db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.id, input.parentObjectId), eq(eosInstrumentObjects.instrumentKey, input.instrumentKey))).limit(1);

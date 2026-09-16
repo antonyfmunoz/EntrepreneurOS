@@ -100,6 +100,7 @@ import {
   sharedServiceDispositionSchema,
   selectAdvisorSeats,
   selectOperatingAssignment,
+  conferenceDecisionWorkPacketCreateSchema,
   workPacketCreateSchema,
   visibilityPolicyFor,
 } from "../../shared/eos-runtime";
@@ -166,6 +167,19 @@ describe("EOS overlay runtime contracts", () => {
     expect(packet.requiresApproval).toBe(false);
     expect(packet.source).toBe("manual");
     expect(packet.evidenceRequirements).toEqual([]);
+  });
+
+  it("requires a current decision and an explicit accountable attendee before creating follow-on work", () => {
+    const input = conferenceDecisionWorkPacketCreateSchema.parse({
+      expectedDecisionVersion: 3,
+      title: "Deliver the revised recovery offer",
+      objective: "Prepare the revised package agreed in the commercial review.",
+      accountableSeatId: "00000000-0000-4000-8000-000000000901",
+    });
+    expect(input.requiresApproval).toBe(false);
+    expect(input.priority).toBe("medium");
+    expect(conferenceDecisionWorkPacketCreateSchema.safeParse({ ...input, expectedDecisionVersion: 0 }).success).toBe(false);
+    expect(conferenceDecisionWorkPacketCreateSchema.safeParse({ ...input, accountableSeatId: "not-a-seat" }).success).toBe(false);
   });
 
   it("enforces the Work Packet transition graph", () => {

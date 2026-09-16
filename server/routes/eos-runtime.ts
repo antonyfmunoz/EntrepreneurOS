@@ -139,6 +139,7 @@ import {
   authoritySubjectIsEffective,
   authoritySubjectTransitionSchema,
   authorityClasses,
+  conferenceDecisionWorkPacketCreateSchema,
   authorityGrantCoversResource,
   authorityGrantCreateSchema,
   authorityGrantTransitionSchema,
@@ -12952,6 +12953,174 @@ export function registerEosRuntimeRoutes(app: Express): void {
                 visible.has(packet.accountableSeatId))),
         ),
       };
+    }),
+  );
+
+  /**
+   * Native Conference Rooms are decision environments, not a disconnected
+   * meeting ledger. This is the only path that turns a recorded decision into
+   * accountable work, and retains both sides of that lineage atomically.
+   */
+  app.post(
+    "/api/eos/companies/:companyId/conference-rooms/decisions/:decisionId/work-packet",
+    route(async (req) => {
+      const access = await companyAccess(req);
+      const { company } = access;
+      const input = conferenceDecisionWorkPacketCreateSchema.parse(req.body);
+      const [decision] = await db.select().from(eosInstrumentObjects).where(and(
+        eq(eosInstrumentObjects.id, req.params.decisionId),
+        eq(eosInstrumentObjects.companyId, company.id),
+        eq(eosInstrumentObjects.instrumentKey, "conference_rooms"),
+        eq(eosInstrumentObjects.objectType, "decision"),
+      )).limit(1);
+      if (!decision) throw new EosRouteError(404, "conference_decision_not_found", "The Conference Room decision was not found in this company.");
+      if (decision.version !== input.expectedDecisionVersion)
+        throw new EosRouteError(409, "conference_decision_changed", "The decision changed before its follow-on work could be created. Refresh it and try again.");
+      if (!mayAccessClassification(access, decision.classification))
+        throw new EosRouteError(403, "classification_ceiling_exceeded", "This seat cannot create work from a decision above its classification ceiling.");
+
+      const decisionData = (decision.data || {}) as Record<string, unknown>;
+      const meetingObjectId = typeof decisionData.meetingObjectId === "string" ? decisionData.meetingObjectId : "";
+      const [meeting] = meetingObjectId ? await db.select().from(eosInstrumentObjects).where(and(
+        eq(eosInstrumentObjects.id, meetingObjectId),
+        eq(eosInstrumentObjects.companyId, company.id),
+        eq(eosInstrumentObjects.instrumentKey, "conference_rooms"),
+        eq(eosInstrumentObjects.objectType, "meeting"),
+      )).limit(1) : [];
+      if (!meeting) throw new EosRouteError(409, "conference_decision_meeting_invalid", "The decision must remain attached to its governed meeting before creating follow-on work.");
+      const meetingData = (meeting.data || {}) as Record<string, unknown>;
+      const participantSeatIds = Array.isArray(meetingData.participantSeatIds)
+        ? meetingData.participantSeatIds.filter((seatId): seatId is string => typeof seatId === "string")
+        : [];
+      const seniorOperator = ["founder", "portfolio_executive"].includes(access.role);
+      if (!seniorOperator && !participantSeatIds.includes(access.seat.id))
+        throw new EosRouteError(403, "conference_meeting_participant_required", "Only a meeting participant or an authorized senior operator may create follow-on work from this decision.");
+      if (!participantSeatIds.includes(input.accountableSeatId))
+        throw new EosRouteError(409, "conference_work_owner_invalid", "Follow-on work must be assigned to a named participant in the governing meeting.");
+
+      await authorizeAction(req, access, {
+        authorityClass: "execute",
+        resource: "conference_room_decision",
+        actionKey: "conference_room.decision.create_work_packet",
+        purpose: "turn_governed_decision_into_accountable_work",
+        classification: decision.classification,
+        consequence: input.requiresApproval ? "material" : "routine",
+        targetSeatId: input.accountableSeatId,
+      });
+      const visible = await visibleSeatIds(company.id, access.seat.id, access.role);
+      if (!visible.has(input.accountableSeatId) && !seniorOperator)
+        throw new EosRouteError(403, "accountable_seat_denied", "This seat cannot assign decision follow-on work outside its authorized reporting scope.");
+      const accountableSeat = await db.query.eosSeats.findFirst({ where: and(
+        eq(eosSeats.id, input.accountableSeatId),
+        eq(eosSeats.companyId, company.id),
+        eq(eosSeats.status, "active"),
+      ) });
+      if (!accountableSeat) throw new EosRouteError(409, "conference_work_owner_inactive", "The selected accountable meeting participant is no longer an active company seat.");
+
+      const now = new Date();
+      const id = randomUUID();
+      const { traceId, correlationId } = tracePair();
+      const status = input.requiresApproval ? "awaiting_approval" : "ready";
+      const followOnWorkPacketIds = Array.from(new Set([
+        ...(Array.isArray(decisionData.followOnWorkPacketIds)
+          ? decisionData.followOnWorkPacketIds.filter((item): item is string => typeof item === "string")
+          : []),
+        id,
+      ]));
+      let approvalId: string | undefined;
+      const approver = await approverFor(company, access.seat, decision.classification);
+      await db.transaction(async (tx) => {
+        await tx.insert(eosWorkPackets).values({
+          id,
+          companyId: company.id,
+          createdByUserId: req.user.id,
+          accountableUserId: req.user.id,
+          accountableSeatId: input.accountableSeatId,
+          title: input.title,
+          objective: input.objective,
+          status,
+          priority: input.priority,
+          source: "manual",
+          visibility: "reporting_tree",
+          classification: decision.classification,
+          requiresApproval: input.requiresApproval,
+          toolPack: ["tasks", "conference_rooms"],
+          evidenceRequirements: input.evidenceRequirements,
+          capabilityInstanceId: null,
+          processDefinitionId: null,
+          resourceIds: [],
+          expectedOutput: input.expectedOutput,
+          acceptanceCriteria: input.acceptanceCriteria,
+          constraintsPolicies: "Created from a governed Conference Room decision; preserve the decision, meeting, and authority lineage.",
+          failureEscalationCompensation: "Escalate through the reporting chain and retain the decision record if this work cannot be completed as agreed.",
+          humanFallback: "The accountable role holder reviews, redirects, or reassigns the work through the reporting chain.",
+          sourceLineage: `conference_decision:${decision.id};meeting:${meeting.id}`,
+          outputArtifactKeys: [],
+          traceId,
+          correlationId,
+          dueAt: input.dueAt ? new Date(input.dueAt) : null,
+          createdAt: now,
+          updatedAt: now,
+        });
+        if (input.requiresApproval) {
+          approvalId = randomUUID();
+          await tx.insert(eosApprovalRequests).values({
+            id: approvalId,
+            companyId: company.id,
+            workPacketId: id,
+            requestedByUserId: req.user.id,
+            assignedToUserId: approver.userId,
+            assignedToSeatId: approver.seatId,
+            summary: `Authorize follow-on work: ${input.title}`,
+            status: "pending",
+            createdAt: now,
+          });
+        }
+        const [updatedDecision] = await tx.update(eosInstrumentObjects).set({
+          data: { ...decisionData, followOnWorkPacketIds },
+          version: decision.version + 1,
+          updatedAt: now,
+          contentSha256: jsonContentHash({
+            schemaVersion: "eos.instrument-object.v1",
+            companyId: company.id,
+            instrumentKey: decision.instrumentKey,
+            objectType: decision.objectType,
+            objectKey: decision.objectKey,
+            title: decision.title,
+            summary: decision.summary,
+            state: decision.state,
+            classification: decision.classification,
+            visibility: decision.visibility,
+            ownerSeatId: decision.ownerSeatId,
+            parentObjectId: decision.parentObjectId,
+            data: { ...decisionData, followOnWorkPacketIds },
+            sourceReference: decision.sourceReference,
+            evidenceIds: decision.evidenceIds,
+            version: decision.version + 1,
+          }),
+        }).where(and(
+          eq(eosInstrumentObjects.id, decision.id),
+          eq(eosInstrumentObjects.companyId, company.id),
+          eq(eosInstrumentObjects.version, decision.version),
+        )).returning();
+        if (!updatedDecision) throw new EosRouteError(409, "conference_decision_changed", "The decision changed before its follow-on work could be linked.");
+        await tx.insert(eosAuditRecords).values([
+          {
+            id: randomUUID(), companyId: company.id, actorUserId: req.user.id,
+            action: "conference_room.decision.work_packet_created", targetType: "conference_decision", targetId: decision.id,
+            traceId, correlationId, result: status,
+            details: { workPacketId: id, approvalId: approvalId || null, meetingObjectId: meeting.id, accountableSeatId: input.accountableSeatId }, createdAt: now,
+          },
+          {
+            id: randomUUID(), companyId: company.id, actorUserId: req.user.id,
+            action: "work_packet.created_from_conference_decision", targetType: "work_packet", targetId: id,
+            traceId, correlationId, result: status,
+            details: { decisionObjectId: decision.id, meetingObjectId: meeting.id, approvalId: approvalId || null }, createdAt: now,
+          },
+        ]);
+      });
+      const created = await db.query.eosWorkPackets.findFirst({ where: eq(eosWorkPackets.id, id) });
+      return { status: 201, body: { workPacket: created, decisionId: decision.id, approvalId: approvalId || null } };
     }),
   );
 
