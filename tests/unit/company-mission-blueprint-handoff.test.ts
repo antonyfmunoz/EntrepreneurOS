@@ -17,4 +17,12 @@ describe("Company Mission blueprint handoff", () => {
     expect(runtime).toContain('actionKey: "company_blueprint.instantiate"');
     expect(runtime).toContain("ensureSeatOperatingKernel");
   });
+
+  it("materializes native objectives and draft launch packets from the same company variables", () => {
+    expect(runtime).toContain("compileCompanyBlueprintStarters");
+    expect(runtime).toContain("createdStarterObjectiveIds");
+    expect(runtime).toContain("createdStarterPacketIds");
+    expect(runtime).toContain('source: "compiler"');
+    expect(runtime).toContain("No external provider effect is implied by this native starter packet.");
+  });
 });
