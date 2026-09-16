@@ -1880,8 +1880,10 @@ try {
   await desktop.getByRole("button", { name: "Continue", exact: true }).click();
   await desktop.getByText("Agent-first", { exact: true }).click();
   await desktop.getByRole("button", { name: "Continue", exact: true }).click();
-  await desktop.getByRole("button", { name: "Create company and open Org Studio", exact: true }).click();
-  await desktop.waitForURL(/\/company\/\d+\/org-studio/);
+  await desktop
+    .getByRole("button", { name: "Create company and compile blueprint", exact: true })
+    .click();
+  await desktop.waitForURL(/\/company\/\d+\/org-studio\?from=mission&compiled=1/);
   await desktop.getByRole("heading", { name: "Org Studio", exact: true }).waitFor();
   const firstRunState = await desktop.evaluate(async () => {
     const companyId = window.location.pathname.match(/\/company\/(\d+)/)?.[1];
@@ -1907,6 +1909,19 @@ try {
   )
     throw new Error(
       `First-run organization context was incomplete: ${JSON.stringify(firstRunState.context)}`,
+    );
+  const compiledBlueprint = await desktop.evaluate(async () => {
+    const companyId = window.location.pathname.match(/\/company\/(\d+)/)?.[1];
+    return fetch(`/api/eos/companies/${companyId}/company-blueprint`).then((response) =>
+      response.json(),
+    );
+  });
+  if (
+    !compiledBlueprint.blueprint?.roles?.length ||
+    compiledBlueprint.blueprint.roles.some((role: { state?: string }) => role.state !== "instantiated")
+  )
+    throw new Error(
+      `Company Mission did not compile the native operating blueprint: ${JSON.stringify(compiledBlueprint)}`,
     );
   const newlyCreatedCompanyId = new URL(desktop.url()).pathname.match(/\/company\/(\d+)/)?.[1];
   if (!newlyCreatedCompanyId) throw new Error("Created company route did not include a company id.");
