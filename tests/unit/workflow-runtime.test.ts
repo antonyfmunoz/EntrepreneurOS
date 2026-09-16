@@ -9,6 +9,7 @@ import {
 describe("durable workflow runtime contracts", () => {
   it("enforces the complete guarded run state machine", () => {
     expect(nextWorkflowRunState("queued", "start")).toBe("running");
+    expect(nextWorkflowRunState("running", "advance_step")).toBe("running");
     expect(nextWorkflowRunState("running", "request_approval")).toBe("waiting_approval");
     expect(nextWorkflowRunState("waiting_approval", "resume")).toBe("running");
     expect(nextWorkflowRunState("running", "complete")).toBe("completed");
