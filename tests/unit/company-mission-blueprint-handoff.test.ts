@@ -17,6 +17,16 @@ describe("Company Mission blueprint handoff", () => {
     expect(runtime).toContain('"/api/eos/companies/:companyId/company-blueprint/instantiate"');
     expect(runtime).toContain('actionKey: "company_blueprint.instantiate"');
     expect(runtime).toContain("ensureSeatOperatingKernel");
+    expect(runtime).toContain("eos_operating_formation");
+    expect(runtime).toContain("no-roster-implied-access");
+  });
+
+  it("turns the selected operating formation into a durable role-transition plan", () => {
+    expect(runtime).toContain("compiledOperatingFormation");
+    expect(runtime).toContain("teamTransitionPacketId");
+    expect(runtime).toContain("Map the existing team to the EOS organization");
+    expect(orgStudio).toContain("Operating formation");
+    expect(orgStudio).toContain("Review team transition");
   });
 
   it("materializes native objectives and draft launch packets from the same company variables", () => {
