@@ -9,6 +9,7 @@ import {
   eosInstrumentEvents,
   eosInstrumentLinks,
   eosInstrumentObjects,
+  eosSeats,
 } from "@shared/schema";
 import {
   eosInstrumentKeySchema,
@@ -74,10 +75,111 @@ function assertCredentialFree(value: unknown) {
     throw new EosRouteError(400, "instrument_credential_material_forbidden", "Instrument records may contain managed-secret references, never credential values.");
 }
 
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+/**
+ * Messages are a native company capability, but they must still follow the
+ * reporting graph. This prevents a role from using generic instrument storage
+ * to skip its manager, direct reports, or role assistant.
+ */
+async function assertNativeMessageCreate(
+  access: Awaited<ReturnType<typeof companyAccess>>,
+  input: {
+    instrumentKey: string;
+    objectType: string;
+    data: Record<string, unknown>;
+    parentObjectId?: string;
+    visibility: string;
+  },
+) {
+  if (input.instrumentKey !== "messages") return;
+  const data = recordValue(input.data);
+  if (input.objectType === "conversation") {
+    const supplied = data.participantSeatIds;
+    if (!Array.isArray(supplied) || supplied.length < 2 || supplied.some((seatId) => typeof seatId !== "string"))
+      throw new EosRouteError(400, "message_participants_invalid", "A native conversation requires at least two named organizational seats.");
+    const participantSeatIds = supplied as string[];
+    const uniqueParticipantSeatIds = Array.from(new Set(participantSeatIds));
+    if (uniqueParticipantSeatIds.length !== participantSeatIds.length)
+      throw new EosRouteError(400, "message_participants_duplicate", "Conversation participants must be unique.");
+    if (!uniqueParticipantSeatIds.includes(access.seat.id))
+      throw new EosRouteError(403, "message_creator_not_participant", "The current organizational seat must participate in a conversation it creates.");
+    if (input.visibility !== "team")
+      throw new EosRouteError(400, "message_visibility_invalid", "Native conversations use team visibility; participant membership controls the reader set.");
+    const seats = await db.select().from(eosSeats).where(and(
+      eq(eosSeats.companyId, access.company.id),
+      eq(eosSeats.status, "active"),
+      inArray(eosSeats.id, uniqueParticipantSeatIds),
+    ));
+    if (seats.length !== uniqueParticipantSeatIds.length)
+      throw new EosRouteError(409, "message_participant_scope_invalid", "Every conversation participant must be an active seat in this company.");
+    const requester = seats.find((seat) => seat.id === access.seat.id) || access.seat;
+    for (const participant of seats) {
+      if (participant.id === requester.id) continue;
+      const adjacent = participant.supervisorSeatId === requester.id || requester.supervisorSeatId === participant.id;
+      if (!adjacent)
+        throw new EosRouteError(403, "message_reporting_path_required", "Native conversations may include only the current seat's direct manager or direct reports. Use the role assistant to orchestrate a non-adjacent request.");
+    }
+    return;
+  }
+
+  if (!['message', 'thread'].includes(input.objectType)) return;
+  const conversationObjectId = data.conversationObjectId;
+  if (typeof conversationObjectId !== "string" || !conversationObjectId)
+    throw new EosRouteError(400, "message_conversation_required", "Messages and threads must identify their native conversation.");
+  if (input.parentObjectId !== conversationObjectId)
+    throw new EosRouteError(400, "message_parent_required", "Messages and threads must be nested beneath their named native conversation.");
+  const [conversation] = await db.select().from(eosInstrumentObjects).where(and(
+    eq(eosInstrumentObjects.companyId, access.company.id),
+    eq(eosInstrumentObjects.id, conversationObjectId),
+    eq(eosInstrumentObjects.instrumentKey, "messages"),
+    eq(eosInstrumentObjects.objectType, "conversation"),
+  )).limit(1);
+  if (!conversation)
+    throw new EosRouteError(409, "message_conversation_scope_invalid", "The named conversation must exist inside this company.");
+  const participantSeatIds = recordValue(conversation.data).participantSeatIds;
+  if (!Array.isArray(participantSeatIds) || !participantSeatIds.includes(access.seat.id))
+    throw new EosRouteError(403, "message_conversation_membership_required", "Only a named participant may add messages or threads to this conversation.");
+  if (input.objectType === "message") {
+    if (typeof data.body !== "string" || !data.body.trim())
+      throw new EosRouteError(400, "message_body_required", "A native message requires a non-empty body.");
+    if (!['native_eos', 'email', 'slack', 'sms', 'social'].includes(String(data.channelType)))
+      throw new EosRouteError(400, "message_channel_invalid", "Messages must use a declared native or external delivery channel.");
+  }
+}
+
 async function visibleObjectSet(access: Awaited<ReturnType<typeof companyAccess>>, objects: typeof eosInstrumentObjects.$inferSelect[]) {
   const seatIds = await visibleSeatIds(access.company.id, access.seat.id, access.role);
+  const messageConversationParticipants = new Map<string, Set<string>>(
+    objects
+      .filter((object) => object.instrumentKey === "messages" && object.objectType === "conversation")
+      .map((object) => [
+        object.id,
+        new Set(
+          Array.isArray((object.data as Record<string, unknown>).participantSeatIds)
+            ? ((object.data as Record<string, unknown>).participantSeatIds as unknown[])
+              .filter((seatId): seatId is string => typeof seatId === "string")
+            : [],
+        ),
+      ]),
+  );
   return objects.filter((object) => {
     if (!mayAccessClassification(access, object.classification)) return false;
+    // A reporting-line relationship does not silently grant access to every
+    // private thread. A manager receives an escalation by being named in it.
+    if (object.instrumentKey === "messages") {
+      const data = object.data as Record<string, unknown>;
+      const conversationId = object.objectType === "conversation"
+        ? object.id
+        : typeof data.conversationObjectId === "string"
+          ? data.conversationObjectId
+          : object.parentObjectId;
+      if (!conversationId || !messageConversationParticipants.get(conversationId)?.has(access.seat.id)) return false;
+    }
     if (object.visibility === "seat") return object.ownerSeatId === access.seat.id;
     if (object.visibility === "team") return seatIds.has(object.ownerSeatId);
     if (object.visibility === "portfolio") return ["founder", "portfolio_executive"].includes(access.role);
@@ -216,6 +318,7 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     const { access, policy } = await instrumentAccess(req, "execute", input.instrumentKey, "instrument.object.create", input.classification);
     const replay = await replayCommand(access.company.id, input.idempotencyKey, input.instrumentKey, "object.create");
     if (replay) { res.status(200).json(replay); return; }
+    await assertNativeMessageCreate(access, input);
     await checkedEvidence(access.company.id, input.evidenceIds);
     if (input.parentObjectId) {
       const [parent] = await db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.id, input.parentObjectId), eq(eosInstrumentObjects.instrumentKey, input.instrumentKey))).limit(1);
