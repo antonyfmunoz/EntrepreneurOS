@@ -25,6 +25,7 @@ import {
   canTransitionCapitalAllocation,
   canSeeSeat,
   canTransitionWorkPacket,
+  deriveOrganizationBlueprintPlan,
   evidenceCreateSchema,
   effectiveAuthorityFor,
   eosActiveModules,
@@ -157,6 +158,28 @@ describe("EOS overlay runtime contracts", () => {
         enabledModules: [],
       }).success,
     ).toBe(false);
+  });
+
+  it("derives a governed setup plan from founder blueprint inputs without claiming completion", () => {
+    const parsed = manifestInputSchema.parse({
+      ...manifest,
+      blueprint: {
+        startingPoint: "existing_company",
+        operatingModel: "hybrid_team",
+        businessModel: "Creative services studio",
+        primaryGrowthMotion: "Founder-led outbound",
+        departments: ["Sales", "Delivery"],
+        priorityTools: ["CRM", "Contracts"],
+        existingSystems: ["QuickBooks", "Google Workspace"],
+      },
+    });
+    const plan = deriveOrganizationBlueprintPlan(parsed);
+    expect(plan.context.operatingModel).toBe("hybrid_team");
+    expect(plan.setupMissions.map((mission) => mission.key)).toContain(
+      "reconcile-existing-systems",
+    );
+    expect(plan.setupMissions.every((mission) => mission.status === "not_started")).toBe(true);
+    expect(plan.activationBoundary).toMatch(/does not activate/i);
   });
 
   it("defaults a manual Work Packet to a safe local lifecycle", () => {

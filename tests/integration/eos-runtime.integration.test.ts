@@ -2590,6 +2590,15 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         enabledModules: Array.from({ length: 14 }, (_, index) => index + 1),
         ownerSeat: { title: "Founder / Owner", authority: "owner" },
         operatingCadence: "weekly",
+        blueprint: {
+          startingPoint: "existing_company",
+          operatingModel: "hybrid_team",
+          businessModel: "Creative services studio",
+          primaryGrowthMotion: "Founder-led outbound",
+          departments: ["Sales", "Delivery"],
+          priorityTools: ["CRM", "Contracts"],
+          existingSystems: ["QuickBooks"],
+        },
         sourceAssertions: [
           {
             label: "Owner intent",
@@ -2616,6 +2625,14 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       })
       .expect(201);
     expect(draft.body.status).toBe("draft");
+    expect(draft.body.manifest.blueprintPlan.schemaVersion).toBe(
+      "eos.organization-blueprint-plan.v1",
+    );
+    expect(draft.body.manifest.blueprintPlan.setupMissions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "reconcile-existing-systems", status: "not_started" }),
+      ]),
+    );
     for (const status of [
       "diagnostic",
       "proposed",

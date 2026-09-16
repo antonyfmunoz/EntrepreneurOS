@@ -1,6 +1,27 @@
 import { z } from "zod";
 import { recoveryProviderExecutionSchemas } from "./recovery-provider-executions";
 
+/**
+ * Founder-supplied context for the organization compiler. These are inputs to
+ * a template, not assertions that the resulting operating system is already
+ * provisioned or qualified.
+ */
+export const organizationBlueprintInputSchema = z
+  .object({
+    startingPoint: z.enum(["new_company", "existing_company"]).default("new_company"),
+    operatingModel: z
+      .enum(["agent_first", "hybrid_team", "human_team"])
+      .default("agent_first"),
+    businessModel: z.string().trim().max(300).default(""),
+    primaryGrowthMotion: z.string().trim().max(300).default(""),
+    departments: z.array(z.string().trim().min(1).max(120)).max(30).default([]),
+    priorityTools: z.array(z.string().trim().min(1).max(120)).max(30).default([]),
+    existingSystems: z.array(z.string().trim().min(1).max(160)).max(50).default([]),
+  })
+  .strict();
+
+export type OrganizationBlueprintInput = z.infer<typeof organizationBlueprintInputSchema>;
+
 export const manifestInputSchema = z.object({
   purpose: z.string().min(3).max(500),
   stage: z.string().min(1).max(100),
@@ -21,6 +42,15 @@ export const manifestInputSchema = z.object({
       workingStyle: z.string().max(1200).default(""),
     })
     .default({ vision: "", values: "", decisionStyle: "", workingStyle: "" }),
+  blueprint: organizationBlueprintInputSchema.default({
+    startingPoint: "new_company",
+    operatingModel: "agent_first",
+    businessModel: "",
+    primaryGrowthMotion: "",
+    departments: [],
+    priorityTools: [],
+    existingSystems: [],
+  }),
   sourceAssertions: z
     .array(
       z.object({
@@ -74,6 +104,88 @@ export const manifestInputSchema = z.object({
 });
 
 export type ManifestInput = z.infer<typeof manifestInputSchema>;
+
+export type OrganizationBlueprintMission = {
+  key: string;
+  title: string;
+  objective: string;
+  owner: "founder" | "executive_assistant" | "company_ceo";
+  requiredInputs: string[];
+  completionEvidence: string[];
+  status: "not_started";
+};
+
+/**
+ * Convert explicit company context into the first governed setup sequence.
+ * This deliberately returns a plan only: users still provision, approve, and
+ * verify each item through the normal EOS lifecycle.
+ */
+export function deriveOrganizationBlueprintPlan(input: ManifestInput) {
+  const blueprint = organizationBlueprintInputSchema.parse(input.blueprint);
+  const names = (items: string[]) => items.length ? items.join(", ") : "Not yet specified";
+  const setupMissions: OrganizationBlueprintMission[] = [
+    {
+      key: "make-context-authoritative",
+      title: "Make company context authoritative",
+      objective: "Confirm the mission, offer, customer, goals, and founder operating preferences that will govern this organization instance.",
+      owner: "founder",
+      requiredInputs: ["Purpose", "Offer", "Target customer", "Founder profile"],
+      completionEvidence: ["Approved organization manifest"],
+      status: "not_started",
+    },
+    {
+      key: "activate-operating-team",
+      title: "Activate the operating team",
+      objective: blueprint.operatingModel === "agent_first"
+        ? "Assign the founder, executive assistant, and initial agent-held seats before adding human operators."
+        : blueprint.operatingModel === "hybrid_team"
+          ? "Map human-held seats and their agent assistants, reporting lines, and decision rights."
+          : "Map the existing human team, reporting lines, decision rights, and the agent assistants each role needs.",
+      owner: "founder",
+      requiredInputs: ["Operating model", "Departments", "Role and reporting design"],
+      completionEvidence: ["Governed org chart", "Seat assignments", "Authority grants"],
+      status: "not_started",
+    },
+    {
+      key: "establish-customer-value-loop",
+      title: "Establish the first customer-value loop",
+      objective: `Configure the native relationship, commercial, delivery, and reporting path for ${input.offer}.`,
+      owner: "company_ceo",
+      requiredInputs: ["Offer", "Growth motion", "Success criteria"],
+      completionEvidence: ["Approved operating workflow", "Evidence-bearing test run"],
+      status: "not_started",
+    },
+  ];
+
+  if (blueprint.startingPoint === "existing_company" || blueprint.existingSystems.length) {
+    setupMissions.push({
+      key: "reconcile-existing-systems",
+      title: "Reconcile existing systems",
+      objective: "Map authoritative external records into EOS overlays while retaining an equivalent native operating path for every required capability.",
+      owner: "executive_assistant",
+      requiredInputs: ["Existing systems", "Data owners", "Provider authorization scope"],
+      completionEvidence: ["Provider connection receipts", "Reconciliation report", "Native fallback acceptance"],
+      status: "not_started",
+    });
+  }
+
+  return {
+    schemaVersion: "eos.organization-blueprint-plan.v1" as const,
+    compiledAt: "on_manifest_compile",
+    context: {
+      startingPoint: blueprint.startingPoint,
+      operatingModel: blueprint.operatingModel,
+      businessModel: blueprint.businessModel || "Not yet specified",
+      primaryGrowthMotion: blueprint.primaryGrowthMotion || "Not yet specified",
+      departments: names(blueprint.departments),
+      priorityTools: names(blueprint.priorityTools),
+      existingSystems: names(blueprint.existingSystems),
+    },
+    setupMissions,
+    activationBoundary:
+      "This plan does not activate a company, grant authority, connect a provider, or claim operational proof. Each mission must complete its governed lifecycle separately.",
+  };
+}
 
 export const workPacketCreateSchema = z.object({
   title: z.string().min(3).max(200),
