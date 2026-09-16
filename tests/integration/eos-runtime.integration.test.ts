@@ -2564,7 +2564,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     currentUserId = ownerId;
   });
 
-  it("compiles and activates an organization, then completes an evidence-bearing approved mission", async () => {
+  it("compiles the organization from its one company mission, then activates an evidence-bearing approved mission", async () => {
     const context = await api
       .get(`/api/eos/companies/${companyId}/context`)
       .expect(200);
@@ -2579,52 +2579,27 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(council.body.advisors).toHaveLength(15);
     expect(council.body.founderFacingAgent).toBe("executive_assistant");
 
+    await sql`UPDATE companies
+      SET type = 'services',
+          founder_profile = ${JSON.stringify({
+            vision: "Operate a durable client-value loop.",
+            operatingFormation: "hybrid",
+            existingSystems: ["QuickBooks"],
+            setupJourneyVersion: "company-mission-journey-v1",
+          })}::jsonb
+      WHERE id = ${companyId}`;
     const draft = await api
-      .post(`/api/eos/companies/${companyId}/compiler/drafts`)
-      .send({
-        purpose: "Prove the first governed customer-value loop",
-        stage: "MVP",
-        offer: "Governed operating system",
-        targetCustomer: "Founder-led company",
-        goals: ["Complete one repeatable loop"],
-        enabledModules: Array.from({ length: 14 }, (_, index) => index + 1),
-        ownerSeat: { title: "Founder / Owner", authority: "owner" },
-        operatingCadence: "weekly",
-        blueprint: {
-          startingPoint: "existing_company",
-          operatingModel: "hybrid_team",
-          businessModel: "Creative services studio",
-          primaryGrowthMotion: "Founder-led outbound",
-          departments: ["Sales", "Delivery"],
-          priorityTools: ["CRM", "Contracts"],
-          existingSystems: ["QuickBooks"],
-        },
-        sourceAssertions: [
-          {
-            label: "Owner intent",
-            value: "Complete one repeatable loop",
-            sourceType: "user_assertion",
-          },
-        ],
-        provisioningChecklist: [
-          {
-            id: "owner",
-            label: "Owner verified",
-            required: true,
-            complete: true,
-          },
-        ],
-        verificationChecks: [
-          {
-            id: "runtime",
-            label: "Runtime ready",
-            status: "passed",
-            evidence: "/api/ready",
-          },
-        ],
-      })
+      .post(`/api/eos/companies/${companyId}/compiler/from-company-mission`)
+      .send({})
       .expect(201);
     expect(draft.body.status).toBe("draft");
+    expect(draft.body.manifest.compiledFrom).toMatchObject({
+      source: "company_mission_journey",
+      journeyVersion: "company-mission-journey-v1",
+    });
+    expect(draft.body.manifest.sourceAssertions).toEqual(
+      expect.arrayContaining([expect.objectContaining({ label: "Company Mission Journey" })]),
+    );
     expect(draft.body.manifest.blueprintPlan.schemaVersion).toBe(
       "eos.organization-blueprint-plan.v1",
     );
@@ -2662,7 +2637,6 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       "review",
       "approved",
       "provisioning",
-      "verifying",
     ]) {
       await api
         .post(
@@ -2671,6 +2645,29 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         .send({ status })
         .expect(200);
     }
+    await api
+      .post(
+        `/api/eos/companies/${companyId}/manifests/${draft.body.id}/transition`,
+      )
+      .send({
+        status: "verifying",
+        manifest: {
+          ...draft.body.manifest,
+          provisioningChecklist: [{
+            id: "company-mission-reviewed",
+            label: "Founder reviewed the compiled Company Mission Journey",
+            required: true,
+            complete: true,
+          }],
+          verificationChecks: [{
+            id: "native-blueprint-materialized",
+            label: "Native blueprint and governed setup work are present",
+            status: "passed",
+            evidence: "integration qualification fixture",
+          }],
+        },
+      })
+      .expect(200);
     await api
       .post(
         `/api/eos/companies/${companyId}/manifests/${draft.body.id}/activate`,

@@ -377,6 +377,92 @@ function companyIdFrom(req: Request): number {
   return value;
 }
 
+function profileStringList(value: unknown): string[] {
+  const values = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[\n,]/)
+      : [];
+  return Array.from(
+    new Set(
+      values
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ).slice(0, 50);
+}
+
+/**
+ * The Company Mission Journey owns company-definition inputs. The compiler
+ * deliberately derives its first manifest from that saved context instead of
+ * accepting a parallel client-side version of the company story.
+ */
+function manifestFromCompanyMission(
+  company: typeof companies.$inferSelect,
+) {
+  const profile = (company.founderProfile || {}) as Record<string, unknown>;
+  const formation = typeof profile.operatingFormation === "string"
+    ? profile.operatingFormation
+    : "agent_first";
+  const businessModel = company.type || (typeof profile.businessModel === "string" ? profile.businessModel : "");
+  const template = companyBlueprintForBusinessModel(businessModel);
+  const existingSystems = profileStringList(profile.existingSystems);
+  const goals = String(company.goals || "")
+    .split(/[\n,]/)
+    .map((goal) => goal.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+  const purpose = String(company.goals || "").trim()
+    || `Build a durable, operator-ready organization for ${company.name}.`;
+
+  return manifestInputSchema.parse({
+    purpose,
+    stage: company.stage || "MVP",
+    offer: company.offer || "Define and validate the primary offer",
+    targetCustomer: company.targetCustomer || "Define the initial ideal customer",
+    goals: goals.length ? goals : [purpose],
+    enabledModules: Array.from({ length: 14 }, (_, index) => index + 1),
+    ownerSeat: { title: "Founder / Owner", authority: "owner" },
+    operatingCadence: "weekly",
+    founderProfile: {
+      vision: typeof profile.vision === "string" ? profile.vision : "",
+      values: typeof profile.values === "string" ? profile.values : "",
+      decisionStyle: typeof profile.decisionStyle === "string" ? profile.decisionStyle : "",
+      workingStyle: typeof profile.workingStyle === "string" ? profile.workingStyle : "",
+    },
+    blueprint: {
+      startingPoint: formation === "existing_team" || existingSystems.length
+        ? "existing_company"
+        : "new_company",
+      operatingModel: formation === "existing_team"
+        ? "human_team"
+        : formation === "hybrid"
+          ? "hybrid_team"
+          : "agent_first",
+      businessModel,
+      primaryGrowthMotion: typeof profile.primaryGrowthMotion === "string"
+        ? profile.primaryGrowthMotion
+        : "",
+      departments: Array.from(new Set(template.roles.map((role) => role.department))),
+      priorityTools: Array.from(new Set(template.roles.flatMap((role) => role.tools))),
+      existingSystems,
+    },
+    sourceAssertions: [
+      {
+        label: "Company Mission Journey",
+        value: `${company.name}: ${purpose}`.slice(0, 2_000),
+        sourceType: "user_assertion",
+      },
+    ],
+    assumptions: [],
+    unknowns: [],
+    packageSelections: [],
+    provisioningChecklist: [],
+    verificationChecks: [],
+  });
+}
+
 function requestedSeatId(req: Request): string | undefined {
   const header = req.get("x-eos-seat-id")?.trim();
   const query =
@@ -12629,6 +12715,79 @@ export function registerEosRuntimeRoutes(app: Express): void {
         EMPYREAN_REFERENCE_PACKAGE.key,
         input.confirmCompanyKey,
       );
+    }),
+  );
+
+  app.post(
+    "/api/eos/companies/:companyId/compiler/from-company-mission",
+    route(async (req) => {
+      const access = await companyAccess(req);
+      const { company } = access;
+      if (!mayManageOrganization(access.role))
+        throw new EosRouteError(
+          403,
+          "compiler_denied",
+          "Only the founder or Company CEO may compile the organization.",
+        );
+      await authorizeAction(req, access, {
+        authorityClass: "decide",
+        resource: "organization_manifest",
+        actionKey: "manifest.compile_from_company_mission",
+        purpose: "compile_organization_from_company_mission",
+        classification: "restricted",
+        consequence: "material",
+      });
+      const manifest = manifestFromCompanyMission(company);
+      const latest = await db.query.eosManifestVersions.findFirst({
+        where: eq(eosManifestVersions.companyId, company.id),
+        orderBy: [desc(eosManifestVersions.version)],
+      });
+      const record = {
+        id: randomUUID(),
+        companyId: company.id,
+        version: (latest?.version || 0) + 1,
+        status: "draft" as const,
+        manifest: {
+          ...manifest,
+          advisorCouncil: buildAdvisorCouncil({
+            founderName: req.user.fullName || req.user.username,
+            companyName: company.name,
+            founderProfile: manifest.founderProfile,
+            companyGoals: manifest.goals.join("\n"),
+          }),
+          blueprintPlan: deriveOrganizationBlueprintPlan(manifest),
+          compiledFrom: {
+            companyId: company.id,
+            companyName: company.name,
+            source: "company_mission_journey",
+            journeyVersion:
+              typeof (company.founderProfile as Record<string, unknown> | null)?.setupJourneyVersion === "string"
+                ? (company.founderProfile as Record<string, unknown>).setupJourneyVersion
+                : null,
+          },
+          schemaVersion: "eos.organization-manifest.v1",
+        },
+        createdByUserId: req.user.id,
+        createdAt: new Date(),
+      };
+      const { traceId, correlationId } = tracePair();
+      await db.transaction(async (tx) => {
+        await tx.insert(eosManifestVersions).values(record);
+        await tx.insert(eosAuditRecords).values({
+          id: randomUUID(),
+          companyId: company.id,
+          actorUserId: req.user.id,
+          action: "manifest.compiled_from_company_mission",
+          targetType: "organization_manifest",
+          targetId: record.id,
+          traceId,
+          correlationId,
+          result: "draft_created",
+          details: { version: record.version, source: "company_mission_journey" },
+          createdAt: new Date(),
+        });
+      });
+      return { status: 201, body: record };
     }),
   );
 

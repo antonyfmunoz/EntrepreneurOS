@@ -36,6 +36,15 @@ function profileString(profile: Record<string, unknown> | undefined, key: string
   return typeof profile?.[key] === "string" ? profile[key] as string : "";
 }
 
+function profileList(profile: Record<string, unknown> | undefined, key: string) {
+  const value = profile?.[key];
+  if (Array.isArray(value))
+    return value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean);
+  if (typeof value === "string")
+    return value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean);
+  return [];
+}
+
 function createTeamRosterEntry(): TeamRosterEntry {
   return { id: crypto.randomUUID(), name: "", email: "", sourceTitle: "", reportsTo: "", seatId: null };
 }
@@ -87,6 +96,7 @@ export default function CompanySetupPage() {
   const [formation, setFormation] = useState<CompanyMissionInput["formation"]>();
   const [teamSnapshot, setTeamSnapshot] = useState("");
   const [teamRoster, setTeamRoster] = useState<TeamRosterEntry[]>([]);
+  const [existingSystems, setExistingSystems] = useState("");
   const [compiledCompanyId, setCompiledCompanyId] = useState("");
   const hydratedCompany = useRef(false);
 
@@ -118,6 +128,7 @@ export default function CompanySetupPage() {
     if (["agent_first", "hybrid", "existing_team"].includes(currentFormation)) setFormation(currentFormation as CompanyMissionInput["formation"]);
     setTeamSnapshot(profileString(profile, "teamSnapshot"));
     setTeamRoster(stagedTeamRoster(profile));
+    setExistingSystems(profileList(profile, "existingSystems").join("\n"));
   }, [existingCompanyQuery.data, requestedPortfolioId]);
 
   const createPortfolio = useMutation<Portfolio, Error, { name: string; description?: string }>({
@@ -131,6 +142,7 @@ export default function CompanySetupPage() {
   const missionInput: CompanyMissionInput = {
     portfolioId: selectedPortfolioId, companyName, legalName, assumedBusinessNames: parseAssumedBusinessNames(assumedBusinessNames),
     stage, industry, businessModel, offer, targetCustomer, assistantName, founderVision, founderValues, decisionStyle, workingStyle, goals, formation, teamSnapshot,
+    existingSystems: existingSystems.split(/[\n,]/).map((item) => item.trim()).filter(Boolean),
   };
   const missionStatus = companyMissionStatus(missionInput);
   const activeMission = companyMissionJourney[currentStep];
@@ -164,12 +176,17 @@ export default function CompanySetupPage() {
     setErrors(next); return Object.keys(next).length === 0;
   }, [currentStep, selectedPortfolioId, companyName, stage, businessModel, offer, targetCustomer, assistantName, founderVision, goals, formation, teamSnapshot, teamRoster]);
 
-  const compileBlueprint = useMutation<Record<string, unknown>, Error, string>({
-    mutationFn: async (companyId) =>
-      (await apiRequest("POST", `/api/eos/companies/${encodeURIComponent(companyId)}/company-blueprint/instantiate`, {})).json(),
-    onSuccess: async (_, companyId) => {
+  const compileBlueprint = useMutation<{ manifest: { id: string } }, Error, string>({
+    mutationFn: async (companyId) => {
+      const root = `/api/eos/companies/${encodeURIComponent(companyId)}`;
+      await (await apiRequest("POST", `${root}/company-blueprint/instantiate`, {})).json();
+      const manifest = await (await apiRequest("POST", `${root}/compiler/from-company-mission`, {})).json() as { id: string };
+      await (await apiRequest("POST", `${root}/manifests/${encodeURIComponent(manifest.id)}/blueprint-missions/materialize`, {})).json();
+      return { manifest };
+    },
+    onSuccess: async ({ manifest }, companyId) => {
       await queryClient.invalidateQueries({ queryKey: ["portfolios"] });
-      setLocation(`/company/${companyId}/org-studio?from=mission&compiled=1`);
+      setLocation(`/company/${companyId}/org-studio?from=mission&compiled=1&manifest=${encodeURIComponent(manifest.id)}`);
     },
   });
 
@@ -201,7 +218,7 @@ export default function CompanySetupPage() {
   const completeJourney = () => {
     if (!validateCurrentMission()) return;
     const rosterEntries = teamRoster.map((entry) => ({ ...entry, name: entry.name.trim(), email: entry.email.trim().toLowerCase(), sourceTitle: entry.sourceTitle.trim(), reportsTo: entry.reportsTo.trim(), seatId: null })).filter((entry) => entry.name || entry.email);
-    const founderProfile = { vision: founderVision.trim(), values: founderValues.trim(), decisionStyle: decisionStyle.trim(), workingStyle: workingStyle.trim(), industry: industry.trim(), businessModel, operatingFormation: formation, teamSnapshot: teamSnapshot.trim(), ...(formation !== "agent_first" ? { teamRosterPlan: { version: "team-roster-plan-v1", entries: rosterEntries } } : {}), setupJourneyVersion: "company-mission-journey-v1" };
+    const founderProfile = { vision: founderVision.trim(), values: founderValues.trim(), decisionStyle: decisionStyle.trim(), workingStyle: workingStyle.trim(), industry: industry.trim(), businessModel, operatingFormation: formation, teamSnapshot: teamSnapshot.trim(), existingSystems: existingSystems.split(/[\n,]/).map((item) => item.trim()).filter(Boolean), ...(formation !== "agent_first" ? { teamRosterPlan: { version: "team-roster-plan-v1", entries: rosterEntries } } : {}), setupJourneyVersion: "company-mission-journey-v1" };
     saveCompany.mutate({
       name: companyName.trim(), legalName: legalName.trim() || companyName.trim(), assumedBusinessNames: parseAssumedBusinessNames(assumedBusinessNames),
       stage, type: businessModel, businessModel, offer: offer.trim(), targetCustomer: targetCustomer.trim(), goals: normalizeOptionalGoals(goals),
@@ -238,7 +255,7 @@ export default function CompanySetupPage() {
             {currentStep === 3 && <div className="grid max-w-3xl gap-5"><div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm"><Sparkles className="mb-2 h-5 w-5 text-primary"/><p className="font-medium">The EA is a founder-facing coordination role, not a hardcoded product character.</p><p className="mt-1 text-muted-foreground">It coordinates advisors and company agents within the authority you establish.</p></div><Field label="Executive Assistant name" error={errors.assistantName}><Input value={assistantName} onChange={(event) => setAssistantName(event.target.value)} placeholder="Choose the name you want to use" /></Field><Field label="Founder vision" error={errors.founderVision}><Textarea value={founderVision} onChange={(event) => setFounderVision(event.target.value)} placeholder="What are you building and what must remain true as it grows?" className="min-h-28" /></Field><div className="grid gap-5 sm:grid-cols-2"><Field label="Values and standards"><Textarea value={founderValues} onChange={(event) => setFounderValues(event.target.value)} placeholder="Principles the company must protect" /></Field><Field label="Decision style"><Textarea value={decisionStyle} onChange={(event) => setDecisionStyle(event.target.value)} placeholder="How recommendations should be prepared" /></Field></div><Field label="Working style"><Textarea value={workingStyle} onChange={(event) => setWorkingStyle(event.target.value)} placeholder="Cadence, communication preferences, and watchouts" /></Field></div>}
             {currentStep === 4 && <div className="max-w-3xl"><Field label="Near-term outcomes" hint="State what must become true next. EOS will turn these into objectives, measures, and governed work." error={errors.goals}><Textarea value={goals} onChange={(event) => setGoals(event.target.value)} placeholder="e.g. Validate the Revenue Recovery offer, close three retained clients, and establish a reliable delivery loop." className="min-h-44" /></Field></div>}
             {currentStep === 5 && <div className="max-w-3xl space-y-4"><p className="text-sm text-muted-foreground">This is not permanent. It sets the initial shape of the company graph. People can be added later into existing seats, where the role agent becomes their assistant.</p><RadioGroup value={formation} onValueChange={(value) => setFormation(value as CompanyMissionInput["formation"])} className="space-y-3">{FORMATIONS.map(([value, title, description]) => <label key={value} className={`flex cursor-pointer gap-3 rounded-xl border p-5 ${formation === value ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:border-primary/40"}`}><RadioGroupItem value={value} /><span><span className="font-medium">{title}</span><span className="mt-1 block text-sm text-muted-foreground">{description}</span></span></label>)}</RadioGroup>{formation === "agent_first" && <div className="rounded-xl border bg-muted/40 p-4 text-sm text-muted-foreground">EOS will start with role agents. As people join, assign them to the existing seats in Org Studio; their role agent then shifts into assistant mode.</div>}{formation && formation !== "agent_first" && <><Field label="Current team snapshot" hint="Describe the functions, key roles, reporting lines, and important vacancies. This is your starting operating reality; map individual people to seats in Org Studio after the blueprint is compiled." error={errors.teamSnapshot}><Textarea value={teamSnapshot} onChange={(event) => setTeamSnapshot(event.target.value)} placeholder="Example: Founder/CEO; one account director reporting to the founder; two delivery specialists; freelance designer; finance handled externally; no dedicated growth lead yet." className="min-h-36" /></Field><section className="rounded-xl border bg-muted/30 p-4"><div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><p className="font-medium">Stage your existing team</p><p className="mt-1 text-sm text-muted-foreground">Add people now so the same setup journey carries your real organization into Org Studio. This is planning data only: EOS does not create accounts, send invitations, assign seats, or grant access here.</p></div><Button type="button" variant="outline" size="sm" onClick={() => setTeamRoster((current) => [...current, createTeamRosterEntry()])}><Plus className="mr-2 h-4 w-4" />Add person</Button></div>{teamRoster.length > 0 && <div className="mt-4 space-y-3">{teamRoster.map((entry, index) => <div key={entry.id} className="grid gap-3 rounded-lg border bg-background p-3 sm:grid-cols-2"><Input aria-label={`Team member ${index + 1} name`} value={entry.name} onChange={(event) => setTeamRoster((current) => current.map((item) => item.id === entry.id ? { ...item, name: event.target.value } : item))} placeholder="Full name"/><Input aria-label={`Team member ${index + 1} work email`} value={entry.email} onChange={(event) => setTeamRoster((current) => current.map((item) => item.id === entry.id ? { ...item, email: event.target.value } : item))} placeholder="Work email (optional)"/><Input aria-label={`Team member ${index + 1} current role`} value={entry.sourceTitle} onChange={(event) => setTeamRoster((current) => current.map((item) => item.id === entry.id ? { ...item, sourceTitle: event.target.value } : item))} placeholder="Current role"/><div className="flex gap-2"><Input aria-label={`Team member ${index + 1} reports to`} value={entry.reportsTo} onChange={(event) => setTeamRoster((current) => current.map((item) => item.id === entry.id ? { ...item, reportsTo: event.target.value } : item))} placeholder="Reports to"/><Button type="button" variant="ghost" size="icon" aria-label={`Remove team member ${index + 1}`} onClick={() => setTeamRoster((current) => current.filter((item) => item.id !== entry.id))}><Trash2 className="h-4 w-4" /></Button></div>{errors[`teamRoster-${index}`] && <p className="sm:col-span-2 text-sm text-destructive">{errors[`teamRoster-${index}`]}</p>}</div>)}</div>}{errors.teamRoster && <p className="mt-3 text-sm text-destructive">{errors.teamRoster}</p>}<p className="mt-3 text-xs text-muted-foreground">After EOS compiles the role graph, Org Studio suggests each person&apos;s stable seat. You review every mapping, then separately decide whether to invite them.</p></section></>}{errors.formation && <p className="text-sm text-destructive">{errors.formation}</p>}</div>}
-            {currentStep === 6 && <div className="max-w-3xl space-y-5"><div className="rounded-xl border border-primary/20 bg-primary/5 p-5"><Network className="mb-3 h-6 w-6 text-primary"/><h3 className="font-semibold">Native first. Integrations when useful.</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">EOS will create the company’s native operating foundation now. Connect a CRM, accounting system, document service, or inbox later only to reconcile existing data or use a specialist external rail. No integration is required to use the company graph, roles, work, documents, or native instruments.</p></div><div className="rounded-xl bg-muted/50 p-5"><p className="font-medium">What happens next</p><ul className="mt-3 space-y-2 text-sm text-muted-foreground"><li>• Open Org Studio and shape the real reporting graph.</li><li>• Activate seats, role agents, responsibilities, and the tools each role needs.</li><li>• Use Systems only when an external provider adds value or holds historical data.</li></ul></div></div>}
+            {currentStep === 6 && <div className="max-w-3xl space-y-5"><div className="rounded-xl border border-primary/20 bg-primary/5 p-5"><Network className="mb-3 h-6 w-6 text-primary"/><h3 className="font-semibold">Native first. Integrations when useful.</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">EOS will create the company’s native operating foundation now. Connect a CRM, accounting system, document service, or inbox later only to reconcile existing data or use a specialist external rail. No integration is required to use the company graph, roles, work, documents, or native instruments.</p></div><Field label="Existing systems or record sources" hint="Optional. Name tools or data sources that already hold company records, one per line. This creates an inventory for a later governed reconciliation plan; it does not connect, import, or grant any provider access."><Textarea value={existingSystems} onChange={(event) => setExistingSystems(event.target.value)} placeholder="QuickBooks\nGoogle Workspace\nLegacy CRM" className="min-h-28" /></Field><div className="rounded-xl bg-muted/50 p-5"><p className="font-medium">What happens next</p><ul className="mt-3 space-y-2 text-sm text-muted-foreground"><li>• Compile the native organization, manifest, and governed setup work from this one company model.</li><li>• Open Org Studio and shape the real reporting graph, role agents, responsibilities, and tools.</li><li>• Use Systems only when an external provider adds value or holds historical data.</li></ul></div></div>}
           </div>
           <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between"><Button variant="ghost" disabled={currentStep === 0 || compileBlueprint.isPending} onClick={() => { setErrors({}); setCurrentStep((step) => Math.max(0, step - 1)); }}>Back</Button>{currentStep < companyMissionJourney.length - 1 ? <Button onClick={advance}>Continue <ArrowRight className="ml-2 h-4 w-4" /></Button> : <Button disabled={saveCompany.isPending || compileBlueprint.isPending} onClick={completeJourney}>{saveCompany.isPending ? "Saving company…" : compileBlueprint.isPending ? "Compiling business blueprint…" : existingCompanyId ? "Save and compile blueprint" : "Create company and compile blueprint"}<ArrowRight className="ml-2 h-4 w-4" /></Button>}</div>
           {saveCompany.isError && <p className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">The mission could not be saved. Review the company details and try again.</p>}
