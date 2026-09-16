@@ -20,4 +20,14 @@ describe("native operating workflow evidence selection", () => {
     );
     expect(controlCenter).not.toContain("Verified Evidence ID when required");
   });
+
+  it("binds a Role Agent schedule to a process selected for that exact seat", () => {
+    expect(controlCenter).toContain('const [scheduleProcessId, setScheduleProcessId] = useState("")');
+    expect(controlCenter).toContain('process.accountableSeatId === scheduleSeat?.id');
+    expect(controlCenter).toContain('aria-label="Scheduled released process"');
+    expect(controlCenter).toContain('processDefinitionId: scheduleProcessId');
+    expect(controlCenter).toContain("Choose the exact verified Role Agent first.");
+    expect(controlCenter).toContain("Scope preview:");
+    expect(controlCenter).not.toContain('!scheduleSubject || !selectedProcessId || createSchedule.isPending');
+  });
 });
