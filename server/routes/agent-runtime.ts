@@ -16,11 +16,12 @@ import {
 import {
   agentEvaluationSchema,
   agentScheduleCreateSchema,
+  agentScheduleManualRunSchema,
   agentScheduleTransitionSchema,
 } from "@shared/agent-runtime";
 import { allowedSurfacesFor } from "@shared/eos-runtime";
 import { db } from "../db";
-import { enqueueAgentEvent } from "../agents/scheduler";
+import { enqueueAgentEvent, enqueueManualAgentSchedule } from "../agents/scheduler";
 import { containsCredentialMaterial } from "../security/credential-material";
 import {
   EosRouteError,
@@ -118,6 +119,38 @@ export function registerAgentRuntimeRoutes(app: Express): void {
     if (!updated) throw new EosRouteError(409, "agent_schedule_concurrent_change", "The schedule changed before this action completed.");
     await db.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "agent_schedule.transitioned", targetType: "agent_schedule", targetId: schedule.id, traceId: policy.traceId, correlationId: policy.correlationId, result: input.state, details: { from: schedule.state, to: input.state, rationale: input.rationale, policyDecisionId: policy.decisionId }, createdAt: new Date() });
     res.json(updated);
+  }));
+
+  app.post("/api/eos/companies/:companyId/agent-schedules/:scheduleId/run", route(async (req, res) => {
+    const input = agentScheduleManualRunSchema.parse(req.body);
+    const { access, policy } = await agentAccess(req, "execute", "agent_schedule.manual_run", "confidential");
+    const [schedule] = await db.select().from(eosAgentSchedules).where(and(
+      eq(eosAgentSchedules.id, req.params.scheduleId),
+      eq(eosAgentSchedules.companyId, access.company.id),
+    )).limit(1);
+    if (!schedule) throw new EosRouteError(404, "agent_schedule_not_found", "Agent schedule not found.");
+    const visible = await visibleSeatIds(access.company.id, access.seat.id, access.role);
+    if (!visible.has(schedule.seatId))
+      throw new EosRouteError(409, "agent_schedule_seat_invalid", "The scheduled seat must be inside the current reporting hierarchy.");
+    if (schedule.triggerKind !== "manual" || schedule.cadence !== "manual")
+      throw new EosRouteError(409, "agent_schedule_not_manual", "Only a schedule configured for manual runs can be started from this control.");
+    if (schedule.state !== "active")
+      throw new EosRouteError(409, "agent_schedule_manual_run_blocked", "Activate this manual schedule after reviewing its Role Agent, process, authority, and runtime limits before running it.");
+    const run = await enqueueManualAgentSchedule({
+      companyId: access.company.id,
+      scheduleId: schedule.id,
+      idempotencyKey: input.idempotencyKey,
+    });
+    if (!run)
+      throw new EosRouteError(409, "agent_schedule_manual_run_blocked", "This manual schedule is no longer active or no longer satisfies its runtime contract. Refresh and review it before retrying.");
+    await db.insert(eosAuditRecords).values({
+      id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id,
+      action: "agent_schedule.manual_run_requested", targetType: "workflow_run", targetId: run.id,
+      traceId: policy.traceId, correlationId: policy.correlationId, result: run.state,
+      details: { scheduleId: schedule.id, executionMode: run.executionMode, policyDecisionId: policy.decisionId, externalEffectsExecuted: false },
+      createdAt: new Date(),
+    });
+    res.status(201).json(run);
   }));
 
   app.post("/api/eos/companies/:companyId/agent-events", route(async (req, res) => {

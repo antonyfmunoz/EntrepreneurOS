@@ -30,4 +30,12 @@ describe("native operating workflow evidence selection", () => {
     expect(controlCenter).toContain("Scope preview:");
     expect(controlCenter).not.toContain('!scheduleSubject || !selectedProcessId || createSchedule.isPending');
   });
+
+  it("lets an authorized operator run an active manual schedule without leaving the native workspace", () => {
+    expect(controlCenter).toContain('`${root}/agent-schedules/${schedule.id}/run`');
+    expect(controlCenter).toContain('ui:manual-agent-schedule:${schedule.id}:${crypto.randomUUID()}');
+    expect(controlCenter).toContain('setOperatingTab("runs")');
+    expect(controlCenter).toContain("Manual run: creates a governed EOS workflow run now.");
+    expect(controlCenter).toContain("Run now");
+  });
 });

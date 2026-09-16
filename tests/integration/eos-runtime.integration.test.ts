@@ -9571,6 +9571,12 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     if (subject) {
       const schedule = await api.post(`/api/eos/companies/${companyId}/agent-schedules`).send({ scheduleKey: `fixture-schedule-${randomUUID()}`, name: "Fixture governed Role Agent", seatId: process.accountable_seat_id, authoritySubjectId: subject.id, processDefinitionId: process.id, triggerKind: "manual", cadence: "manual", eventTypes: [], executionMode: process.occupant_user_id ? "assisted" : "autonomous", inputTemplate: { fixture: true }, maxRunsPerDay: 2, evaluationRequired: true, classification: "confidential" }).expect(201);
       await api.patch(`/api/eos/companies/${companyId}/agent-schedules/${schedule.body.id}/state`).send({ expectedVersion: 1, state: "active", rationale: "Activate only after resolving the verified Authority Subject, exact accountable seat, and released process version." }).expect(200);
+      const manualRunKey = `fixture-manual-run-${randomUUID()}`;
+      const manualRun = await api.post(`/api/eos/companies/${companyId}/agent-schedules/${schedule.body.id}/run`).send({ idempotencyKey: manualRunKey }).expect(201);
+      expect(manualRun.body).toMatchObject({ companyId, processDefinitionId: process.id, ownerSeatId: process.accountable_seat_id });
+      expect(manualRun.body.input).toMatchObject({ fixture: true, _scheduleId: schedule.body.id, _agentTrigger: { kind: "manual", id: manualRunKey } });
+      const repeatedManualRun = await api.post(`/api/eos/companies/${companyId}/agent-schedules/${schedule.body.id}/run`).send({ idempotencyKey: manualRunKey }).expect(201);
+      expect(repeatedManualRun.body.id).toBe(manualRun.body.id);
     }
 
     const observation = await api.post(`/api/eos/companies/${companyId}/reality-observations`).send({ observationKey: `fixture-observation-${randomUUID()}`, subject: "Native runtime qualification", statement: "The disposable PostgreSQL journey completed the governed workflow fixture.", sourceKind: "workflow", sourceReference: run.body.id, observedAt: new Date().toISOString(), confidence: 100, state: "verified", evidenceIds: [evidence.id], classification: "confidential" }).expect(201);

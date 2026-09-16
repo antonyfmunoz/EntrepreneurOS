@@ -51,6 +51,7 @@ export function NativeOperatingControlCenter({
   const [scheduleSubjectId, setScheduleSubjectId] = useState("");
   const [scheduleProcessId, setScheduleProcessId] = useState("");
   const [scheduleCadence, setScheduleCadence] = useState("daily");
+  const [operatingTab, setOperatingTab] = useState("runs");
 
   const runtime = useQuery<Json>({ queryKey: [root, "workflow-runtime"], queryFn: () => request("GET", `${root}/workflow-runtime`) });
   const evidence = useQuery<Json[]>({ queryKey: [root, "evidence"], queryFn: () => request("GET", `${root}/evidence`) });
@@ -138,8 +139,19 @@ export function NativeOperatingControlCenter({
     mutationFn: (schedule: Json) => request<Json>("PATCH", `${root}/agent-schedules/${schedule.id}/state`, { expectedVersion: schedule.version, state: schedule.state === "active" ? "paused" : "active", rationale: "The operator reviewed the exact seat, Authority Subject, released process, execution mode, cadence, and runtime limits." }),
     onSuccess: refresh,
   });
+  const runSchedule = useMutation({
+    mutationFn: (schedule: Json) => request<Json>("POST", `${root}/agent-schedules/${schedule.id}/run`, {
+      idempotencyKey: `ui:manual-agent-schedule:${schedule.id}:${crypto.randomUUID()}`,
+    }),
+    onSuccess: async (run) => {
+      setSelectedRunId(run.id);
+      setInstrumentStep("Observe");
+      setOperatingTab("runs");
+      await refresh();
+    },
+  });
 
-  const error = [runtime.error, evidence.error, agents.error, handoffs.error, council.error, createRun.error, transition.error, createDeliberation.error, advanceDeliberation.error, createSchedule.error, scheduleTransition.error].find(Boolean);
+  const error = [runtime.error, evidence.error, agents.error, handoffs.error, council.error, createRun.error, transition.error, createDeliberation.error, advanceDeliberation.error, createSchedule.error, scheduleTransition.error, runSchedule.error].find(Boolean);
   const handoffCounts = handoffs.data?.gapCounts || { P0: 0, P1: 0, P2: 0 };
   const activeDeliberation = council.data?.deliberations?.find((item: Json) => !["decided", "calibrated", "failed"].includes(item.state));
   const availableSubjects = useMemo(() => authoritySubjects.filter((subject) => subject.subjectType === "agent" && subject.status === "active" && subject.verificationStatus === "verified" && subject.seatId), [authoritySubjects]);
@@ -173,7 +185,7 @@ export function NativeOperatingControlCenter({
           <Fact icon={Activity} label="Needs review" value={String(agents.data?.counts?.needsReview || 0)} />
         </div>
 
-        <Tabs defaultValue="runs">
+        <Tabs value={operatingTab} onValueChange={setOperatingTab}>
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4"><TabsTrigger value="runs">Runs</TabsTrigger><TabsTrigger value="agents">Role Agents</TabsTrigger><TabsTrigger value="handoffs">Handoffs</TabsTrigger><TabsTrigger value="council" disabled={!isFounder}>Council</TabsTrigger></TabsList>
           <TabsContent value="runs" className="space-y-4 pt-4">
             <div className="grid gap-3 lg:grid-cols-[1fr_180px_auto_auto]">
@@ -212,7 +224,7 @@ export function NativeOperatingControlCenter({
               {scheduleSubject && !scheduleProcesses.length && <p className="mt-3 text-sm text-muted-foreground">This Role Agent has no implemented, released process assigned yet. Assign and release its process in Org Studio before scheduling it.</p>}
               {scheduleSubject && scheduleProcess && <p className="mt-3 rounded-lg border bg-background p-3 text-xs text-muted-foreground"><span className="font-medium text-foreground">Scope preview:</span> {scheduleSubject.displayName} will run {scheduleProcess.name} as {scheduleExecutionMode} work on a {scheduleCadence} cadence. External effects remain blocked unless a separately authorized provider action produces its own receipt.</p>}
             </div>
-            <div className="grid gap-3 md:grid-cols-2">{(agents.data?.schedules || []).map((schedule: Json) => <div key={schedule.id} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{schedule.name}</p><p className="mt-1 text-xs text-muted-foreground">{schedule.cadence} · {schedule.executionMode}</p></div><Badge variant="outline">{schedule.state}</Badge></div><Button className="mt-4" size="sm" variant="outline" disabled={!canDecide || schedule.state === "retired" || scheduleTransition.isPending} onClick={() => scheduleTransition.mutate(schedule)}>{schedule.state === "active" ? "Pause" : "Activate"}</Button></div>)}</div>
+            <div className="grid gap-3 md:grid-cols-2">{(agents.data?.schedules || []).map((schedule: Json) => { const process = processes.find((item) => item.id === schedule.processDefinitionId); return <div key={schedule.id} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{schedule.name}</p><p className="mt-1 text-xs text-muted-foreground">{process?.name || "Released process"} · {schedule.cadence} · {schedule.executionMode}</p></div><Badge variant="outline">{schedule.state}</Badge></div>{schedule.triggerKind === "manual" && <p className="mt-3 text-xs text-muted-foreground">Manual run: creates a governed EOS workflow run now. It does not claim or perform an external provider effect.</p>}<div className="mt-4 flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={!canDecide || schedule.state === "retired" || scheduleTransition.isPending} onClick={() => scheduleTransition.mutate(schedule)}>{schedule.state === "active" ? "Pause" : "Activate"}</Button>{schedule.triggerKind === "manual" && <Button size="sm" disabled={!canExecute || schedule.state !== "active" || runSchedule.isPending} onClick={() => runSchedule.mutate(schedule)}><Play className="mr-2 h-4 w-4" />{runSchedule.isPending ? "Starting…" : "Run now"}</Button>}</div></div>; })}</div>
           </TabsContent>
 
           <TabsContent value="handoffs" className="space-y-3 pt-4">{(handoffs.data?.handoffs || []).map((handoff: Json) => <div key={handoff.capabilityInstanceId} className="rounded-xl border p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-medium">{handoff.capabilityName}</p><p className="mt-1 text-xs text-muted-foreground">{handoff.capabilityKey} · {handoff.sections.length} handoff sections</p></div><Badge variant={handoff.gaps.length ? "outline" : "default"}>{handoff.readiness.replaceAll("_", " ")}</Badge></div><div className="mt-3 flex flex-wrap gap-2"><Badge variant="destructive">{handoff.gaps.filter((gap: Json) => gap.severity === "P0").length} P0</Badge><Badge variant="secondary">{handoff.gaps.filter((gap: Json) => gap.severity === "P1").length} P1</Badge><Badge variant="outline">{handoff.gaps.filter((gap: Json) => gap.severity === "P2").length} P2</Badge></div></div>)}</TabsContent>

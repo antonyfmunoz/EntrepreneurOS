@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, lte, sql } from "drizzle-orm";
+import { and, asc, count, eq, gte, like, lte, sql } from "drizzle-orm";
 import {
   eosAgentSchedules,
   eosAuditRecords,
@@ -62,12 +62,13 @@ async function enqueueSchedule(scheduleId: string, trigger: Record<string, unkno
     const idempotencyKey = `agent-schedule:${schedule.id}:${triggerIdentity}`;
     const [existing] = await tx.select().from(eosWorkflowRuns).where(and(eq(eosWorkflowRuns.companyId, schedule.companyId), eq(eosWorkflowRuns.idempotencyKey, idempotencyKey))).limit(1);
     if (existing) return existing;
-    const [{ count }] = await tx.select({ count: sql<number>`count(*)::int` }).from(eosWorkflowRuns).where(and(
+    const startOfUtcDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const [{ count: scheduledRunsToday }] = await tx.select({ count: count() }).from(eosWorkflowRuns).where(and(
       eq(eosWorkflowRuns.companyId, schedule.companyId),
-      sql`${eosWorkflowRuns.idempotencyKey} LIKE ${`agent-schedule:${schedule.id}:%`}`,
-      sql`${eosWorkflowRuns.createdAt} >= ${new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))}`,
+      like(eosWorkflowRuns.idempotencyKey, `agent-schedule:${schedule.id}:%`),
+      gte(eosWorkflowRuns.createdAt, startOfUtcDay),
     ));
-    if (Number(count) >= schedule.maxRunsPerDay) {
+    if (Number(scheduledRunsToday) >= schedule.maxRunsPerDay) {
       await tx.update(eosAgentSchedules).set({ state: "paused", version: schedule.version + 1, updatedAt: now }).where(and(eq(eosAgentSchedules.id, schedule.id), eq(eosAgentSchedules.version, schedule.version)));
       await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: schedule.companyId, actorUserId: schedule.recordedByUserId, action: "agent_schedule.daily_limit_reached", targetType: "agent_schedule", targetId: schedule.id, traceId: randomUUID(), correlationId: randomUUID(), result: "paused", details: { maxRunsPerDay: schedule.maxRunsPerDay }, createdAt: now });
       return null;
@@ -99,6 +100,34 @@ async function enqueueSchedule(scheduleId: string, trigger: Record<string, unkno
     await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: schedule.companyId, actorUserId: schedule.recordedByUserId, action: "agent_schedule.run_enqueued", targetType: "workflow_run", targetId: id, traceId: randomUUID(), correlationId: randomUUID(), result: result.state, details: { scheduleId: schedule.id, executionMode: schedule.executionMode, trigger, externalEffectsExecuted: false }, createdAt: now });
     return result;
   });
+}
+
+/**
+ * A manual schedule is a deliberate operator command, not an event-dispatch
+ * loophole. The route authorizes the caller and this helper keeps the
+ * scheduler contract honest if it is reused by another internal surface.
+ */
+export async function enqueueManualAgentSchedule(input: {
+  companyId: number;
+  scheduleId: string;
+  idempotencyKey: string;
+  requestedAt?: Date;
+}) {
+  const [schedule] = await db.select({
+    id: eosAgentSchedules.id,
+    triggerKind: eosAgentSchedules.triggerKind,
+    cadence: eosAgentSchedules.cadence,
+  }).from(eosAgentSchedules).where(and(
+    eq(eosAgentSchedules.id, input.scheduleId),
+    eq(eosAgentSchedules.companyId, input.companyId),
+  )).limit(1);
+  if (!schedule || schedule.triggerKind !== "manual" || schedule.cadence !== "manual") return null;
+  const now = input.requestedAt || new Date();
+  return enqueueSchedule(schedule.id, {
+    kind: "manual",
+    id: input.idempotencyKey,
+    requestedAt: now.toISOString(),
+  }, now);
 }
 
 export async function enqueueDueAgentSchedulesOnce(now = new Date(), limit = 25) {
