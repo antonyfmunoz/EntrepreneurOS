@@ -31,6 +31,7 @@ import {
   companyAccess,
   EosRouteError,
   mayAccessClassification,
+  visibleInstrumentKeysForAccess,
   visibleSeatIds,
 } from "./eos-runtime";
 
@@ -191,6 +192,29 @@ async function visibleObjectSet(access: Awaited<ReturnType<typeof companyAccess>
   });
 }
 
+function permittedInstrumentKeySet(
+  access: Awaited<ReturnType<typeof companyAccess>>,
+  principalKey: string,
+) {
+  return new Set(visibleInstrumentKeysForAccess(access, principalKey));
+}
+
+function objectsForPermittedInstruments(
+  objects: typeof eosInstrumentObjects.$inferSelect[],
+  permittedKeys: Set<string>,
+) {
+  return objects.filter((object) => permittedKeys.has(object.instrumentKey));
+}
+
+function requirePermittedInstrumentKeys(permittedKeys: Set<string>) {
+  if (!permittedKeys.size)
+    throw new EosRouteError(
+      403,
+      "instrument_scope_denied",
+      "This seat has no native tools assigned in its current organization contract.",
+    );
+}
+
 async function existingCommand(companyId: number, idempotencyKey: string) {
   const [command] = await db.select().from(eosInstrumentCommands).where(and(eq(eosInstrumentCommands.companyId, companyId), eq(eosInstrumentCommands.idempotencyKey, idempotencyKey))).limit(1);
   return command;
@@ -212,16 +236,20 @@ function eventHash(input: Record<string, unknown>) {
 export function registerInstrumentRuntimeRoutes(app: Express): void {
   app.get("/api/eos/companies/:companyId/instruments", route(async (req, res) => {
     const access = await companyAccess(req);
-    await authorizeAction(req, access, { authorityClass: "view", resource: "instrument:*", actionKey: "instrument.manifest.read", purpose: "inspect_instrument_manifest", classification: "internal", consequence: "routine", targetSeatId: access.seat.id });
+    const permittedKeys = permittedInstrumentKeySet(access, req.user.id);
+    requirePermittedInstrumentKeys(permittedKeys);
     const objects = await db.select().from(eosInstrumentObjects).where(eq(eosInstrumentObjects.companyId, access.company.id)).orderBy(desc(eosInstrumentObjects.updatedAt));
-    const visible = await visibleObjectSet(access, objects);
+    const visible = await visibleObjectSet(
+      access,
+      objectsForPermittedInstruments(objects, permittedKeys),
+    );
     const visibleIds = visible.map((object) => object.id);
     const [links, events] = visibleIds.length ? await Promise.all([
       db.select().from(eosInstrumentLinks).where(and(eq(eosInstrumentLinks.companyId, access.company.id), inArray(eosInstrumentLinks.sourceObjectId, visibleIds), inArray(eosInstrumentLinks.targetObjectId, visibleIds))),
       db.select().from(eosInstrumentEvents).where(and(eq(eosInstrumentEvents.companyId, access.company.id), inArray(eosInstrumentEvents.objectId, visibleIds))).orderBy(desc(eosInstrumentEvents.createdAt)),
     ]) : [[], []];
     const counts = Object.fromEntries(instrumentManifestProjection().map((instrument) => [instrument.key, visible.filter((object) => object.instrumentKey === instrument.key).length]));
-    res.json({ schemaVersion: "eos.instrument-runtime.v1", manifest: instrumentManifestProjection(), objects: visible, links, events: events.slice(0, 250), counts });
+    res.json({ schemaVersion: "eos.instrument-runtime.v1", manifest: instrumentManifestProjection().filter((instrument) => permittedKeys.has(instrument.key)), permittedInstrumentKeys: Array.from(permittedKeys), objects: visible, links, events: events.slice(0, 250), counts });
   }));
 
   app.get("/api/eos/companies/:companyId/instruments/:instrumentKey", route(async (req, res) => {
@@ -245,21 +273,26 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
   app.get("/api/eos/companies/:companyId/instrument-search", route(async (req, res) => {
     const input = instrumentSearchSchema.parse(req.query);
     const access = await companyAccess(req);
-    await authorizeAction(req, access, { authorityClass: "view", resource: "instrument:search", actionKey: "instrument.search", purpose: "search_authorized_instrument_state", classification: "internal", consequence: "routine", targetSeatId: access.seat.id });
+    const permittedKeys = permittedInstrumentKeySet(access, req.user.id);
+    requirePermittedInstrumentKeys(permittedKeys);
+    if (input.instrumentKey)
+      await instrumentAccess(req, "view", input.instrumentKey, "instrument.read", "internal");
     const conditions = [eq(eosInstrumentObjects.companyId, access.company.id)];
     if (input.instrumentKey) conditions.push(eq(eosInstrumentObjects.instrumentKey, input.instrumentKey));
     if (input.state) conditions.push(eq(eosInstrumentObjects.state, input.state));
     if (input.query) conditions.push(or(ilike(eosInstrumentObjects.title, `%${input.query}%`), ilike(eosInstrumentObjects.summary, `%${input.query}%`), ilike(eosInstrumentObjects.objectKey, `%${input.query}%`))!);
     const objects = await db.select().from(eosInstrumentObjects).where(and(...conditions)).orderBy(desc(eosInstrumentObjects.updatedAt)).limit(input.limit);
-    res.json({ schemaVersion: "eos.instrument-search.v1", query: input.query, results: await visibleObjectSet(access, objects) });
+    res.json({ schemaVersion: "eos.instrument-search.v1", query: input.query, results: await visibleObjectSet(access, objectsForPermittedInstruments(objects, permittedKeys)) });
   }));
 
   app.get("/api/eos/companies/:companyId/instrument-export", route(async (req, res) => {
     const access = await companyAccess(req);
-    await authorizeAction(req, access, { authorityClass: "view", resource: "instrument:*", actionKey: "instrument.bundle.export", purpose: "export_authorized_instrument_state", classification: "internal", consequence: "routine", targetSeatId: access.seat.id });
     const instrumentKey = req.query.instrumentKey ? eosInstrumentKeySchema.parse(req.query.instrumentKey) : undefined;
+    const permittedKeys = permittedInstrumentKeySet(access, req.user.id);
+    requirePermittedInstrumentKeys(permittedKeys);
+    if (instrumentKey) await instrumentAccess(req, "view", instrumentKey, "instrument.bundle.export", "internal");
     const rows = await db.select().from(eosInstrumentObjects).where(instrumentKey ? and(eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.instrumentKey, instrumentKey)) : eq(eosInstrumentObjects.companyId, access.company.id)).orderBy(desc(eosInstrumentObjects.updatedAt));
-    const objects = await visibleObjectSet(access, rows);
+    const objects = await visibleObjectSet(access, objectsForPermittedInstruments(rows, permittedKeys));
     const ids = objects.map((object) => object.id);
     const links = ids.length ? await db.select().from(eosInstrumentLinks).where(and(eq(eosInstrumentLinks.companyId, access.company.id), inArray(eosInstrumentLinks.sourceObjectId, ids), inArray(eosInstrumentLinks.targetObjectId, ids))) : [];
     const byId = new Map(objects.map((object) => [object.id, object]));
@@ -275,7 +308,16 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
   app.post("/api/eos/companies/:companyId/instrument-imports", route(async (req, res) => {
     const input = instrumentImportSchema.parse(req.body); assertCredentialFree(input.bundle);
     const access = await companyAccess(req);
-    const policy = await authorizeAction(req, access, { authorityClass: "execute", resource: "instrument:*", actionKey: "instrument.bundle.import", purpose: "import_instrument_drafts", classification: "confidential", consequence: "routine", targetSeatId: access.seat.id });
+    // A portable bundle may span several tools.  Treating it as one broad
+    // instrument:* command would let a role with Docs import Finance or CRM
+    // records.  Every imported source tool must independently authorize the
+    // same execute action that a normal native create would require.
+    const importPolicies = new Map<string, Awaited<ReturnType<typeof authorizeAction>>>();
+    for (const instrumentKey of Array.from(new Set(input.bundle.objects.map((object) => object.instrumentKey)))) {
+      importPolicies.set(instrumentKey, await authorizeAction(req, access, {
+        authorityClass: "execute", resource: `instrument:${instrumentKey}`, actionKey: "instrument.bundle.import", purpose: "import_instrument_drafts", classification: "confidential", consequence: "routine", targetSeatId: access.seat.id, toolKey: instrumentKey,
+      }));
+    }
     const result = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`instrument-import:${access.company.id}:${input.idempotencyKey}`}))`);
       const [prior] = await tx.select().from(eosInstrumentCommands).where(and(eq(eosInstrumentCommands.companyId, access.company.id), eq(eosInstrumentCommands.idempotencyKey, input.idempotencyKey))).limit(1);
@@ -303,7 +345,7 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
         const projection = { schemaVersion: "eos.instrument-object.v1", companyId: access.company.id, instrumentKey: portable.instrumentKey, objectType: portable.objectType, objectKey, title: portable.title, summary: portable.summary, state: "draft", classification: portable.classification, visibility: portable.visibility, ownerSeatId: access.seat.id, data: portable.data, sourceReference, evidenceIds: [], version: 1 };
         const object = { id: objectId, companyId: access.company.id, instrumentKey: portable.instrumentKey, objectType: portable.objectType, objectKey, title: portable.title, summary: portable.summary, state: "draft", classification: portable.classification, visibility: portable.visibility, ownerSeatId: access.seat.id, parentObjectId: null, data: portable.data, sourceReference, evidenceIds: [], contentSha256: nativeContractContentSha256(projection), version: 1, recordedByUserId: req.user.id, createdAt: now, updatedAt: now, archivedAt: null };
         await tx.insert(eosInstrumentObjects).values(object);
-        await tx.insert(eosInstrumentCommands).values({ id: commandId, companyId: access.company.id, instrumentKey: portable.instrumentKey, objectId, commandType: "object.import", idempotencyKey, expectedVersion: null, payload: { bundleSha256, sourceObjectKey: portable.objectKey }, state: "completed", result: { objectId, version: 1 }, policyDecisionId: policy.decisionId, requestedByUserId: req.user.id, createdAt: now, completedAt: now });
+        await tx.insert(eosInstrumentCommands).values({ id: commandId, companyId: access.company.id, instrumentKey: portable.instrumentKey, objectId, commandType: "object.import", idempotencyKey, expectedVersion: null, payload: { bundleSha256, sourceObjectKey: portable.objectKey }, state: "completed", result: { objectId, version: 1 }, policyDecisionId: importPolicies.get(portable.instrumentKey)!.decisionId, requestedByUserId: req.user.id, createdAt: now, completedAt: now });
         await tx.insert(eosInstrumentEvents).values({ id: randomUUID(), companyId: access.company.id, instrumentKey: portable.instrumentKey, objectId, commandId, eventType: "object.imported", fromState: null, toState: "draft", objectVersion: 1, payload: { bundleSha256, sourceObjectKey: portable.objectKey }, evidenceIds: [], contentSha256: eventHash({ companyId: access.company.id, objectId, commandId, eventType: "object.imported", toState: "draft", objectVersion: 1 }), recordedByUserId: req.user.id, createdAt: now });
         created.push(object); importedByKey.set(sourceKey, object);
       }
@@ -316,13 +358,14 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
         const linkId = randomUUID(); const commandId = randomUUID();
         const inserted = await tx.insert(eosInstrumentLinks).values({ id: linkId, companyId: access.company.id, sourceObjectId: source.id, targetObjectId: target.id, relationshipType: portableLink.relationshipType, metadata: portableLink.metadata, createdByUserId: req.user.id, createdAt: now }).onConflictDoNothing().returning();
         if (!inserted[0]) continue;
-        await tx.insert(eosInstrumentCommands).values({ id: commandId, companyId: access.company.id, instrumentKey: source.instrumentKey, objectId: source.id, commandType: "link.import", idempotencyKey: `${input.idempotencyKey}:link:${index}`, expectedVersion: source.version, payload: { linkId, targetObjectId: target.id, relationshipType: portableLink.relationshipType, bundleSha256 }, state: "completed", result: { linkId }, policyDecisionId: policy.decisionId, requestedByUserId: req.user.id, createdAt: now, completedAt: now });
+        await tx.insert(eosInstrumentCommands).values({ id: commandId, companyId: access.company.id, instrumentKey: source.instrumentKey, objectId: source.id, commandType: "link.import", idempotencyKey: `${input.idempotencyKey}:link:${index}`, expectedVersion: source.version, payload: { linkId, targetObjectId: target.id, relationshipType: portableLink.relationshipType, bundleSha256 }, state: "completed", result: { linkId }, policyDecisionId: importPolicies.get(source.instrumentKey)!.decisionId, requestedByUserId: req.user.id, createdAt: now, completedAt: now });
         await tx.insert(eosInstrumentEvents).values({ id: randomUUID(), companyId: access.company.id, instrumentKey: source.instrumentKey, objectId: source.id, commandId, eventType: "relationship.imported", fromState: source.state, toState: source.state, objectVersion: source.version, payload: { linkId, targetObjectId: target.id, relationshipType: portableLink.relationshipType, bundleSha256 }, evidenceIds: [], contentSha256: eventHash({ companyId: access.company.id, objectId: source.id, commandId, eventType: "relationship.imported", linkId }), recordedByUserId: req.user.id, createdAt: now });
         linked += 1;
       }
       const summary = { imported: created.length, skipped: skipped.length, linked, objectIds: created.map((object) => object.id), bundleSha256 };
-      await tx.insert(eosInstrumentCommands).values({ id: randomUUID(), companyId: access.company.id, instrumentKey: input.bundle.objects[0].instrumentKey, objectId: null, commandType: "bundle.import", idempotencyKey: input.idempotencyKey, expectedVersion: null, payload: { conflictStrategy: input.conflictStrategy, objectCount: input.bundle.objects.length, linkCount: input.bundle.links.length, bundleSha256 }, state: "completed", result: summary, policyDecisionId: policy.decisionId, requestedByUserId: req.user.id, createdAt: now, completedAt: now });
-      await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "instrument.bundle.imported", targetType: "instrument_bundle", targetId: bundleSha256, traceId: policy.traceId, correlationId: policy.correlationId, result: "drafts_created", details: { ...summary, policyDecisionId: policy.decisionId }, createdAt: now });
+      const primaryPolicy = importPolicies.get(input.bundle.objects[0].instrumentKey)!;
+      await tx.insert(eosInstrumentCommands).values({ id: randomUUID(), companyId: access.company.id, instrumentKey: input.bundle.objects[0].instrumentKey, objectId: null, commandType: "bundle.import", idempotencyKey: input.idempotencyKey, expectedVersion: null, payload: { conflictStrategy: input.conflictStrategy, objectCount: input.bundle.objects.length, linkCount: input.bundle.links.length, bundleSha256 }, state: "completed", result: summary, policyDecisionId: primaryPolicy.decisionId, requestedByUserId: req.user.id, createdAt: now, completedAt: now });
+      await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "instrument.bundle.imported", targetType: "instrument_bundle", targetId: bundleSha256, traceId: primaryPolicy.traceId, correlationId: primaryPolicy.correlationId, result: "drafts_created", details: { ...summary, policyDecisionIds: Object.fromEntries(Array.from(importPolicies.entries()).map(([key, decision]) => [key, decision.decisionId])) }, createdAt: now });
       return { ...summary, replayed: false };
     });
     res.status(result.replayed ? 200 : 201).json({ schemaVersion: "eos.instrument-import-result.v1", ...result });
@@ -410,7 +453,12 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     const objects = await db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, Number(req.params.companyId)), inArray(eosInstrumentObjects.id, [input.sourceObjectId, input.targetObjectId])));
     if (objects.length !== 2) throw new EosRouteError(409, "instrument_link_scope_invalid", "Both linked objects must resolve inside the selected company.");
     const source = objects.find((item) => item.id === input.sourceObjectId)!;
+    const target = objects.find((item) => item.id === input.targetObjectId)!;
     const { access, policy } = await instrumentAccess(req, "execute", source.instrumentKey, "instrument.link.create", source.classification);
+    // Relationships can reveal the existence and purpose of their target.
+    // Require the same focused read permission on that target before linking;
+    // a source-tool grant is never a back door into another role's tool data.
+    await instrumentAccess(req, "view", target.instrumentKey, "instrument.read", target.classification);
     const replay = await replayCommand(access.company.id, input.idempotencyKey, source.instrumentKey, "link.create"); if (replay) { res.json(replay); return; }
     const now = new Date(); const linkId = randomUUID(); const commandId = randomUUID();
     await db.transaction(async (tx) => {

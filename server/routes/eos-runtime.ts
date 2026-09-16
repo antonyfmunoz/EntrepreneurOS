@@ -780,6 +780,43 @@ export async function authorizeAction(
   };
 }
 
+/**
+ * Resolve the native tools a seat may actually inspect.  This deliberately
+ * evaluates the same policy input as a focused instrument route, including
+ * the tool key. A role-projected manifest can show only those permitted
+ * tools; it must never turn a Systems surface into permission to discover
+ * every tool's records.
+ *
+ * This is intentionally side-effect free: it is used to shape role-projected
+ * navigation and collection responses.  Consequential requests still pass
+ * through authorizeAction, which records their individual policy decision.
+ */
+export function visibleInstrumentKeysForAccess(
+  access: {
+    seat: { id: string };
+    authorityCandidates: any[];
+  },
+  principalKey: string,
+) {
+  return eosInstrumentKeys.filter((instrumentKey) =>
+    evaluatePolicyDecision({
+      grants: access.authorityCandidates,
+      principalKey,
+      seatId: access.seat.id,
+      action: policyActionContextSchema.parse({
+        authorityClass: "view",
+        resource: `instrument:${instrumentKey}`,
+        actionKey: "instrument.read",
+        purpose: "inspect_instrument",
+        classification: "internal",
+        consequence: "routine",
+        targetSeatId: access.seat.id,
+        toolKey: instrumentKey,
+      }),
+    }).outcome === "permit",
+  );
+}
+
 function mayManageMembership(
   actor: { role: EosSeatKind; userId: string },
   target: { role: string; userId: string },
@@ -2420,21 +2457,9 @@ export function registerEosRuntimeRoutes(app: Express): void {
             effectiveUntil: grant.effectiveUntil,
           })),
         },
-        visibleInstrumentKeys: eosInstrumentKeys.filter((instrumentKey) =>
-          evaluatePolicyDecision({
-            grants: access.authorityCandidates,
-            principalKey: req.user.id,
-            seatId: seat.id,
-            action: policyActionContextSchema.parse({
-              authorityClass: "view",
-              resource: `instrument:${instrumentKey}`,
-              actionKey: "instrument.read",
-              purpose: "inspect_instrument",
-              classification: "internal",
-              consequence: "routine",
-              targetSeatId: seat.id,
-            }),
-          }).outcome === "permit",
+        visibleInstrumentKeys: visibleInstrumentKeysForAccess(
+          access,
+          req.user.id,
         ),
         toolEntitlements: Array.from(
           new Set([

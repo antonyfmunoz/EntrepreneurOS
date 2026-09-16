@@ -61,11 +61,14 @@ function stateTone(state: string) {
   return "outline" as const;
 }
 
-export function CanonicalInstrumentControlCenter({ root, canExecute, canDecide, evidence = [] }: {
+export function CanonicalInstrumentControlCenter({ root, canExecute, canDecide, evidence = [], visibleInstrumentKeys }: {
   root: string;
   canExecute: boolean;
   canDecide: boolean;
   evidence?: EvidenceOption[];
+  /** The compiled seat contract. The server independently returns the same
+   * filtered list and remains the final authority for every command. */
+  visibleInstrumentKeys?: readonly string[];
 }) {
   const [instrumentKey, setInstrumentKey] = useState<EosInstrumentKey>("docs");
   const [selectedId, setSelectedId] = useState("");
@@ -87,6 +90,19 @@ export function CanonicalInstrumentControlCenter({ root, canExecute, canDecide, 
     queryKey: [root, "canonical-instruments"],
     queryFn: async () => (await apiRequest("GET", `${root}/instruments`)).json(),
   });
+  const availableInstrumentKeys = useMemo(() => {
+    const compiled = visibleInstrumentKeys ? new Set(visibleInstrumentKeys) : null;
+    const server = Array.isArray(query.data?.permittedInstrumentKeys)
+      ? new Set(query.data.permittedInstrumentKeys.filter((key: unknown): key is string => typeof key === "string"))
+      : null;
+    return eosInstrumentKeys.filter((key) =>
+      (!compiled || compiled.has(key)) && (!server || server.has(key)),
+    );
+  }, [query.data?.permittedInstrumentKeys, visibleInstrumentKeys]);
+  useEffect(() => {
+    if (availableInstrumentKeys.length && !availableInstrumentKeys.includes(instrumentKey))
+      setInstrumentKey(availableInstrumentKeys[0]);
+  }, [availableInstrumentKeys, instrumentKey]);
   const objects: JsonRecord[] = query.data?.objects || [];
   const visible = useMemo(() => objects.filter((item) => item.instrumentKey === instrumentKey && (!search.trim() || `${item.title} ${item.summary} ${item.objectKey}`.toLowerCase().includes(search.trim().toLowerCase()))), [objects, instrumentKey, search]);
   const selected = objects.find((item) => item.id === selectedId);
@@ -212,13 +228,14 @@ export function CanonicalInstrumentControlCenter({ root, canExecute, canDecide, 
         <Button variant="outline" size="sm" onClick={() => query.refetch()} disabled={query.isFetching} aria-label="Refresh canonical instruments"><RefreshCw className={`mr-2 h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`}/>Refresh</Button>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-        {eosInstrumentKeys.map((key) => <button key={key} type="button" onClick={() => setInstrumentKey(key)} className={`rounded-xl border px-3 py-2 text-left text-xs transition ${instrumentKey === key ? "border-primary bg-primary/10 text-primary" : "bg-background hover:bg-muted"}`} aria-pressed={instrumentKey === key}>
+        {availableInstrumentKeys.map((key) => <button key={key} type="button" onClick={() => setInstrumentKey(key)} className={`rounded-xl border px-3 py-2 text-left text-xs transition ${instrumentKey === key ? "border-primary bg-primary/10 text-primary" : "bg-background hover:bg-muted"}`} aria-pressed={instrumentKey === key}>
           <span className="block truncate font-medium">{eosInstrumentManifest[key].label}</span>
           <span className="text-muted-foreground">{query.data?.counts?.[key] || 0} objects</span>
         </button>)}
       </div>
     </CardHeader>
     <CardContent className="space-y-5">
+      {!query.isLoading && !availableInstrumentKeys.length ? <Alert><ShieldCheck className="h-4 w-4"/><AlertTitle>No native tools are assigned to this seat</AlertTitle><AlertDescription>Ask the founder or an authorized organization administrator to assign the required tools in Org Studio. EOS will not show a generic catalog as a substitute for that role contract.</AlertDescription></Alert> : <>
       <Alert><ShieldCheck className="h-4 w-4"/><AlertTitle>{instrument.label}</AlertTitle><AlertDescription>{instrument.purpose} Provider references never become authority or current truth by implication.</AlertDescription></Alert>
       {error && <Alert variant="destructive"><AlertTitle>Command not applied</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]">
@@ -255,11 +272,12 @@ export function CanonicalInstrumentControlCenter({ root, canExecute, canDecide, 
             <div className={`rounded-md px-3 py-2 text-xs ${readinessFindings.length ? "bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200" : "bg-emerald-50 text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200"}`}>{readinessFindings.length ? `${readinessFindings.length} activation requirement${readinessFindings.length === 1 ? "" : "s"} remain: ${readinessFindings.map((finding) => finding.message).join(" ")}` : "Activation-ready structure. Decision authority and Evidence rules still apply."}</div>
           </div>
           <details className="rounded-lg border bg-background p-3"><summary className="cursor-pointer text-sm font-medium">Advanced structured data</summary><Label htmlFor="instrument-data" className="sr-only">Structured instrument data JSON</Label><Textarea id="instrument-data" className="mt-3 font-mono text-xs" value={structuredData} onChange={(event) => setStructuredData(event.target.value)} rows={8}/><p className="mt-2 text-xs text-muted-foreground">Managed references such as vault:// are allowed. Credential values are rejected.</p></details>
-          <Button className="w-full" disabled={!canExecute || title.trim().length < 2 || createMutation.isPending || updateMutation.isPending} onClick={() => selected ? updateMutation.mutate() : createMutation.mutate()}>{selected ? "Save new version" : "Create draft object"}</Button>
+          <Button className="w-full" disabled={!canExecute || !availableInstrumentKeys.includes(instrumentKey) || title.trim().length < 2 || createMutation.isPending || updateMutation.isPending} onClick={() => selected ? updateMutation.mutate() : createMutation.mutate()}>{selected ? "Save new version" : "Create draft object"}</Button>
           {selected && <div className="space-y-3 border-t pt-4"><div><p className="text-sm font-medium">Lifecycle controls</p><p className="text-xs text-muted-foreground">Consequential transitions require decision authority. Completion requires verified Evidence.</p></div>{instrumentTransitions[selected.state as keyof typeof instrumentTransitions]?.map((state) => <Button key={state} variant="outline" size="sm" className="mr-2" disabled={transitionMutation.isPending || (["active", "completed", "cancelled", "archived"].includes(state) ? !canDecide : !canExecute)} onClick={() => transitionMutation.mutate(state)}>{selected.state}<ArrowRight className="mx-2 h-3 w-3"/>{state}</Button>)}<Select value={transitionEvidenceId || "none"} onValueChange={(value) => setTransitionEvidenceId(value === "none" ? "" : value)}><SelectTrigger aria-label="Transition Evidence" className="mt-2"><SelectValue placeholder="Optional verified Evidence"/></SelectTrigger><SelectContent><SelectItem value="none">No Evidence attached</SelectItem>{evidence.filter((item) => item.verificationState === "verified").map((item) => <SelectItem key={item.id} value={item.id}>{item.title}</SelectItem>)}</SelectContent></Select></div>}
         </section>
       </div>
       {selected && <div className="grid gap-4 lg:grid-cols-2"><section className="rounded-xl border p-4"><h4 className="font-semibold">Cross-instrument relationships</h4><p className="mt-1 text-sm text-muted-foreground">Link canonical objects without copying or collapsing their source state.</p><div className="mt-3 grid gap-2 sm:grid-cols-[1fr_160px_auto]"><Select value={linkTargetId || "none"} onValueChange={(value) => setLinkTargetId(value === "none" ? "" : value)}><SelectTrigger aria-label="Relationship target"><SelectValue placeholder="Target object"/></SelectTrigger><SelectContent><SelectItem value="none">Choose target</SelectItem>{objects.filter((item) => item.id !== selected.id).map((item) => <SelectItem key={item.id} value={item.id}>{eosInstrumentManifest[item.instrumentKey as EosInstrumentKey]?.label}: {item.title}</SelectItem>)}</SelectContent></Select><Input value={relationshipType} onChange={(event) => setRelationshipType(event.target.value)} aria-label="Relationship type"/><Button size="icon" variant="outline" onClick={() => linkMutation.mutate()} disabled={!canExecute || !linkTargetId || relationshipType.trim().length < 2} aria-label="Create relationship"><Link2 className="h-4 w-4"/></Button></div><div className="mt-3 space-y-2">{links.map((link) => <p key={link.id} className="rounded-lg bg-muted p-2 text-xs">{link.relationshipType} · {link.sourceObjectId === selected.id ? "outbound" : "inbound"}</p>)}{!links.length && <p className="text-xs text-muted-foreground">No relationships yet.</p>}</div></section><section className="rounded-xl border p-4"><h4 className="font-semibold">Append-only event trail</h4><div className="mt-3 max-h-64 space-y-2 overflow-auto">{events.map((event) => <div key={event.id} className="rounded-lg bg-muted p-3 text-xs"><div className="flex justify-between gap-3"><span className="font-medium">{event.eventType.replaceAll("_", " ")}</span><span>v{event.objectVersion}</span></div><p className="mt-1 text-muted-foreground">{event.fromState || "none"} → {event.toState} · {new Date(event.createdAt).toLocaleString()}</p></div>)}{!events.length && <p className="text-xs text-muted-foreground">Events appear after the first accepted command.</p>}</div></section></div>}
+      </>}
     </CardContent>
   </Card>;
 }
