@@ -10,7 +10,7 @@ import {
   eosWorkflowRunEvents,
   eosWorkflowRuns,
 } from "@shared/schema";
-import { nextAgentScheduleAt } from "@shared/agent-runtime";
+import { matchesAgentEventFilter, nextAgentScheduleAt } from "@shared/agent-runtime";
 import { db } from "../db";
 import { nativeContractContentSha256 } from "../esign/template-generation";
 import { writeLog } from "../observability/logger";
@@ -142,7 +142,11 @@ export async function enqueueDueAgentSchedulesOnce(now = new Date(), limit = 25)
 
 export async function enqueueAgentEvent(input: { companyId: number; eventType: string; eventId: string; payload: Record<string, unknown>; observedAt?: Date }) {
   const schedules = await db.select().from(eosAgentSchedules).where(and(eq(eosAgentSchedules.companyId, input.companyId), eq(eosAgentSchedules.state, "active"), eq(eosAgentSchedules.triggerKind, "event")));
-  const matching = schedules.filter((schedule) => Array.isArray(schedule.eventTypes) && schedule.eventTypes.includes(input.eventType));
+  const matching = schedules.filter((schedule) => (
+    Array.isArray(schedule.eventTypes)
+    && schedule.eventTypes.includes(input.eventType)
+    && matchesAgentEventFilter(input.payload, schedule.eventFilter)
+  ));
   const now = input.observedAt || new Date();
   const results = [];
   for (const schedule of matching) {

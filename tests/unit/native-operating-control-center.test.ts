@@ -41,6 +41,10 @@ describe("native operating workflow evidence selection", () => {
     expect(controlCenter).toContain('`${root}/agent-events`');
     expect(controlCenter).toContain('externalEffectsPermitted: false');
     expect(controlCenter).toContain('Testing emits a bounded EOS event only; it does not call a provider.');
+    expect(controlCenter).toContain("Only run when these facts match");
+    expect(controlCenter).toContain('aria-label="Role Agent event rule value"');
+    expect(controlCenter).toContain("eventFilter: { all:");
+    expect(controlCenter).toContain("setNestedEventFact(payload, rule.path, rule.equals)");
   });
 
   it("lets an authorized operator run an active manual schedule without leaving the native workspace", () => {

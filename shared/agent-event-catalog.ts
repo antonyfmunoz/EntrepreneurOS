@@ -10,6 +10,7 @@ export const nativeAgentEventCatalog = [
     source: "Native workflow runtime",
     description: "Runs after EOS commits a workflow start, step advance, approval wait, resume, block, failure, cancellation, or completion.",
     payloadSummary: "Workflow, process, action, prior and next state, current step, approval, evidence, and classification.",
+    filterFields: ["action", "fromState", "toState", "currentStep", "classification"],
   },
   {
     eventType: "eos.approval.decided.v1",
@@ -17,6 +18,7 @@ export const nativeAgentEventCatalog = [
     source: "Native approval runtime",
     description: "Runs after EOS commits an authorized approval or rejection and updates its linked work packet.",
     payloadSummary: "Approval, linked work packet, decision, prior status, next work-packet status, classification, and no provider-effect claim.",
+    filterFields: ["decision", "previousStatus", "workPacketStatus", "classification"],
   },
   {
     eventType: "eos.instrument.object.transitioned.v1",
@@ -24,6 +26,7 @@ export const nativeAgentEventCatalog = [
     source: "Native instrument runtime",
     description: "Runs after EOS commits a lifecycle transition for a native tool object, including CRM, documents, sheets, calendar, websites, finance, and other instrument records.",
     payloadSummary: "Tool, object, object type, command, prior and next state, version, classification, and no provider-effect claim.",
+    filterFields: ["instrumentKey", "objectType", "fromState", "toState", "classification"],
   },
   {
     eventType: "eos.crm.consented_lead_recorded.v1",
@@ -31,6 +34,7 @@ export const nativeAgentEventCatalog = [
     source: "Native website and CRM runtime",
     description: "Runs after EOS accepts a consented submission from an EOS-owned public form and commits the linked native CRM records.",
     payloadSummary: "Form, submission, linked CRM record identifiers, recorded consent version, classification, and no visitor answers or provider-effect claim.",
+    filterFields: ["consentRecorded", "consentVersion", "classification"],
   },
 ] as const;
 

@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { nativeAgentEventCatalog, nativeAgentEventLabel } from "@shared/agent-event-catalog";
 
 type Json = Record<string, any>;
+type EventRule = { path: string; equals: string };
 
 async function request<T>(method: "GET" | "POST" | "PATCH", url: string, body?: unknown): Promise<T> {
   const response = await apiRequest(method, url, body) as Response;
@@ -19,6 +20,23 @@ async function request<T>(method: "GET" | "POST" | "PATCH", url: string, body?: 
 }
 
 const interactionSteps = ["See", "Zoom", "Select", "Inspect", "Ask", "Compare", "Simulate", "Enter", "Act", "Observe", "Learn"] as const;
+
+function eventRuleValue(value: string): string | number | boolean {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  if (/^-?\d+(?:\.\d+)?$/.test(value)) return Number(value);
+  return value;
+}
+
+function setNestedEventFact(payload: Json, path: string, value: unknown) {
+  const segments = path.split(".");
+  let current = payload;
+  for (const segment of segments.slice(0, -1)) {
+    if (!current[segment] || typeof current[segment] !== "object" || Array.isArray(current[segment])) current[segment] = {};
+    current = current[segment];
+  }
+  current[segments[segments.length - 1]] = value;
+}
 
 export function NativeOperatingControlCenter({
   root,
@@ -54,6 +72,9 @@ export function NativeOperatingControlCenter({
   const [scheduleCadence, setScheduleCadence] = useState("daily");
   const [scheduleEventTypes, setScheduleEventTypes] = useState("");
   const [nativeEventChoice, setNativeEventChoice] = useState("");
+  const [scheduleEventRules, setScheduleEventRules] = useState<EventRule[]>([]);
+  const [eventRulePath, setEventRulePath] = useState("");
+  const [eventRuleEquals, setEventRuleEquals] = useState("");
   const [operatingTab, setOperatingTab] = useState("runs");
 
   const runtime = useQuery<Json>({ queryKey: [root, "workflow-runtime"], queryFn: () => request("GET", `${root}/workflow-runtime`) });
@@ -132,6 +153,7 @@ export function NativeOperatingControlCenter({
         triggerKind,
         cadence: scheduleCadence,
         eventTypes,
+        eventFilter: { all: triggerKind === "event" ? scheduleEventRules.map((rule) => ({ path: rule.path, equals: eventRuleValue(rule.equals) })) : [] },
         executionMode: scheduleExecutionMode,
         inputTemplate: { source: "native_operating_instrument" },
         ...(triggerKind === "schedule" ? { nextRunAt: now.toISOString() } : {}),
@@ -140,7 +162,7 @@ export function NativeOperatingControlCenter({
         classification: "confidential",
       });
     },
-    onSuccess: async () => { setScheduleName(""); setScheduleProcessId(""); setScheduleEventTypes(""); await refresh(); },
+    onSuccess: async () => { setScheduleName(""); setScheduleProcessId(""); setScheduleEventTypes(""); setScheduleEventRules([]); setEventRulePath(""); setEventRuleEquals(""); await refresh(); },
   });
   const scheduleTransition = useMutation({
     mutationFn: (schedule: Json) => request<Json>("PATCH", `${root}/agent-schedules/${schedule.id}/state`, { expectedVersion: schedule.version, state: schedule.state === "active" ? "paused" : "active", rationale: "The operator reviewed the exact seat, Authority Subject, released process, execution mode, cadence, and runtime limits." }),
@@ -161,15 +183,20 @@ export function NativeOperatingControlCenter({
     mutationFn: (schedule: Json) => {
       const eventType = Array.isArray(schedule.eventTypes) ? schedule.eventTypes[0] : "";
       if (!eventType) throw new Error("This event schedule has no declared EOS event type. Refresh and correct the schedule before testing it.");
+      const payload: Json = {
+        source: "native_operating_instrument",
+        test: true,
+        scheduleId: schedule.id,
+        externalEffectsPermitted: false,
+      };
+      const rules = Array.isArray(schedule.eventFilter?.all) ? schedule.eventFilter.all : [];
+      for (const rule of rules) {
+        if (typeof rule?.path === "string" && (typeof rule.equals === "string" || typeof rule.equals === "number" || typeof rule.equals === "boolean")) setNestedEventFact(payload, rule.path, rule.equals);
+      }
       return request<Json>("POST", `${root}/agent-events`, {
         eventType,
         eventId: `ui:role-agent-event-test:${schedule.id}:${crypto.randomUUID()}`,
-        payload: {
-          source: "native_operating_instrument",
-          test: true,
-          scheduleId: schedule.id,
-          externalEffectsPermitted: false,
-        },
+        payload,
       });
     },
     onSuccess: async (result) => {
@@ -191,6 +218,15 @@ export function NativeOperatingControlCenter({
   const scheduleProcess = scheduleProcesses.find((process) => process.id === scheduleProcessId);
   const scheduleExecutionMode = scheduleSeat?.occupantUserId ? "assisted" : "autonomous";
   const configuredEventTypes = scheduleEventTypes.split(",").map((value) => value.trim()).filter(Boolean);
+  const filterableEventFields = useMemo(() => Array.from(new Set(
+    nativeAgentEventCatalog.filter((event) => configuredEventTypes.includes(event.eventType)).flatMap((event) => event.filterFields),
+  )), [configuredEventTypes.join(",")]);
+  const addEventRule = () => {
+    const path = eventRulePath.trim(); const equals = eventRuleEquals.trim();
+    if (!path || !equals || scheduleEventRules.some((rule) => rule.path === path)) return;
+    setScheduleEventRules((current) => [...current, { path, equals }]);
+    setEventRulePath(""); setEventRuleEquals("");
+  };
   const addNativeEventType = (eventType: string) => {
     if (!eventType) return;
     setScheduleEventTypes((current) => Array.from(new Set([...current.split(",").map((value) => value.trim()).filter(Boolean), eventType])).join(", "));
@@ -259,11 +295,11 @@ export function NativeOperatingControlCenter({
                 </select>
                 <Button disabled={!canDecide || !scheduleName || !scheduleSubject || !scheduleProcess || (scheduleCadence === "event" && !configuredEventTypes.length) || createSchedule.isPending} onClick={() => createSchedule.mutate()}>Create schedule</Button>
               </div>
-              {scheduleCadence === "event" && <div className="mt-3 space-y-3 rounded-lg border bg-background p-3"><div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"><label className="space-y-1 text-xs font-medium text-muted-foreground">Native EOS event<select aria-label="Native Role Agent event" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={nativeEventChoice} onChange={(event) => { setNativeEventChoice(event.target.value); addNativeEventType(event.target.value); }}><option value="">Add a native event…</option>{nativeAgentEventCatalog.map((event) => <option key={event.eventType} value={event.eventType}>{event.label}</option>)}</select></label><label className="space-y-1 text-xs font-medium text-muted-foreground">Subscribed event types<Input aria-label="Role Agent event types" value={scheduleEventTypes} onChange={(event) => setScheduleEventTypes(event.target.value)} placeholder="Select a native event or enter a documented adapter event" /></label></div><div className="grid gap-2 md:grid-cols-2">{nativeAgentEventCatalog.map((event) => <div key={event.eventType} className="rounded-md border bg-muted/20 p-2 text-xs"><p className="font-medium">{event.label}</p><p className="mt-1 text-muted-foreground">{event.description}</p><p className="mt-1 text-muted-foreground">Carries: {event.payloadSummary}</p></div>)}</div><p className="text-xs text-muted-foreground">Choose a native event rather than memorizing an internal name. A documented adapter event may still be entered for a governed connected system. Every trigger schedules EOS work only; it never turns an event into an unreviewed external effect.</p></div>}
+              {scheduleCadence === "event" && <div className="mt-3 space-y-3 rounded-lg border bg-background p-3"><div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"><label className="space-y-1 text-xs font-medium text-muted-foreground">Native EOS event<select aria-label="Native Role Agent event" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={nativeEventChoice} onChange={(event) => { setNativeEventChoice(event.target.value); addNativeEventType(event.target.value); }}><option value="">Add a native event…</option>{nativeAgentEventCatalog.map((event) => <option key={event.eventType} value={event.eventType}>{event.label}</option>)}</select></label><label className="space-y-1 text-xs font-medium text-muted-foreground">Subscribed event types<Input aria-label="Role Agent event types" value={scheduleEventTypes} onChange={(event) => setScheduleEventTypes(event.target.value)} placeholder="Select a native event or enter a documented adapter event" /></label></div><div className="rounded-md border bg-muted/20 p-3"><p className="text-sm font-medium">Only run when these facts match</p><p className="mt-1 text-xs text-muted-foreground">Optional exact-match rules narrow this agent without writing code. All listed rules must match a bounded fact that EOS already committed in the event.</p><div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"><label className="sr-only" htmlFor="role-agent-event-rule-field">Event fact</label><select id="role-agent-event-rule-field" className="h-10 rounded-md border bg-background px-3 text-sm" value={eventRulePath} onChange={(event) => setEventRulePath(event.target.value)}><option value="">Choose an event fact</option>{filterableEventFields.map((field) => <option key={field} value={field}>{field}</option>)}</select><Input aria-label="Role Agent event rule value" value={eventRuleEquals} onChange={(event) => setEventRuleEquals(event.target.value)} placeholder="Equals value, e.g. active or true" /><Button type="button" variant="outline" disabled={!eventRulePath || !eventRuleEquals || scheduleEventRules.length >= 8} onClick={addEventRule}>Add rule</Button></div>{scheduleEventRules.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{scheduleEventRules.map((rule) => <button type="button" key={rule.path} className="rounded-full border bg-background px-2 py-1 text-xs hover:border-destructive" onClick={() => setScheduleEventRules((current) => current.filter((item) => item.path !== rule.path))}>{rule.path} = {rule.equals} ×</button>)}</div>}</div><div className="grid gap-2 md:grid-cols-2">{nativeAgentEventCatalog.map((event) => <div key={event.eventType} className="rounded-md border bg-muted/20 p-2 text-xs"><p className="font-medium">{event.label}</p><p className="mt-1 text-muted-foreground">{event.description}</p><p className="mt-1 text-muted-foreground">Carries: {event.payloadSummary}</p></div>)}</div><p className="text-xs text-muted-foreground">Choose a native event rather than memorizing an internal name. A documented adapter event may still be entered for a governed connected system. Every trigger schedules EOS work only; it never turns an event into an unreviewed external effect.</p></div>}
               {scheduleSubject && !scheduleProcesses.length && <p className="mt-3 text-sm text-muted-foreground">This Role Agent has no implemented, released process assigned yet. Assign and release its process in Org Studio before scheduling it.</p>}
               {scheduleSubject && scheduleProcess && <p className="mt-3 rounded-lg border bg-background p-3 text-xs text-muted-foreground"><span className="font-medium text-foreground">Scope preview:</span> {scheduleSubject.displayName} will run {scheduleProcess.name} as {scheduleExecutionMode} work {scheduleTriggerDescription}. External effects remain blocked unless a separately authorized provider action produces its own receipt.</p>}
             </div>
-            <div className="grid gap-3 md:grid-cols-2">{(agents.data?.schedules || []).map((schedule: Json) => { const process = processes.find((item) => item.id === schedule.processDefinitionId); const eventTypes = Array.isArray(schedule.eventTypes) ? schedule.eventTypes : []; return <div key={schedule.id} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{schedule.name}</p><p className="mt-1 text-xs text-muted-foreground">{process?.name || "Released process"} · {schedule.cadence} · {schedule.executionMode}</p></div><Badge variant="outline">{schedule.state}</Badge></div>{schedule.triggerKind === "manual" && <p className="mt-3 text-xs text-muted-foreground">Manual run: creates a governed EOS workflow run now. It does not claim or perform an external provider effect.</p>}{schedule.triggerKind === "event" && <p className="mt-3 text-xs text-muted-foreground">Event trigger: {eventTypes.length ? eventTypes.map(nativeAgentEventLabel).join(", ") : "not declared"}. Testing emits a bounded EOS event only; it does not call a provider.</p>}<div className="mt-4 flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={!canDecide || schedule.state === "retired" || scheduleTransition.isPending} onClick={() => scheduleTransition.mutate(schedule)}>{schedule.state === "active" ? "Pause" : "Activate"}</Button>{schedule.triggerKind === "manual" && <Button size="sm" disabled={!canExecute || schedule.state !== "active" || runSchedule.isPending} onClick={() => runSchedule.mutate(schedule)}><Play className="mr-2 h-4 w-4" />{runSchedule.isPending ? "Starting…" : "Run now"}</Button>}{schedule.triggerKind === "event" && <Button size="sm" disabled={!canExecute || schedule.state !== "active" || !eventTypes.length || dispatchScheduleEvent.isPending} onClick={() => dispatchScheduleEvent.mutate(schedule)}><Activity className="mr-2 h-4 w-4" />{dispatchScheduleEvent.isPending ? "Testing…" : "Test event"}</Button>}</div></div>; })}</div>
+            <div className="grid gap-3 md:grid-cols-2">{(agents.data?.schedules || []).map((schedule: Json) => { const process = processes.find((item) => item.id === schedule.processDefinitionId); const eventTypes = Array.isArray(schedule.eventTypes) ? schedule.eventTypes : []; const eventRules = Array.isArray(schedule.eventFilter?.all) ? schedule.eventFilter.all : []; return <div key={schedule.id} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{schedule.name}</p><p className="mt-1 text-xs text-muted-foreground">{process?.name || "Released process"} · {schedule.cadence} · {schedule.executionMode}</p></div><Badge variant="outline">{schedule.state}</Badge></div>{schedule.triggerKind === "manual" && <p className="mt-3 text-xs text-muted-foreground">Manual run: creates a governed EOS workflow run now. It does not claim or perform an external provider effect.</p>}{schedule.triggerKind === "event" && <><p className="mt-3 text-xs text-muted-foreground">Event trigger: {eventTypes.length ? eventTypes.map(nativeAgentEventLabel).join(", ") : "not declared"}. Testing emits a bounded EOS event only; it does not call a provider.</p>{eventRules.length > 0 && <p className="mt-2 text-xs text-muted-foreground">Only when: {eventRules.map((rule: Json) => `${rule.path} = ${String(rule.equals)}`).join(" and ")}</p>}</>}<div className="mt-4 flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={!canDecide || schedule.state === "retired" || scheduleTransition.isPending} onClick={() => scheduleTransition.mutate(schedule)}>{schedule.state === "active" ? "Pause" : "Activate"}</Button>{schedule.triggerKind === "manual" && <Button size="sm" disabled={!canExecute || schedule.state !== "active" || runSchedule.isPending} onClick={() => runSchedule.mutate(schedule)}><Play className="mr-2 h-4 w-4" />{runSchedule.isPending ? "Starting…" : "Run now"}</Button>}{schedule.triggerKind === "event" && <Button size="sm" disabled={!canExecute || schedule.state !== "active" || !eventTypes.length || dispatchScheduleEvent.isPending} onClick={() => dispatchScheduleEvent.mutate(schedule)}><Activity className="mr-2 h-4 w-4" />{dispatchScheduleEvent.isPending ? "Testing…" : "Test event"}</Button>}</div></div>; })}</div>
           </TabsContent>
 
           <TabsContent value="handoffs" className="space-y-3 pt-4">{(handoffs.data?.handoffs || []).map((handoff: Json) => <div key={handoff.capabilityInstanceId} className="rounded-xl border p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-medium">{handoff.capabilityName}</p><p className="mt-1 text-xs text-muted-foreground">{handoff.capabilityKey} · {handoff.sections.length} handoff sections</p></div><Badge variant={handoff.gaps.length ? "outline" : "default"}>{handoff.readiness.replaceAll("_", " ")}</Badge></div><div className="mt-3 flex flex-wrap gap-2"><Badge variant="destructive">{handoff.gaps.filter((gap: Json) => gap.severity === "P0").length} P0</Badge><Badge variant="secondary">{handoff.gaps.filter((gap: Json) => gap.severity === "P1").length} P1</Badge><Badge variant="outline">{handoff.gaps.filter((gap: Json) => gap.severity === "P2").length} P2</Badge></div></div>)}</TabsContent>
