@@ -1,6 +1,35 @@
 import { z } from "zod";
 import { workflowExecutionModes } from "./workflow-runtime";
 
+const eventFilterValueSchema = z.union([
+  z.string().trim().min(1).max(240),
+  z.number().finite(),
+  z.boolean(),
+]);
+
+export const agentEventFilterSchema = z.object({
+  all: z.array(z.object({
+    path: z.string().trim().min(1).max(120).regex(/^[A-Za-z][A-Za-z0-9_.-]*$/, "Use a documented event field name."),
+    equals: eventFilterValueSchema,
+  })).max(8).default([]),
+}).default({ all: [] });
+
+type EventFilterTerm = z.infer<typeof agentEventFilterSchema>["all"][number];
+
+/** Exact, bounded fact matching for the visual event-rule builder. */
+export function matchesAgentEventFilter(payload: Record<string, unknown>, filter: unknown): boolean {
+  const parsed = agentEventFilterSchema.safeParse(filter);
+  if (!parsed.success) return false;
+  return parsed.data.all.every(({ path, equals }: EventFilterTerm) => {
+    const value = path.split(".").reduce<unknown>((current, segment) => (
+      current && typeof current === "object" && !Array.isArray(current)
+        ? (current as Record<string, unknown>)[segment]
+        : undefined
+    ), payload);
+    return value === equals;
+  });
+}
+
 export const agentScheduleCreateSchema = z.object({
   scheduleKey: z.string().trim().min(3).max(160),
   name: z.string().trim().min(3).max(240),
@@ -10,6 +39,7 @@ export const agentScheduleCreateSchema = z.object({
   triggerKind: z.enum(["schedule", "event", "manual"]),
   cadence: z.enum(["once", "hourly", "daily", "weekly", "monthly", "event", "manual"]),
   eventTypes: z.array(z.string().trim().min(3).max(200)).max(100).default([]),
+  eventFilter: agentEventFilterSchema,
   executionMode: z.enum(workflowExecutionModes),
   inputTemplate: z.record(z.unknown()).default({}),
   nextRunAt: z.string().datetime().optional(),
@@ -21,6 +51,8 @@ export const agentScheduleCreateSchema = z.object({
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["executionMode"], message: "Scheduled Role Agents own their seat's run; use the workflow runtime for explicit hierarchy-bound delegation." });
   if (value.triggerKind === "event" && (!value.eventTypes.length || value.cadence !== "event"))
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["eventTypes"], message: "Event schedules require at least one event type and the event cadence." });
+  if (value.triggerKind !== "event" && value.eventFilter.all.length)
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["eventFilter"], message: "Only event-triggered Role Agent schedules may use an event rule." });
   if (value.triggerKind === "schedule" && (["event", "manual"].includes(value.cadence) || !value.nextRunAt))
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["nextRunAt"], message: "Time schedules require a future run time and a time cadence." });
   if (value.triggerKind === "manual" && value.cadence !== "manual")

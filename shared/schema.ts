@@ -4276,6 +4276,7 @@ export const eosAgentSchedules = pgTable("eos_agent_schedules", {
   triggerKind: text("trigger_kind").notNull(),
   cadence: text("cadence").notNull(),
   eventTypes: jsonb("event_types").notNull().default([]),
+  eventFilter: jsonb("event_filter").notNull().default({ all: [] }),
   executionMode: text("execution_mode").notNull(),
   inputTemplate: jsonb("input_template").notNull().default({}),
   state: text("state").notNull().default("draft"),
@@ -4302,6 +4303,7 @@ export const eosAgentSchedules = pgTable("eos_agent_schedules", {
   check("eos_agent_schedules_daily_limit_check", sql`${table.maxRunsPerDay} BETWEEN 1 AND 1440`),
   check("eos_agent_schedules_classification_check", sql`${table.classification} IN ('internal','confidential','restricted')`),
   check("eos_agent_schedules_event_array_check", sql`jsonb_typeof(${table.eventTypes}) = 'array'`),
+  check("eos_agent_schedules_event_filter_check", sql`jsonb_typeof(${table.eventFilter}) = 'object'`),
   check("eos_agent_schedules_trigger_configuration_check", sql`
     (${table.triggerKind} = 'event' AND ${table.cadence} = 'event' AND jsonb_array_length(${table.eventTypes}) > 0 AND ${table.nextRunAt} IS NULL) OR
     (${table.triggerKind} = 'manual' AND ${table.cadence} = 'manual' AND jsonb_array_length(${table.eventTypes}) = 0 AND ${table.nextRunAt} IS NULL) OR

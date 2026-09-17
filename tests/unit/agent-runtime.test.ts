@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   agentScheduleCreateSchema,
   agentEvaluationSchema,
+  matchesAgentEventFilter,
   nextAgentScheduleAt,
 } from "../../shared/agent-runtime";
 
@@ -21,8 +22,18 @@ describe("scheduled and event-driven Role Agent contracts", () => {
   it("requires coherent time, event, and manual trigger configuration", () => {
     expect(agentScheduleCreateSchema.safeParse({ ...base, triggerKind: "schedule", cadence: "daily", executionMode: "autonomous", nextRunAt: "2026-08-27T08:00:00.000Z", eventTypes: [] }).success).toBe(true);
     expect(agentScheduleCreateSchema.safeParse({ ...base, triggerKind: "event", cadence: "event", executionMode: "assisted", eventTypes: ["customer.risk.detected"] }).success).toBe(true);
+    expect(agentScheduleCreateSchema.safeParse({ ...base, triggerKind: "event", cadence: "event", executionMode: "assisted", eventTypes: ["customer.risk.detected"], eventFilter: { all: [{ path: "health.state", equals: "at_risk" }] } }).success).toBe(true);
     expect(agentScheduleCreateSchema.safeParse({ ...base, triggerKind: "event", cadence: "daily", executionMode: "assisted", eventTypes: [] }).success).toBe(false);
+    expect(agentScheduleCreateSchema.safeParse({ ...base, triggerKind: "manual", cadence: "manual", executionMode: "assisted", eventTypes: [], eventFilter: { all: [{ path: "state", equals: "active" }] } }).success).toBe(false);
     expect(agentScheduleCreateSchema.safeParse({ ...base, triggerKind: "schedule", cadence: "daily", executionMode: "delegated", nextRunAt: "2026-08-27T08:00:00.000Z", eventTypes: [] }).success).toBe(false);
+  });
+
+  it("matches only bounded committed facts from a no-code event rule", () => {
+    const filter = { all: [{ path: "health.state", equals: "at_risk" }, { path: "consentRecorded", equals: true }] };
+    expect(matchesAgentEventFilter({ health: { state: "at_risk" }, consentRecorded: true }, filter)).toBe(true);
+    expect(matchesAgentEventFilter({ health: { state: "healthy" }, consentRecorded: true }, filter)).toBe(false);
+    expect(matchesAgentEventFilter({ health: { state: "at_risk" }, consentRecorded: "true" }, filter)).toBe(false);
+    expect(matchesAgentEventFilter({ health: { state: "at_risk" }, consentRecorded: true }, { all: [{ path: "not valid", equals: "x" }] })).toBe(false);
   });
 
   it("calculates bounded UTC cadence without pretending event or one-time work recurs", () => {

@@ -74,7 +74,7 @@ export function registerAgentRuntimeRoutes(app: Express): void {
 
   app.post("/api/eos/companies/:companyId/agent-schedules", route(async (req, res) => {
     const input = agentScheduleCreateSchema.parse(req.body);
-    if (containsCredentialMaterial(input.inputTemplate)) throw new EosRouteError(409, "agent_schedule_contains_credentials", "Role Agent schedules may use secret-manager references, but cannot store credentials, passwords, tokens, or private keys.");
+    if (containsCredentialMaterial(input.inputTemplate) || containsCredentialMaterial(input.eventFilter)) throw new EosRouteError(409, "agent_schedule_contains_credentials", "Role Agent schedules may use secret-manager references, but cannot store credentials, passwords, tokens, private keys, or secret filter values.");
     const { access, policy } = await agentAccess(req, "decide", "agent_schedule.create", input.classification);
     const visible = await visibleSeatIds(access.company.id, access.seat.id, access.role);
     if (!visible.has(input.seatId)) throw new EosRouteError(409, "agent_schedule_seat_invalid", "The scheduled seat must be inside the current reporting hierarchy.");
@@ -86,10 +86,10 @@ export function registerAgentRuntimeRoutes(app: Express): void {
     if (!seat || !subject || !process || process.accountableSeatId !== seat.id || subject.seatId !== seat.id)
       throw new EosRouteError(409, "agent_schedule_contract_invalid", "Schedule, Authority Subject, process, and accountable seat must resolve to one company role context.");
     const now = new Date();
-    const record = { id: randomUUID(), companyId: access.company.id, portfolioId: access.company.portfolioId, scheduleKey: input.scheduleKey, name: input.name, seatId: input.seatId, authoritySubjectId: input.authoritySubjectId, processDefinitionId: input.processDefinitionId, triggerKind: input.triggerKind, cadence: input.cadence, eventTypes: input.eventTypes, executionMode: input.executionMode, inputTemplate: input.inputTemplate, state: "draft", nextRunAt: input.nextRunAt ? new Date(input.nextRunAt) : null, lastRunAt: null, maxRunsPerDay: input.maxRunsPerDay, evaluationRequired: input.evaluationRequired, activationPolicyDecisionId: null, classification: input.classification, version: 1, recordedByUserId: req.user.id, createdAt: now, updatedAt: now };
+    const record = { id: randomUUID(), companyId: access.company.id, portfolioId: access.company.portfolioId, scheduleKey: input.scheduleKey, name: input.name, seatId: input.seatId, authoritySubjectId: input.authoritySubjectId, processDefinitionId: input.processDefinitionId, triggerKind: input.triggerKind, cadence: input.cadence, eventTypes: input.eventTypes, eventFilter: input.eventFilter, executionMode: input.executionMode, inputTemplate: input.inputTemplate, state: "draft", nextRunAt: input.nextRunAt ? new Date(input.nextRunAt) : null, lastRunAt: null, maxRunsPerDay: input.maxRunsPerDay, evaluationRequired: input.evaluationRequired, activationPolicyDecisionId: null, classification: input.classification, version: 1, recordedByUserId: req.user.id, createdAt: now, updatedAt: now };
     await db.transaction(async (tx) => {
       await tx.insert(eosAgentSchedules).values(record);
-      await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "agent_schedule.created", targetType: "agent_schedule", targetId: record.id, traceId: policy.traceId, correlationId: policy.correlationId, result: "draft", details: { scheduleKey: record.scheduleKey, triggerKind: record.triggerKind, executionMode: record.executionMode, policyDecisionId: policy.decisionId }, createdAt: now });
+      await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "agent_schedule.created", targetType: "agent_schedule", targetId: record.id, traceId: policy.traceId, correlationId: policy.correlationId, result: "draft", details: { scheduleKey: record.scheduleKey, triggerKind: record.triggerKind, eventFilter: record.eventFilter, executionMode: record.executionMode, policyDecisionId: policy.decisionId }, createdAt: now });
     });
     res.status(201).json(record);
   }));
