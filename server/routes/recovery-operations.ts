@@ -5,6 +5,7 @@ import { z, ZodError } from "zod";
 import {
   eosAuditRecords,
   eosAgentEventOutbox,
+  eosAgentSchedules,
   eosCustomerSuccessAccounts,
   eosEvidence,
   eosIntegrationBindings,
@@ -21,6 +22,7 @@ import {
   eosStakeholderRelationships,
   eosStakeholders,
   eosWorkPackets,
+  eosWorkflowRuns,
 } from "@shared/schema";
 import {
   engagementProgress,
@@ -46,6 +48,30 @@ import { EosRouteError, authorizeAction, companyAccess, mayAccessClassification,
 
 type Access = Awaited<ReturnType<typeof companyAccess>>;
 type Tx = any;
+
+const recoveryAgentEventTypes = new Set([
+  "eos.recovery.engagement.transitioned.v1",
+  "eos.recovery.campaign.transitioned.v1",
+  "eos.recovery.opportunity.transitioned.v1",
+]);
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function recoveryRunContext(run: typeof eosWorkflowRuns.$inferSelect) {
+  const input = asRecord(run.input);
+  const trigger = asRecord(input?._agentTrigger);
+  const payload = asRecord(trigger?.payload);
+  const scheduleId = typeof input?._scheduleId === "string" ? input._scheduleId : null;
+  const eventType = typeof trigger?.eventType === "string" ? trigger.eventType : null;
+  const engagementId = typeof payload?.engagementId === "string" ? payload.engagementId : null;
+  return { scheduleId, eventType, engagementId };
+}
 
 function route(handler: (req: Request, res: Response) => Promise<void>) {
   return async (req: Request, res: Response, next: (error?: unknown) => void) => {
@@ -167,7 +193,7 @@ export function registerRecoveryOperationsRoutes(app: Express): void {
     const companyId = Number(req.params.companyId); const { access } = await operationsAccess(req, "view", "recovery_operations.state.read");
     if (access.company.id !== companyId) throw new EosRouteError(404, "company_not_found", "Company not found in the active principal scope.");
     const visible = await visibleSeatIds(companyId, access.seat.id, access.role);
-    const [engagements, seats, evidenceRows, bindings, packets, sessions, agreements, billings, stakeholders, relationships, accounts] = await Promise.all([
+    const [engagements, seats, evidenceRows, bindings, packets, sessions, agreements, billings, stakeholders, relationships, accounts, schedules, workflowRuns] = await Promise.all([
       db.select().from(eosRecoveryEngagements).where(eq(eosRecoveryEngagements.companyId, companyId)).orderBy(desc(eosRecoveryEngagements.updatedAt)),
       db.select().from(eosSeats).where(eq(eosSeats.companyId, companyId)).orderBy(eosSeats.title),
       db.select({ evidence: eosEvidence, packet: eosWorkPackets }).from(eosEvidence).innerJoin(eosWorkPackets, eq(eosWorkPackets.id, eosEvidence.workPacketId)).where(and(eq(eosEvidence.companyId, companyId), eq(eosEvidence.verificationState, "verified"))),
@@ -179,9 +205,40 @@ export function registerRecoveryOperationsRoutes(app: Express): void {
       db.select().from(eosStakeholders).where(eq(eosStakeholders.companyId, companyId)),
       db.select().from(eosStakeholderRelationships).where(eq(eosStakeholderRelationships.companyId, companyId)),
       db.select().from(eosCustomerSuccessAccounts).where(eq(eosCustomerSuccessAccounts.companyId, companyId)),
+      db.select().from(eosAgentSchedules).where(eq(eosAgentSchedules.companyId, companyId)).orderBy(eosAgentSchedules.name),
+      db.select().from(eosWorkflowRuns).where(eq(eosWorkflowRuns.companyId, companyId)).orderBy(desc(eosWorkflowRuns.updatedAt)).limit(240),
     ]);
     const visibleEngagements = engagements.filter((item) => visible.has(item.ownerSeatId) && mayAccessClassification(access, item.classification));
-    const bundles = await Promise.all(visibleEngagements.map(engagementBundle));
+    const recoverySchedules = schedules.filter((schedule) =>
+      visible.has(schedule.seatId)
+      && mayAccessClassification(access, schedule.classification)
+      && schedule.triggerKind === "event"
+      && stringArray(schedule.eventTypes).some((eventType) => recoveryAgentEventTypes.has(eventType)),
+    );
+    const recoveryScheduleIds = new Set(recoverySchedules.map((schedule) => schedule.id));
+    const recoveryRunsByEngagement = new Map<string, Array<Record<string, unknown>>>();
+    for (const run of workflowRuns) {
+      if (!visible.has(run.ownerSeatId) || !mayAccessClassification(access, run.classification)) continue;
+      const context = recoveryRunContext(run);
+      if (!context.scheduleId || !context.engagementId || !context.eventType || !recoveryScheduleIds.has(context.scheduleId) || !recoveryAgentEventTypes.has(context.eventType)) continue;
+      const runs = recoveryRunsByEngagement.get(context.engagementId) || [];
+      if (runs.length < 12) runs.push({ id: run.id, scheduleId: context.scheduleId, eventType: context.eventType, state: run.state, currentStep: run.currentStep, executionMode: run.executionMode, ownerSeatId: run.ownerSeatId, processDefinitionId: run.processDefinitionId, createdAt: run.createdAt, updatedAt: run.updatedAt });
+      recoveryRunsByEngagement.set(context.engagementId, runs);
+    }
+    const recoveryScheduleProjection = recoverySchedules.map((schedule) => ({
+      id: schedule.id, name: schedule.name, seatId: schedule.seatId, state: schedule.state, version: schedule.version,
+      executionMode: schedule.executionMode, eventTypes: stringArray(schedule.eventTypes).filter((eventType) => recoveryAgentEventTypes.has(eventType)),
+      eventFilter: schedule.eventFilter, maxRunsPerDay: schedule.maxRunsPerDay, evaluationRequired: schedule.evaluationRequired,
+    }));
+    const bundles = (await Promise.all(visibleEngagements.map(engagementBundle))).map((bundle) => ({
+      ...bundle,
+      automation: {
+        matchingSchedules: recoveryScheduleProjection.length,
+        activeSchedules: recoveryScheduleProjection.filter((schedule) => schedule.state === "active").length,
+        schedules: recoveryScheduleProjection,
+        runs: recoveryRunsByEngagement.get(bundle.id) || [],
+      },
+    }));
     const existingPacketIds = new Set(engagements.map((item) => item.call2PacketId).filter(Boolean));
     const eligiblePaidHandoffs = packets.filter((packet) => {
       const session = sessions.find((item) => item.id === packet.sessionId); const agreement = agreements.find((item) => item.call2PacketId === packet.id); const billing = agreement && billings.find((item) => item.agreementInstanceId === agreement.id);
