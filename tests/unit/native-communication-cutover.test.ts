@@ -51,4 +51,14 @@ describe("native communication authority cutover", () => {
     expect(messageHub).toContain("Planning creates no provider effect.");
     expect(messageHub).toContain("provider receipt");
   });
+
+  it("links a message to only an already-authorized native CRM relationship", () => {
+    expect(messageHub).toContain('`${root}/context`');
+    expect(messageHub).toContain('visibleInstrumentKeys.includes("crm")');
+    expect(messageHub).toContain('enabled: Boolean(canViewCrm)');
+    expect(messageHub).toContain("Only relationships already visible to this role appear here.");
+    expect(messageHub).toContain('relationshipType: "concerns_relationship"');
+    expect(messageHub).toContain("relationshipContext");
+    expect(messageHub).toContain("no email is sent until the provider's governed run is approved");
+  });
 });
