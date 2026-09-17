@@ -9577,6 +9577,16 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       expect(manualRun.body.input).toMatchObject({ fixture: true, _scheduleId: schedule.body.id, _agentTrigger: { kind: "manual", id: manualRunKey } });
       const repeatedManualRun = await api.post(`/api/eos/companies/${companyId}/agent-schedules/${schedule.body.id}/run`).send({ idempotencyKey: manualRunKey }).expect(201);
       expect(repeatedManualRun.body.id).toBe(manualRun.body.id);
+
+      const eventType = "eos.fixture.role_agent_event.v1";
+      const eventSchedule = await api.post(`/api/eos/companies/${companyId}/agent-schedules`).send({ scheduleKey: `fixture-event-schedule-${randomUUID()}`, name: "Fixture event Role Agent", seatId: process.accountable_seat_id, authoritySubjectId: subject.id, processDefinitionId: process.id, triggerKind: "event", cadence: "event", eventTypes: [eventType], executionMode: process.occupant_user_id ? "assisted" : "autonomous", inputTemplate: { fixture: true }, maxRunsPerDay: 2, evaluationRequired: true, classification: "confidential" }).expect(201);
+      await api.patch(`/api/eos/companies/${companyId}/agent-schedules/${eventSchedule.body.id}/state`).send({ expectedVersion: 1, state: "active", rationale: "Activate only after resolving the verified Authority Subject, exact accountable seat, released process, and declared EOS event contract." }).expect(200);
+      const eventId = `fixture-agent-event-${randomUUID()}`;
+      const eventDispatch = await api.post(`/api/eos/companies/${companyId}/agent-events`).send({ eventType, eventId, payload: { fixture: true, externalEffectsPermitted: false } }).expect(202);
+      expect(eventDispatch.body).toMatchObject({ eventId, matchingSchedules: 1 });
+      expect(eventDispatch.body.runIds).toHaveLength(1);
+      const eventRun = await api.get(`/api/eos/companies/${companyId}/workflow-runtime`).expect(200);
+      expect(eventRun.body.runs.find((item: any) => item.id === eventDispatch.body.runIds[0])).toMatchObject({ companyId, processDefinitionId: process.id, ownerSeatId: process.accountable_seat_id, input: { fixture: true, _scheduleId: eventSchedule.body.id, _agentTrigger: { kind: "event", id: eventId, eventType, payload: { fixture: true, externalEffectsPermitted: false } } } });
     }
 
     const observation = await api.post(`/api/eos/companies/${companyId}/reality-observations`).send({ observationKey: `fixture-observation-${randomUUID()}`, subject: "Native runtime qualification", statement: "The disposable PostgreSQL journey completed the governed workflow fixture.", sourceKind: "workflow", sourceReference: run.body.id, observedAt: new Date().toISOString(), confidence: 100, state: "verified", evidenceIds: [evidence.id], classification: "confidential" }).expect(201);

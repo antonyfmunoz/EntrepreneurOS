@@ -51,6 +51,7 @@ export function NativeOperatingControlCenter({
   const [scheduleSubjectId, setScheduleSubjectId] = useState("");
   const [scheduleProcessId, setScheduleProcessId] = useState("");
   const [scheduleCadence, setScheduleCadence] = useState("daily");
+  const [scheduleEventTypes, setScheduleEventTypes] = useState("");
   const [operatingTab, setOperatingTab] = useState("runs");
 
   const runtime = useQuery<Json>({ queryKey: [root, "workflow-runtime"], queryFn: () => request("GET", `${root}/workflow-runtime`) });
@@ -115,6 +116,10 @@ export function NativeOperatingControlCenter({
   const createSchedule = useMutation({
     mutationFn: () => {
       if (!scheduleSeat) throw new Error("Choose a verified Role Agent with an active seat.");
+      const eventTypes = scheduleEventTypes.split(",").map((value) => value.trim()).filter(Boolean);
+      const triggerKind = scheduleCadence === "manual" ? "manual" : scheduleCadence === "event" ? "event" : "schedule";
+      if (triggerKind === "event" && !eventTypes.length)
+        throw new Error("Add at least one EOS event type before creating an event-triggered Role Agent schedule.");
       const now = new Date(); now.setUTCDate(now.getUTCDate() + 1);
       return request<Json>("POST", `${root}/agent-schedules`, {
         scheduleKey: `schedule-${scheduleName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${crypto.randomUUID().slice(0, 8)}`,
@@ -122,18 +127,18 @@ export function NativeOperatingControlCenter({
         seatId: scheduleSeat.id,
         authoritySubjectId: scheduleSubjectId,
         processDefinitionId: scheduleProcessId,
-        triggerKind: scheduleCadence === "manual" ? "manual" : "schedule",
+        triggerKind,
         cadence: scheduleCadence,
-        eventTypes: [],
+        eventTypes,
         executionMode: scheduleExecutionMode,
         inputTemplate: { source: "native_operating_instrument" },
-        ...(scheduleCadence === "manual" ? {} : { nextRunAt: now.toISOString() }),
+        ...(triggerKind === "schedule" ? { nextRunAt: now.toISOString() } : {}),
         maxRunsPerDay: 24,
         evaluationRequired: true,
         classification: "confidential",
       });
     },
-    onSuccess: async () => { setScheduleName(""); setScheduleProcessId(""); await refresh(); },
+    onSuccess: async () => { setScheduleName(""); setScheduleProcessId(""); setScheduleEventTypes(""); await refresh(); },
   });
   const scheduleTransition = useMutation({
     mutationFn: (schedule: Json) => request<Json>("PATCH", `${root}/agent-schedules/${schedule.id}/state`, { expectedVersion: schedule.version, state: schedule.state === "active" ? "paused" : "active", rationale: "The operator reviewed the exact seat, Authority Subject, released process, execution mode, cadence, and runtime limits." }),
@@ -150,8 +155,30 @@ export function NativeOperatingControlCenter({
       await refresh();
     },
   });
+  const dispatchScheduleEvent = useMutation({
+    mutationFn: (schedule: Json) => {
+      const eventType = Array.isArray(schedule.eventTypes) ? schedule.eventTypes[0] : "";
+      if (!eventType) throw new Error("This event schedule has no declared EOS event type. Refresh and correct the schedule before testing it.");
+      return request<Json>("POST", `${root}/agent-events`, {
+        eventType,
+        eventId: `ui:role-agent-event-test:${schedule.id}:${crypto.randomUUID()}`,
+        payload: {
+          source: "native_operating_instrument",
+          test: true,
+          scheduleId: schedule.id,
+          externalEffectsPermitted: false,
+        },
+      });
+    },
+    onSuccess: async (result) => {
+      if (result.runIds?.[0]) setSelectedRunId(result.runIds[0]);
+      setInstrumentStep("Observe");
+      setOperatingTab("runs");
+      await refresh();
+    },
+  });
 
-  const error = [runtime.error, evidence.error, agents.error, handoffs.error, council.error, createRun.error, transition.error, createDeliberation.error, advanceDeliberation.error, createSchedule.error, scheduleTransition.error, runSchedule.error].find(Boolean);
+  const error = [runtime.error, evidence.error, agents.error, handoffs.error, council.error, createRun.error, transition.error, createDeliberation.error, advanceDeliberation.error, createSchedule.error, scheduleTransition.error, runSchedule.error, dispatchScheduleEvent.error].find(Boolean);
   const handoffCounts = handoffs.data?.gapCounts || { P0: 0, P1: 0, P2: 0 };
   const activeDeliberation = council.data?.deliberations?.find((item: Json) => !["decided", "calibrated", "failed"].includes(item.state));
   const availableSubjects = useMemo(() => authoritySubjects.filter((subject) => subject.subjectType === "agent" && subject.status === "active" && subject.verificationStatus === "verified" && subject.seatId), [authoritySubjects]);
@@ -161,6 +188,10 @@ export function NativeOperatingControlCenter({
   );
   const scheduleProcess = scheduleProcesses.find((process) => process.id === scheduleProcessId);
   const scheduleExecutionMode = scheduleSeat?.occupantUserId ? "assisted" : "autonomous";
+  const configuredEventTypes = scheduleEventTypes.split(",").map((value) => value.trim()).filter(Boolean);
+  const scheduleTriggerDescription = scheduleCadence === "event"
+    ? configuredEventTypes.length ? `when EOS observes ${configuredEventTypes.join(", ")}` : "when a declared EOS event occurs"
+    : scheduleCadence === "manual" ? "only when an authorized operator runs it" : `on a ${scheduleCadence} cadence`;
 
   return (
     <Card className="border-primary/20 shadow-[0_10px_34px_rgba(106,55,212,0.08)]">
@@ -217,14 +248,15 @@ export function NativeOperatingControlCenter({
                   {scheduleProcesses.map((process) => <option key={process.id} value={process.id}>{process.name} · v{process.version}</option>)}
                 </select>
                 <select aria-label="Schedule cadence" className="h-10 rounded-md border bg-background px-3 text-sm" value={scheduleCadence} onChange={(event) => setScheduleCadence(event.target.value)}>
-                  <option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="manual">Manual</option>
+                  <option value="once">Once</option><option value="hourly">Hourly</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="event">When EOS observes an event</option><option value="manual">Manual</option>
                 </select>
-                <Button disabled={!canDecide || !scheduleName || !scheduleSubject || !scheduleProcess || createSchedule.isPending} onClick={() => createSchedule.mutate()}>Create schedule</Button>
+                <Button disabled={!canDecide || !scheduleName || !scheduleSubject || !scheduleProcess || (scheduleCadence === "event" && !configuredEventTypes.length) || createSchedule.isPending} onClick={() => createSchedule.mutate()}>Create schedule</Button>
               </div>
+              {scheduleCadence === "event" && <div className="mt-3"><label className="space-y-1 text-xs font-medium text-muted-foreground">EOS event types<Input aria-label="Role Agent event types" value={scheduleEventTypes} onChange={(event) => setScheduleEventTypes(event.target.value)} placeholder="eos.work_packet.proposed.v1, eos.approval.decided.v1" /></label><p className="mt-1 text-xs text-muted-foreground">Use one or more comma-separated EOS event names. This schedules governed work only after EOS receives that event; it never turns a provider callback into an unreviewed external effect.</p></div>}
               {scheduleSubject && !scheduleProcesses.length && <p className="mt-3 text-sm text-muted-foreground">This Role Agent has no implemented, released process assigned yet. Assign and release its process in Org Studio before scheduling it.</p>}
-              {scheduleSubject && scheduleProcess && <p className="mt-3 rounded-lg border bg-background p-3 text-xs text-muted-foreground"><span className="font-medium text-foreground">Scope preview:</span> {scheduleSubject.displayName} will run {scheduleProcess.name} as {scheduleExecutionMode} work on a {scheduleCadence} cadence. External effects remain blocked unless a separately authorized provider action produces its own receipt.</p>}
+              {scheduleSubject && scheduleProcess && <p className="mt-3 rounded-lg border bg-background p-3 text-xs text-muted-foreground"><span className="font-medium text-foreground">Scope preview:</span> {scheduleSubject.displayName} will run {scheduleProcess.name} as {scheduleExecutionMode} work {scheduleTriggerDescription}. External effects remain blocked unless a separately authorized provider action produces its own receipt.</p>}
             </div>
-            <div className="grid gap-3 md:grid-cols-2">{(agents.data?.schedules || []).map((schedule: Json) => { const process = processes.find((item) => item.id === schedule.processDefinitionId); return <div key={schedule.id} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{schedule.name}</p><p className="mt-1 text-xs text-muted-foreground">{process?.name || "Released process"} · {schedule.cadence} · {schedule.executionMode}</p></div><Badge variant="outline">{schedule.state}</Badge></div>{schedule.triggerKind === "manual" && <p className="mt-3 text-xs text-muted-foreground">Manual run: creates a governed EOS workflow run now. It does not claim or perform an external provider effect.</p>}<div className="mt-4 flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={!canDecide || schedule.state === "retired" || scheduleTransition.isPending} onClick={() => scheduleTransition.mutate(schedule)}>{schedule.state === "active" ? "Pause" : "Activate"}</Button>{schedule.triggerKind === "manual" && <Button size="sm" disabled={!canExecute || schedule.state !== "active" || runSchedule.isPending} onClick={() => runSchedule.mutate(schedule)}><Play className="mr-2 h-4 w-4" />{runSchedule.isPending ? "Starting…" : "Run now"}</Button>}</div></div>; })}</div>
+            <div className="grid gap-3 md:grid-cols-2">{(agents.data?.schedules || []).map((schedule: Json) => { const process = processes.find((item) => item.id === schedule.processDefinitionId); const eventTypes = Array.isArray(schedule.eventTypes) ? schedule.eventTypes : []; return <div key={schedule.id} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{schedule.name}</p><p className="mt-1 text-xs text-muted-foreground">{process?.name || "Released process"} · {schedule.cadence} · {schedule.executionMode}</p></div><Badge variant="outline">{schedule.state}</Badge></div>{schedule.triggerKind === "manual" && <p className="mt-3 text-xs text-muted-foreground">Manual run: creates a governed EOS workflow run now. It does not claim or perform an external provider effect.</p>}{schedule.triggerKind === "event" && <p className="mt-3 text-xs text-muted-foreground">Event trigger: {eventTypes.join(", ") || "not declared"}. Testing emits a bounded EOS event only; it does not call a provider.</p>}<div className="mt-4 flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={!canDecide || schedule.state === "retired" || scheduleTransition.isPending} onClick={() => scheduleTransition.mutate(schedule)}>{schedule.state === "active" ? "Pause" : "Activate"}</Button>{schedule.triggerKind === "manual" && <Button size="sm" disabled={!canExecute || schedule.state !== "active" || runSchedule.isPending} onClick={() => runSchedule.mutate(schedule)}><Play className="mr-2 h-4 w-4" />{runSchedule.isPending ? "Starting…" : "Run now"}</Button>}{schedule.triggerKind === "event" && <Button size="sm" disabled={!canExecute || schedule.state !== "active" || !eventTypes.length || dispatchScheduleEvent.isPending} onClick={() => dispatchScheduleEvent.mutate(schedule)}><Activity className="mr-2 h-4 w-4" />{dispatchScheduleEvent.isPending ? "Testing…" : "Test event"}</Button>}</div></div>; })}</div>
           </TabsContent>
 
           <TabsContent value="handoffs" className="space-y-3 pt-4">{(handoffs.data?.handoffs || []).map((handoff: Json) => <div key={handoff.capabilityInstanceId} className="rounded-xl border p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-medium">{handoff.capabilityName}</p><p className="mt-1 text-xs text-muted-foreground">{handoff.capabilityKey} · {handoff.sections.length} handoff sections</p></div><Badge variant={handoff.gaps.length ? "outline" : "default"}>{handoff.readiness.replaceAll("_", " ")}</Badge></div><div className="mt-3 flex flex-wrap gap-2"><Badge variant="destructive">{handoff.gaps.filter((gap: Json) => gap.severity === "P0").length} P0</Badge><Badge variant="secondary">{handoff.gaps.filter((gap: Json) => gap.severity === "P1").length} P1</Badge><Badge variant="outline">{handoff.gaps.filter((gap: Json) => gap.severity === "P2").length} P2</Badge></div></div>)}</TabsContent>
