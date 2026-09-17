@@ -3196,6 +3196,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
               companyName: access.company.name,
               offer: access.company.offer || "",
               targetCustomer: access.company.targetCustomer || "",
+              ownerRoleKey: blueprint.starters.find((starter) => starter.key === "commercial-foundation")?.ownerRoleKey,
             }).map((starter) => {
               const objectKey = `company-blueprint:${blueprint.key}:${starter.key}`;
               const original = instruments.find((candidate) => candidate.instrumentKey === starter.instrumentKey && candidate.objectKey === objectKey);
@@ -3607,6 +3608,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
           companyName: access.company.name,
           offer: access.company.offer || "",
           targetCustomer: access.company.targetCustomer || "",
+          ownerRoleKey: blueprint.starters.find((starter) => starter.key === "commercial-foundation")?.ownerRoleKey,
         });
         const existingNativeAssets = await tx
           .select()
