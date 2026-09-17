@@ -35,6 +35,9 @@ describe("native operating workflow evidence selection", () => {
     expect(controlCenter).toContain('const [scheduleEventTypes, setScheduleEventTypes] = useState("")');
     expect(controlCenter).toContain('triggerKind = scheduleCadence === "manual" ? "manual" : scheduleCadence === "event" ? "event" : "schedule"');
     expect(controlCenter).toContain('aria-label="Role Agent event types"');
+    expect(controlCenter).toContain('aria-label="Native Role Agent event"');
+    expect(controlCenter).toContain("nativeAgentEventCatalog");
+    expect(controlCenter).toContain("Choose a native event rather than memorizing an internal name.");
     expect(controlCenter).toContain('`${root}/agent-events`');
     expect(controlCenter).toContain('externalEffectsPermitted: false');
     expect(controlCenter).toContain('Testing emits a bounded EOS event only; it does not call a provider.');
