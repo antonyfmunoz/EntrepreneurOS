@@ -2,10 +2,12 @@ import { randomUUID } from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z, ZodError } from "zod";
-import { companies, eosAuditRecords, eosInstrumentCommands, eosInstrumentEvents, eosInstrumentLinks, eosInstrumentObjects } from "@shared/schema";
+import { companies, eosAgentEventOutbox, eosAuditRecords, eosInstrumentCommands, eosInstrumentEvents, eosInstrumentLinks, eosInstrumentObjects } from "@shared/schema";
 import { nativeContractContentSha256 } from "../esign/template-generation";
+import { dispatchAgentEventOutboxEvent } from "../agents/scheduler";
 import { db } from "../db";
 import { fixedWindowRateLimit } from "../middleware/rate-limit";
+import { writeLog } from "../observability/logger";
 
 const publicCaptureRateLimit = fixedWindowRateLimit({ limit: 30, windowMs: 60_000, namespace: "eos-public-lead-capture" });
 const publicIdSchema = z.string().uuid();
@@ -128,7 +130,7 @@ export function registerPublicLeadCaptureRoutes(app: Express): void {
     )).orderBy(desc(eosInstrumentCommands.completedAt)).limit(1);
     if (!activation?.policyDecisionId) throw new PublicLeadCaptureError(409, "lead_capture_activation_evidence_missing", "This form is active but has no publish authorization record. Pause it and republish through EOS.");
 
-    const now = new Date(); const submissionId = randomUUID();
+    const now = new Date(); const submissionId = randomUUID(); const agentEventId = randomUUID();
     const submissionCommandId = randomUUID();
     const leadName = answerFor(input.answers, ["name", "full_name", "fullName", "first_name", "firstName"]) || "New lead";
     const email = answerFor(input.answers, ["email", "email_address", "emailAddress"]);
@@ -167,6 +169,37 @@ export function registerPublicLeadCaptureRoutes(app: Express): void {
         ...(!existingRelationship ? [{ object: relationshipProjection, commandId: commands.find((command) => command.objectId === relationshipProjection.id)!.id, eventType: "public_lead.relationship_created" }] : []),
       ].map(({ object, commandId, eventType }) => ({ id: randomUUID(), companyId: form.companyId, instrumentKey: object.instrumentKey, objectId: object.id, commandId, eventType, fromState: null, toState: "active", objectVersion: 1, payload: { formObjectId: form.id, source: "unverified_public_submitter" }, evidenceIds: [], contentSha256: eventHash({ companyId: form.companyId, objectId: object.id, commandId, eventType, formObjectId: form.id }), recordedByUserId: form.recordedByUserId, createdAt: now }));
       await tx.insert(eosInstrumentEvents).values(events);
+      // This is an internal, consent-gated handoff from an EOS-owned public
+      // funnel into the company operating system. Do not put the visitor's
+      // identity, free-form answers, or reconciliation result in the trigger.
+      // The assigned Role Agent reads the native CRM records only through its
+      // normal role, tenant, and classification scope.
+      await tx.insert(eosAgentEventOutbox).values({
+        id: agentEventId,
+        companyId: form.companyId,
+        eventType: "eos.crm.consented_lead_recorded.v1",
+        aggregateType: "lead_submission",
+        aggregateId: submissionId,
+        payload: {
+          schemaVersion: "eos.crm.consented_lead_recorded.v1",
+          formObjectId: form.id,
+          submissionObjectId: submissionId,
+          crmPersonObjectId: personProjection.id,
+          crmRelationshipObjectId: relationshipProjection.id,
+          consentRecorded: true,
+          consentVersion: definition.consentVersion,
+          classification: "confidential",
+          externalEffectsExecuted: false,
+        },
+        state: "pending",
+        attempts: 0,
+        dispatchedRunIds: [],
+        lastError: "",
+        occurredAt: now,
+        dispatchedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
       await tx.insert(eosInstrumentLinks).values([
         { id: randomUUID(), companyId: form.companyId, sourceObjectId: form.id, targetObjectId: submissionId, relationshipType: "received", metadata: { source: "public_eos_capture" }, createdByUserId: form.recordedByUserId, createdAt: now },
         { id: randomUUID(), companyId: form.companyId, sourceObjectId: submissionId, targetObjectId: personProjection.id, relationshipType: "identified", metadata: { source: "public_eos_capture", reconciled: Boolean(existingPerson) }, createdByUserId: form.recordedByUserId, createdAt: now },
@@ -177,6 +210,15 @@ export function registerPublicLeadCaptureRoutes(app: Express): void {
       ]);
       await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: form.companyId, actorUserId: form.recordedByUserId, action: "lead_capture.public_submission_recorded", targetType: "lead_capture_form", targetId: form.id, traceId: "public:" + submissionId, correlationId: submissionId, result: "captured_unverified", details: { actorType: "unverified_public_submitter", formObjectId: form.id, submissionObjectId: submissionId, crmPersonObjectId: personProjection.id, crmRelationshipObjectId: relationshipProjection.id, reconciledExistingPerson: Boolean(existingPerson), reconciledExistingRelationship: Boolean(existingRelationship), consentVersion: definition.consentVersion, activationPolicyDecisionId: activation.policyDecisionId }, createdAt: now });
     });
+    // Dispatch only after commit. Public acceptance must not fail merely
+    // because the immediate scheduler attempt is temporarily unavailable: the
+    // durable outbox is retried by EOS, and neither path exposes or replays
+    // the visitor's data.
+    try {
+      await dispatchAgentEventOutboxEvent(agentEventId);
+    } catch (error) {
+      writeLog("error", "public_lead_agent_event_dispatch_deferred", { agentEventId, companyId: form.companyId, error });
+    }
     publicHeaders(res);
     // Never disclose reconciliation to an untrusted public submitter: that
     // would turn the form into an account-enumeration oracle. The result is
