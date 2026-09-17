@@ -82,6 +82,41 @@ const operatingStarter = (ownerRoleKey: string, tools: string[]): CompanyBluepri
   successExitCriteria: "The accountable role, delivery or product loop, review cadence, and escalation path are recorded and ready for governed execution.",
 });
 
+/**
+ * A business-in-a-box cannot stop at demand generation.  Every commercial
+ * blueprint needs the same governed handoff from an authorized commitment to
+ * accountable delivery, whether the company is a studio, product company, or
+ * software company.  This is a native EOS process draft; it never asserts a
+ * payment, signature, or external provider effect.
+ */
+const clientOnboardingStarter = (ownerRoleKey: string, tools: string[]): CompanyBlueprintStarter => ({
+  key: "client-onboarding-foundation",
+  title: "Establish the client onboarding foundation",
+  statement: "Turn an authorized commercial commitment into a role-owned client launch with a clear outcome, requirements, project, and communication cadence.",
+  ownerRoleKey,
+  priority: "high",
+  tools,
+  workflowTemplateKey: "client-onboarding",
+  successExitCriteria: "A governed onboarding path names the commercial authorization, accountable owner, launch requirements, delivery project, and client-facing next step.",
+});
+
+/**
+ * The customer learning loop is intentionally compiled with the commercial
+ * and delivery loops.  It gives a new company a native improvement path from
+ * delivered value to feedback and accountable follow-through, instead of
+ * treating reputation as an optional external tool added much later.
+ */
+const reputationStarter = (ownerRoleKey: string, tools: string[]): CompanyBlueprintStarter => ({
+  key: "reputation-foundation",
+  title: "Establish the feedback and improvement foundation",
+  statement: "Create a consent-aware path to request customer feedback, preserve the evidence, and turn material feedback into accountable improvement work.",
+  ownerRoleKey,
+  priority: "medium",
+  tools,
+  workflowTemplateKey: "reputation-follow-through",
+  successExitCriteria: "A consent-aware feedback path, evidence record, and owner for any customer-driven improvement are ready for governed use.",
+});
+
 export const companyBlueprints: readonly CompanyBlueprint[] = [
   {
     key: "service_studio",
@@ -92,12 +127,14 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
       { key: "company_ceo", title: "Company CEO", department: "Executive", kind: "company_ceo", agentName: "Company CEO Agent", mandate: "Turn founder direction into an accountable company operating plan and escalate consequential decisions.", tools: commonExecutiveTools },
       { key: "growth", title: "Growth & Revenue", department: "Growth & Revenue", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Growth Agent", mandate: "Create qualified demand and move prospects through a measured commercial pipeline.", tools: ["CRM", "Dialer", "Calendar", "Messages", "Documents", "Forms", "Websites", "Analytics"] },
       { key: "client_delivery", title: "Client Delivery", department: "Operations & Delivery", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Delivery Agent", mandate: "Deliver the promised client outcome with evidence, quality controls, and clear handoffs.", tools: ["Projects", "Tasks", "Documents", "Messages", "Calendar"] },
-      { key: "client_success", title: "Client Success", department: "Client Success", kind: "manager", supervisorKey: "client_delivery", agentName: "Client Success Agent", mandate: "Protect client communication, onboarding, retention, and outcome visibility.", tools: ["CRM", "Messages", "Documents", "Calendar"] },
+      { key: "client_success", title: "Client Success", department: "Client Success", kind: "manager", supervisorKey: "client_delivery", agentName: "Client Success Agent", mandate: "Protect client communication, onboarding, retention, and outcome visibility.", tools: ["CRM", "Messages", "Documents", "Calendar", "Projects", "Tasks", "Reputation"] },
       ...universalCoreRoles,
     ],
     starters: [
       commercialStarter("growth", ["CRM", "Dialer", "Calendar", "Messages", "Documents", "Forms", "Websites", "Analytics"]),
       operatingStarter("client_delivery", ["Projects", "Tasks", "Documents", "Workflows"]),
+      clientOnboardingStarter("client_success", ["CRM", "Projects", "Tasks", "Calendar", "Messages", "Documents"]),
+      reputationStarter("client_success", ["CRM", "Messages", "Reputation", "Projects", "Documents"]),
     ],
   },
   {
@@ -109,12 +146,14 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
       { key: "company_ceo", title: "Company CEO", department: "Executive", kind: "company_ceo", agentName: "Company CEO Agent", mandate: "Translate founder direction into company priorities, capital-aware tradeoffs, and operating accountability.", tools: commonExecutiveTools },
       { key: "product", title: "Product & Engineering", department: "Product & Engineering", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Product Agent", mandate: "Own product learning, roadmap evidence, delivery quality, and technical operating choices.", tools: ["Projects", "Roadmap", "Documents", "Analytics", "Workflows"] },
       { key: "growth", title: "Growth & Revenue", department: "Growth & Revenue", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Growth Agent", mandate: "Create demand, operate the commercial funnel, and report repeatable revenue evidence.", tools: ["CRM", "Dialer", "Calendar", "Messages", "Forms", "Websites", "Analytics", "Campaigns"] },
-      { key: "customer", title: "Customer Success", department: "Client Success", kind: "manager", supervisorKey: "company_ceo", agentName: "Customer Success Agent", mandate: "Protect onboarding, adoption, retention, and customer outcome feedback.", tools: ["CRM", "Messages", "Documents", "Analytics"] },
+      { key: "customer", title: "Customer Success", department: "Client Success", kind: "manager", supervisorKey: "company_ceo", agentName: "Customer Success Agent", mandate: "Protect onboarding, adoption, retention, and customer outcome feedback.", tools: ["CRM", "Messages", "Documents", "Analytics", "Projects", "Calendar", "Reputation"] },
       ...universalCoreRoles,
     ],
     starters: [
       commercialStarter("growth", ["CRM", "Dialer", "Messages", "Calendar", "Forms", "Websites", "Analytics"]),
       operatingStarter("product", ["Projects", "Documents", "Analytics", "Workflows"]),
+      clientOnboardingStarter("customer", ["CRM", "Projects", "Calendar", "Messages", "Documents"]),
+      reputationStarter("customer", ["CRM", "Messages", "Reputation", "Projects", "Documents"]),
     ],
   },
   {
@@ -126,12 +165,14 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
       { key: "company_ceo", title: "Company CEO", department: "Executive", kind: "company_ceo", agentName: "Company CEO Agent", mandate: "Own company-level priorities, resource allocation, and exception decisions.", tools: commonExecutiveTools },
       { key: "brand_growth", title: "Brand & Growth", department: "Growth & Revenue", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Brand Growth Agent", mandate: "Create qualified demand and learn which customer messages and offers work.", tools: ["CRM", "Dialer", "Content Calendar", "Campaigns", "Forms", "Websites", "Analytics", "Documents"] },
       { key: "product_operations", title: "Product Operations", department: "Operations", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Product Operations Agent", mandate: "Coordinate product availability, delivery quality, and operating readiness.", tools: ["Projects", "Tables", "Documents", "Workflows", "Analytics"] },
-      { key: "customer", title: "Customer Care", department: "Client Success", kind: "manager", supervisorKey: "company_ceo", agentName: "Customer Care Agent", mandate: "Own customer communication, service recovery, and feedback visibility.", tools: ["CRM", "Messages", "Documents", "Forms"] },
+      { key: "customer", title: "Customer Care", department: "Client Success", kind: "manager", supervisorKey: "company_ceo", agentName: "Customer Care Agent", mandate: "Own customer communication, service recovery, and feedback visibility.", tools: ["CRM", "Messages", "Documents", "Forms", "Projects", "Calendar", "Reputation"] },
       ...universalCoreRoles,
     ],
     starters: [
       commercialStarter("brand_growth", ["CRM", "Dialer", "Content Calendar", "Campaigns", "Forms", "Websites", "Analytics"]),
       operatingStarter("product_operations", ["Projects", "Tables", "Documents", "Workflows"]),
+      clientOnboardingStarter("customer", ["CRM", "Projects", "Calendar", "Messages", "Documents"]),
+      reputationStarter("customer", ["CRM", "Messages", "Reputation", "Projects", "Documents"]),
     ],
   },
   {
@@ -142,12 +183,14 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
     roles: [
       { key: "company_ceo", title: "Company CEO", department: "Executive", kind: "company_ceo", agentName: "Company CEO Agent", mandate: "Translate founder direction into a coherent company operating plan.", tools: commonExecutiveTools },
       { key: "growth", title: "Growth & Commercial", department: "Growth & Revenue", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Commercial Agent", mandate: "Build qualified pipeline and learn the repeatable value proposition.", tools: ["CRM", "Dialer", "Calendar", "Messages", "Forms", "Websites", "Analytics"] },
-      { key: "operations", title: "Operations & Delivery", department: "Operations & Delivery", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Operations Agent", mandate: "Produce reliable delivery, workflow execution, and quality evidence.", tools: ["Projects", "Tasks", "Documents", "Workflows"] },
+      { key: "operations", title: "Operations & Delivery", department: "Operations & Delivery", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Operations Agent", mandate: "Produce reliable delivery, workflow execution, and quality evidence.", tools: ["Projects", "Tasks", "Documents", "Workflows", "CRM", "Calendar", "Messages", "Reputation"] },
       ...universalCoreRoles,
     ],
     starters: [
       commercialStarter("growth", ["CRM", "Dialer", "Calendar", "Messages", "Forms", "Websites", "Analytics"]),
       operatingStarter("operations", ["Projects", "Tasks", "Documents", "Workflows"]),
+      clientOnboardingStarter("operations", ["CRM", "Projects", "Tasks", "Calendar", "Messages", "Documents"]),
+      reputationStarter("operations", ["CRM", "Messages", "Reputation", "Projects", "Documents"]),
     ],
   },
 ];
@@ -254,10 +297,18 @@ export function compileCompanyBlueprintStarters(
     ...starter,
     title: starter.key === "commercial-foundation"
       ? `Commercial foundation · ${offer}`
-      : `Operating foundation · ${goal}`,
+      : starter.key === "operating-foundation"
+        ? `Operating foundation · ${goal}`
+        : starter.key === "client-onboarding-foundation"
+          ? `Client onboarding foundation · ${offer}`
+          : `Feedback and improvement foundation · ${offer}`,
     statement: starter.key === "commercial-foundation"
       ? `Validate and operate a measurable path for ${offer} with ${targetCustomer}. ${starter.statement}`
-      : `${starter.statement} The first declared outcome is: ${goal}.`,
+      : starter.key === "operating-foundation"
+        ? `${starter.statement} The first declared outcome is: ${goal}.`
+        : starter.key === "client-onboarding-foundation"
+          ? `${starter.statement} This applies ${offer} to ${targetCustomer} without implying that commercial authorization already exists.`
+          : `${starter.statement} This applies to ${targetCustomer} receiving ${offer}; feedback consent and evidence remain required.`,
     variables: { offer, targetCustomer, goal },
   }));
 }
