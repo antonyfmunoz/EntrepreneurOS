@@ -9786,6 +9786,15 @@ export default function EosOverlayPage() {
                   root={root}
                   capabilities={operationsStateQuery.data?.capabilities || []}
                   processes={operationsStateQuery.data?.processes || []}
+                  companyContext={{
+                    companyName: company?.name,
+                    offer: company?.offer,
+                    targetCustomer: company?.targetCustomer,
+                    goal: String(company?.goals || "")
+                      .split(/\r?\n|[•;]/)
+                      .map((item) => item.replace(/^[\s\-–—\d.)]+/, "").trim())
+                      .find(Boolean),
+                  }}
                   canExecute={effectiveAuthorityClasses.has("execute")}
                   canDecide={effectiveAuthorityClasses.has("decide")}
                   onChanged={() => operationsStateQuery.refetch()}
