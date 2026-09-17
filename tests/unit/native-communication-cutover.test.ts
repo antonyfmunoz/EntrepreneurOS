@@ -11,6 +11,7 @@ const conferenceRooms = readFileSync(new URL("../../client/src/components/confer
 const nativeCrmStudio = readFileSync(new URL("../../client/src/components/native-crm-studio.tsx", import.meta.url), "utf8");
 const nativeCalendarStudio = readFileSync(new URL("../../client/src/components/native-calendar-studio.tsx", import.meta.url), "utf8");
 const nativeProjectsStudio = readFileSync(new URL("../../client/src/components/native-projects-studio.tsx", import.meta.url), "utf8");
+const nativeDocumentsStudio = readFileSync(new URL("../../client/src/components/native-documents-studio.tsx", import.meta.url), "utf8");
 
 describe("native communication authority cutover", () => {
   it("does not register legacy global agent or assistant route modules", () => {
@@ -98,5 +99,13 @@ describe("native communication authority cutover", () => {
     expect(nativeProjectsStudio).toContain('relationshipType: "concerns_relationship"');
     expect(nativeProjectsStudio).toContain("Only CRM relationships already visible to this role appear here.");
     expect(nativeCrmStudio).toContain("projects:");
+  });
+
+  it("links native documents to only role-visible CRM relationships", () => {
+    expect(nativeDocumentsStudio).toContain('visibleInstrumentKeys.includes("crm")');
+    expect(nativeDocumentsStudio).toContain('enabled: Boolean(canViewCrm)');
+    expect(nativeDocumentsStudio).toContain('relationshipType: "concerns_relationship"');
+    expect(nativeDocumentsStudio).toContain("Only CRM relationships already visible to this role appear here.");
+    expect(nativeCrmStudio).toContain("documents:");
   });
 });
