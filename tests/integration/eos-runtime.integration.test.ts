@@ -9779,6 +9779,12 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const state = await api.get(`/api/eos/companies/${companyId}/recovery-operations`).expect(200);
     const projection = state.body.engagements.find((item: any) => item.id === created.body.id);
     expect(projection.events.length).toBeGreaterThanOrEqual(12);
+    expect(projection.automation).toMatchObject({ matchingSchedules: 1, activeSchedules: 1, schedules: [expect.objectContaining({ id: recoverySchedule.body.id, state: "active", eventTypes: [recoveryEventType], eventFilter: { all: [{ path: "action", equals: "verify_bounded_launch" }, { path: "toState", equals: "operating" }] } })] });
+    expect(projection.automation.runs).toEqual(expect.arrayContaining([expect.objectContaining({ id: boundedLaunch.body.agentEvent.runIds[0], scheduleId: recoverySchedule.body.id, eventType: recoveryEventType, state: expect.stringMatching(/^(queued|running)$/) })]));
+    const projectedSchedule = projection.automation.schedules.find((item: any) => item.id === recoverySchedule.body.id);
+    await api.patch(`/api/eos/companies/${companyId}/agent-schedules/${recoverySchedule.body.id}/state`).send({ expectedVersion: projectedSchedule.version, state: "paused", rationale: "Pause the exact Recovery-triggered Role Agent after confirming the contextual Recovery control reports its active scope and triggered workflow without implying an external effect." }).expect(200);
+    const pausedProjection = (await api.get(`/api/eos/companies/${companyId}/recovery-operations`).expect(200)).body.engagements.find((item: any) => item.id === created.body.id);
+    expect(pausedProjection.automation).toMatchObject({ matchingSchedules: 1, activeSchedules: 0, schedules: [expect.objectContaining({ id: recoverySchedule.body.id, state: "paused" })] });
     expect(projection.events.every((item: any, index: number) => index === 0 ? item.previousEventSha256 === "" : item.previousEventSha256 === projection.events[index - 1].eventSha256)).toBe(true);
     await expect(sql`UPDATE eos_recovery_engagement_events SET event_type = 'tampered' WHERE engagement_id = ${created.body.id}`).rejects.toThrow(/append-only/);
     await expect(sql`DELETE FROM eos_recovery_engagements WHERE id = ${created.body.id}`).rejects.toThrow(/cannot be deleted/);
