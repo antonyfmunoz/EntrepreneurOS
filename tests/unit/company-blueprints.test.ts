@@ -150,6 +150,17 @@ describe("company operating blueprints", () => {
     });
   });
 
+  it("assigns commercial native assets to the active blueprint's commercial role", () => {
+    const productAssets = materializeNativeBusinessStarters({
+      companyName: "Northstar Goods",
+      offer: "Membership products",
+      targetCustomer: "Independent creators",
+      ownerRoleKey: "brand_growth",
+    });
+    expect(productAssets.every((starter) => starter.ownerRoleKey === "brand_growth")).toBe(true);
+    expect(companyBlueprintForBusinessModel("product").roles.some((role) => role.key === productAssets[0].ownerRoleKey)).toBe(true);
+  });
+
   it("maps role-designer labels to the canonical tool keys used by policy enforcement", () => {
     expect(canonicalToolEntitlements([
       "CRM", "Documents", "Content Calendar", "Campaigns", "Roadmap", "CRM",
