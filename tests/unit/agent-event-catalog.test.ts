@@ -14,9 +14,15 @@ describe("native Role Agent event catalog", () => {
         label: "Approval decided",
         source: "Native approval runtime",
       }),
+      expect.objectContaining({
+        eventType: "eos.instrument.object.transitioned.v1",
+        label: "Native tool lifecycle changed",
+        source: "Native instrument runtime",
+      }),
     ]));
     expect(nativeAgentEventLabel("eos.workflow_run.transitioned.v1")).toBe("Workflow state changed");
     expect(nativeAgentEventLabel("eos.approval.decided.v1")).toBe("Approval decided");
+    expect(nativeAgentEventLabel("eos.instrument.object.transitioned.v1")).toBe("Native tool lifecycle changed");
   });
 
   it("keeps adapter-specific event names visible instead of falsely relabeling them", () => {

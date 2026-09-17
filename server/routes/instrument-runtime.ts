@@ -4,6 +4,7 @@ import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { ZodError } from "zod";
 import {
   eosAuditRecords,
+  eosAgentEventOutbox,
   eosEvidence,
   eosInstrumentCommands,
   eosInstrumentEvents,
@@ -26,6 +27,7 @@ import {
 import { db } from "../db";
 import { nativeContractContentSha256 } from "../esign/template-generation";
 import { containsCredentialMaterial } from "../security/credential-material";
+import { dispatchAgentEventOutboxEvent } from "../agents/scheduler";
 import {
   authorizeAction,
   companyAccess,
@@ -496,16 +498,51 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
       if (findings.length) throw new EosRouteError(409, findings[0].code, findings[0].message);
     }
     await checkedEvidence(access.company.id, input.evidenceIds, input.state === "completed");
-    const commandId = randomUUID(); const now = new Date(); const nextVersion = current.version + 1;
+    const commandId = randomUUID(); const instrumentEventId = randomUUID(); const agentEventId = randomUUID(); const now = new Date(); const nextVersion = current.version + 1;
     const [updated] = await db.transaction(async (tx) => {
       const rows = await tx.update(eosInstrumentObjects).set({ state: input.state, evidenceIds: input.evidenceIds, version: nextVersion, updatedAt: now, archivedAt: input.state === "archived" ? now : null, contentSha256: nativeContractContentSha256({ schemaVersion: "eos.instrument-object.v1", companyId: access.company.id, instrumentKey: current.instrumentKey, objectType: current.objectType, objectKey: current.objectKey, title: current.title, summary: current.summary, state: input.state, classification: current.classification, visibility: current.visibility, ownerSeatId: current.ownerSeatId, data: current.data, sourceReference: current.sourceReference, evidenceIds: input.evidenceIds, version: nextVersion }) }).where(and(eq(eosInstrumentObjects.id, current.id), eq(eosInstrumentObjects.version, current.version))).returning();
       if (!rows[0]) throw new EosRouteError(409, "instrument_concurrent_change", "The instrument object changed before this transition completed.");
       await tx.insert(eosInstrumentCommands).values({ id: commandId, companyId: access.company.id, instrumentKey: current.instrumentKey, objectId: current.id, commandType: "object.transition", idempotencyKey: input.idempotencyKey, expectedVersion: input.expectedVersion, payload: { state: input.state, rationale: input.rationale }, state: "completed", result: { objectId: current.id, version: nextVersion, state: input.state }, policyDecisionId: policy.decisionId, requestedByUserId: req.user.id, createdAt: now, completedAt: now });
-      await tx.insert(eosInstrumentEvents).values({ id: randomUUID(), companyId: access.company.id, instrumentKey: current.instrumentKey, objectId: current.id, commandId, eventType: "object.transitioned", fromState: current.state, toState: input.state, objectVersion: nextVersion, payload: { rationale: input.rationale }, evidenceIds: input.evidenceIds, contentSha256: eventHash({ companyId: access.company.id, objectId: current.id, commandId, eventType: "object.transitioned", fromState: current.state, toState: input.state, objectVersion: nextVersion }), recordedByUserId: req.user.id, createdAt: now });
+      await tx.insert(eosInstrumentEvents).values({ id: instrumentEventId, companyId: access.company.id, instrumentKey: current.instrumentKey, objectId: current.id, commandId, eventType: "object.transitioned", fromState: current.state, toState: input.state, objectVersion: nextVersion, payload: { rationale: input.rationale }, evidenceIds: input.evidenceIds, contentSha256: eventHash({ companyId: access.company.id, objectId: current.id, commandId, eventType: "object.transitioned", fromState: current.state, toState: input.state, objectVersion: nextVersion }), recordedByUserId: req.user.id, createdAt: now });
+      // The instrument event and its automation trigger share one transaction:
+      // a committed native lifecycle change cannot lose its downstream Role
+      // Agent handoff, and a failed handoff remains retryable in EOS.
+      await tx.insert(eosAgentEventOutbox).values({
+        id: agentEventId,
+        companyId: access.company.id,
+        eventType: "eos.instrument.object.transitioned.v1",
+        aggregateType: "instrument_object",
+        aggregateId: current.id,
+        // Exclude free-form rationale and object data. A Role Agent receives
+        // bounded lifecycle metadata, then reads the object only through its
+        // own existing tenant, role, and classification authority.
+        payload: {
+          schemaVersion: "eos.instrument.object.transitioned.v1",
+          instrumentEventId,
+          instrumentKey: current.instrumentKey,
+          objectId: current.id,
+          objectType: current.objectType,
+          commandId,
+          fromState: current.state,
+          toState: input.state,
+          objectVersion: nextVersion,
+          classification: current.classification,
+          externalEffectsExecuted: false,
+        },
+        state: "pending",
+        attempts: 0,
+        dispatchedRunIds: [],
+        lastError: "",
+        occurredAt: now,
+        dispatchedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
       await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "instrument.object.transitioned", targetType: current.instrumentKey, targetId: current.id, traceId: policy.traceId, correlationId: policy.correlationId, result: input.state, details: { commandId, from: current.state, to: input.state, rationale: input.rationale, evidenceIds: input.evidenceIds, policyDecisionId: policy.decisionId }, createdAt: now });
       return rows;
     });
-    res.json({ command: { id: commandId, state: "completed" }, object: updated, replayed: false });
+    const agentEvent = await dispatchAgentEventOutboxEvent(agentEventId);
+    res.json({ command: { id: commandId, state: "completed" }, object: updated, replayed: false, agentEvent: agentEvent ? { id: agentEventId, state: agentEvent.event.state, matchingSchedules: agentEvent.runIds.length, runIds: agentEvent.runIds } : null });
   }));
 
   app.post("/api/eos/companies/:companyId/instrument-links", route(async (req, res) => {
