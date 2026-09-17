@@ -10831,6 +10831,7 @@ export default function EosOverlayPage() {
             {mayOperateConferenceRooms && <Suspense fallback={<DeferredControlFallback />}>
               <ConferenceRoomControlCenter
                 root={root}
+                roleScopeKey={roleScopeKey}
                 seats={visibleSeats}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}

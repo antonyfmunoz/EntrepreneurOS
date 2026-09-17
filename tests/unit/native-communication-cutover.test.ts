@@ -7,6 +7,7 @@ const canonicalRuntime = readFileSync(new URL("../../server/routes/eos-runtime.t
 const instrumentRuntime = readFileSync(new URL("../../server/routes/instrument-runtime.ts", import.meta.url), "utf8");
 const overlay = readFileSync(new URL("../../client/src/pages/eos-overlay-page.tsx", import.meta.url), "utf8");
 const messageHub = readFileSync(new URL("../../client/src/components/native-message-hub.tsx", import.meta.url), "utf8");
+const conferenceRooms = readFileSync(new URL("../../client/src/components/conference-room-control-center.tsx", import.meta.url), "utf8");
 
 describe("native communication authority cutover", () => {
   it("does not register legacy global agent or assistant route modules", () => {
@@ -60,5 +61,14 @@ describe("native communication authority cutover", () => {
     expect(messageHub).toContain('relationshipType: "concerns_relationship"');
     expect(messageHub).toContain("relationshipContext");
     expect(messageHub).toContain("no email is sent until the provider's governed run is approved");
+  });
+
+  it("keeps commercial meeting context role-scoped and links it through the native operating graph", () => {
+    expect(conferenceRooms).toContain('`${root}/context`');
+    expect(conferenceRooms).toContain('visibleInstrumentKeys.includes("crm")');
+    expect(conferenceRooms).toContain('enabled: Boolean(canViewCrm)');
+    expect(conferenceRooms).toContain("Only relationships already visible to this role appear here.");
+    expect(conferenceRooms).toContain('relationshipType: "concerns_relationship"');
+    expect(conferenceRooms).toContain("The meeting was scheduled, but EOS could not create its CRM relationship link.");
   });
 });
