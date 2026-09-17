@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Bot, ChevronLeft, ChevronRight, X } from "lucide-react";
 import Header from "./header";
 import LeftRail from "./left-rail";
@@ -51,7 +51,9 @@ export function UniversalLayout({
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [floatingPanelExpanded, setFloatingPanelExpanded] = useState(false);
   const [reserveExpandedHudClearance, setReserveExpandedHudClearance] = useState(false);
+  const [expandedHudClearance, setExpandedHudClearance] = useState(0);
   const workspaceRef = useRef<HTMLElement>(null);
+  const collapsedHudHeightRef = useRef(0);
   const hasCustomLeft = leftRailItems !== undefined;
   const hasLeft = leftRailItems === undefined || leftRailItems.length > 0;
   const hasRight = Boolean(rightRailContent);
@@ -96,6 +98,35 @@ export function UniversalLayout({
     workspace.addEventListener("scroll", updateExpandedHudClearance, { passive: true });
     updateExpandedHudClearance();
     return () => workspace.removeEventListener("scroll", updateExpandedHudClearance);
+  }, [floatingPanelExpanded]);
+
+  useLayoutEffect(() => {
+    const workspace = workspaceRef.current;
+    if (!workspace || typeof ResizeObserver === "undefined") return;
+    const hud = workspace.querySelector<HTMLElement>("[data-eos-decision-hud]");
+    if (!hud) return;
+
+    const updateClearance = () => {
+      const height = Math.ceil(hud.getBoundingClientRect().height);
+      if (!floatingPanelExpanded) {
+        // The collapsed HUD naturally occupies this amount of document flow.
+        // Preserve it so an expansion can reserve only the newly introduced
+        // height when the user is already reading below the HUD.
+        collapsedHudHeightRef.current = height;
+        setExpandedHudClearance(0);
+        return;
+      }
+
+      const collapsedHeight = collapsedHudHeightRef.current || 56;
+      // Do not guess at a fixed panel height. Custom decision content can be
+      // much taller than the default panel, especially on narrow screens.
+      setExpandedHudClearance(Math.max(0, height - collapsedHeight + 12));
+    };
+
+    const observer = new ResizeObserver(updateClearance);
+    observer.observe(hud);
+    updateClearance();
+    return () => observer.disconnect();
   }, [floatingPanelExpanded]);
 
   const resolvedFloatingPanel = floatingPanel === false
@@ -151,8 +182,11 @@ export function UniversalLayout({
                 // layout. Mid-workspace, its sticky expanded state needs an
                 // explicit clearance so it cannot cover the visible section.
                 "pointer-events-none mt-3 transition-[height] duration-200 " +
-                (reserveExpandedHudClearance ? "h-32 sm:h-36" : "h-3")
+                (reserveExpandedHudClearance ? "" : "h-3")
               }
+              style={reserveExpandedHudClearance
+                ? { height: `${Math.max(12, expandedHudClearance)}px` }
+                : undefined}
             />
           )}
           <div className={
@@ -204,7 +238,7 @@ function CustomNavigation({
   return (
     <nav className={collapsed ? "px-1.5" : "px-2"} aria-label="EOS primary navigation">
       <ul className="flex flex-col gap-0.5">
-        {leadingAction && <li>{leadingAction}</li>}
+        {leadingAction && <li className="mb-2 border-b border-border/60 pb-2">{leadingAction}</li>}
         {items.map((item) => (
           <li key={`${item.label}-${item.href}`}>
             <a
