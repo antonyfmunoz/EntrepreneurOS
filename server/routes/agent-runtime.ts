@@ -21,7 +21,7 @@ import {
 } from "@shared/agent-runtime";
 import { allowedSurfacesFor } from "@shared/eos-runtime";
 import { db } from "../db";
-import { enqueueAgentEvent, enqueueManualAgentSchedule } from "../agents/scheduler";
+import { dispatchAgentEventOutboxEvent, enqueueManualAgentSchedule, recordAgentEvent } from "../agents/scheduler";
 import { containsCredentialMaterial } from "../security/credential-material";
 import {
   EosRouteError,
@@ -157,9 +157,11 @@ export function registerAgentRuntimeRoutes(app: Express): void {
     const input = z.object({ eventType: z.string().trim().min(3).max(200), eventId: z.string().trim().min(8).max(240), payload: z.record(z.unknown()).default({}) }).parse(req.body);
     if (containsCredentialMaterial(input.payload)) throw new EosRouteError(409, "agent_event_contains_credentials", "Role Agent events may carry bounded facts and secret-manager references, but never credentials, passwords, tokens, or private keys.");
     const { access, policy } = await agentAccess(req, "execute", "agent_event.dispatch", "confidential");
-    const runs = await enqueueAgentEvent({ companyId: access.company.id, eventType: input.eventType, eventId: input.eventId, payload: input.payload });
-    await db.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "agent_event.dispatched", targetType: "agent_event", targetId: input.eventId, traceId: policy.traceId, correlationId: policy.correlationId, result: runs.length ? "runs_enqueued" : "no_matching_schedule", details: { eventType: input.eventType, runIds: runs.map((run) => run.id), policyDecisionId: policy.decisionId }, createdAt: new Date() });
-    res.status(202).json({ eventId: input.eventId, matchingSchedules: runs.length, runIds: runs.map((run) => run.id) });
+    await recordAgentEvent({ id: input.eventId, companyId: access.company.id, eventType: input.eventType, aggregateType: "operator_dispatch", aggregateId: input.eventId, payload: input.payload });
+    const dispatched = await dispatchAgentEventOutboxEvent(input.eventId);
+    const runIds = dispatched?.runIds || [];
+    await db.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "agent_event.dispatched", targetType: "agent_event", targetId: input.eventId, traceId: policy.traceId, correlationId: policy.correlationId, result: dispatched?.event.state === "failed" ? "dispatch_failed" : runIds.length ? "runs_enqueued" : "no_matching_schedule", details: { eventType: input.eventType, runIds, outboxState: dispatched?.event.state || "pending", policyDecisionId: policy.decisionId }, createdAt: new Date() });
+    res.status(202).json({ eventId: input.eventId, matchingSchedules: runIds.length, runIds, state: dispatched?.event.state || "pending" });
   }));
 
   app.post("/api/eos/companies/:companyId/workflow-runs/:runId/evaluation", route(async (req, res) => {

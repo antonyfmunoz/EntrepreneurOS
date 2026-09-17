@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { z, ZodError } from "zod";
 import {
   eosApprovalRequests,
+  eosAgentEventOutbox,
   eosAuditRecords,
   eosEvidence,
   eosIntegrationBindings,
@@ -25,6 +26,7 @@ import {
 import { resolveWorkflowNextStep, WorkflowRoutingError } from "@shared/workflow-routing";
 import { allowedSurfacesFor } from "@shared/eos-runtime";
 import { db } from "../db";
+import { dispatchAgentEventOutboxEvent } from "../agents/scheduler";
 import { nativeContractContentSha256 } from "../esign/template-generation";
 import { containsCredentialMaterial } from "../security/credential-material";
 import {
@@ -250,14 +252,47 @@ export function registerWorkflowRuntimeRoutes(app: Express): void {
       }
     }
     const event = appendRunEventValues({ runId: run.id, companyId: access.company.id, sequence: nextVersion, action: input.action, fromState: run.state, toState: nextState, actorSeatId: access.seat.id, actorUserId: req.user.id, note: input.note, policyDecisionId: policy.decisionId, evidenceIds: input.evidenceIds, approvalId: input.approvalId || run.approvalId, blocker: input.blocker, currentStepBefore: run.currentStep, currentStepAfter: nextStep, conditionOutcome: input.conditionOutcome });
+    const agentEventId = randomUUID();
+    const agentScheduledRun = typeof (run.input as Record<string, unknown>)._scheduleId === "string";
     const [updated] = await db.transaction(async (tx) => {
       await tx.insert(eosWorkflowRunEvents).values(event);
       const rows = await tx.update(eosWorkflowRuns).set({ state: nextState, currentStep: nextStep, output: input.action === "complete" ? input.output : run.output, evidenceIds: input.evidenceIds.length ? input.evidenceIds : run.evidenceIds, approvalId: input.approvalId || run.approvalId, blocker: input.blocker, version: nextVersion, startedAt: input.action === "start" ? now : run.startedAt, completedAt: ["completed", "failed", "cancelled"].includes(nextState) ? now : null, updatedAt: now }).where(and(eq(eosWorkflowRuns.id, run.id), eq(eosWorkflowRuns.version, run.version), eq(eosWorkflowRuns.state, run.state))).returning();
       if (!rows[0]) throw new EosRouteError(409, "workflow_run_concurrent_change", "The workflow run changed before the transition completed.");
+      if (!agentScheduledRun) await tx.insert(eosAgentEventOutbox).values({
+        id: agentEventId,
+        companyId: access.company.id,
+        eventType: "eos.workflow_run.transitioned.v1",
+        aggregateType: "workflow_run",
+        aggregateId: run.id,
+        payload: {
+          schemaVersion: "eos.workflow_run.transitioned.v1",
+          workflowRunId: run.id,
+          processDefinitionId: run.processDefinitionId,
+          workPacketId: run.workPacketId,
+          action: input.action,
+          fromState: run.state,
+          toState: nextState,
+          currentStepBefore: run.currentStep,
+          currentStepAfter: nextStep,
+          approvalId: input.approvalId || run.approvalId,
+          evidenceIds: input.evidenceIds,
+          classification: run.classification,
+          externalEffectsExecuted: false,
+        },
+        state: "pending",
+        attempts: 0,
+        dispatchedRunIds: [],
+        lastError: "",
+        occurredAt: now,
+        dispatchedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
       await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: `workflow_run.${input.action}`, targetType: "workflow_run", targetId: run.id, traceId: policy.traceId, correlationId: policy.correlationId, result: nextState, details: { from: run.state, to: nextState, currentStepBefore: run.currentStep, currentStepAfter: nextStep, conditionOutcome: input.conditionOutcome ?? null, version: nextVersion, policyDecisionId: policy.decisionId }, createdAt: now });
       return rows;
     });
-    res.json(updated);
+    const dispatched = agentScheduledRun ? null : await dispatchAgentEventOutboxEvent(agentEventId);
+    res.json({ ...updated, agentEvent: dispatched ? { id: agentEventId, state: dispatched.event.state, matchingSchedules: dispatched.runIds.length, runIds: dispatched.runIds } : null });
   }));
 
   app.post("/api/eos/companies/:companyId/workflow-runs/:runId/skill-invocations", route(async (req, res) => {
