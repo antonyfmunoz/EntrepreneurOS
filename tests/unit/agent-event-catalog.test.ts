@@ -24,11 +24,26 @@ describe("native Role Agent event catalog", () => {
         label: "Consented lead recorded",
         source: "Native website and CRM runtime",
       }),
+      expect.objectContaining({
+        eventType: "eos.recovery.engagement.transitioned.v1",
+        label: "Recovery engagement advanced",
+        source: "Native Revenue Recovery operations",
+        filterFields: expect.arrayContaining(["action", "toState"]),
+      }),
+      expect.objectContaining({
+        eventType: "eos.recovery.campaign.transitioned.v1",
+        label: "Recovery campaign decision recorded",
+      }),
+      expect.objectContaining({
+        eventType: "eos.recovery.opportunity.transitioned.v1",
+        label: "Recovery opportunity advanced",
+      }),
     ]));
     expect(nativeAgentEventLabel("eos.workflow_run.transitioned.v1")).toBe("Workflow state changed");
     expect(nativeAgentEventLabel("eos.approval.decided.v1")).toBe("Approval decided");
     expect(nativeAgentEventLabel("eos.instrument.object.transitioned.v1")).toBe("Native tool lifecycle changed");
     expect(nativeAgentEventLabel("eos.crm.consented_lead_recorded.v1")).toBe("Consented lead recorded");
+    expect(nativeAgentEventLabel("eos.recovery.engagement.transitioned.v1")).toBe("Recovery engagement advanced");
   });
 
   it("keeps adapter-specific event names visible instead of falsely relabeling them", () => {

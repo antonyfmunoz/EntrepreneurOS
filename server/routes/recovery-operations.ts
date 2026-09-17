@@ -4,6 +4,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z, ZodError } from "zod";
 import {
   eosAuditRecords,
+  eosAgentEventOutbox,
   eosCustomerSuccessAccounts,
   eosEvidence,
   eosIntegrationBindings,
@@ -40,6 +41,7 @@ import {
 import { allowedSurfacesFor } from "@shared/eos-runtime";
 import { db } from "../db";
 import { nativeContractContentSha256 } from "../esign/template-generation";
+import { dispatchAgentEventOutboxEvent } from "../agents/scheduler";
 import { EosRouteError, authorizeAction, companyAccess, mayAccessClassification, visibleSeatIds } from "./eos-runtime";
 
 type Access = Awaited<ReturnType<typeof companyAccess>>;
@@ -253,20 +255,51 @@ export function registerRecoveryOperationsRoutes(app: Express): void {
     if (lifecycleEvidence[input.action]) requireEvidenceType(evidence, lifecycleEvidence[input.action]!, `${input.action.replaceAll("_", " ")}`);
     const authorityClass = ["approve_scope", "approve_campaigns", "start_renewal_review", "close", "cancel"].includes(input.action) ? "decide" : "execute";
     const { policy } = await operationsAccess(req, authorityClass, `recovery_operations.engagement.${input.action}`, engagement.classification);
-    const next = nextRecoveryEngagementState({ state: engagement.state as RecoveryEngagementState, action: input.action, returnState: engagement.returnState }); const now = new Date();
-    const updated = await db.transaction(async (tx) => {
+    const next = nextRecoveryEngagementState({ state: engagement.state as RecoveryEngagementState, action: input.action, returnState: engagement.returnState }); const now = new Date(); const agentEventId = randomUUID();
+    const result = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`recovery-engagement:${engagement.id}`}))`);
       const [current] = await tx.select().from(eosRecoveryEngagements).where(eq(eosRecoveryEngagements.id, engagement.id)).limit(1);
       if (!current || current.version !== input.expectedVersion || current.state !== engagement.state) throw new EosRouteError(409, "recovery_engagement_version_conflict", "The engagement changed before this transition. Refresh and try again.");
       const nextVersion = current.version + 1; const blockers = input.action === "report_failure" ? [input.blocker] : input.action === "restore_safe_state" ? [] : current.blockers;
-      const event = await appendEvent(tx, { companyId, engagementId: current.id, eventType: input.action, entityType: "engagement", entityId: current.id, fromState: current.state, toState: next.state, engagementVersionBefore: current.version, engagementVersionAfter: nextVersion, evidenceIds: evidence.map((item) => item.id), payload: { note: input.note, blocker: input.blocker || null, nextAction: input.nextAction, externalEffectsExecuted: false }, policyDecisionId: policy.decisionId, recordedByUserId: req.user.id, recordedAt: now });
-      const [row] = await tx.update(eosRecoveryEngagements).set({ state: next.state, returnState: next.returnState, blockers, evidenceIds: Array.from(new Set([...(current.evidenceIds as string[]), ...evidence.map((item) => item.id)])), nextAction: input.nextAction, nextActionAt: input.nextActionAt || null, version: nextVersion, lastEventId: event.id, updatedAt: now }).where(and(eq(eosRecoveryEngagements.id, current.id), eq(eosRecoveryEngagements.version, current.version))).returning();
-      if (!row) throw new EosRouteError(409, "recovery_engagement_version_conflict", "The engagement changed before this transition.");
-      await tx.update(eosWorkPackets).set({ status: next.state === "closed" ? "completed" : next.state === "cancelled" ? "cancelled" : next.state === "recovery_required" ? "blocked" : "in_progress", completedAt: next.state === "closed" ? now : null, updatedAt: now }).where(eq(eosWorkPackets.id, current.workPacketId));
-      await tx.insert(eosAuditRecords).values(audit(companyId, req.user.id, `recovery_operations.engagement.${input.action}`, "recovery_engagement", current.id, next.state, { eventSha256: event.eventSha256, policyDecisionId: policy.decisionId, evidenceIds: evidence.map((item) => item.id), externalEffectsExecuted: false }));
-      return row;
-    });
-    res.json(await engagementBundle(updated));
+       const event = await appendEvent(tx, { companyId, engagementId: current.id, eventType: input.action, entityType: "engagement", entityId: current.id, fromState: current.state, toState: next.state, engagementVersionBefore: current.version, engagementVersionAfter: nextVersion, evidenceIds: evidence.map((item) => item.id), payload: { note: input.note, blocker: input.blocker || null, nextAction: input.nextAction, externalEffectsExecuted: false }, policyDecisionId: policy.decisionId, recordedByUserId: req.user.id, recordedAt: now });
+       const [row] = await tx.update(eosRecoveryEngagements).set({ state: next.state, returnState: next.returnState, blockers, evidenceIds: Array.from(new Set([...(current.evidenceIds as string[]), ...evidence.map((item) => item.id)])), nextAction: input.nextAction, nextActionAt: input.nextActionAt || null, version: nextVersion, lastEventId: event.id, updatedAt: now }).where(and(eq(eosRecoveryEngagements.id, current.id), eq(eosRecoveryEngagements.version, current.version))).returning();
+       if (!row) throw new EosRouteError(409, "recovery_engagement_version_conflict", "The engagement changed before this transition.");
+       // The Recovery record and its bounded Role Agent handoff commit
+       // together. The handoff contains only operational facts; an agent must
+       // use its ordinary company, role, and classification scope to read the
+       // underlying engagement or Evidence.
+       await tx.insert(eosAgentEventOutbox).values({
+         id: agentEventId,
+         companyId,
+         eventType: "eos.recovery.engagement.transitioned.v1",
+         aggregateType: "recovery_engagement",
+         aggregateId: current.id,
+         payload: {
+           engagementId: current.id,
+           action: input.action,
+           mode: current.mode,
+           fromState: current.state,
+           toState: row.state,
+           engagementVersion: nextVersion,
+           evidenceCount: evidence.length,
+           classification: current.classification,
+           externalEffectsExecuted: false,
+         },
+         state: "pending",
+         attempts: 0,
+         dispatchedRunIds: [],
+         lastError: "",
+         occurredAt: now,
+         dispatchedAt: null,
+         createdAt: now,
+         updatedAt: now,
+       });
+       await tx.update(eosWorkPackets).set({ status: next.state === "closed" ? "completed" : next.state === "cancelled" ? "cancelled" : next.state === "recovery_required" ? "blocked" : "in_progress", completedAt: next.state === "closed" ? now : null, updatedAt: now }).where(eq(eosWorkPackets.id, current.workPacketId));
+       await tx.insert(eosAuditRecords).values(audit(companyId, req.user.id, `recovery_operations.engagement.${input.action}`, "recovery_engagement", current.id, next.state, { eventSha256: event.eventSha256, policyDecisionId: policy.decisionId, evidenceIds: evidence.map((item) => item.id), externalEffectsExecuted: false }));
+       return row;
+     });
+    const agentEvent = await dispatchAgentEventOutboxEvent(agentEventId);
+    res.json({ ...(await engagementBundle(result)), agentEvent: agentEvent ? { id: agentEventId, state: agentEvent.event.state, matchingSchedules: agentEvent.runIds.length, runIds: agentEvent.runIds } : null });
   }));
 
   app.put("/api/eos/companies/:companyId/recovery-operations/engagements/:engagementId/pools/:poolKey", route(async (req, res) => {
@@ -294,7 +327,45 @@ export function registerRecoveryOperationsRoutes(app: Express): void {
     const campaignEvidence: Record<string, string[]> = { submit: ["campaign_approval", "operator_observation", "data_quality_receipt"], approve: ["campaign_approval"], reject: ["campaign_approval"], verify_test: ["provider_receipt", "delivery_receipt", "communication_receipt"], activate: ["provider_receipt", "delivery_receipt", "communication_receipt"], pause: ["operator_observation", "recovery_receipt", "provider_receipt"], complete: ["delivery_receipt", "attribution_receipt", "client_confirmation"] };
     requireEvidenceType(evidence, campaignEvidence[input.decision], `campaign ${input.decision.replaceAll("_", " ")}`);
     if (input.decision === "activate") { if (!["bounded_launch", "operating", "reporting", "guarantee_review"].includes(engagement.state)) throw new EosRouteError(409, "recovery_campaign_engagement_not_ready", "Campaign activation requires the bounded-launch or operating stage."); if (campaign.channel !== "manual") { const binding = campaign.integrationBindingId ? await db.query.eosIntegrationBindings.findFirst({ where: eq(eosIntegrationBindings.id, campaign.integrationBindingId) }) : null; if (!providerBindingReady(binding)) throw new EosRouteError(409, "recovery_campaign_binding_not_ready", "Automated campaign activation requires the exact active, connected, healthy, parity-qualified provider binding and managed-secret reference."); } }
-    const { policy } = await operationsAccess(req, transition.authority, `recovery_operations.campaign.${input.decision}`, engagement.classification); const now = new Date(); const updated = await db.transaction(async (tx) => { const [row] = await tx.update(eosRecoveryCampaignControls).set({ state: transition.to, approvalEvidenceIds: Array.from(new Set([...(campaign.approvalEvidenceIds as string[]), ...evidence.map((item) => item.id)])), version: campaign.version + 1, updatedAt: now }).where(and(eq(eosRecoveryCampaignControls.id, campaign.id), eq(eosRecoveryCampaignControls.version, campaign.version))).returning(); if (!row) throw new EosRouteError(409, "recovery_campaign_version_conflict", "The campaign changed before this decision."); const event = await appendEvent(tx, { companyId, engagementId: engagement.id, eventType: `campaign_${input.decision}`, entityType: "campaign", entityId: campaign.id, fromState: campaign.state, toState: row.state, engagementVersionBefore: engagement.version, engagementVersionAfter: engagement.version, evidenceIds: evidence.map((item) => item.id), payload: { note: input.note, providerEffectExecutedByTransition: false }, policyDecisionId: policy.decisionId, recordedByUserId: req.user.id, recordedAt: now }); await tx.update(eosRecoveryCampaignControls).set({ lastEventId: event.id }).where(eq(eosRecoveryCampaignControls.id, campaign.id)); await tx.update(eosRecoveryEngagements).set({ lastEventId: event.id, updatedAt: now }).where(eq(eosRecoveryEngagements.id, engagement.id)); return row; }); res.json(updated);
+    const { policy } = await operationsAccess(req, transition.authority, `recovery_operations.campaign.${input.decision}`, engagement.classification); const now = new Date(); const agentEventId = randomUUID();
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx.update(eosRecoveryCampaignControls).set({ state: transition.to, approvalEvidenceIds: Array.from(new Set([...(campaign.approvalEvidenceIds as string[]), ...evidence.map((item) => item.id)])), version: campaign.version + 1, updatedAt: now }).where(and(eq(eosRecoveryCampaignControls.id, campaign.id), eq(eosRecoveryCampaignControls.version, campaign.version))).returning();
+      if (!row) throw new EosRouteError(409, "recovery_campaign_version_conflict", "The campaign changed before this decision.");
+      const event = await appendEvent(tx, { companyId, engagementId: engagement.id, eventType: `campaign_${input.decision}`, entityType: "campaign", entityId: campaign.id, fromState: campaign.state, toState: row.state, engagementVersionBefore: engagement.version, engagementVersionAfter: engagement.version, evidenceIds: evidence.map((item) => item.id), payload: { note: input.note, providerEffectExecutedByTransition: false }, policyDecisionId: policy.decisionId, recordedByUserId: req.user.id, recordedAt: now });
+      await tx.update(eosRecoveryCampaignControls).set({ lastEventId: event.id }).where(eq(eosRecoveryCampaignControls.id, campaign.id));
+      await tx.update(eosRecoveryEngagements).set({ lastEventId: event.id, updatedAt: now }).where(eq(eosRecoveryEngagements.id, engagement.id));
+      await tx.insert(eosAgentEventOutbox).values({
+        id: agentEventId,
+        companyId,
+        eventType: "eos.recovery.campaign.transitioned.v1",
+        aggregateType: "recovery_campaign",
+        aggregateId: campaign.id,
+        payload: {
+          engagementId: engagement.id,
+          campaignId: campaign.id,
+          decision: input.decision,
+          poolKey: campaign.poolKey,
+          channel: campaign.channel,
+          fromState: campaign.state,
+          toState: row.state,
+          campaignVersion: row.version,
+          evidenceCount: evidence.length,
+          classification: engagement.classification,
+          providerEffectExecutedByTransition: false,
+        },
+        state: "pending",
+        attempts: 0,
+        dispatchedRunIds: [],
+        lastError: "",
+        occurredAt: now,
+        dispatchedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      return row;
+    });
+    const agentEvent = await dispatchAgentEventOutboxEvent(agentEventId);
+    res.json({ ...updated, agentEvent: agentEvent ? { id: agentEventId, state: agentEvent.event.state, matchingSchedules: agentEvent.runIds.length, runIds: agentEvent.runIds } : null });
   }));
 
   app.post("/api/eos/companies/:companyId/recovery-operations/engagements/:engagementId/opportunities", route(async (req, res) => {
@@ -308,8 +379,45 @@ export function registerRecoveryOperationsRoutes(app: Express): void {
     if (!recoveryAttributionAllowed(input.state, input.attributionModel)) throw new EosRouteError(409, "recovery_attribution_invalid", "Direct attribution is recorded only for booked or won outcomes with Evidence.");
     const opportunityEvidence: Record<string, string[]> = { contacted: ["communication_receipt", "provider_receipt", "delivery_receipt"], replied: ["communication_receipt", "client_confirmation"], qualified: ["operator_observation", "communication_receipt", "data_quality_receipt"], routed: ["communication_receipt", "operator_observation"], booked: ["communication_receipt", "client_confirmation", "provider_receipt"], won: ["attribution_receipt", "client_confirmation", "provider_receipt"], lost: ["operator_observation", "communication_receipt", "client_confirmation"], suppressed: ["consent_review", "communication_receipt", "recovery_receipt"], disputed: ["operator_observation", "client_confirmation", "recovery_receipt"], identified: ["operator_observation", "data_quality_receipt"] };
     requireEvidenceType(evidence, opportunityEvidence[input.state], `opportunity ${input.state}`);
-    const authorityClass = ["won", "lost", "suppressed"].includes(input.state) ? "decide" : "execute"; const { policy } = await operationsAccess(req, authorityClass, `recovery_operations.opportunity.${input.state}`, engagement.classification); const now = new Date();
-    const updated = await db.transaction(async (tx) => { const [row] = await tx.update(eosRecoveryOpportunities).set({ state: input.state, actualValueMinor: input.actualValueMinor, attributionModel: input.attributionModel, nextAction: input.nextAction, nextActionAt: input.nextActionAt || null, evidenceIds: Array.from(new Set([...(opportunity.evidenceIds as string[]), ...evidence.map((item) => item.id)])), version: opportunity.version + 1, updatedAt: now }).where(and(eq(eosRecoveryOpportunities.id, opportunity.id), eq(eosRecoveryOpportunities.version, opportunity.version))).returning(); if (!row) throw new EosRouteError(409, "recovery_opportunity_version_conflict", "The opportunity changed before this transition."); const event = await appendEvent(tx, { companyId, engagementId: engagement.id, eventType: "opportunity_transitioned", entityType: "opportunity", entityId: opportunity.id, fromState: opportunity.state, toState: row.state, engagementVersionBefore: engagement.version, engagementVersionAfter: engagement.version, evidenceIds: evidence.map((item) => item.id), payload: { note: input.note, actualValueMinor: input.actualValueMinor, attributionModel: input.attributionModel }, policyDecisionId: policy.decisionId, recordedByUserId: req.user.id, recordedAt: now }); await tx.update(eosRecoveryOpportunities).set({ lastEventId: event.id }).where(eq(eosRecoveryOpportunities.id, opportunity.id)); await tx.update(eosRecoveryEngagements).set({ lastEventId: event.id, updatedAt: now }).where(eq(eosRecoveryEngagements.id, engagement.id)); return row; }); res.json(updated);
+    const authorityClass = ["won", "lost", "suppressed"].includes(input.state) ? "decide" : "execute"; const { policy } = await operationsAccess(req, authorityClass, `recovery_operations.opportunity.${input.state}`, engagement.classification); const now = new Date(); const agentEventId = randomUUID();
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx.update(eosRecoveryOpportunities).set({ state: input.state, actualValueMinor: input.actualValueMinor, attributionModel: input.attributionModel, nextAction: input.nextAction, nextActionAt: input.nextActionAt || null, evidenceIds: Array.from(new Set([...(opportunity.evidenceIds as string[]), ...evidence.map((item) => item.id)])), version: opportunity.version + 1, updatedAt: now }).where(and(eq(eosRecoveryOpportunities.id, opportunity.id), eq(eosRecoveryOpportunities.version, opportunity.version))).returning();
+      if (!row) throw new EosRouteError(409, "recovery_opportunity_version_conflict", "The opportunity changed before this transition.");
+      const event = await appendEvent(tx, { companyId, engagementId: engagement.id, eventType: "opportunity_transitioned", entityType: "opportunity", entityId: opportunity.id, fromState: opportunity.state, toState: row.state, engagementVersionBefore: engagement.version, engagementVersionAfter: engagement.version, evidenceIds: evidence.map((item) => item.id), payload: { note: input.note, actualValueMinor: input.actualValueMinor, attributionModel: input.attributionModel }, policyDecisionId: policy.decisionId, recordedByUserId: req.user.id, recordedAt: now });
+      await tx.update(eosRecoveryOpportunities).set({ lastEventId: event.id }).where(eq(eosRecoveryOpportunities.id, opportunity.id));
+      await tx.update(eosRecoveryEngagements).set({ lastEventId: event.id, updatedAt: now }).where(eq(eosRecoveryEngagements.id, engagement.id));
+      await tx.insert(eosAgentEventOutbox).values({
+        id: agentEventId,
+        companyId,
+        eventType: "eos.recovery.opportunity.transitioned.v1",
+        aggregateType: "recovery_opportunity",
+        aggregateId: opportunity.id,
+        payload: {
+          engagementId: engagement.id,
+          opportunityId: opportunity.id,
+          poolKey: opportunity.poolKey,
+          fromState: opportunity.state,
+          toState: row.state,
+          opportunityVersion: row.version,
+          actualValueMinor: row.actualValueMinor,
+          attributionModel: row.attributionModel,
+          evidenceCount: evidence.length,
+          classification: engagement.classification,
+          externalEffectsExecuted: false,
+        },
+        state: "pending",
+        attempts: 0,
+        dispatchedRunIds: [],
+        lastError: "",
+        occurredAt: now,
+        dispatchedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      return row;
+    });
+    const agentEvent = await dispatchAgentEventOutboxEvent(agentEventId);
+    res.json({ ...updated, agentEvent: agentEvent ? { id: agentEventId, state: agentEvent.event.state, matchingSchedules: agentEvent.runIds.length, runIds: agentEvent.runIds } : null });
   }));
 
   app.post("/api/eos/companies/:companyId/recovery-operations/engagements/:engagementId/customer-success-link", route(async (req, res) => {

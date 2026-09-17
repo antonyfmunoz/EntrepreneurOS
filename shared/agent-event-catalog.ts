@@ -36,6 +36,30 @@ export const nativeAgentEventCatalog = [
     payloadSummary: "Form, submission, linked CRM record identifiers, recorded consent version, classification, and no visitor answers or provider-effect claim.",
     filterFields: ["consentRecorded", "consentVersion", "classification"],
   },
+  {
+    eventType: "eos.recovery.engagement.transitioned.v1",
+    label: "Recovery engagement advanced",
+    source: "Native Revenue Recovery operations",
+    description: "Runs after EOS commits a governed Revenue Recovery engagement milestone, such as scope approval, intake, audit, bounded launch, reporting, recovery, or closeout.",
+    payloadSummary: "Engagement identifier, action, Client Zero or paid-client mode, prior and next state, version, evidence count, classification, and no provider-effect claim.",
+    filterFields: ["action", "mode", "fromState", "toState", "classification"],
+  },
+  {
+    eventType: "eos.recovery.campaign.transitioned.v1",
+    label: "Recovery campaign decision recorded",
+    source: "Native Revenue Recovery operations",
+    description: "Runs after EOS commits a governed Recovery campaign submission, approval, test verification, activation, pause, rejection, or completion.",
+    payloadSummary: "Engagement and campaign identifiers, decision, pool, channel, prior and next state, version, evidence count, classification, and no provider-effect claim.",
+    filterFields: ["decision", "poolKey", "channel", "fromState", "toState", "classification"],
+  },
+  {
+    eventType: "eos.recovery.opportunity.transitioned.v1",
+    label: "Recovery opportunity advanced",
+    source: "Native Revenue Recovery operations",
+    description: "Runs after EOS commits a verified state transition for a Recovery opportunity; EOS never infers contact, booking, revenue, or attribution without Evidence.",
+    payloadSummary: "Engagement and opportunity identifiers, pool, prior and next state, version, attributable value, evidence count, classification, and no provider-effect claim.",
+    filterFields: ["poolKey", "fromState", "toState", "attributionModel", "classification"],
+  },
 ] as const;
 
 export type NativeAgentEventType = (typeof nativeAgentEventCatalog)[number]["eventType"];
