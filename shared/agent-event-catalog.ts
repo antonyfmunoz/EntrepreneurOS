@@ -18,6 +18,13 @@ export const nativeAgentEventCatalog = [
     description: "Runs after EOS commits an authorized approval or rejection and updates its linked work packet.",
     payloadSummary: "Approval, linked work packet, decision, prior status, next work-packet status, classification, and no provider-effect claim.",
   },
+  {
+    eventType: "eos.instrument.object.transitioned.v1",
+    label: "Native tool lifecycle changed",
+    source: "Native instrument runtime",
+    description: "Runs after EOS commits a lifecycle transition for a native tool object, including CRM, documents, sheets, calendar, websites, finance, and other instrument records.",
+    payloadSummary: "Tool, object, object type, command, prior and next state, version, classification, and no provider-effect claim.",
+  },
 ] as const;
 
 export type NativeAgentEventType = (typeof nativeAgentEventCatalog)[number]["eventType"];
