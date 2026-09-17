@@ -31,6 +31,15 @@ describe("native operating workflow evidence selection", () => {
     expect(controlCenter).not.toContain('!scheduleSubject || !selectedProcessId || createSchedule.isPending');
   });
 
+  it("lets a founder configure and safely exercise an EOS event-triggered Role Agent schedule", () => {
+    expect(controlCenter).toContain('const [scheduleEventTypes, setScheduleEventTypes] = useState("")');
+    expect(controlCenter).toContain('triggerKind = scheduleCadence === "manual" ? "manual" : scheduleCadence === "event" ? "event" : "schedule"');
+    expect(controlCenter).toContain('aria-label="Role Agent event types"');
+    expect(controlCenter).toContain('`${root}/agent-events`');
+    expect(controlCenter).toContain('externalEffectsPermitted: false');
+    expect(controlCenter).toContain('Testing emits a bounded EOS event only; it does not call a provider.');
+  });
+
   it("lets an authorized operator run an active manual schedule without leaving the native workspace", () => {
     expect(controlCenter).toContain('`${root}/agent-schedules/${schedule.id}/run`');
     expect(controlCenter).toContain('ui:manual-agent-schedule:${schedule.id}:${crypto.randomUUID()}');
