@@ -3460,7 +3460,15 @@ export function registerEosRuntimeRoutes(app: Express): void {
         const starterArtifacts: Array<{ key: string; objectiveId: string; workPacketId: string; processDefinitionId: string; ownerSeatId: string }> = [];
         const trace = tracePair();
         for (const starter of starters) {
-          const ownerSeatId = byTemplateKey.get(starter.ownerRoleKey)?.id || byTemplateKey.get("company_ceo")?.id || access.seat.id;
+          const ownerSeat = byTemplateKey.get(starter.ownerRoleKey);
+          if (!ownerSeat) {
+            throw new EosRouteError(
+              422,
+              "company_blueprint_owner_missing",
+              `The ${starter.title} template names an unavailable ${starter.ownerRoleKey} role. Reconcile the company blueprint before compiling work.`,
+            );
+          }
+          const ownerSeatId = ownerSeat.id;
           const objectiveId = `objective:company-blueprint:${access.company.id}:${blueprint.key}:${starter.key}`;
           const packetId = `packet:company-blueprint:${access.company.id}:${blueprint.key}:${starter.key}`;
           const processKey = `company-blueprint:${blueprint.key}:${starter.key}`;
@@ -3686,7 +3694,15 @@ export function registerEosRuntimeRoutes(app: Express): void {
             preservedNativeAssetIds.push(existing.id);
             continue;
           }
-          const ownerSeatId = byTemplateKey.get(starter.ownerRoleKey)?.id || byTemplateKey.get("company_ceo")?.id || access.seat.id;
+          const ownerSeat = byTemplateKey.get(starter.ownerRoleKey);
+          if (!ownerSeat) {
+            throw new EosRouteError(
+              422,
+              "company_blueprint_owner_missing",
+              `The ${starter.title} native asset names an unavailable ${starter.ownerRoleKey} role. Reconcile the company blueprint before compiling assets.`,
+            );
+          }
+          const ownerSeatId = ownerSeat.id;
           const now = new Date();
           if (original && !uuidPattern.test(original.id)) migratedLegacyNativeAssetIds.push(original.id);
           const data = resolveStarterData(starter.data) as Record<string, unknown>;
