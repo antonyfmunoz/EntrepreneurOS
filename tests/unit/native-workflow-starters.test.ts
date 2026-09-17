@@ -17,7 +17,9 @@ describe("native workflow starters", () => {
   it("preserves template ancestry while making the resulting company workflow editable", () => {
     expect(composer).toContain("native_workflow_starter.${starter.key}.v1");
     expect(composer).toContain("templateAncestry,");
-    expect(composer).toContain("setSteps(starter.steps.map");
+    expect(composer).toContain("materializeNativeWorkflowStarter(starter.key, companyContext)");
+    expect(composer).toContain("setSteps(materialized.steps.map");
+    expect(composer).toContain("company&apos;s mission variables");
   });
 
   it("keeps starter actions native-first and does not invent external effects", () => {

@@ -43,7 +43,10 @@ describe("native no-code workflow composition", () => {
     expect(composer).toContain("Routes may only move forward");
     expect(composer).toContain("Workflow step ${index + 1} type");
     expect(composer).toContain("Do not transmit data to an external provider");
+    expect(composer).toContain("companyContext: NativeWorkflowStarterVariables");
+    expect(composer).toContain("materializeNativeWorkflowStarter(starter.key, companyContext)");
     expect(overlay).toContain("mayOperateNativeWorkflows");
+    expect(overlay).toContain("companyContext={{");
     expect(overlay).toContain('toolEntitlements.has("workflows")');
     expect(runtime).toContain('toolKey: "workflows"');
   });
