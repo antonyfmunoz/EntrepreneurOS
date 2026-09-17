@@ -2564,6 +2564,37 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     currentUserId = ownerId;
   });
 
+  it("keeps a product company’s native commercial assets with Brand & Growth", async () => {
+    currentUserId = ownerId;
+    const [productCompany] = await sql<{ id: number }[]>`
+      INSERT INTO companies (
+        owner_user_id, portfolio_id, name, type, stage, offer, target_customer, goals
+      ) VALUES (
+        ${ownerId}, ${portfolioId}, 'Product Blueprint Ownership Fixture', 'product', 'MVP',
+        'Creator membership', 'Independent creators', 'Validate an accountable commercial launch'
+      )
+      RETURNING id
+    `;
+
+    const instantiated = await api
+      .post(`/api/eos/companies/${productCompany.id}/company-blueprint/instantiate`)
+      .send({ blueprintKey: "product_company" })
+      .expect(201);
+    const brandGrowthSeat = instantiated.body.created.find(
+      (seat: { title: string }) => seat.title === "Brand & Growth",
+    );
+    expect(brandGrowthSeat).toBeTruthy();
+
+    const nativeAssets = await sql<Array<{ ownerSeatId: string }>>`
+      SELECT owner_seat_id AS "ownerSeatId"
+      FROM eos_instrument_objects
+      WHERE company_id = ${productCompany.id}
+        AND object_key LIKE 'company-blueprint:product_company:%'
+    `;
+    expect(nativeAssets).toHaveLength(5);
+    expect(nativeAssets.every((asset) => asset.ownerSeatId === brandGrowthSeat.id)).toBe(true);
+  });
+
   it("compiles the organization from its one company mission, then activates an evidence-bearing approved mission", async () => {
     const context = await api
       .get(`/api/eos/companies/${companyId}/context`)
