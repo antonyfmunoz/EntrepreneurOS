@@ -9,8 +9,14 @@ describe("native Role Agent event catalog", () => {
         label: "Workflow state changed",
         source: "Native workflow runtime",
       }),
+      expect.objectContaining({
+        eventType: "eos.approval.decided.v1",
+        label: "Approval decided",
+        source: "Native approval runtime",
+      }),
     ]));
     expect(nativeAgentEventLabel("eos.workflow_run.transitioned.v1")).toBe("Workflow state changed");
+    expect(nativeAgentEventLabel("eos.approval.decided.v1")).toBe("Approval decided");
   });
 
   it("keeps adapter-specific event names visible instead of falsely relabeling them", () => {

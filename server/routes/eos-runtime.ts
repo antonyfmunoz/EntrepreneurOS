@@ -36,6 +36,7 @@ import { executeApprovedRecoveryProviderExecution } from "../recovery-provider-e
 import {
   companies,
   eosApprovalRequests,
+  eosAgentEventOutbox,
   eosAssignments,
   eosAuthorityGrants,
   eosAuthoritySubjects,
@@ -338,6 +339,7 @@ import { companyPackageParitySnapshot } from "../company-compilation/semantic-pa
 import { compiledOperatingFormation, compileCompanyBlueprintStarters, companyBlueprintForBusinessModel } from "@shared/company-blueprints";
 import { materializeNativeWorkflowStarter } from "@shared/native-workflow-starters";
 import { materializeNativeBusinessStarters } from "@shared/native-business-starters";
+import { dispatchAgentEventOutboxEvent } from "../agents/scheduler";
 
 function escapeHtml(value: string): string {
   return value.replace(
@@ -14417,6 +14419,10 @@ export function registerEosRuntimeRoutes(app: Express): void {
       const now = new Date();
       const nextStatus = input.decision === "approved" ? "ready" : "cancelled";
       const { traceId, correlationId } = tracePair();
+      // This identifier is created before the state change so the decision and
+      // the downstream Role Agent event commit together. A delivery retry must
+      // never turn one human decision into multiple governed runs.
+      const agentEventId = randomUUID();
       let decided: typeof approval | undefined;
       await db.transaction(async (tx) => {
         [decided] = await tx
@@ -14592,6 +14598,34 @@ export function registerEosRuntimeRoutes(app: Express): void {
           },
           createdAt: now,
         });
+        await tx.insert(eosAgentEventOutbox).values({
+          id: agentEventId,
+          companyId: company.id,
+          eventType: "eos.approval.decided.v1",
+          aggregateType: "approval",
+          aggregateId: approval.id,
+          // Decision reasons may contain free-form sensitive context. Role
+          // Agents receive the bounded operational fact and can retrieve
+          // governed records only through their normal role authority.
+          payload: {
+            schemaVersion: "eos.approval.decided.v1",
+            approvalId: approval.id,
+            workPacketId: approval.workPacketId,
+            decision: input.decision,
+            previousStatus: approval.status,
+            workPacketStatus: nextStatus,
+            classification: approvalPacket.classification,
+            externalEffectsExecuted: false,
+          },
+          state: "pending",
+          attempts: 0,
+          dispatchedRunIds: [],
+          lastError: "",
+          occurredAt: now,
+          dispatchedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        });
         if (federatedCommand) {
           const federationOutcome = {
             protocolVersion: FEDERATION_PROTOCOL_VERSION,
@@ -14661,13 +14695,29 @@ export function registerEosRuntimeRoutes(app: Express): void {
             );
         }
       });
+      // A failed enqueue is retained for the scheduler's bounded retry worker;
+      // a valid human decision must not be rolled back because a downstream
+      // role is temporarily unavailable.
+      const agentEvent = await dispatchAgentEventOutboxEvent(agentEventId);
       const providerExecution = await db.query.eosProviderExecutions.findFirst({
         where: and(
           eq(eosProviderExecutions.companyId, company.id),
           eq(eosProviderExecutions.approvalId, approval.id),
         ),
       });
-      if (!providerExecution) return { body: decided };
+      if (!providerExecution) return {
+        body: {
+          ...decided,
+          agentEvent: agentEvent
+            ? {
+                id: agentEventId,
+                state: agentEvent.event.state,
+                matchingSchedules: agentEvent.runIds.length,
+                runIds: agentEvent.runIds,
+              }
+            : null,
+        },
+      };
       if (input.decision === "rejected") {
         const [updated] = await db
           .update(eosProviderExecutions)
