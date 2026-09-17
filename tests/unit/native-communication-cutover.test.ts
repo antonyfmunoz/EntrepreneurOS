@@ -42,4 +42,13 @@ describe("native communication authority cutover", () => {
     expect(messageHub).toContain("Reporting-line participants");
     expect(messageHub).toContain("role assistant to route the request");
   });
+
+  it("uses the existing governed provider run queue for Email and Slack instead of claiming delivery from the native ledger", () => {
+    expect(messageHub).toContain('return "gmail.send"');
+    expect(messageHub).toContain('return "slack.message.send"');
+    expect(messageHub).toContain('`${root}/integration-operations/runs`');
+    expect(messageHub).toContain('deliveryState: "provider_delivery_planned"');
+    expect(messageHub).toContain("Planning creates no provider effect.");
+    expect(messageHub).toContain("provider receipt");
+  });
 });
