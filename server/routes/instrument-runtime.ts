@@ -331,6 +331,39 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     res.json({ schemaVersion: "eos.instrument-runtime.v1", instrument: instrumentManifestProjection().find((item) => item.key === key), objects: visible, events: events.slice(0, 250) });
   }));
 
+  app.get("/api/eos/companies/:companyId/instruments/crm/relationships/:relationshipObjectId/operating-context", route(async (req, res) => {
+    const { access } = await instrumentAccess(req, "view", "crm", "instrument.read", "internal");
+    const [relationship] = await db.select().from(eosInstrumentObjects).where(and(
+      eq(eosInstrumentObjects.companyId, access.company.id),
+      eq(eosInstrumentObjects.id, req.params.relationshipObjectId),
+      eq(eosInstrumentObjects.instrumentKey, "crm"),
+      eq(eosInstrumentObjects.objectType, "relationship"),
+    )).limit(1);
+    if (!relationship) throw new EosRouteError(404, "crm_relationship_not_found", "The requested native CRM relationship does not exist in this company.");
+    const visibleRelationship = await visibleObjectSet(access, [relationship]);
+    if (!visibleRelationship.length) throw new EosRouteError(404, "crm_relationship_not_visible", "The requested native CRM relationship is not visible in this role scope.");
+
+    const permittedKeys = permittedInstrumentKeySet(access, req.user.id);
+    const allObjects = await db.select().from(eosInstrumentObjects).where(eq(eosInstrumentObjects.companyId, access.company.id)).orderBy(desc(eosInstrumentObjects.updatedAt));
+    const visibleObjects = await visibleObjectSet(access, objectsForPermittedInstruments(allObjects, permittedKeys));
+    const visibleById = new Map(visibleObjects.map((object) => [object.id, object]));
+    const directLinks = await db.select().from(eosInstrumentLinks).where(and(
+      eq(eosInstrumentLinks.companyId, access.company.id),
+      or(eq(eosInstrumentLinks.sourceObjectId, relationship.id), eq(eosInstrumentLinks.targetObjectId, relationship.id)),
+    ));
+    const directObjectIds = new Set(directLinks.map((link) => link.sourceObjectId === relationship.id ? link.targetObjectId : link.sourceObjectId));
+    const directObjects = Array.from(directObjectIds).map((id) => visibleById.get(id)).filter((object): object is typeof eosInstrumentObjects.$inferSelect => Boolean(object));
+    const meetingIds = new Set(directObjects.filter((object) => object.instrumentKey === "conference_rooms" && object.objectType === "meeting").map((object) => object.id));
+    const decisionObjects = visibleObjects.filter((object) => object.instrumentKey === "conference_rooms" && object.objectType === "decision" && meetingIds.has(object.parentObjectId || ""));
+    const returnedIds = new Set([...directObjects.map((object) => object.id), ...decisionObjects.map((object) => object.id)]);
+    res.json({
+      schemaVersion: "eos.crm.relationship-operating-context.v1",
+      relationship: visibleRelationship[0],
+      objects: [...directObjects, ...decisionObjects],
+      links: directLinks.filter((link) => returnedIds.has(link.sourceObjectId) || returnedIds.has(link.targetObjectId)),
+    });
+  }));
+
   app.get("/api/eos/companies/:companyId/instrument-search", route(async (req, res) => {
     const input = instrumentSearchSchema.parse(req.query);
     const access = await companyAccess(req);

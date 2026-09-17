@@ -8,6 +8,7 @@ const instrumentRuntime = readFileSync(new URL("../../server/routes/instrument-r
 const overlay = readFileSync(new URL("../../client/src/pages/eos-overlay-page.tsx", import.meta.url), "utf8");
 const messageHub = readFileSync(new URL("../../client/src/components/native-message-hub.tsx", import.meta.url), "utf8");
 const conferenceRooms = readFileSync(new URL("../../client/src/components/conference-room-control-center.tsx", import.meta.url), "utf8");
+const nativeCrmStudio = readFileSync(new URL("../../client/src/components/native-crm-studio.tsx", import.meta.url), "utf8");
 
 describe("native communication authority cutover", () => {
   it("does not register legacy global agent or assistant route modules", () => {
@@ -70,5 +71,14 @@ describe("native communication authority cutover", () => {
     expect(conferenceRooms).toContain("Only relationships already visible to this role appear here.");
     expect(conferenceRooms).toContain('relationshipType: "concerns_relationship"');
     expect(conferenceRooms).toContain("The meeting was scheduled, but EOS could not create its CRM relationship link.");
+  });
+
+  it("projects a relationship operating context only through the server's role-scoped graph", () => {
+    expect(instrumentRuntime).toContain("relationships/:relationshipObjectId/operating-context");
+    expect(instrumentRuntime).toContain("crm_relationship_not_visible");
+    expect(instrumentRuntime).toContain("visibleObjectSet(access, objectsForPermittedInstruments");
+    expect(nativeCrmStudio).toContain("native-crm-relationship-operating-context");
+    expect(nativeCrmStudio).toContain("Relationship operating context");
+    expect(nativeCrmStudio).toContain("only objects already visible to your role");
   });
 });
