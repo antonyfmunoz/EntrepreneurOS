@@ -14,12 +14,15 @@ describe("universal workspace layout", () => {
     expect(layout).toContain('const workspaceRef = useRef<HTMLElement>(null)');
     expect(layout).toContain('onExpandedChange: handleFloatingPanelExpandedChange');
     expect(layout).toContain('workspace.scrollTop > 4');
-    expect(layout).toContain('reserveExpandedHudClearance ? "h-32 sm:h-36" : "h-3"');
+    expect(layout).toContain('const [expandedHudClearance, setExpandedHudClearance] = useState(0)');
+    expect(layout).toContain('new ResizeObserver(updateClearance)');
+    expect(layout).toContain('height - collapsedHeight + 12');
+    expect(layout).toContain('height: `${Math.max(12, expandedHudClearance)}px`');
   });
 
   it("places the left-rail control in navigation above Home instead of on the rail edge", () => {
     expect(layout).toContain('<RailToggle side="left" collapsed={left.collapsed} onClick={left.toggle} variant="navigation" />');
-    expect(layout).toContain('{leadingAction && <li>{leadingAction}</li>}');
+    expect(layout).toContain('{leadingAction && <li className="mb-2 border-b border-border/60 pb-2">{leadingAction}</li>}');
     expect(layout).not.toContain('<RailToggle side="left" collapsed={left.collapsed} onClick={left.toggle} />');
   });
 });
