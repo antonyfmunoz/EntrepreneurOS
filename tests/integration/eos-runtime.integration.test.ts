@@ -9710,6 +9710,34 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       clientSideOwner: "Empyrean operator", nextAction: "Approve the source and consent boundary.", classification: "confidential",
     }).expect(201);
     expect(created.body).toMatchObject({ mode: "client_zero", state: "draft", version: 1, externalEffectsExecuted: false });
+    const [recoveryProcess] = await sql<{ id: string; accountable_seat_id: string; occupant_user_id: string | null }[]>`
+      SELECT process.id, process.accountable_seat_id, seat.occupant_user_id
+      FROM eos_process_definitions process
+      JOIN eos_seats seat ON seat.id = process.accountable_seat_id
+      WHERE process.company_id = ${companyId} AND process.release_state = 'released'
+        AND process.qualification_state IN ('implemented','pre_live_qualified','field_qualified')
+      ORDER BY CASE process.qualification_state WHEN 'field_qualified' THEN 0 ELSE 1 END, process.created_at
+      LIMIT 1`;
+    const [recoverySubject] = recoveryProcess ? await sql<{ id: string }[]>`SELECT id FROM eos_authority_subjects WHERE company_id = ${companyId} AND seat_id = ${recoveryProcess.accountable_seat_id} AND status = 'active' AND verification_status = 'verified' ORDER BY created_at LIMIT 1` : [];
+    expect(recoveryProcess?.id).toBeTruthy(); expect(recoverySubject?.id).toBeTruthy();
+    const recoveryEventType = "eos.recovery.engagement.transitioned.v1";
+    const recoverySchedule = await api.post(`/api/eos/companies/${companyId}/agent-schedules`).send({
+      scheduleKey: `fixture-recovery-event-${randomUUID()}`,
+      name: "Recovery milestone Role Agent",
+      seatId: recoveryProcess.accountable_seat_id,
+      authoritySubjectId: recoverySubject.id,
+      processDefinitionId: recoveryProcess.id,
+      triggerKind: "event",
+      cadence: "event",
+      eventTypes: [recoveryEventType],
+      eventFilter: { all: [{ path: "action", equals: "verify_bounded_launch" }, { path: "toState", equals: "operating" }] },
+      executionMode: recoveryProcess.occupant_user_id ? "assisted" : "autonomous",
+      inputTemplate: { fixture: "native-recovery-milestone" },
+      maxRunsPerDay: 2,
+      evaluationRequired: true,
+      classification: "confidential",
+    }).expect(201);
+    await api.patch(`/api/eos/companies/${companyId}/agent-schedules/${recoverySchedule.body.id}/state`).send({ expectedVersion: 1, state: "active", rationale: "Activate this precise Recovery handoff only after binding it to a released governed process and the verified bounded-launch milestone." }).expect(200);
 
     const recordEvidence = async (evidenceType: string, title: string, claim: string) => (await api.post(`/api/eos/companies/${companyId}/recovery-operations/engagements/${created.body.id}/evidence`).send({ evidenceType, title, sourceSystem: "EOS integration fixture", sourceReference: `${evidenceType}-${randomUUID()}`, supportedClaimSummary: claim, verifierMethod: "The accountable founder reviewed the exact fixture source, timestamp, scope, and declared limitation.", consentRights: "Internal qualification only; no public proof, live send, or provider outcome is authorized.", dataClassification: "confidential" }).expect(201)).body;
     await api.post(`/api/eos/companies/${companyId}/recovery-operations/engagements/${created.body.id}/evidence`).send({ evidenceType: "provider_receipt", title: "Operator-authored provider claim", sourceSystem: "operator", sourceReference: "not-authoritative", supportedClaimSummary: "An operator note must not become an authoritative provider receipt in EOS.", verifierMethod: "Operator typed a claim without signed ingress or a provider client response.", consentRights: "No provider verification rights are present.", dataClassification: "confidential" }).expect(409).expect(({ body }) => expect(body.code).toBe("recovery_external_evidence_requires_authoritative_ingress"));
@@ -9738,7 +9766,13 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       VALUES (${authoritativeReceiptId}, ${companyId}, ${created.body.workPacketId}, ${ownerId}, 'communication_receipt', 'Bounded manual communication receipt', ${`recovery-authoritative:${authoritativeReceiptId}`}, 'recovery_engagement', ${created.body.id}, 'verified', 'authoritative', 'confidential', 'governed_fixture_ingress', 'fixture-provider', 'Internal qualification only', 'The governed fixture recorded one bounded communication receipt without claiming response, booking, or revenue.', 'Disposable PostgreSQL authoritative-ingress fixture', ${sql.json({ externalEffect: "bounded_fixture_only" })})`;
     campaign = (await api.post(`/api/eos/companies/${companyId}/recovery-operations/engagements/${created.body.id}/campaigns/${configured.body.id}/decisions`).send({ expectedVersion: campaign.version, decision: "verify_test", note: "Verify the bounded communication from the authoritative fixture receipt, without inferring response or outcome.", evidenceIds: [authoritativeReceiptId] }).expect(200)).body;
     const opportunity = await api.post(`/api/eos/companies/${companyId}/recovery-operations/engagements/${created.body.id}/opportunities`).send({ poolKey: "missed_calls", externalReference: "fixture-record-1", title: "Bounded missed-call follow-up", summary: "One eligible first-party record entered the bounded launch; no response, booking, or revenue is claimed.", ownerSeatId: founderSeat.id, estimatedValueMinor: 0, nextAction: "Observe the authoritative communication state and apply stop rules.", evidenceIds: [authoritativeReceiptId] }).expect(201);
-    engagement = (await api.post(`/api/eos/companies/${companyId}/recovery-operations/engagements/${created.body.id}/transitions`).send({ expectedVersion: engagement.version, action: "verify_bounded_launch", note: "Advance only after the tested campaign and real minimized opportunity both retain authoritative receipt Evidence.", evidenceIds: [authoritativeReceiptId], nextAction: "Operate the approved Recovery cadence and retain every receipt." }).expect(200)).body;
+    const boundedLaunch = await api.post(`/api/eos/companies/${companyId}/recovery-operations/engagements/${created.body.id}/transitions`).send({ expectedVersion: engagement.version, action: "verify_bounded_launch", note: "Advance only after the tested campaign and real minimized opportunity both retain authoritative receipt Evidence.", evidenceIds: [authoritativeReceiptId], nextAction: "Operate the approved Recovery cadence and retain every receipt." }).expect(200);
+    engagement = boundedLaunch.body;
+    expect(boundedLaunch.body.agentEvent).toMatchObject({ state: "dispatched", matchingSchedules: 1 });
+    const recoveryRuntime = await api.get(`/api/eos/companies/${companyId}/workflow-runtime`).expect(200);
+    expect(recoveryRuntime.body.runs.find((item: any) => item.id === boundedLaunch.body.agentEvent.runIds[0])).toMatchObject({ input: { fixture: "native-recovery-milestone", _scheduleId: recoverySchedule.body.id, _agentTrigger: { kind: "event", eventType: recoveryEventType, payload: { engagementId: created.body.id, action: "verify_bounded_launch", mode: "client_zero", fromState: "bounded_launch", toState: "operating", evidenceCount: 1, classification: "confidential", externalEffectsExecuted: false } } } });
+    const [recoveryOutbox] = await sql<{ aggregate_type: string; aggregate_id: string; state: string; attempts: number; dispatched_run_ids: string[]; payload: Record<string, unknown> }[]>`SELECT aggregate_type, aggregate_id, state, attempts, dispatched_run_ids, payload FROM eos_agent_event_outbox WHERE id = ${boundedLaunch.body.agentEvent.id}`;
+    expect(recoveryOutbox).toMatchObject({ aggregate_type: "recovery_engagement", aggregate_id: created.body.id, state: "dispatched", attempts: 1, dispatched_run_ids: [boundedLaunch.body.agentEvent.runIds[0]], payload: { action: "verify_bounded_launch", toState: "operating", externalEffectsExecuted: false } });
     expect(engagement).toMatchObject({ state: "operating", externalEffectsExecuted: false, readiness: { campaignsTested: true, opportunityCount: 1 } });
     expect(opportunity.body.externalReferenceSha256).toMatch(/^[0-9a-f]{64}$/);
     expect(JSON.stringify(opportunity.body)).not.toContain("fixture-record-1");
