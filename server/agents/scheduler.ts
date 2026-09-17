@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, count, eq, gte, like, lte, sql } from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray, like, lte, sql } from "drizzle-orm";
 import {
+  eosAgentEventOutbox,
   eosAgentSchedules,
   eosAuditRecords,
   eosAuthoritySubjects,
@@ -151,9 +152,86 @@ export async function enqueueAgentEvent(input: { companyId: number; eventType: s
   return results;
 }
 
+export type AgentEventInput = {
+  id: string;
+  companyId: number;
+  eventType: string;
+  aggregateType: string;
+  aggregateId: string;
+  payload: Record<string, unknown>;
+  occurredAt?: Date;
+};
+
+/**
+ * Stores an internal event before delivery.  Reusing an ID is intentionally
+ * idempotent: a retry cannot create a second governed Role Agent run.
+ */
+export async function recordAgentEvent(input: AgentEventInput) {
+  const now = input.occurredAt || new Date();
+  await db.insert(eosAgentEventOutbox).values({
+    id: input.id,
+    companyId: input.companyId,
+    eventType: input.eventType,
+    aggregateType: input.aggregateType,
+    aggregateId: input.aggregateId,
+    payload: input.payload,
+    state: "pending",
+    attempts: 0,
+    dispatchedRunIds: [],
+    lastError: "",
+    occurredAt: now,
+    dispatchedAt: null,
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoNothing();
+  const [event] = await db.select().from(eosAgentEventOutbox).where(eq(eosAgentEventOutbox.id, input.id)).limit(1);
+  return event || null;
+}
+
+export async function dispatchAgentEventOutboxEvent(eventId: string) {
+  const [event] = await db.select().from(eosAgentEventOutbox).where(eq(eosAgentEventOutbox.id, eventId)).limit(1);
+  if (!event) return null;
+  if (event.state === "dispatched") return { event, runIds: Array.isArray(event.dispatchedRunIds) ? event.dispatchedRunIds as string[] : [], replayed: true };
+  const now = new Date();
+  try {
+    const runs = await enqueueAgentEvent({
+      companyId: event.companyId,
+      eventType: event.eventType,
+      eventId: event.id,
+      payload: event.payload as Record<string, unknown>,
+      observedAt: event.occurredAt,
+    });
+    const runIds = runs.map((run) => run.id);
+    const [updated] = await db.update(eosAgentEventOutbox).set({
+      state: "dispatched",
+      attempts: event.attempts + 1,
+      dispatchedRunIds: runIds,
+      lastError: "",
+      dispatchedAt: now,
+      updatedAt: now,
+    }).where(eq(eosAgentEventOutbox.id, event.id)).returning();
+    return { event: updated || event, runIds, replayed: false };
+  } catch (error) {
+    const message = error instanceof Error ? error.message.slice(0, 2000) : "Unknown Role Agent event dispatch failure.";
+    await db.update(eosAgentEventOutbox).set({ state: "failed", attempts: event.attempts + 1, lastError: message, updatedAt: now }).where(eq(eosAgentEventOutbox.id, event.id));
+    writeLog("error", "agent_event_dispatch_failed", { eventId: event.id, companyId: event.companyId, eventType: event.eventType, error });
+    return { event: { ...event, state: "failed", attempts: event.attempts + 1, lastError: message }, runIds: [], replayed: false };
+  }
+}
+
+export async function dispatchPendingAgentEventsOnce(limit = 50) {
+  const events = await db.select({ id: eosAgentEventOutbox.id }).from(eosAgentEventOutbox).where(inArray(eosAgentEventOutbox.state, ["pending", "failed"])).orderBy(asc(eosAgentEventOutbox.occurredAt)).limit(limit);
+  let dispatched = 0;
+  for (const event of events) {
+    const result = await dispatchAgentEventOutboxEvent(event.id);
+    if (result?.event.state === "dispatched") dispatched += 1;
+  }
+  return dispatched;
+}
+
 export function startAgentScheduleWorker(intervalMs = 30_000) {
-  const run = () => void enqueueDueAgentSchedulesOnce().then((enqueued) => {
-    if (enqueued) writeLog("info", "agent_schedule_worker_completed", { enqueued });
+  const run = () => void Promise.all([enqueueDueAgentSchedulesOnce(), dispatchPendingAgentEventsOnce()]).then(([enqueued, dispatched]) => {
+    if (enqueued || dispatched) writeLog("info", "agent_schedule_worker_completed", { enqueued, dispatched });
   }).catch((error) => writeLog("error", "agent_schedule_worker_failed", { error }));
   const timer = setInterval(run, Math.max(5_000, intervalMs)); timer.unref(); run();
   return () => clearInterval(timer);

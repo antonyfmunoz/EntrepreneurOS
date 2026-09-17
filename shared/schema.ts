@@ -4309,6 +4309,35 @@ export const eosAgentSchedules = pgTable("eos_agent_schedules", {
   `),
 ]);
 
+/**
+ * Durable, tenant-scoped internal events that may start a governed Role Agent
+ * run.  This is an outbox rather than an in-request side effect so a workflow
+ * transition cannot be committed while its downstream automation is lost.
+ */
+export const eosAgentEventOutbox = pgTable("eos_agent_event_outbox", {
+  id: text("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  eventType: text("event_type").notNull(),
+  aggregateType: text("aggregate_type").notNull(),
+  aggregateId: text("aggregate_id").notNull(),
+  payload: jsonb("payload").notNull().default({}),
+  state: text("state").notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  dispatchedRunIds: jsonb("dispatched_run_ids").notNull().default([]),
+  lastError: text("last_error").notNull().default(""),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+  dispatchedAt: timestamp("dispatched_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("eos_agent_event_outbox_pending_idx").on(table.state, table.occurredAt),
+  index("eos_agent_event_outbox_company_type_idx").on(table.companyId, table.eventType, table.occurredAt),
+  check("eos_agent_event_outbox_state_check", sql`${table.state} IN ('pending','dispatched','failed')`),
+  check("eos_agent_event_outbox_attempts_check", sql`${table.attempts} >= 0`),
+  check("eos_agent_event_outbox_payload_check", sql`jsonb_typeof(${table.payload}) = 'object'`),
+  check("eos_agent_event_outbox_run_ids_check", sql`jsonb_typeof(${table.dispatchedRunIds}) = 'array'`),
+]);
+
 export const eosAgentRunEvaluations = pgTable("eos_agent_run_evaluations", {
   id: text("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
