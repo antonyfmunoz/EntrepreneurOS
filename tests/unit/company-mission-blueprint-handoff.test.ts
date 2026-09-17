@@ -60,6 +60,16 @@ describe("Company Mission blueprint handoff", () => {
     expect(runtime).toContain("grant:${seat.id}:baseline");
   });
 
+  it("shows the same deterministic blueprint before creation that the server materializes afterward", () => {
+    expect(missionPage).toContain("companyBlueprintForBusinessModel");
+    expect(missionPage).toContain("compileCompanyBlueprintStarters");
+    expect(missionPage).toContain("compiledOperatingFormation");
+    expect(missionPage).toContain("Live business blueprint");
+    expect(missionPage).toContain("Native tool baseline");
+    expect(missionPage).toContain("First compiled missions");
+    expect(missionPage).toContain("do not create a provider connection or grant authority");
+  });
+
   it("lets a founder preview and explicitly apply legacy role-tool repairs without rewriting custom labels", () => {
     expect(runtime).toContain('"/api/eos/companies/:companyId/organization-runtime/tool-entitlements/reconcile"');
     expect(runtime).toContain("reconcileLegacyToolEntitlements");

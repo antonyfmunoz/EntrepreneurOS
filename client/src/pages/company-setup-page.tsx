@@ -11,6 +11,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiRequest } from "@/lib/queryClient";
 import { normalizeOptionalGoals } from "@/lib/company-setup";
 import { companyMissionJourney, companyMissionStatus, parseAssumedBusinessNames, type CompanyMissionInput } from "@shared/company-mission";
+import {
+  companyBlueprintForBusinessModel,
+  compileCompanyBlueprintStarters,
+  compiledOperatingFormation,
+  type CompanyBlueprint,
+  type CompiledCompanyBlueprintStarter,
+  type CompiledOperatingFormation,
+} from "@shared/company-blueprints";
 
 type Portfolio = { id: string | number; name: string; description?: string };
 type Company = {
@@ -147,6 +155,23 @@ export default function CompanySetupPage() {
   const missionStatus = companyMissionStatus(missionInput);
   const activeMission = companyMissionJourney[currentStep];
   const selectedPortfolio = (portfoliosQuery.data || []).find((portfolio) => String(portfolio.id) === selectedPortfolioId);
+  // The preview uses the exact deterministic blueprint compiler that runs
+  // after the shared Company Mission Journey is saved. It exposes what the
+  // founder's inputs will change without creating a second onboarding path.
+  const selectedBlueprint = useMemo(
+    () => businessModel ? companyBlueprintForBusinessModel(businessModel) : null,
+    [businessModel],
+  );
+  const previewStarters = useMemo(
+    () => selectedBlueprint
+      ? compileCompanyBlueprintStarters(selectedBlueprint, { offer, targetCustomer, goals })
+      : [],
+    [selectedBlueprint, offer, targetCustomer, goals],
+  );
+  const previewFormation = useMemo(
+    () => compiledOperatingFormation({ formation, teamSnapshot }),
+    [formation, teamSnapshot],
+  );
 
   const validateCurrentMission = useCallback(() => {
     const next: Record<string, string> = {};
@@ -249,6 +274,8 @@ export default function CompanySetupPage() {
           <div className="border-b pb-6"><p className="eos-label">Mission {currentStep + 1} of {companyMissionJourney.length}</p><h2 className="mt-2 text-3xl font-semibold tracking-tight">{activeMission.title}</h2><p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">{activeMission.purpose}</p></div>
 
           <div className="min-h-[360px] py-7">
+            {currentStep === 2 && selectedBlueprint && <CompanyBlueprintPreview blueprint={selectedBlueprint} starters={previewStarters} formation={formation ? previewFormation : undefined} compact />}
+            {currentStep === 5 && selectedBlueprint && <CompanyBlueprintPreview blueprint={selectedBlueprint} starters={previewStarters} formation={previewFormation} compact />}
             {currentStep === 0 && <div className="space-y-5"><div><h3 className="text-lg font-semibold">Choose the portfolio</h3><p className="mt-1 text-sm text-muted-foreground">A portfolio is the parent view for one or more operating companies.</p></div>{(portfoliosQuery.data || []).map((portfolio) => <button type="button" key={portfolio.id} onClick={() => setSelectedPortfolioId(String(portfolio.id))} className={`w-full rounded-xl border p-4 text-left ${selectedPortfolioId === String(portfolio.id) ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:border-primary/40"}`}><p className="font-medium">{portfolio.name}</p>{portfolio.description && <p className="mt-1 text-sm text-muted-foreground">{portfolio.description}</p>}</button>)}{!showCreatePortfolio ? <Button variant="outline" onClick={() => setShowCreatePortfolio(true)}>Create portfolio</Button> : <div className="space-y-3 rounded-xl bg-muted/40 p-4"><Input value={portfolioName} onChange={(event) => setPortfolioName(event.target.value)} placeholder="Portfolio name"/><Textarea value={portfolioDescription} onChange={(event) => setPortfolioDescription(event.target.value)} placeholder="Optional portfolio description"/><div className="flex gap-2"><Button disabled={!portfolioName.trim() || createPortfolio.isPending} onClick={() => createPortfolio.mutate({ name: portfolioName.trim(), description: portfolioDescription.trim() || undefined })}>{createPortfolio.isPending ? "Creating…" : "Create portfolio"}</Button><Button variant="ghost" onClick={() => setShowCreatePortfolio(false)}>Cancel</Button></div></div>}{errors.portfolio && <p className="text-sm text-destructive">{errors.portfolio}</p>}</div>}
             {currentStep === 1 && <div className="grid max-w-2xl gap-5"><Field label="Operating company name" error={errors.companyName}><Input value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="e.g. Empyrean Creative" autoFocus /></Field><Field label="Legal entity name" hint="If different from the operating name"><Input value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder="e.g. Empyrean Creative LLC" /></Field><Field label="Assumed business names" hint="Optional. Separate DBA or public-facing names with commas."><Input value={assumedBusinessNames} onChange={(event) => setAssumedBusinessNames(event.target.value)} placeholder="e.g. Empyrean Studios" /></Field></div>}
             {currentStep === 2 && <div className="grid max-w-3xl gap-6"><Field label="Operating stage" error={errors.stage}><RadioGroup value={stage} onValueChange={setStage} className="grid gap-2 sm:grid-cols-2">{STAGES.map(([value, label]) => <Choice key={value} value={value} label={label} selected={stage === value} />)}</RadioGroup></Field><Field label="Business model" error={errors.businessModel}><RadioGroup value={businessModel} onValueChange={setBusinessModel} className="grid gap-2 sm:grid-cols-2">{BUSINESS_MODELS.map(([value, label]) => <Choice key={value} value={value} label={label} selected={businessModel === value} />)}</RadioGroup></Field><div className="grid gap-5 sm:grid-cols-2"><Field label="Industry" hint="Optional but useful for relevant templates"><Input value={industry} onChange={(event) => setIndustry(event.target.value)} placeholder="Creative services" /></Field><Field label="Initial offer or value stream" error={errors.offer}><Input value={offer} onChange={(event) => setOffer(event.target.value)} placeholder="Revenue recovery service" /></Field></div><Field label="Primary customer or buyer" error={errors.targetCustomer}><Textarea value={targetCustomer} onChange={(event) => setTargetCustomer(event.target.value)} placeholder="Who does this company serve first?" /></Field></div>}
@@ -279,4 +306,75 @@ function Field({ label, hint, error, children }: { label: string; hint?: string;
 
 function Choice({ value, label, selected }: { value: string; label: string; selected: boolean }) {
   return <label className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm ${selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:border-primary/40"}`}><RadioGroupItem value={value} /><span>{label}</span></label>;
+}
+
+function CompanyBlueprintPreview({
+  blueprint,
+  starters,
+  formation,
+  compact = false,
+}: {
+  blueprint: CompanyBlueprint;
+  starters: readonly CompiledCompanyBlueprintStarter[];
+  formation?: CompiledOperatingFormation;
+  compact?: boolean;
+}) {
+  const tools = Array.from(new Set([
+    ...blueprint.roles.flatMap((role) => role.tools),
+    ...starters.flatMap((starter) => starter.tools),
+  ]));
+
+  return (
+    <section aria-label="Live business blueprint preview" className={`rounded-xl border border-primary/25 bg-primary/[0.035] p-5 ${compact ? "mb-6" : ""}`}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="eos-label text-primary">Live business blueprint</p>
+          <h3 className="mt-1 text-lg font-semibold">{blueprint.title}</h3>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{blueprint.description}</p>
+        </div>
+        <span className="w-fit rounded-full bg-white px-2.5 py-1 text-xs font-medium text-primary shadow-sm">Native-first</span>
+      </div>
+
+      <p className="mt-4 text-sm leading-relaxed text-muted-foreground">Your business model selects the institutional seats and native tool baseline. Your offer, customer, and outcome fill those templates with this company&apos;s context; they do not create a provider connection or grant authority.</p>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border bg-white/80 p-4">
+          <p className="text-sm font-medium">Initial accountable seats</p>
+          <ul className="mt-3 space-y-2 text-sm">
+            {blueprint.roles.map((role) => (
+              <li key={role.key} className="flex items-start justify-between gap-3">
+                <span><span className="font-medium">{role.title}</span><span className="block text-xs text-muted-foreground">{role.department} · {role.agentName}</span></span>
+                <span className="text-right text-xs text-muted-foreground">{role.tools.length} tools</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="rounded-lg border bg-white/80 p-4">
+          <p className="text-sm font-medium">Native tool baseline</p>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {tools.map((tool) => <span key={tool} className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">{tool}</span>)}
+          </div>
+          <p className="mt-4 text-xs leading-relaxed text-muted-foreground">These are the native capabilities EOS prepares for the relevant seats. An external system may later reconcile into the same operating surface, but is not required.</p>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-lg border bg-white/80 p-4">
+        <p className="text-sm font-medium">First compiled missions</p>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          {starters.map((starter) => (
+            <article key={starter.key} className="rounded-lg bg-muted/55 p-3">
+              <p className="text-sm font-medium">{starter.title}</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{starter.statement}</p>
+              <p className="mt-2 text-xs font-medium text-primary">Owner seat: {blueprint.roles.find((role) => role.key === starter.ownerRoleKey)?.title || starter.ownerRoleKey}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      {formation ? <div className="mt-4 rounded-lg border border-dashed bg-white/60 p-4">
+        <p className="text-sm font-medium">{formation.title}</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{formation.summary} {formation.humanAssignmentRule}</p>
+      </div> : <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Choose the operating formation in the next mission to preview how these same seats begin as agents, map an existing team, or become assistants to assigned people.</p>}
+    </section>
+  );
 }
