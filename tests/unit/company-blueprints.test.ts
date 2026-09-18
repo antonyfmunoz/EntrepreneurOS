@@ -143,6 +143,8 @@ describe("company operating blueprints", () => {
       "commerce:offer",
       "finance:plan",
       "finance:reconciliation",
+      "sheets:workbook",
+      "sheets:worksheet",
       "docs:document",
       "crm:pipeline",
     ]);
@@ -177,6 +179,14 @@ describe("company operating blueprints", () => {
     expect(starters.find((starter) => starter.key === "finance-reconciliation-register")).toMatchObject({
       ownerRoleKey: "finance_capital",
       data: { providerReceipts: "not_asserted" },
+    });
+    expect(starters.find((starter) => starter.key === "finance-control-workbook")).toMatchObject({
+      ownerRoleKey: "finance_capital",
+      data: { worksheets: [{ starterAssetId: "finance-control-worksheet" }] },
+    });
+    expect(starters.find((starter) => starter.key === "finance-control-worksheet")).toMatchObject({
+      ownerRoleKey: "finance_capital",
+      data: { workbookObjectId: { starterAssetId: "finance-control-workbook" } },
     });
     expect(starters.find((starter) => starter.key === "governance-obligation-register")).toMatchObject({
       ownerRoleKey: "legal_governance",

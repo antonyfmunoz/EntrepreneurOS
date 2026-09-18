@@ -796,7 +796,9 @@ export default function OrgStudioPage() {
                                   ? { href: `/company/${companyId}?focus=native-commerce-studio#work-room`, label: "Native Commerce Studio" }
                                   : asset.instrumentKey === "docs"
                                     ? { href: `/company/${companyId}?focus=native-documents-studio#work-room`, label: "Native Documents Studio" }
-                                    : { href: `/company/${companyId}#capital`, label: "Finance & Capital" };
+                                    : asset.instrumentKey === "sheets"
+                                      ? { href: `/company/${companyId}?focus=native-sheets-studio#work-room`, label: "Native Sheets Studio" }
+                                      : { href: `/company/${companyId}#capital`, label: "Finance & Capital" };
                           return <Link
                             key={asset.key}
                             href={destination.href}
