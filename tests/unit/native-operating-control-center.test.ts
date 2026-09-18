@@ -1,23 +1,15 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const controlCenter = readFileSync(
-  new URL(
-    "../../client/src/components/native-operating-control-center.tsx",
-    import.meta.url,
-  ),
-  "utf8",
-);
+const controlCenter = readFileSync(new URL("../../client/src/components/native-operating-control-center.tsx", import.meta.url), "utf8");
 
-describe("native operating workflow evidence selection", () => {
+describe("native operating control center role-mode guard", () => {
   it("lets a role attach visible, verified EOS evidence without copying a record identifier", () => {
     expect(controlCenter).toContain('queryKey: [root, "evidence"]');
     expect(controlCenter).toContain('request("GET", `${root}/evidence`)');
     expect(controlCenter).toContain('item.verificationState === "verified"');
     expect(controlCenter).toContain('aria-label="Verified workflow evidence"');
-    expect(controlCenter).toContain(
-      "Only evidence visible to this role and already verified by EOS can be attached to the run.",
-    );
+    expect(controlCenter).toContain("Only evidence visible to this role and already verified by EOS can be attached to the run.");
     expect(controlCenter).not.toContain("Verified Evidence ID when required");
   });
 
@@ -53,5 +45,24 @@ describe("native operating workflow evidence selection", () => {
     expect(controlCenter).toContain('setOperatingTab("runs")');
     expect(controlCenter).toContain("Manual run: creates a governed EOS workflow run now.");
     expect(controlCenter).toContain("Run now");
+  });
+
+  it("only offers execution modes that the accountable role can actually run", () => {
+    expect(controlCenter).toContain("selectedProcessHasHumanOwner");
+    expect(controlCenter).toContain("selectedProcessAllowsAutonomous");
+    expect(controlCenter).toContain('disabled={!selectedProcessHasHumanOwner}');
+    expect(controlCenter).toContain('disabled={!selectedProcessAllowsAutonomous}');
+  });
+
+  it("returns a no-longer-valid selected mode to manual instead of sending a rejected run request", () => {
+    expect(controlCenter).toContain('executionMode === "assisted" && !selectedProcessHasHumanOwner');
+    expect(controlCenter).toContain('executionMode === "autonomous" && !selectedProcessAllowsAutonomous');
+    expect(controlCenter).toContain('setExecutionMode("manual")');
+  });
+
+  it("explains the human-led assistant and vacant-role autonomous boundaries in the operating surface", () => {
+    expect(controlCenter).toContain("Execution boundary:");
+    expect(controlCenter).toContain("human-led role's assistant");
+    expect(controlCenter).toContain("vacant role");
   });
 });
