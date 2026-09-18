@@ -77,7 +77,7 @@ describe("company operating blueprints", () => {
       targetCustomer: "B2B service companies",
       goals: "Validate the offer\nClose the first three clients",
     });
-    expect(starters).toHaveLength(4);
+    expect(starters).toHaveLength(5);
     expect(starters[0]).toMatchObject({
       key: "commercial-foundation",
       ownerRoleKey: "growth",
@@ -100,6 +100,13 @@ describe("company operating blueprints", () => {
       workflowTemplateKey: "reputation-follow-through",
     });
     expect(starters[3].statement).toContain("B2B service companies");
+    expect(starters[4]).toMatchObject({
+      key: "talent-foundation",
+      ownerRoleKey: "people_talent",
+      workflowTemplateKey: "capability-to-placement",
+    });
+    expect(starters[4].statement).toContain("Validate the offer");
+    expect(starters[4].statement).toContain("does not imply an employment, compensation, or access decision");
   });
 
   it("turns the matching shared workflow pattern into an editable company-specific native draft", () => {
@@ -195,16 +202,22 @@ describe("company operating blueprints", () => {
     for (const blueprint of companyBlueprints) {
       const onboarding = blueprint.starters.find((starter) => starter.key === "client-onboarding-foundation");
       const reputation = blueprint.starters.find((starter) => starter.key === "reputation-foundation");
+      const talent = blueprint.starters.find((starter) => starter.key === "talent-foundation");
       expect(onboarding).toBeDefined();
       expect(reputation).toBeDefined();
+      expect(talent).toBeDefined();
       expect(blueprint.roles.some((role) => role.key === onboarding?.ownerRoleKey)).toBe(true);
       expect(blueprint.roles.some((role) => role.key === reputation?.ownerRoleKey)).toBe(true);
+      expect(blueprint.roles.some((role) => role.key === talent?.ownerRoleKey)).toBe(true);
       expect(canonicalToolEntitlements(onboarding?.tools || [])).toEqual(expect.arrayContaining(["crm", "projects", "calendar"]));
       expect(canonicalToolEntitlements(reputation?.tools || [])).toEqual(expect.arrayContaining(["crm", "reputation", "projects"]));
+      expect(canonicalToolEntitlements(talent?.tools || [])).toEqual(expect.arrayContaining(["forms", "calendar", "learning", "progression"]));
       const onboardingOwner = blueprint.roles.find((role) => role.key === onboarding?.ownerRoleKey);
       const reputationOwner = blueprint.roles.find((role) => role.key === reputation?.ownerRoleKey);
+      const talentOwner = blueprint.roles.find((role) => role.key === talent?.ownerRoleKey);
       expect(canonicalToolEntitlements(onboardingOwner?.tools || [])).toEqual(expect.arrayContaining(canonicalToolEntitlements(onboarding?.tools || [])));
       expect(canonicalToolEntitlements(reputationOwner?.tools || [])).toEqual(expect.arrayContaining(canonicalToolEntitlements(reputation?.tools || [])));
+      expect(canonicalToolEntitlements(talentOwner?.tools || [])).toEqual(expect.arrayContaining(canonicalToolEntitlements(talent?.tools || [])));
     }
   });
 

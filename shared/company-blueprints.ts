@@ -127,6 +127,23 @@ const reputationStarter = (ownerRoleKey: string, tools: string[]): CompanyBluepr
   successExitCriteria: "A consent-aware feedback path, evidence record, and owner for any customer-driven improvement are ready for governed use.",
 });
 
+/**
+ * A first company should not have to invent its people system only after a
+ * hiring emergency. This starter remains native and reversible: it creates a
+ * role-owned capacity and candidate path, not an employment decision, offer,
+ * compensation change, or external recruitment claim.
+ */
+const talentStarter = (ownerRoleKey: string, tools: string[]): CompanyBlueprintStarter => ({
+  key: "talent-foundation",
+  title: "Establish the people and talent foundation",
+  statement: "Turn a verified capability gap into a fair, evidence-bearing candidate and placement path while preserving human judgment, candidate privacy, and the role-agent assistant model.",
+  ownerRoleKey,
+  priority: "medium",
+  tools,
+  workflowTemplateKey: "capability-to-placement",
+  successExitCriteria: "An accountable talent owner, capability-need record, candidate-assessment path, onboarding boundary, and human decision gate are ready for governed use.",
+});
+
 export const companyBlueprints: readonly CompanyBlueprint[] = [
   {
     key: "service_studio",
@@ -145,6 +162,7 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
       operatingStarter("client_delivery", ["Projects", "Tasks", "Documents", "Workflows"]),
       clientOnboardingStarter("client_success", ["CRM", "Projects", "Tasks", "Calendar", "Messages", "Documents"]),
       reputationStarter("client_success", ["CRM", "Messages", "Reputation", "Projects", "Documents"]),
+      talentStarter("people_talent", ["Forms", "Calendar", "Messages", "Documents", "Tables", "Workflows", "Analytics", "Learning", "Progression"]),
     ],
   },
   {
@@ -164,6 +182,7 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
       operatingStarter("product", ["Projects", "Documents", "Analytics", "Workflows"]),
       clientOnboardingStarter("customer", ["CRM", "Projects", "Calendar", "Messages", "Documents"]),
       reputationStarter("customer", ["CRM", "Messages", "Reputation", "Projects", "Documents"]),
+      talentStarter("people_talent", ["Forms", "Calendar", "Messages", "Documents", "Tables", "Workflows", "Analytics", "Learning", "Progression"]),
     ],
   },
   {
@@ -183,6 +202,7 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
       operatingStarter("product_operations", ["Projects", "Tables", "Documents", "Workflows"]),
       clientOnboardingStarter("customer", ["CRM", "Projects", "Calendar", "Messages", "Documents"]),
       reputationStarter("customer", ["CRM", "Messages", "Reputation", "Projects", "Documents"]),
+      talentStarter("people_talent", ["Forms", "Calendar", "Messages", "Documents", "Tables", "Workflows", "Analytics", "Learning", "Progression"]),
     ],
   },
   {
@@ -201,6 +221,7 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
       operatingStarter("operations", ["Projects", "Tasks", "Documents", "Workflows"]),
       clientOnboardingStarter("operations", ["CRM", "Projects", "Tasks", "Calendar", "Messages", "Documents"]),
       reputationStarter("operations", ["CRM", "Messages", "Reputation", "Projects", "Documents"]),
+      talentStarter("people_talent", ["Forms", "Calendar", "Messages", "Documents", "Tables", "Workflows", "Analytics", "Learning", "Progression"]),
     ],
   },
 ];
@@ -311,6 +332,8 @@ export function compileCompanyBlueprintStarters(
         ? `Operating foundation · ${goal}`
         : starter.key === "client-onboarding-foundation"
           ? `Client onboarding foundation · ${offer}`
+          : starter.key === "talent-foundation"
+            ? `People and talent foundation · ${goal}`
           : `Feedback and improvement foundation · ${offer}`,
     statement: starter.key === "commercial-foundation"
       ? `Validate and operate a measurable path for ${offer} with ${targetCustomer}. ${starter.statement}`
@@ -318,6 +341,8 @@ export function compileCompanyBlueprintStarters(
         ? `${starter.statement} The first declared outcome is: ${goal}.`
         : starter.key === "client-onboarding-foundation"
           ? `${starter.statement} This applies ${offer} to ${targetCustomer} without implying that commercial authorization already exists.`
+          : starter.key === "talent-foundation"
+            ? `${starter.statement} This prepares the people system for ${goal}; it does not imply an employment, compensation, or access decision.`
           : `${starter.statement} This applies to ${targetCustomer} receiving ${offer}; feedback consent and evidence remain required.`,
     variables: { offer, targetCustomer, goal },
   }));

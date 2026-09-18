@@ -111,6 +111,23 @@ export const nativeWorkflowStarters: readonly NativeWorkflowStarter[] = [
       { title: "Turn signal into improvement", instructions: "Record the feedback evidence and create accountable work if an improvement is needed.", completionCriteria: "Feedback is linked to a metric, decision or project where appropriate.", actionKind: "native", authorityClass: "execute", toolKey: "projects", onFailure: "Retain the evidence and flag it for the operating review." },
     ],
   },
+  {
+    key: "capability-to-placement",
+    label: "Capability to placement",
+    description: "Turn a verified capability gap into a fair, governed candidate and onboarding path.",
+    name: "{{company_name}} capability to placement · {{goal}}",
+    purpose: "Prepare a role-owned talent path for {{company_name}} without assuming an employment decision, compensation, access grant, or external recruitment effect.",
+    outcome: "A verified capability need, candidate evidence path, human decision gate, and onboarding boundary are recorded.",
+    trigger: "A company capability gap is reviewed for {{goal}} and an authorized people owner opens a governed talent need.",
+    approvals: ["A human authorized for the relevant people decision must approve any placement, access grant, compensation, or employment commitment."],
+    branches: ["If candidate consent, evidence, scope, or decision authority is incomplete, preserve the record and stop before an adverse, employment, or access decision."],
+    steps: [
+      { title: "Define the capability need", instructions: "Record the missing outcome, target role, decision rights, requirements, and evidence standard in the native talent process.", completionCriteria: "The capability gap is specific enough to assess fairly and does not imply a candidate or employment outcome.", actionKind: "manual", authorityClass: "execute", toolKey: "docs", onFailure: "Keep the need in draft, identify the missing operating context, and return it to the accountable company owner." },
+      { title: "Collect consented candidate context", instructions: "Use a governed intake to collect only the candidate context and consent required for the current assessment stage.", completionCriteria: "Candidate consent, source, role hypothesis, and evidence limitations are visible to the authorized reviewer.", actionKind: "native", authorityClass: "execute", toolKey: "forms", onFailure: "Do not infer fit or contact a candidate; request the missing consent or evidence through an authorized channel." },
+      { title: "Schedule a bounded assessment", instructions: "Prepare an assessment or interview event with clear candidate burden, evaluator, success criteria, and privacy boundary.", completionCriteria: "The planned assessment has a named owner, bounded effort, and no unverified external calendar or message claim.", actionKind: "native", authorityClass: "execute", toolKey: "calendar", onFailure: "Record the scheduling constraint and retain the candidate in the current governed stage." },
+      { title: "Review placement and onboarding boundary", instructions: "Review evidence, unresolved questions, required approval, initial onboarding outcome, and the role-agent assistant transition before any placement is actioned.", completionCriteria: "A human decision gate and accountable onboarding plan are recorded; no employment, compensation, access, or provider effect is assumed.", actionKind: "approval", authorityClass: "decide", toolKey: "docs", onFailure: "Keep the placement uncommitted, preserve the review record, and escalate the missing authority or evidence." },
+    ],
+  },
 ];
 
 type ResolvedNativeWorkflowStarterVariables = {

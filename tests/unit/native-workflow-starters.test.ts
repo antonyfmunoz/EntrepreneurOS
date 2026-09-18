@@ -10,6 +10,7 @@ describe("native workflow starters", () => {
     expect(starterLibrary).toContain('key: "client-onboarding"');
     expect(starterLibrary).toContain('key: "weekly-operating-review"');
     expect(starterLibrary).toContain('key: "reputation-follow-through"');
+    expect(starterLibrary).toContain('key: "capability-to-placement"');
     expect(composer).toContain("Business-in-a-box starters");
     expect(composer).toContain("nativeWorkflowStarters");
   });
@@ -25,5 +26,6 @@ describe("native workflow starters", () => {
   it("keeps starter actions native-first and does not invent external effects", () => {
     expect(composer).toContain("Do not transmit data to an external provider unless an explicit provider capability");
     expect(starterLibrary).toContain("unverified external send claim");
+    expect(starterLibrary).toContain("without assuming an employment decision");
   });
 });
