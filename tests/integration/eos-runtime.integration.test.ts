@@ -5733,7 +5733,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       .post(`/api/eos/companies/${companyId}/executive-assistant/messages`)
       .send({ content: "What is my next authorized action?" })
       .expect(200);
-    expect(message.body.assistantName).toBe("Atlas");
+    expect(message.body.assistantName).toBe("Atlas Prime");
     const history = await api
       .get(`/api/eos/companies/${companyId}/executive-assistant/messages`)
       .expect(200);
