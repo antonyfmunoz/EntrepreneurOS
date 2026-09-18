@@ -58,6 +58,7 @@ describe("Company Mission blueprint handoff", () => {
     expect(orgStudio).toContain("native-commerce-studio");
     expect(orgStudio).toContain("native-documents-studio");
     expect(orgStudio).toContain("nativeObjectId");
+    expect(orgStudio).toContain("native-lead-capture");
     expect(orgStudio).toContain('label: "Finance & Capital"');
   });
 
