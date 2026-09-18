@@ -51,6 +51,9 @@ describe("native communication authority cutover", () => {
     expect(messageHub).toContain("role assistant to route the request");
     expect(messageHub).toContain("threadObjectId");
     expect(messageHub).toContain("Focused thread");
+    expect(messageHub).toContain("visibleMessages.map");
+    expect(messageHub).toContain("Showing only");
+    expect(messageHub).toContain("No messages recorded in this focused thread.");
   });
 
   it("uses the existing governed provider run queue for Email and Slack instead of claiming delivery from the native ledger", () => {
