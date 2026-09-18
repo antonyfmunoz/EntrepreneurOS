@@ -30,4 +30,12 @@ describe("native relationship CRM cutover", () => {
     expect(crmStudio).toContain("expectedVersion: opportunity.version");
     expect(crmStudio).toContain("A connected CRM can reconcile here later");
   });
+
+  it("lets an authorized operator configure a native pipeline in place without stranding governed opportunities", () => {
+    expect(crmStudio).toContain("Edit pipeline");
+    expect(crmStudio).toContain("Save native pipeline");
+    expect(crmStudio).toContain("crm-pipeline-configure");
+    expect(crmStudio).toContain("expectedVersion: editingPipeline.version");
+    expect(crmStudio).toContain("before removing its");
+  });
 });
