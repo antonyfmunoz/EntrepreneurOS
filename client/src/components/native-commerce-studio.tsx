@@ -66,6 +66,11 @@ export function NativeCommerceStudio({ root, roleScopeKey, canExecute, canDecide
   const entitlements = useMemo(() => objects.filter((object) => object.objectType === "entitlement"), [objects]);
   const buyers: Json[] = (crmQuery.data?.objects || []).filter((object: Json) => object.objectType === "person");
   const selectedOffer = offers.find((offer) => offer.id === selectedOfferId) || offers.find((offer) => offer.state === "active") || offers[0];
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const objectId = params.get("nativeObjectId");
+    if (params.get("focus") === "native-commerce-studio" && objectId && offers.some((offer) => offer.id === objectId)) setSelectedOfferId(objectId);
+  }, [offers]);
   const editingOffer = offers.find((offer) => offer.id === editingOfferId);
   const selectedOrder = orders.find((order) => order.id === selectedOrderId) || orders[0];
   const refresh = async () => { await Promise.all([queryClient.invalidateQueries({ queryKey: [root, roleScopeKey, "native-commerce"] }), queryClient.invalidateQueries({ queryKey: [root, roleScopeKey, "native-commerce-buyers"] })]); };

@@ -787,13 +787,13 @@ export default function OrgStudioPage() {
                         .filter((asset: RecordValue) => asset.visible)
                         .map((asset: RecordValue) => {
                           const destination = asset.instrumentKey === "crm"
-                            ? { href: `/company/${companyId}?focus=native-crm-studio#work-room`, label: "Native CRM" }
+                            ? { href: `/company/${companyId}?focus=native-crm-studio${asset.object?.id ? `&nativeObjectId=${encodeURIComponent(asset.object.id)}` : ""}#work-room`, label: "Native CRM" }
                             : asset.instrumentKey === "forms"
                               ? { href: `/company/${companyId}?focus=native-lead-capture${asset.object?.id ? `&nativeObjectId=${encodeURIComponent(asset.object.id)}` : ""}#work-room`, label: "Lead Capture Studio" }
                               : asset.instrumentKey === "websites"
                                 ? { href: `/company/${companyId}?focus=native-funnel-studio#work-room`, label: "Website & Funnel Studio" }
                                 : asset.instrumentKey === "commerce"
-                                  ? { href: `/company/${companyId}?focus=native-commerce-studio#work-room`, label: "Native Commerce Studio" }
+                                  ? { href: `/company/${companyId}?focus=native-commerce-studio${asset.object?.id ? `&nativeObjectId=${encodeURIComponent(asset.object.id)}` : ""}#work-room`, label: "Native Commerce Studio" }
                                   : asset.instrumentKey === "docs"
                                     ? { href: `/company/${companyId}?focus=native-documents-studio${asset.object?.id ? `&nativeObjectId=${encodeURIComponent(asset.object.id)}` : ""}#work-room`, label: "Native Documents Studio" }
                                     : asset.instrumentKey === "sheets"

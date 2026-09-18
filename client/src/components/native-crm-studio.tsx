@@ -73,6 +73,11 @@ export function NativeCrmStudio({ root, roleScopeKey, canExecute, canDecide }: {
   const opportunities = useMemo(() => objects.filter((object) => object.objectType === "opportunity"), [objects]);
   const selectedPerson = people.find((person) => person.id === selectedPersonId) || people[0];
   const selectedPipeline = pipelines.find((pipeline) => pipeline.id === selectedPipelineId) || pipelines[0];
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const objectId = params.get("nativeObjectId");
+    if (params.get("focus") === "native-crm-studio" && objectId && pipelines.some((pipeline) => pipeline.id === objectId)) setSelectedPipelineId(objectId);
+  }, [pipelines]);
   const selectedRelationship = relationships.find((relationship) => relationship.id === selectedRelationshipId) || relationships.find((relationship) => relationship.data?.personObjectId === selectedPerson?.id) || relationships[0];
   const relationshipContextQuery = useQuery<Json>({
     // The server returns only cross-instrument objects the current role can
