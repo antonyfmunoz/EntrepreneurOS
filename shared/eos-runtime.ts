@@ -4863,6 +4863,10 @@ const nativeToolAliases: Readonly<Record<string, string>> = {
   ai: "ai",
   knowledge: "knowledge",
   memory: "memory",
+  learning: "learning",
+  progression: "progression",
+  development: "progression",
+  "development / progression": "progression",
   reputation: "reputation",
 };
 
