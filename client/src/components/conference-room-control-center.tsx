@@ -25,6 +25,13 @@ function localDateTime(hoursFromNow = 1) {
   return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16);
 }
 
+function localDateTimeInput(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16);
+}
+
 function stateVariant(state: string) {
   return ["active", "completed"].includes(state) ? "default" as const : "outline" as const;
 }
@@ -40,11 +47,18 @@ export function ConferenceRoomControlCenter({ root, roleScopeKey, seats, canExec
   const [selectedMeetingId, setSelectedMeetingId] = useState("");
   const [roomTitle, setRoomTitle] = useState("");
   const [roomPurpose, setRoomPurpose] = useState("");
+  const [editingRoomTitle, setEditingRoomTitle] = useState("");
+  const [editingRoomPurpose, setEditingRoomPurpose] = useState("");
   const [meetingTitle, setMeetingTitle] = useState("");
   const [agenda, setAgenda] = useState("");
   const [startsAt, setStartsAt] = useState(localDateTime(1));
   const [endsAt, setEndsAt] = useState(localDateTime(2));
   const [participantSeatIds, setParticipantSeatIds] = useState<string[]>([]);
+  const [editingMeetingTitle, setEditingMeetingTitle] = useState("");
+  const [editingMeetingAgenda, setEditingMeetingAgenda] = useState("");
+  const [editingMeetingStartsAt, setEditingMeetingStartsAt] = useState("");
+  const [editingMeetingEndsAt, setEditingMeetingEndsAt] = useState("");
+  const [editingMeetingParticipantSeatIds, setEditingMeetingParticipantSeatIds] = useState<string[]>([]);
   const [selectedRelationshipId, setSelectedRelationshipId] = useState("");
   const [decision, setDecision] = useState("");
   const [decidedBySeatId, setDecidedBySeatId] = useState("");
@@ -105,6 +119,19 @@ export function ConferenceRoomControlCenter({ root, roleScopeKey, seats, canExec
   const followOnDecision = meetingDecisions.find((item) => item.id === followOnDecisionId);
 
   useEffect(() => {
+    setEditingRoomTitle(String(selectedRoom?.title || ""));
+    setEditingRoomPurpose(String(selectedRoom?.summary || ""));
+  }, [selectedRoom?.id, selectedRoom?.version]);
+
+  useEffect(() => {
+    setEditingMeetingTitle(String(selectedMeeting?.title || ""));
+    setEditingMeetingAgenda(String(selectedMeeting?.data?.agenda || ""));
+    setEditingMeetingStartsAt(selectedMeeting?.data?.startsAt ? localDateTimeInput(selectedMeeting.data.startsAt) : "");
+    setEditingMeetingEndsAt(selectedMeeting?.data?.endsAt ? localDateTimeInput(selectedMeeting.data.endsAt) : "");
+    setEditingMeetingParticipantSeatIds(Array.isArray(selectedMeeting?.data?.participantSeatIds) ? selectedMeeting.data.participantSeatIds.filter((item: unknown): item is string => typeof item === "string") : []);
+  }, [selectedMeeting?.id, selectedMeeting?.version]);
+
+  useEffect(() => {
     setDecidedBySeatId((current) => meetingParticipants.some((seat) => seat.id === current) ? current : meetingParticipants[0]?.id || "");
     setFollowOnOwnerSeatId((current) => meetingParticipants.some((seat) => seat.id === current) ? current : meetingParticipants[0]?.id || "");
   }, [meetingParticipants]);
@@ -123,6 +150,20 @@ export function ConferenceRoomControlCenter({ root, roleScopeKey, seats, canExec
       data: { roomType: "virtual", accessRule: "invited_participants" }, sourceReference: {}, evidenceIds: [], idempotencyKey: commandKey("conference-room"),
     })).json(),
     onSuccess: async (result) => { setSelectedRoomId(result.object.id); setRoomTitle(""); setRoomPurpose(""); await refresh(); },
+    onError: (cause: Error) => setError(cause.message),
+  });
+  const saveRoom = useMutation({
+    mutationFn: async () => {
+      if (!selectedRoom) throw new Error("Select a Conference Room to configure.");
+      return (await apiRequest("PATCH", `${root}/instrument-objects/${selectedRoom.id}`, {
+        expectedVersion: selectedRoom.version,
+        title: editingRoomTitle.trim(),
+        summary: editingRoomPurpose.trim(),
+        data: { ...selectedRoom.data, operatingMode: "native_eos" },
+        idempotencyKey: commandKey("conference-room-configure"),
+      })).json();
+    },
+    onSuccess: async (result) => { setSelectedRoomId(result.object.id); await refresh(); },
     onError: (cause: Error) => setError(cause.message),
   });
   const createMeeting = useMutation({
@@ -166,6 +207,28 @@ export function ConferenceRoomControlCenter({ root, roleScopeKey, seats, canExec
       if (!result.relationshipLinked) setNotice("The meeting was scheduled, but EOS could not create its CRM relationship link. Refresh CRM access and review the meeting before relying on that relationship context.");
       await refresh();
     },
+    onError: (cause: Error) => setError(cause.message),
+  });
+  const saveMeeting = useMutation({
+    mutationFn: async () => {
+      if (!selectedMeeting) throw new Error("Select a governed meeting to configure.");
+      return (await apiRequest("PATCH", `${root}/instrument-objects/${selectedMeeting.id}`, {
+        expectedVersion: selectedMeeting.version,
+        title: editingMeetingTitle.trim(),
+        summary: `Scheduled in ${selectedRoom?.title || "Conference Room"}.`,
+        data: {
+          ...selectedMeeting.data,
+          roomObjectId: selectedMeeting.data?.roomObjectId,
+          startsAt: new Date(editingMeetingStartsAt).toISOString(),
+          endsAt: new Date(editingMeetingEndsAt).toISOString(),
+          participantSeatIds: editingMeetingParticipantSeatIds,
+          agenda: editingMeetingAgenda.trim(),
+          operatingMode: "native_eos",
+        },
+        idempotencyKey: commandKey("conference-meeting-configure"),
+      })).json();
+    },
+    onSuccess: async (result) => { setSelectedMeetingId(result.object.id); await refresh(); },
     onError: (cause: Error) => setError(cause.message),
   });
   const recordDecision = useMutation({
@@ -219,6 +282,7 @@ export function ConferenceRoomControlCenter({ root, roleScopeKey, seats, canExec
 
   const meetingTimesValid = Boolean(startsAt && endsAt && new Date(endsAt).getTime() > new Date(startsAt).getTime());
   const toggleSeat = (seatId: string) => setParticipantSeatIds((current) => current.includes(seatId) ? current.filter((id) => id !== seatId) : [...current, seatId]);
+  const toggleEditingMeetingSeat = (seatId: string) => setEditingMeetingParticipantSeatIds((current) => current.includes(seatId) ? current.filter((id) => id !== seatId) : [...current, seatId]);
   return <Card data-testid="conference-room-control-center">
     <CardHeader>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -236,6 +300,8 @@ export function ConferenceRoomControlCenter({ root, roleScopeKey, seats, canExec
       <section className="rounded-xl border p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Meeting ledger</p><h3 className="mt-1 font-semibold">{selectedRoom ? selectedRoom.title : "Choose a room"}</h3></div>{selectedRoom?.state === "draft" && <Button size="sm" variant="outline" disabled={!canDecide || activate.isPending} onClick={() => activate.mutate(selectedRoom)}>Activate room</Button>}</div><div className="mt-4 grid gap-3 lg:grid-cols-2">{roomMeetings.map((meeting) => <button key={meeting.id} type="button" onClick={() => setSelectedMeetingId(meeting.id)} className={`rounded-xl border p-4 text-left ${selectedMeeting?.id === meeting.id ? "border-primary bg-primary/5" : "bg-muted/30"}`}><div className="flex justify-between gap-3"><p className="font-medium">{meeting.title}</p><Badge variant={stateVariant(meeting.state)}>{meeting.state}</Badge></div><p className="mt-2 text-sm text-muted-foreground">{meeting.data?.agenda}</p><p className="mt-2 text-xs text-muted-foreground">{meeting.data?.startsAt ? new Date(meeting.data.startsAt).toLocaleString() : "Time not recorded"} · {Array.isArray(meeting.data?.participantSeatIds) ? meeting.data.participantSeatIds.length : 0} participants</p></button>)}{selectedRoom && !roomMeetings.length && <p className="py-5 text-sm text-muted-foreground">No meetings scheduled in this room.</p>}</div>{selectedMeeting?.state === "draft" && <Button className="mt-4" size="sm" variant="outline" disabled={!canDecide || activate.isPending} onClick={() => activate.mutate(selectedMeeting)}>Activate selected meeting</Button>}</section>
       {selectedMeeting && <section className="grid gap-5 rounded-xl border p-4 xl:grid-cols-2"><div><div className="flex items-center gap-2"><Gavel className="h-4 w-4 text-primary" /><h3 className="font-semibold">3. Record a decision</h3></div><p className="mt-1 text-sm text-muted-foreground">Decisions retain the named decision-maker and can become accountable native work. This records no external action.</p><Textarea className="mt-4" value={decision} onChange={(event) => setDecision(event.target.value)} placeholder="State the decision, accountable owner, and any condition or follow-up." /><div className="mt-3"><Label htmlFor="conference-decision-maker">Decision-maker</Label><select id="conference-decision-maker" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={decidedBySeatId} onChange={(event) => setDecidedBySeatId(event.target.value)}><option value="">Choose a named meeting participant</option>{meetingParticipants.map((seat) => <option key={seat.id} value={seat.id}>{seat.title}</option>)}</select></div><Button className="mt-3" disabled={!canExecute || decision.trim().length < 3 || !decidedBySeatId || recordDecision.isPending} onClick={() => recordDecision.mutate()}><Gavel className="mr-2 h-4 w-4" />{recordDecision.isPending ? "Recording…" : "Record draft decision"}</Button></div><div><div className="flex items-center gap-2"><UsersRound className="h-4 w-4 text-primary" /><h3 className="font-semibold">Decision record</h3></div><div className="mt-3 space-y-2">{meetingDecisions.map((item) => <div key={item.id} className="rounded-lg bg-muted p-3"><div className="flex justify-between gap-3"><p className="font-medium">{item.summary}</p><Badge variant={stateVariant(item.state)}>{item.state}</Badge></div><p className="mt-1 text-xs text-muted-foreground">Decision-maker: {seats.find((seat) => seat.id === item.data?.decidedBySeatId)?.title || "recorded participant"}{Array.isArray(item.data?.followOnWorkPacketIds) && item.data.followOnWorkPacketIds.length ? ` · ${item.data.followOnWorkPacketIds.length} linked work item${item.data.followOnWorkPacketIds.length === 1 ? "" : "s"}` : ""}</p>{item.state === "draft" && <Button size="sm" variant="outline" className="mt-3" disabled={!canDecide || activate.isPending} onClick={() => activate.mutate(item)}>Activate decision</Button>}{!Array.isArray(item.data?.followOnWorkPacketIds) || !item.data.followOnWorkPacketIds.length ? <Button size="sm" variant="ghost" className="mt-2" disabled={!canExecute} onClick={() => { setFollowOnDecisionId(item.id); setFollowOnTitle(`Follow through · ${item.summary}`); setFollowOnObjective(item.summary || "Complete the recorded Conference Room decision."); }}>Create follow-on work</Button> : null}</div>)}{!meetingDecisions.length && <p className="text-sm text-muted-foreground">No decision has been recorded for this meeting.</p>}</div></div></section>}
       {followOnDecision && <section className="rounded-xl border border-primary/30 bg-primary/5 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Decision → accountable work</p><h3 className="mt-1 font-semibold">Create the follow-on Work Packet</h3><p className="mt-1 text-sm text-muted-foreground">This keeps the decision and Work Packet linked atomically. Only a recorded meeting participant can be accountable.</p></div><Button size="sm" variant="ghost" onClick={() => setFollowOnDecisionId("")}>Close</Button></div><div className="mt-4 grid gap-3 lg:grid-cols-2"><div><Label htmlFor="conference-follow-on-title">Work title</Label><Input id="conference-follow-on-title" className="mt-1" value={followOnTitle} onChange={(event) => setFollowOnTitle(event.target.value)} /></div><div><Label htmlFor="conference-follow-on-owner">Accountable participant</Label><select id="conference-follow-on-owner" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={followOnOwnerSeatId} onChange={(event) => setFollowOnOwnerSeatId(event.target.value)}>{meetingParticipants.map((seat) => <option key={seat.id} value={seat.id}>{seat.title}</option>)}</select></div><div className="lg:col-span-2"><Label htmlFor="conference-follow-on-objective">Objective</Label><Textarea id="conference-follow-on-objective" className="mt-1" value={followOnObjective} onChange={(event) => setFollowOnObjective(event.target.value)} /></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={followOnRequiresApproval} onChange={(event) => setFollowOnRequiresApproval(event.target.checked)} />Require reporting-chain approval before work starts</label></div><Button className="mt-4" disabled={!canExecute || followOnTitle.trim().length < 3 || followOnObjective.trim().length < 3 || !followOnOwnerSeatId || createFollowOnWork.isPending} onClick={() => createFollowOnWork.mutate()}><Gavel className="mr-2 h-4 w-4" />{createFollowOnWork.isPending ? "Creating accountable work…" : "Create linked Work Packet"}</Button></section>}
+      {selectedRoom && <section className="rounded-xl border border-primary/25 bg-primary/[0.03] p-4"><p className="eos-label">Configure selected room</p><div className="mt-3 grid gap-3"><div><Label htmlFor="conference-edit-room-title">Room name</Label><Input id="conference-edit-room-title" className="mt-1" value={editingRoomTitle} onChange={(event) => setEditingRoomTitle(event.target.value)} /></div><div><Label htmlFor="conference-edit-room-purpose">Purpose</Label><Textarea id="conference-edit-room-purpose" className="mt-1" value={editingRoomPurpose} onChange={(event) => setEditingRoomPurpose(event.target.value)} /></div><div><Button size="sm" disabled={!canExecute || editingRoomTitle.trim().length < 2 || saveRoom.isPending} onClick={() => saveRoom.mutate()}>{saveRoom.isPending ? "Saving…" : "Save native room"}</Button></div></div></section>}
+      {selectedMeeting && <section className="rounded-xl border border-primary/25 bg-primary/[0.03] p-4"><p className="eos-label">Configure selected meeting</p><div className="mt-3 grid gap-3 lg:grid-cols-2"><div><Label htmlFor="conference-edit-meeting-title">Meeting title</Label><Input id="conference-edit-meeting-title" className="mt-1" value={editingMeetingTitle} onChange={(event) => setEditingMeetingTitle(event.target.value)} /></div><div><Label htmlFor="conference-edit-meeting-agenda">Agenda</Label><Textarea id="conference-edit-meeting-agenda" className="mt-1" value={editingMeetingAgenda} onChange={(event) => setEditingMeetingAgenda(event.target.value)} /></div><div><Label htmlFor="conference-edit-meeting-starts">Starts</Label><Input id="conference-edit-meeting-starts" className="mt-1" type="datetime-local" value={editingMeetingStartsAt} onChange={(event) => setEditingMeetingStartsAt(event.target.value)} /></div><div><Label htmlFor="conference-edit-meeting-ends">Ends</Label><Input id="conference-edit-meeting-ends" className="mt-1" type="datetime-local" value={editingMeetingEndsAt} onChange={(event) => setEditingMeetingEndsAt(event.target.value)} /></div><div className="lg:col-span-2"><p className="text-sm font-medium">Participants</p><div className="mt-2 flex flex-wrap gap-2">{seats.filter((seat) => seat.status !== "inactive").map((seat) => <label key={seat.id} className="flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-1.5 text-xs"><input type="checkbox" checked={editingMeetingParticipantSeatIds.includes(seat.id)} onChange={() => toggleEditingMeetingSeat(seat.id)} />{seat.title}</label>)}</div></div><div className="lg:col-span-2"><Button size="sm" disabled={!canExecute || editingMeetingTitle.trim().length < 2 || editingMeetingAgenda.trim().length < 3 || !editingMeetingParticipantSeatIds.length || !editingMeetingStartsAt || !editingMeetingEndsAt || new Date(editingMeetingEndsAt).getTime() <= new Date(editingMeetingStartsAt).getTime() || saveMeeting.isPending} onClick={() => saveMeeting.mutate()}>{saveMeeting.isPending ? "Saving…" : "Save native meeting"}</Button></div></div></section>}
       <Alert><AlertTitle>Hierarchy and authority remain intact</AlertTitle><AlertDescription>Rooms coordinate people and role agents; they do not bypass role visibility, reporting paths, approvals, or external-provider controls.</AlertDescription></Alert>
     </CardContent>
   </Card>;
