@@ -21,6 +21,14 @@ export function materializeNativeBusinessStarters(input: {
   companyName: string;
   offer: string;
   targetCustomer: string;
+  goals?: string;
+  stage?: string;
+  businessModel?: string;
+  formation?: string;
+  founderVision?: string;
+  founderValues?: string;
+  decisionStyle?: string;
+  workingStyle?: string;
   /**
    * The active blueprint's accountable commercial seat.  Different business
    * models use different stable keys (for example, `growth` or
@@ -36,6 +44,7 @@ export function materializeNativeBusinessStarters(input: {
    */
   ownerRoleKeys?: {
     commercial?: string;
+    executive?: string;
     finance?: string;
     legal?: string;
     operations?: string;
@@ -44,11 +53,21 @@ export function materializeNativeBusinessStarters(input: {
   const companyName = input.companyName.trim() || "This company";
   const offer = input.offer.trim() || "the declared offer";
   const targetCustomer = input.targetCustomer.trim() || "the declared customer";
+  const goals = input.goals?.trim() || "the declared near-term outcomes";
+  const stage = input.stage?.trim() || "not yet declared";
+  const businessModel = input.businessModel?.trim() || "not yet declared";
+  const formation = input.formation?.trim() || "not yet declared";
+  const founderVision = input.founderVision?.trim() || "not yet captured";
+  const founderValues = input.founderValues?.trim() || "not yet captured";
+  const decisionStyle = input.decisionStyle?.trim() || "not yet captured";
+  const workingStyle = input.workingStyle?.trim() || "not yet captured";
   const commercialOwnerRoleKey = input.ownerRoleKeys?.commercial?.trim() || input.ownerRoleKey?.trim() || "growth";
+  const executiveOwnerRoleKey = input.ownerRoleKeys?.executive?.trim() || "company_ceo";
   const financeOwnerRoleKey = input.ownerRoleKeys?.finance?.trim() || "finance_capital";
   const legalOwnerRoleKey = input.ownerRoleKeys?.legal?.trim() || "legal_governance";
   const operationsOwnerRoleKey = input.ownerRoleKeys?.operations?.trim() || "operations_administration";
   return [
+    { key: "company-operating-brief", instrumentKey: "docs", objectType: "document", title: `${companyName} operating brief`, summary: "Company-specific operating context compiled from the shared Mission Journey.", ownerRoleKey: executiveOwnerRoleKey, data: { compilerStarter: true, format: "markdown", body: `# ${companyName} operating brief\n\n## Company model\n- Stage: ${stage}\n- Business model: ${businessModel}\n- Operating formation: ${formation}\n- Initial offer: ${offer}\n- First customer or buyer: ${targetCustomer}\n\n## Founder direction\n- Vision: ${founderVision}\n- Values and standards: ${founderValues}\n- Decision style: ${decisionStyle}\n- Working style: ${workingStyle}\n\n## Near-term outcomes\n${goals}\n\n## Operating boundary\nThis is an EOS-controlled planning record compiled from the Company Mission Journey. It is not an external commitment, legal conclusion, financial statement, or provider-side configuration. Update it through normal governed document controls as the company learns.`, sourceAuthority: "company_mission_journey", reviewState: "draft" } },
     { key: "commercial-pipeline", instrumentKey: "crm", objectType: "pipeline", title: `${offer} pipeline`, summary: `Native commercial pipeline for ${targetCustomer}.`, ownerRoleKey: commercialOwnerRoleKey, data: { stages: ["Qualified", "Discovery", "Proposal", "Won", "Lost"], compilerStarter: true } },
     { key: "commercial-intake", instrumentKey: "forms", objectType: "form", title: `${offer} discovery`, summary: `Private native intake draft for ${targetCustomer}.`, ownerRoleKey: commercialOwnerRoleKey, data: { publicCapture: true, compilerStarter: true, questions: [{ id: "name", label: "Full name", type: "short_text", required: true, options: [] }, { id: "email", label: "Work email", type: "email", required: true, options: [] }, { id: "company", label: "Company", type: "short_text", required: false, options: [] }, { id: "goals", label: "What are you looking to accomplish?", type: "long_text", required: false, options: [] }], consentVersion: "native-eos-lead-capture-v1", consentLabel: `I agree that ${companyName} may use my information to respond to my request.`, confirmationMessage: "Thank you. Your request has been received." } },
     { key: "company-site", instrumentKey: "websites", objectType: "site", title: companyName, summary: "EOS-owned native website draft.", ownerRoleKey: commercialOwnerRoleKey, data: { brandName: companyName, compilerStarter: true } },

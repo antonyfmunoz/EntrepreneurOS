@@ -2483,7 +2483,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       expect.objectContaining({ key: "vendor-control-foundation" }),
       expect.objectContaining({ key: "offer-evolution-foundation" }),
     ]));
-    expect(instantiated.body.createdNativeAssetIds).toHaveLength(12);
+    expect(instantiated.body.createdNativeAssetIds).toHaveLength(13);
     expect(instantiated.body.createdNativeAssetIds.every((id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))).toBe(true);
     const nativeAssets = await sql<Array<{ id: string; objectKey: string; data: Record<string, unknown> }>>`
       SELECT id, object_key AS "objectKey", data
@@ -2492,6 +2492,10 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         AND object_key LIKE 'company-blueprint:service_studio:%'
     `;
     const starter = (key: string) => nativeAssets.find((asset) => asset.objectKey === `company-blueprint:service_studio:${key}`)!;
+    expect(starter("company-operating-brief").data).toMatchObject({
+      sourceAuthority: "company_mission_journey",
+      body: expect.stringContaining("Revenue recovery service"),
+    });
     expect(starter("commercial-page").data).toMatchObject({
       siteObjectId: starter("company-site").id,
       primaryCtaTarget: "capture_form",
@@ -2512,7 +2516,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       .send({ blueprintKey: "service_studio" })
       .expect(201);
     expect(compilerReplay.body.createdNativeAssetIds).toHaveLength(0);
-    expect(compilerReplay.body.preservedNativeAssetIds).toHaveLength(12);
+    expect(compilerReplay.body.preservedNativeAssetIds).toHaveLength(13);
 
     // Simulate an established company that compiled before the native funnel
     // tools were added, while preserving its deliberate custom entitlement.
@@ -2604,7 +2608,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       WHERE company_id = ${productCompany.id}
         AND object_key LIKE 'company-blueprint:product_company:%'
     `;
-    expect(nativeAssets).toHaveLength(12);
+    expect(nativeAssets).toHaveLength(13);
     expect(nativeAssets.filter((asset) => [
       "commercial-pipeline", "commercial-intake", "company-site", "commercial-page", "commercial-funnel", "native-offer-catalog",
     ].some((key) => asset.objectKey.endsWith(`:${key}`))).every((asset) => asset.ownerSeatId === brandGrowthSeat.id)).toBe(true);
