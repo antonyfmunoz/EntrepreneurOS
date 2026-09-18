@@ -17,6 +17,7 @@ describe("universal workspace layout", () => {
     expect(layout).toContain('const [expandedHudClearance, setExpandedHudClearance] = useState(0)');
     expect(layout).toContain('new ResizeObserver(updateClearance)');
     expect(layout).toContain('height - collapsedHeight + 12');
+    expect(layout).toContain('workspace.scrollTop + 12');
     expect(layout).toContain('height: `${Math.max(12, expandedHudClearance)}px`');
   });
 

@@ -93,7 +93,21 @@ export function UniversalLayout({
     if (!workspace || !floatingPanelExpanded) return;
 
     const updateExpandedHudClearance = () => {
-      setReserveExpandedHudClearance(workspace.scrollTop > 4);
+      const hasScrolled = workspace.scrollTop > 4;
+      setReserveExpandedHudClearance(hasScrolled);
+      if (!hasScrolled) return;
+
+      const hud = workspace.querySelector<HTMLElement>("[data-eos-decision-hud]");
+      if (!hud) return;
+      const expandedDelta = Math.max(
+        0,
+        Math.ceil(hud.getBoundingClientRect().height) - (collapsedHudHeightRef.current || 56) + 12,
+      );
+      // A normal-flow spacer moves upward with the document while the HUD is
+      // sticky. It therefore has to account for the current scroll offset as
+      // well as the HUD's newly introduced height; otherwise the first active
+      // section can still slip behind the fixed visual control.
+      setExpandedHudClearance(Math.max(expandedDelta, workspace.scrollTop + 12));
     };
     workspace.addEventListener("scroll", updateExpandedHudClearance, { passive: true });
     updateExpandedHudClearance();
@@ -120,7 +134,11 @@ export function UniversalLayout({
       const collapsedHeight = collapsedHudHeightRef.current || 56;
       // Do not guess at a fixed panel height. Custom decision content can be
       // much taller than the default panel, especially on narrow screens.
-      setExpandedHudClearance(Math.max(0, height - collapsedHeight + 12));
+      setExpandedHudClearance(Math.max(
+        0,
+        height - collapsedHeight + 12,
+        workspace.scrollTop > 4 ? workspace.scrollTop + 12 : 0,
+      ));
     };
 
     const observer = new ResizeObserver(updateClearance);

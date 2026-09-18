@@ -95,6 +95,26 @@ try {
   const clearanceBox = await hudClearance.boundingBox();
   if (!expandedHudBox || !clearanceBox || clearanceBox.y < expandedHudBox.y + expandedHudBox.height - 1)
     throw new Error("Expanding the decision HUD did not reserve workspace clearance beneath the sticky control.");
+
+  // The important failure mode is not the initial render. It is opening this
+  // sticky decision HUD after someone has already scrolled into the workspace:
+  // the first workspace section must be pushed below the taller HUD instead of
+  // being hidden behind it.
+  const workspace = desktop.locator("main");
+  const workspaceContent = hudClearance.locator("xpath=following-sibling::div[1]");
+  await workspace.evaluate((element) => { element.scrollTop = 160; });
+  await desktop.waitForFunction(() => {
+    const hud = document.querySelector<HTMLElement>("[data-eos-decision-hud]");
+    const clearance = document.querySelector<HTMLElement>("[data-eos-decision-hud-clearance='expanded']");
+    const content = clearance?.nextElementSibling as HTMLElement | null;
+    if (!hud || !clearance || !content) return false;
+    return content.getBoundingClientRect().top >= hud.getBoundingClientRect().bottom - 1;
+  });
+  const deepWorkspaceHudBox = await decisionHud.boundingBox();
+  const deepWorkspaceContentBox = await workspaceContent.boundingBox();
+  if (!deepWorkspaceHudBox || !deepWorkspaceContentBox || deepWorkspaceContentBox.y < deepWorkspaceHudBox.y + deepWorkspaceHudBox.height - 1)
+    throw new Error("Expanding the decision HUD after scrolling covered the active workspace section.");
+  await workspace.evaluate((element) => { element.scrollTop = 0; });
   await decisionHud
     .getByRole("button", { name: "Continue organization setup", exact: true })
     .click();
