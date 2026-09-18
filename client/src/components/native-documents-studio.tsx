@@ -63,6 +63,11 @@ export function NativeDocumentsStudio({ root, roleScopeKey, canExecute, canDecid
   const [selectedRelationshipId, setSelectedRelationshipId] = useState("");
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("focus") !== "native-documents-studio") return;
+    document.getElementById("native-documents-studio")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
   const query = useQuery<Json>({
     // Documents are visible by role, not merely by company.  A role switch
     // must never reuse another seat's cached document list or revision trail.
@@ -183,7 +188,7 @@ export function NativeDocumentsStudio({ root, roleScopeKey, canExecute, canDecid
   const isTemplate = selected?.objectType === "template";
   const canCreate = title.trim().length >= 2 && body.trim().length >= 1 && (mode === "documents" || (() => { try { parseVariables(variables); return true; } catch { return false; } })());
 
-  return <Card data-testid="native-documents-studio">
+  return <Card id="native-documents-studio" data-testid="native-documents-studio">
     <CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-primary" />Native Docs</CardTitle><CardDescription className="mt-1">Create, edit, activate, and reuse governed operating documents inside EOS. Connected file suites can reconcile later; no external document product is required to begin.</CardDescription></div><Button size="sm" variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}><RefreshCw className={`mr-2 h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />Refresh</Button></div></CardHeader>
     <CardContent className="space-y-5">
       {error && <Alert variant="destructive"><AlertTitle>Document command not applied</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}

@@ -54,6 +54,12 @@ describe("Company Mission blueprint handoff", () => {
     expect(runtime).toContain("Existing lifecycle controls still govern whether any form, site, or");
   });
 
+  it("routes each compiled native tool to its actual EOS operating surface", () => {
+    expect(orgStudio).toContain("native-commerce-studio");
+    expect(orgStudio).toContain("native-documents-studio");
+    expect(orgStudio).toContain('label: "Finance & Capital"');
+  });
+
   it("binds role labels to the same canonical native tool keys enforced by policy", () => {
     expect(runtime).toContain("canonicalToolEntitlements(role.tools)");
     expect(runtime).toContain("canonicalToolEntitlements(input.toolEntitlements)");

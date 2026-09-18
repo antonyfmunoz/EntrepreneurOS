@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { BadgeDollarSign, CheckCircle2, CreditCard, PackageCheck, Plus, RefreshCw, Repeat2, ShoppingBag } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -43,6 +43,11 @@ export function NativeCommerceStudio({ root, roleScopeKey, canExecute, canDecide
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [entitlementScope, setEntitlementScope] = useState("service_delivery");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("focus") !== "native-commerce-studio") return;
+    document.getElementById("native-commerce-studio")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   const commerceQuery = useQuery<Json>({ queryKey: [root, roleScopeKey, "native-commerce"], queryFn: async () => (await apiRequest("GET", `${root}/instruments/commerce`)).json() });
   const crmQuery = useQuery<Json>({ queryKey: [root, roleScopeKey, "native-commerce-buyers"], queryFn: async () => (await apiRequest("GET", `${root}/instruments/crm`)).json() });
@@ -105,7 +110,7 @@ export function NativeCommerceStudio({ root, roleScopeKey, canExecute, canDecide
     })).json(), onSuccess: refresh, onError: (cause: Error) => setError(cause.message),
   });
 
-  return <Card data-testid="native-commerce-studio">
+  return <Card id="native-commerce-studio" data-testid="native-commerce-studio">
     <CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2"><ShoppingBag className="h-5 w-5 text-primary" />Native Commerce Studio</CardTitle><CardDescription className="mt-1">Run the offer catalog, governed orders, service subscriptions, and delivery entitlements in EOS. A payment provider can execute an approved collection later, but it is not required to define the commercial system or is falsely represented as having collected money.</CardDescription></div><Button size="sm" variant="outline" onClick={() => { commerceQuery.refetch(); crmQuery.refetch(); }} disabled={commerceQuery.isFetching || crmQuery.isFetching}><RefreshCw className={`mr-2 h-4 w-4 ${(commerceQuery.isFetching || crmQuery.isFetching) ? "animate-spin" : ""}`} />Refresh</Button></div></CardHeader>
     <CardContent className="space-y-5">
       {error && <Alert variant="destructive"><AlertTitle>Commerce command not applied</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
