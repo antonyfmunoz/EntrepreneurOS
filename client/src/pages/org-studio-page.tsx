@@ -786,19 +786,20 @@ export default function OrgStudioPage() {
                       {(blueprint.data.blueprint.nativeAssets || [])
                         .filter((asset: RecordValue) => asset.visible)
                         .map((asset: RecordValue) => {
-                          const focus = asset.instrumentKey === "crm"
-                            ? "native-crm-studio"
-                            : asset.instrumentKey === "forms"
-                              ? "native-lead-capture"
-                              : "native-funnel-studio";
                           const destination = asset.instrumentKey === "crm"
-                            ? "Native CRM"
+                            ? { href: `/company/${companyId}?focus=native-crm-studio#work-room`, label: "Native CRM" }
                             : asset.instrumentKey === "forms"
-                              ? "Lead Capture Studio"
-                              : "Website & Funnel Studio";
+                              ? { href: `/company/${companyId}?focus=native-lead-capture#work-room`, label: "Lead Capture Studio" }
+                              : asset.instrumentKey === "websites"
+                                ? { href: `/company/${companyId}?focus=native-funnel-studio#work-room`, label: "Website & Funnel Studio" }
+                                : asset.instrumentKey === "commerce"
+                                  ? { href: `/company/${companyId}?focus=native-commerce-studio#work-room`, label: "Native Commerce Studio" }
+                                  : asset.instrumentKey === "docs"
+                                    ? { href: `/company/${companyId}?focus=native-documents-studio#work-room`, label: "Native Documents Studio" }
+                                    : { href: `/company/${companyId}#capital`, label: "Finance & Capital" };
                           return <Link
                             key={asset.key}
-                            href={`/company/${companyId}?focus=${focus}#work-room`}
+                            href={destination.href}
                             className="rounded-lg bg-muted/70 px-3 py-2 text-sm transition-colors hover:bg-muted"
                           >
                             <span className="block font-medium">
@@ -810,7 +811,7 @@ export default function OrgStudioPage() {
                                 : "Tool starter ready to compile"}
                             </span>
                             <span className="mt-2 block text-xs font-medium text-primary">
-                              Open {destination} →
+                              Open {destination.label} →
                             </span>
                           </Link>
                         })}
