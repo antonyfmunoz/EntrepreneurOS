@@ -133,8 +133,17 @@ describe("company operating blueprints", () => {
       companyName: "Empyrean Studios",
       offer: "Revenue recovery service",
       targetCustomer: "B2B service companies",
+      goals: "Build the first repeatable control loop",
+      stage: "pre-revenue",
+      businessModel: "services",
+      formation: "agent_first",
+      founderVision: "Build durable client value",
+      founderValues: "Truth before speed",
+      decisionStyle: "Evidence first",
+      workingStyle: "Weekly operating review",
     });
     expect(starters.map((starter) => `${starter.instrumentKey}:${starter.objectType}`)).toEqual([
+      "docs:document",
       "crm:pipeline",
       "forms:form",
       "websites:site",
@@ -148,6 +157,14 @@ describe("company operating blueprints", () => {
       "docs:document",
       "crm:pipeline",
     ]);
+    expect(starters.find((starter) => starter.key === "company-operating-brief")).toMatchObject({
+      title: "Empyrean Studios operating brief",
+      ownerRoleKey: "company_ceo",
+      data: {
+        sourceAuthority: "company_mission_journey",
+        body: expect.stringContaining("Revenue recovery service"),
+      },
+    });
     expect(starters.find((starter) => starter.key === "commercial-pipeline")).toMatchObject({
       title: "Revenue recovery service pipeline",
       ownerRoleKey: "growth",
@@ -208,6 +225,7 @@ describe("company operating blueprints", () => {
     const commercialAssets = productAssets.filter((starter) => ["commercial-pipeline", "commercial-intake", "company-site", "commercial-page", "commercial-funnel", "native-offer-catalog"].includes(starter.key));
     expect(commercialAssets.every((starter) => starter.ownerRoleKey === "brand_growth")).toBe(true);
     expect(productAssets.find((starter) => starter.key === "finance-control-plan")?.ownerRoleKey).toBe("finance_capital");
+    expect(productAssets.find((starter) => starter.key === "company-operating-brief")?.ownerRoleKey).toBe("company_ceo");
     expect(productAssets.find((starter) => starter.key === "governance-obligation-register")?.ownerRoleKey).toBe("legal_governance");
     expect(productAssets.find((starter) => starter.key === "vendor-service-pipeline")?.ownerRoleKey).toBe("operations_administration");
   });
