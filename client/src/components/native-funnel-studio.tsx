@@ -104,6 +104,8 @@ export function NativeFunnelStudio({
   const [captureFormObjectId, setCaptureFormObjectId] = useState("");
   const [siteName, setSiteName] = useState("");
   const [selectedSiteId, setSelectedSiteId] = useState("");
+  const [selectedSiteConfigId, setSelectedSiteConfigId] = useState("");
+  const [editingSiteName, setEditingSiteName] = useState("");
   const [pageTitle, setPageTitle] = useState("");
   const [pageHeadline, setPageHeadline] = useState("");
   const [pageSupportingCopy, setPageSupportingCopy] = useState("");
@@ -173,6 +175,7 @@ export function NativeFunnelStudio({
   );
   const selectedSite =
     activeSites.find((site: Json) => site.id === selectedSiteId) || null;
+  const selectedSiteConfig = sites.find((site: Json) => site.id === selectedSiteConfigId) || sites[0] || null;
 
   useEffect(() => {
     if (!selectedSiteId && activeSites[0]) setSelectedSiteId(activeSites[0].id);
@@ -182,6 +185,13 @@ export function NativeFunnelStudio({
     )
       setSelectedSiteId(activeSites[0]?.id || "");
   }, [activeSites, selectedSiteId]);
+  useEffect(() => {
+    if (!selectedSiteConfigId && sites[0]) setSelectedSiteConfigId(sites[0].id);
+    if (selectedSiteConfigId && !sites.some((site: Json) => site.id === selectedSiteConfigId)) setSelectedSiteConfigId(sites[0]?.id || "");
+  }, [sites, selectedSiteConfigId]);
+  useEffect(() => {
+    setEditingSiteName(String(selectedSiteConfig?.data?.brandName || selectedSiteConfig?.title || ""));
+  }, [selectedSiteConfig?.id, selectedSiteConfig?.version]);
 
   const refresh = async () => {
     await Promise.all([
@@ -318,6 +328,19 @@ export function NativeFunnelStudio({
       cancelPageEdit();
       await refresh();
     },
+    onError: (cause: Error) => setError(cause.message),
+  });
+  const saveSite = useMutation({
+    mutationFn: async () => {
+      if (!selectedSiteConfig) throw new Error("Select a native website to configure.");
+      return (await apiRequest("PATCH", root + "/instrument-objects/" + selectedSiteConfig.id, {
+        expectedVersion: selectedSiteConfig.version,
+        title: editingSiteName.trim(),
+        data: { ...selectedSiteConfig.data, brandName: editingSiteName.trim(), operatingMode: "native_eos" },
+        idempotencyKey: commandKey("native-site-configure"),
+      })).json();
+    },
+    onSuccess: async (result) => { setSelectedSiteConfigId(result.object.id); await refresh(); },
     onError: (cause: Error) => setError(cause.message),
   });
   const updatePage = useMutation({
@@ -515,9 +538,9 @@ export function NativeFunnelStudio({
             {sites.map((site: Json) => (
               <div
                 key={site.id}
-                className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm"
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${selectedSiteConfig?.id === site.id ? "border border-primary bg-primary/5" : "bg-muted/50"}`}
               >
-                <span className="font-medium">{site.title}</span>
+                <button type="button" className="font-medium text-left" onClick={() => setSelectedSiteConfigId(site.id)}>{site.title}</button>
                 <Badge
                   variant={site.state === "active" ? "default" : "outline"}
                 >
@@ -536,6 +559,16 @@ export function NativeFunnelStudio({
               </div>
             ))}
           </div>
+          {selectedSiteConfig && (
+            <div className="mt-4 rounded-lg border border-primary/25 bg-primary/[0.03] p-3">
+              <p className="eos-label">Configure selected website</p>
+              <div className="mt-2 flex flex-wrap items-end gap-2">
+                <div className="min-w-56 flex-1"><Label htmlFor="native-edit-site-name">Site / brand name</Label><Input id="native-edit-site-name" className="mt-1" value={editingSiteName} onChange={(event) => setEditingSiteName(event.target.value)} /></div>
+                <Button size="sm" disabled={!canExecute || editingSiteName.trim().length < 2 || saveSite.isPending} onClick={() => saveSite.mutate()}>{saveSite.isPending ? "Saving…" : "Save native website"}</Button>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">This updates the EOS-owned site in place. Its pages, funnels, and published state remain intact.</p>
+            </div>
+          )}
           {!sites.length && (
             <p className="mt-3 text-sm text-muted-foreground">
               No native sites yet. Create one here; a decision-authorized role
