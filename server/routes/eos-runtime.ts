@@ -5459,10 +5459,25 @@ export function registerEosRuntimeRoutes(app: Express): void {
       const [seat] = await db.select().from(eosSeats).where(and(eq(eosSeats.id, req.params.seatId), eq(eosSeats.companyId, access.company.id), eq(eosSeats.status, "active"))).limit(1);
       if (!seat) throw new EosRouteError(404, "seat_not_found", "The role does not exist in this company.");
       if (seat.kind === "founder" && (input.supervisorSeatId !== undefined || input.title !== undefined)) throw new EosRouteError(409, "founder_seat_structure_immutable", "Founder reporting position and title are immutable.");
+      if (access.role === "company_ceo" && visibilityPolicyFor(seat.kind as EosSeatKind).visibilityRank >= visibilityPolicyFor("company_ceo").visibilityRank)
+        throw new EosRouteError(403, "seat_update_authority_denied", "A Company CEO may update only lower organizational seats.");
+      if (input.supervisorSeatId === null && seat.kind !== "founder")
+        throw new EosRouteError(400, "seat_supervisor_required", "Only the founder seat may have no reporting supervisor.");
       if (input.supervisorSeatId) {
         if (input.supervisorSeatId === seat.id) throw new EosRouteError(400, "seat_self_supervision_invalid", "A role cannot report to itself.");
-        const [supervisor] = await db.select().from(eosSeats).where(and(eq(eosSeats.id, input.supervisorSeatId), eq(eosSeats.companyId, access.company.id), eq(eosSeats.status, "active"))).limit(1);
+        const allSeats = await db.select().from(eosSeats).where(and(eq(eosSeats.companyId, access.company.id), eq(eosSeats.status, "active")));
+        const byId = new Map(allSeats.map((candidate) => [candidate.id, candidate]));
+        let supervisor = byId.get(input.supervisorSeatId);
         if (!supervisor) throw new EosRouteError(400, "invalid_supervisor", "Supervisor must be an active role in this company.");
+        const traversed = new Set<string>();
+        while (supervisor) {
+          if (supervisor.id === seat.id)
+            throw new EosRouteError(409, "seat_reporting_cycle", "The reporting update would create an organizational cycle.");
+          if (traversed.has(supervisor.id))
+            throw new EosRouteError(409, "seat_reporting_graph_invalid", "The existing reporting graph contains a cycle and must be repaired first.");
+          traversed.add(supervisor.id);
+          supervisor = supervisor.supervisorSeatId ? byId.get(supervisor.supervisorSeatId) : undefined;
+        }
       }
       const policy = await authorizeAction(req, access, { authorityClass: "grant_access", resource: "seat", actionKey: "seat.update", purpose: "maintain_accountable_role", classification: "restricted", consequence: "material", targetSeatId: seat.id });
       const [updated] = await db.transaction(async (tx) => {
@@ -5472,17 +5487,30 @@ export function registerEosRuntimeRoutes(app: Express): void {
             ? {}
             : { toolEntitlements: canonicalToolEntitlements(input.toolEntitlements) }),
         };
-        const rows = await tx.update(eosSeats).set({ ...nextInput, updatedAt: new Date() }).where(eq(eosSeats.id, seat.id)).returning();
+        const now = new Date();
+        const rows = await tx.update(eosSeats).set({ ...nextInput, updatedAt: now }).where(and(eq(eosSeats.id, seat.id), eq(eosSeats.companyId, access.company.id))).returning();
+        if (!rows[0]) throw new EosRouteError(409, "seat_concurrent_change", "The role changed before this update completed.");
         if (input.toolEntitlements !== undefined) {
-          await tx.update(eosAuthorityGrants).set({ toolEntitlements: rows[0].toolEntitlements }).where(and(
+          await tx.update(eosAuthorityGrants).set({ toolEntitlements: rows[0].toolEntitlements, updatedAt: now }).where(and(
             eq(eosAuthorityGrants.id, `grant:${seat.id}:baseline`),
             eq(eosAuthorityGrants.companyId, access.company.id),
           ));
         }
-        await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "seat.updated", targetType: "seat", targetId: seat.id, traceId: policy.traceId, correlationId: policy.correlationId, result: "active", details: { changedFields: Object.keys(input), policyDecisionId: policy.decisionId }, createdAt: new Date() });
+        // A primary Role Agent is persistent organizational infrastructure.
+        // Keep its human-facing identity and reporting binding in lockstep with
+        // the seat; do not replace it with a new agent or silently alter grants.
+        await tx.update(eosAuthoritySubjects).set({
+          displayName: rows[0].agentName,
+          supervisorSeatId: rows[0].supervisorSeatId,
+          updatedAt: now,
+        }).where(and(
+          eq(eosAuthoritySubjects.companyId, access.company.id),
+          eq(eosAuthoritySubjects.subjectKey, `agent:${seat.id}:primary`),
+        ));
+        await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "seat.updated", targetType: "seat", targetId: seat.id, traceId: policy.traceId, correlationId: policy.correlationId, result: "active", details: { changedFields: Object.keys(input), previousSupervisorSeatId: seat.supervisorSeatId, supervisorSeatId: rows[0].supervisorSeatId, policyDecisionId: policy.decisionId, roleOperatingPackNotice: "Compile a new Role Operating Pack for contractual authority or responsibility changes." }, createdAt: now });
         return rows;
       });
-      return { body: updated };
+      return { body: { ...updated, roleOperatingPackNotice: "Live seat configuration changed. Compile a new Role Operating Pack before changing contractual responsibility or authority." } };
     }),
   );
 

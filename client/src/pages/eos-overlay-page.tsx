@@ -894,6 +894,7 @@ export default function EosOverlayPage() {
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [seatTitle, setSeatTitle] = useState("");
+  const [seatDepartment, setSeatDepartment] = useState("General Management");
   const [seatKind, setSeatKind] = useState("individual_contributor");
   const [seatAgentName, setSeatAgentName] = useState("");
   const [seatSupervisorId, setSeatSupervisorId] = useState("");
@@ -901,6 +902,13 @@ export default function EosOverlayPage() {
   const [mapSeatSearch, setMapSeatSearch] = useState("");
   const [showAllMapSeats, setShowAllMapSeats] = useState(false);
   const [showAllMapReports, setShowAllMapReports] = useState(false);
+  const [editingMapSeatId, setEditingMapSeatId] = useState("");
+  const [mapSeatTitleDraft, setMapSeatTitleDraft] = useState("");
+  const [mapSeatDepartmentDraft, setMapSeatDepartmentDraft] = useState("");
+  const [mapSeatAgentDraft, setMapSeatAgentDraft] = useState("");
+  const [mapSeatSupervisorDraft, setMapSeatSupervisorDraft] = useState("");
+  const [mapSeatMandateDraft, setMapSeatMandateDraft] = useState("");
+  const [mapSeatToolsDraft, setMapSeatToolsDraft] = useState("");
   const [membershipEmail, setMembershipEmail] = useState("");
   const [membershipSeatId, setMembershipSeatId] = useState("");
   const [membershipPortfolioScope, setMembershipPortfolioScope] =
@@ -3246,6 +3254,7 @@ export default function EosOverlayPage() {
     mutationFn: () =>
       requestJson<JsonRecord>("POST", `${root}/seats`, {
         title: seatTitle.trim(),
+        department: seatDepartment.trim(),
         kind: seatKind,
         agentName: seatAgentName.trim(),
         ...(seatSupervisorId ? { supervisorSeatId: seatSupervisorId } : {}),
@@ -3258,6 +3267,7 @@ export default function EosOverlayPage() {
       }),
     onSuccess: async (seat) => {
       setSeatTitle("");
+      setSeatDepartment("General Management");
       setSeatAgentName("");
       setMembershipSeatId(seat.id);
       await refresh();
@@ -3267,6 +3277,22 @@ export default function EosOverlayPage() {
       });
     },
     onError: (error) => showMutationError("Seat creation", error),
+  });
+
+  const seatUpdateMutation = useMutation({
+    mutationFn: ({ id, values }: { id: string; values: JsonRecord }) =>
+      requestJson<JsonRecord>("PATCH", `${root}/seats/${id}`, values),
+    onSuccess: async (seat) => {
+      setEditingMapSeatId("");
+      await refresh();
+      toast({
+        title: "Role configuration updated",
+        description:
+          seat.roleOperatingPackNotice ||
+          "The role, reporting line, and persistent Role Agent now reflect this Org Studio change.",
+      });
+    },
+    onError: (error) => showMutationError("Role configuration", error),
   });
 
   const membershipMutation = useMutation({
@@ -5465,6 +5491,14 @@ export default function EosOverlayPage() {
                       placeholder="Seat title, e.g. Head of Growth"
                     />
                     <Input
+                      aria-label="Seat department"
+                      value={seatDepartment}
+                      onChange={(event) =>
+                        setSeatDepartment(event.target.value)
+                      }
+                      placeholder="Department, e.g. Growth"
+                    />
+                    <Input
                       value={seatAgentName}
                       onChange={(event) => setSeatAgentName(event.target.value)}
                       placeholder="Role Agent name"
@@ -5505,6 +5539,7 @@ export default function EosOverlayPage() {
                     <Button
                       disabled={
                         seatTitle.trim().length < 2 ||
+                        seatDepartment.trim().length < 2 ||
                         seatAgentName.trim().length < 2 ||
                         seatMutation.isPending
                       }
@@ -11447,10 +11482,44 @@ export default function EosOverlayPage() {
                       </CardTitle>
                       <CardDescription>
                         {selectedMapSeat.kind.replaceAll("_", " ")} ·{" "}
+                        {selectedMapSeat.department || "General Management"} ·{" "}
                         {selectedMapSeat.agentName}
                       </CardDescription>
                     </div>
-                    <StateBadge state={selectedMapSeat.agentMode} />
+                    <div className="flex items-center gap-2">
+                      <StateBadge state={selectedMapSeat.agentMode} />
+                      {mayAdminOrganization &&
+                        selectedMapSeat.kind !== "founder" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setEditingMapSeatId(selectedMapSeat.id);
+                              setMapSeatTitleDraft(selectedMapSeat.title || "");
+                              setMapSeatDepartmentDraft(
+                                selectedMapSeat.department || "General Management",
+                              );
+                              setMapSeatAgentDraft(
+                                selectedMapSeat.agentName || "",
+                              );
+                              setMapSeatSupervisorDraft(
+                                selectedMapSeat.supervisorSeatId || "",
+                              );
+                              setMapSeatMandateDraft(
+                                selectedMapSeat.mandate || "",
+                              );
+                              setMapSeatToolsDraft(
+                                Array.isArray(selectedMapSeat.toolEntitlements)
+                                  ? selectedMapSeat.toolEntitlements.join(", ")
+                                  : "",
+                              );
+                            }}
+                          >
+                            <Pencil className="mr-2 h-3.5 w-3.5" />
+                            Edit role
+                          </Button>
+                        )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-5">
@@ -11485,6 +11554,149 @@ export default function EosOverlayPage() {
                       }
                     />
                   </div>
+                  <div>
+                    <p className="eos-label mb-2">Declared tools</p>
+                    <div className="flex flex-wrap gap-2">
+                      {Array.isArray(selectedMapSeat.toolEntitlements) &&
+                      selectedMapSeat.toolEntitlements.length ? (
+                        selectedMapSeat.toolEntitlements.map((tool: string) => (
+                          <Badge key={tool} variant="outline">
+                            {tool}
+                          </Badge>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          No role-specific tool keys are declared yet. Native
+                          work remains bounded by this seat's authority.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {editingMapSeatId === selectedMapSeat.id && (
+                    <div className="space-y-4 rounded-2xl border border-primary/25 bg-primary/5 p-4">
+                      <div>
+                        <p className="font-medium">Edit live role configuration</p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          This changes the role's live identity, reporting line,
+                          mandate, and declared tool set. Contractual authority
+                          and responsibility still require a versioned Role
+                          Operating Pack.
+                        </p>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <Input
+                          aria-label="Role title"
+                          value={mapSeatTitleDraft}
+                          onChange={(event) =>
+                            setMapSeatTitleDraft(event.target.value)
+                          }
+                          placeholder="Role title"
+                        />
+                        <Input
+                          aria-label="Role department"
+                          value={mapSeatDepartmentDraft}
+                          onChange={(event) =>
+                            setMapSeatDepartmentDraft(event.target.value)
+                          }
+                          placeholder="Department"
+                        />
+                        <Input
+                          aria-label="Role Agent name"
+                          value={mapSeatAgentDraft}
+                          onChange={(event) =>
+                            setMapSeatAgentDraft(event.target.value)
+                          }
+                          placeholder="Persistent Role Agent name"
+                        />
+                        <select
+                          aria-label="Role reporting supervisor"
+                          value={mapSeatSupervisorDraft}
+                          onChange={(event) =>
+                            setMapSeatSupervisorDraft(event.target.value)
+                          }
+                          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          <option value="">Choose reporting supervisor</option>
+                          {visibleSeats
+                            .filter(
+                              (seat: JsonRecord) =>
+                                seat.id !== selectedMapSeat.id,
+                            )
+                            .map((seat: JsonRecord) => (
+                              <option key={seat.id} value={seat.id}>
+                                {seat.title}
+                              </option>
+                            ))}
+                        </select>
+                        <Textarea
+                          aria-label="Role mandate"
+                          value={mapSeatMandateDraft}
+                          onChange={(event) =>
+                            setMapSeatMandateDraft(event.target.value)
+                          }
+                          placeholder="Accountable operating mandate"
+                          className="md:col-span-2"
+                        />
+                        <Textarea
+                          aria-label="Declared role tools"
+                          value={mapSeatToolsDraft}
+                          onChange={(event) =>
+                            setMapSeatToolsDraft(event.target.value)
+                          }
+                          placeholder="docs, crm, calendar"
+                          className="md:col-span-2"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Separate tool keys with commas or new lines. A declared
+                        key never bypasses an explicit Authority Grant, approval,
+                        classification, or provider connection requirement.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          disabled={
+                            seatUpdateMutation.isPending ||
+                            mapSeatTitleDraft.trim().length < 2 ||
+                            mapSeatDepartmentDraft.trim().length < 2 ||
+                            mapSeatAgentDraft.trim().length < 2 ||
+                            !mapSeatSupervisorDraft
+                          }
+                          onClick={() => {
+                            const toolEntitlements = Array.from(
+                              new Set(
+                                mapSeatToolsDraft
+                                  .split(/[\n,]/)
+                                  .map((value) => value.trim())
+                                  .filter(Boolean),
+                              ),
+                            );
+                            seatUpdateMutation.mutate({
+                              id: selectedMapSeat.id,
+                              values: {
+                                title: mapSeatTitleDraft.trim(),
+                                department: mapSeatDepartmentDraft.trim(),
+                                agentName: mapSeatAgentDraft.trim(),
+                                supervisorSeatId: mapSeatSupervisorDraft,
+                                mandate: mapSeatMandateDraft.trim(),
+                                toolEntitlements,
+                              },
+                            });
+                          }}
+                        >
+                          {seatUpdateMutation.isPending
+                            ? "Saving…"
+                            : "Save role configuration"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          disabled={seatUpdateMutation.isPending}
+                          onClick={() => setEditingMapSeatId("")}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                   {selectedMapReports.length > 0 && (
                     <div>
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
