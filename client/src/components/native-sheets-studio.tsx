@@ -63,6 +63,11 @@ export function NativeSheetsStudio({ root, roleScopeKey, canExecute, canDecide }
   const [chartColumn, setChartColumn] = useState("");
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("focus") !== "native-sheets-studio") return;
+    document.getElementById("native-sheets-studio")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
   const query = useQuery<Json>({
     // A role change must not reuse another seat's workbook cache.  The
     // server remains the authority for both tenant and role visibility.
@@ -187,7 +192,7 @@ export function NativeSheetsStudio({ root, roleScopeKey, canExecute, canDecide }
   const deleteRow = (rowIndex: number) => setDraftRows((current) => current.filter((_, index) => index !== rowIndex));
   const canBuildSheet = Boolean(selectedWorkbook && sheetTitle.trim().length >= 2 && columnsFromText(columnsText).length);
 
-  return <Card data-testid="native-sheets-studio">
+  return <Card id="native-sheets-studio" data-testid="native-sheets-studio">
     <CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2"><FileSpreadsheet className="h-5 w-5 text-primary" />Native Sheets</CardTitle><CardDescription className="mt-1">Build operating models, trackers, forecasts, and chart views directly in EOS. Connected spreadsheet providers can reconcile later; no external spreadsheet product is required to start.</CardDescription></div><Button size="sm" variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}><RefreshCw className={`mr-2 h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />Refresh</Button></div></CardHeader>
     <CardContent className="space-y-5">
       {error && <Alert variant="destructive"><AlertTitle>Sheet command not applied</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
