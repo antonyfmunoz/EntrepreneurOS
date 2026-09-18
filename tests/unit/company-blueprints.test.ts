@@ -38,6 +38,7 @@ describe("company operating blueprints", () => {
       expect(blueprint.roles.find((role) => role.key === "finance_capital")).toMatchObject({ kind: "functional_executive", department: "Finance", supervisorKey: "company_ceo" });
       expect(blueprint.roles.find((role) => role.key === "legal_governance")).toMatchObject({ kind: "functional_executive", department: "Legal & Governance", supervisorKey: "company_ceo" });
       expect(blueprint.roles.find((role) => role.key === "people_talent")).toMatchObject({ kind: "functional_executive", department: "People, Talent & Culture", supervisorKey: "company_ceo" });
+      expect(blueprint.roles.find((role) => role.key === "operations_administration")).toMatchObject({ kind: "functional_executive", department: "Operations, Administration & Vendor Control", supervisorKey: "company_ceo" });
       expect(blueprint.roles.every((role) => role.department.trim().length > 0)).toBe(true);
     }
   });
@@ -77,7 +78,7 @@ describe("company operating blueprints", () => {
       targetCustomer: "B2B service companies",
       goals: "Validate the offer\nClose the first three clients",
     });
-    expect(starters).toHaveLength(5);
+    expect(starters).toHaveLength(9);
     expect(starters[0]).toMatchObject({
       key: "commercial-foundation",
       ownerRoleKey: "growth",
@@ -107,6 +108,10 @@ describe("company operating blueprints", () => {
     });
     expect(starters[4].statement).toContain("Validate the offer");
     expect(starters[4].statement).toContain("does not imply an employment, compensation, or access decision");
+    expect(starters[5]).toMatchObject({ key: "finance-control-foundation", ownerRoleKey: "finance_capital", workflowTemplateKey: "finance-control-cycle" });
+    expect(starters[6]).toMatchObject({ key: "legal-governance-foundation", ownerRoleKey: "legal_governance", workflowTemplateKey: "policy-obligation-control" });
+    expect(starters[7]).toMatchObject({ key: "vendor-control-foundation", ownerRoleKey: "operations_administration", workflowTemplateKey: "vendor-to-approved-service" });
+    expect(starters[8]).toMatchObject({ key: "offer-evolution-foundation", ownerRoleKey: "growth", workflowTemplateKey: "offer-learning-loop" });
   });
 
   it("turns the matching shared workflow pattern into an editable company-specific native draft", () => {
@@ -218,6 +223,26 @@ describe("company operating blueprints", () => {
       expect(canonicalToolEntitlements(onboardingOwner?.tools || [])).toEqual(expect.arrayContaining(canonicalToolEntitlements(onboarding?.tools || [])));
       expect(canonicalToolEntitlements(reputationOwner?.tools || [])).toEqual(expect.arrayContaining(canonicalToolEntitlements(reputation?.tools || [])));
       expect(canonicalToolEntitlements(talentOwner?.tools || [])).toEqual(expect.arrayContaining(canonicalToolEntitlements(talent?.tools || [])));
+    }
+  });
+
+  it("compiles finance, governance, vendor, and offer-evolution controls into every company rather than leaving the control plane as role descriptions", () => {
+    for (const blueprint of companyBlueprints) {
+      const finance = blueprint.starters.find((starter) => starter.key === "finance-control-foundation");
+      const legal = blueprint.starters.find((starter) => starter.key === "legal-governance-foundation");
+      const vendor = blueprint.starters.find((starter) => starter.key === "vendor-control-foundation");
+      const offerEvolution = blueprint.starters.find((starter) => starter.key === "offer-evolution-foundation");
+      expect(finance).toMatchObject({ ownerRoleKey: "finance_capital", workflowTemplateKey: "finance-control-cycle" });
+      expect(legal).toMatchObject({ ownerRoleKey: "legal_governance", workflowTemplateKey: "policy-obligation-control" });
+      expect(vendor).toMatchObject({ ownerRoleKey: "operations_administration", workflowTemplateKey: "vendor-to-approved-service" });
+      expect(offerEvolution?.workflowTemplateKey).toBe("offer-learning-loop");
+      for (const starter of [finance, legal, vendor, offerEvolution]) {
+        const owner = blueprint.roles.find((role) => role.key === starter?.ownerRoleKey);
+        expect(owner).toBeDefined();
+        expect(canonicalToolEntitlements(owner?.tools || [])).toEqual(
+          expect.arrayContaining(canonicalToolEntitlements(starter?.tools || [])),
+        );
+      }
     }
   });
 

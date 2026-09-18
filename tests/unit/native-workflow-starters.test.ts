@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { materializeNativeWorkflowStarter } from "../../shared/native-workflow-starters";
 
 const composer = readFileSync(new URL("../../client/src/components/native-workflow-composer.tsx", import.meta.url), "utf8");
 const starterLibrary = readFileSync(new URL("../../shared/native-workflow-starters.ts", import.meta.url), "utf8");
@@ -11,6 +12,10 @@ describe("native workflow starters", () => {
     expect(starterLibrary).toContain('key: "weekly-operating-review"');
     expect(starterLibrary).toContain('key: "reputation-follow-through"');
     expect(starterLibrary).toContain('key: "capability-to-placement"');
+    expect(starterLibrary).toContain('key: "finance-control-cycle"');
+    expect(starterLibrary).toContain('key: "policy-obligation-control"');
+    expect(starterLibrary).toContain('key: "vendor-to-approved-service"');
+    expect(starterLibrary).toContain('key: "offer-learning-loop"');
     expect(composer).toContain("Business-in-a-box starters");
     expect(composer).toContain("nativeWorkflowStarters");
   });
@@ -27,5 +32,30 @@ describe("native workflow starters", () => {
     expect(composer).toContain("Do not transmit data to an external provider unless an explicit provider capability");
     expect(starterLibrary).toContain("unverified external send claim");
     expect(starterLibrary).toContain("without assuming an employment decision");
+    expect(starterLibrary).toContain("without claiming ledger truth");
+    expect(starterLibrary).toContain("without presenting legal advice");
+    expect(starterLibrary).toContain("without creating an external commitment");
+    expect(starterLibrary).toContain("without silently mutating a reusable EOS template");
+  });
+
+  it("materializes all universal control loops with company context and explicit human decision boundaries", () => {
+    for (const key of [
+      "finance-control-cycle",
+      "policy-obligation-control",
+      "vendor-to-approved-service",
+      "offer-learning-loop",
+    ]) {
+      const workflow = materializeNativeWorkflowStarter(key, {
+        companyName: "Empyrean Studios",
+        offer: "Revenue recovery service",
+        targetCustomer: "B2B service companies",
+        goal: "Validate the first operating loop",
+      });
+      expect(workflow.name).toContain("Empyrean Studios");
+      expect(workflow.steps.length).toBeGreaterThanOrEqual(4);
+      expect(workflow.steps.some((step) => step.actionKind === "approval")).toBe(true);
+      expect(workflow.approvals.join(" ")).toMatch(/authorized human/i);
+      expect(workflow.branches.join(" ")).toMatch(/stop|preserve/i);
+    }
   });
 });
