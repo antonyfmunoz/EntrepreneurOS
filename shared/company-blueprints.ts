@@ -68,6 +68,16 @@ const universalCoreRoles: readonly CompanyBlueprintRole[] = [
     mandate: "Maintain accountable capacity planning, recruiting, fair evidence-based assessment, onboarding, development, succession, and the human-to-agent assistant transition. Escalate employment, compensation, and other regulated people decisions to the authorized human or qualified professional.",
     tools: ["Forms", "Calendar", "Messages", "Documents", "Tables", "Workflows", "Analytics", "Learning", "Progression"],
   },
+  {
+    key: "operations_administration",
+    title: "Operations, Administration & Vendor Control",
+    department: "Operations, Administration & Vendor Control",
+    kind: "functional_executive",
+    supervisorKey: "company_ceo",
+    agentName: "Operations & Vendor Agent",
+    mandate: "Maintain governed operating requests, vendor relationships, access, assets, recurring work, and service continuity. Escalate spend, contracting, access grants, and irreversible vendor commitments to the authorized human.",
+    tools: ["CRM", "Projects", "Tasks", "Tables", "Documents", "Workflows", "Finance", "Analytics", "Conference Rooms"],
+  },
 ];
 
 const commercialStarter = (ownerRoleKey: string, tools: string[]): CompanyBlueprintStarter => ({
@@ -144,6 +154,56 @@ const talentStarter = (ownerRoleKey: string, tools: string[]): CompanyBlueprintS
   successExitCriteria: "An accountable talent owner, capability-need record, candidate-assessment path, onboarding boundary, and human decision gate are ready for governed use.",
 });
 
+/**
+ * These universal control loops make the non-commercial parts of a company
+ * operational from the same compilation event.  They create editable native
+ * work and review boundaries, never an accounting conclusion, legal advice,
+ * spend, contract, access grant, or third-party commitment.
+ */
+const financeStarter = (): CompanyBlueprintStarter => ({
+  key: "finance-control-foundation",
+  title: "Establish the finance control foundation",
+  statement: "Create a governed cash, obligation, budget, and reconciliation review loop so operational decisions retain source limits and human financial authority.",
+  ownerRoleKey: "finance_capital",
+  priority: "high",
+  tools: ["Finance", "Sheets", "Analytics", "Documents", "Workflows"],
+  workflowTemplateKey: "finance-control-cycle",
+  successExitCriteria: "A finance owner, source-of-truth boundary, review cadence, approval threshold, and reconciliation path are ready for governed use.",
+});
+
+const legalStarter = (): CompanyBlueprintStarter => ({
+  key: "legal-governance-foundation",
+  title: "Establish the legal and governance foundation",
+  statement: "Make the company’s policy, obligation, contract, rights, and decision record reviewable before it makes commitments that require qualified counsel or authorized sign-off.",
+  ownerRoleKey: "legal_governance",
+  priority: "high",
+  tools: ["Documents", "Workflows", "Conference Rooms", "Analytics"],
+  workflowTemplateKey: "policy-obligation-control",
+  successExitCriteria: "A governance owner, controlled source record, obligation review queue, escalation route, and authorized decision gate are ready for governed use.",
+});
+
+const vendorStarter = (): CompanyBlueprintStarter => ({
+  key: "vendor-control-foundation",
+  title: "Establish the vendor and service-control foundation",
+  statement: "Create a traceable path from a vendor or service need to a bounded, reviewable relationship without assuming a purchase, contract, access grant, or provider effect.",
+  ownerRoleKey: "operations_administration",
+  priority: "medium",
+  tools: ["CRM", "Projects", "Documents", "Workflows", "Finance", "Analytics"],
+  workflowTemplateKey: "vendor-to-approved-service",
+  successExitCriteria: "A vendor owner, relationship record, scope and risk review, approval boundary, continuity plan, and evidence requirements are ready for governed use.",
+});
+
+const offerEvolutionStarter = (ownerRoleKey: string, tools: string[]): CompanyBlueprintStarter => ({
+  key: "offer-evolution-foundation",
+  title: "Establish the offer learning foundation",
+  statement: "Turn customer, delivery, and operating evidence into a governed proposal to evolve the offer or template—without silently changing the company’s reusable operating model.",
+  ownerRoleKey,
+  priority: "medium",
+  tools,
+  workflowTemplateKey: "offer-learning-loop",
+  successExitCriteria: "An accountable owner, evidence-linked improvement proposal, version boundary, and authorized release path are ready for governed use.",
+});
+
 export const companyBlueprints: readonly CompanyBlueprint[] = [
   {
     key: "service_studio",
@@ -152,7 +212,7 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
     appliesTo: ["services"],
     roles: [
       { key: "company_ceo", title: "Company CEO", department: "Executive", kind: "company_ceo", agentName: "Company CEO Agent", mandate: "Turn founder direction into an accountable company operating plan and escalate consequential decisions.", tools: commonExecutiveTools },
-      { key: "growth", title: "Growth & Revenue", department: "Growth & Revenue", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Growth Agent", mandate: "Create qualified demand and move prospects through a measured commercial pipeline.", tools: ["CRM", "Dialer", "Calendar", "Messages", "Documents", "Forms", "Websites", "Analytics"] },
+      { key: "growth", title: "Growth & Revenue", department: "Growth & Revenue", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Growth Agent", mandate: "Create qualified demand and move prospects through a measured commercial pipeline.", tools: ["CRM", "Dialer", "Calendar", "Messages", "Documents", "Forms", "Websites", "Projects", "Workflows", "Analytics"] },
       { key: "client_delivery", title: "Client Delivery", department: "Operations & Delivery", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Delivery Agent", mandate: "Deliver the promised client outcome with evidence, quality controls, and clear handoffs.", tools: ["Projects", "Tasks", "Documents", "Messages", "Calendar"] },
       { key: "client_success", title: "Client Success", department: "Client Success", kind: "manager", supervisorKey: "client_delivery", agentName: "Client Success Agent", mandate: "Protect client communication, onboarding, retention, and outcome visibility.", tools: ["CRM", "Messages", "Documents", "Calendar", "Projects", "Tasks", "Reputation"] },
       ...universalCoreRoles,
@@ -163,6 +223,10 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
       clientOnboardingStarter("client_success", ["CRM", "Projects", "Tasks", "Calendar", "Messages", "Documents"]),
       reputationStarter("client_success", ["CRM", "Messages", "Reputation", "Projects", "Documents"]),
       talentStarter("people_talent", ["Forms", "Calendar", "Messages", "Documents", "Tables", "Workflows", "Analytics", "Learning", "Progression"]),
+      financeStarter(),
+      legalStarter(),
+      vendorStarter(),
+      offerEvolutionStarter("growth", ["CRM", "Projects", "Documents", "Analytics", "Workflows"]),
     ],
   },
   {
@@ -183,6 +247,10 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
       clientOnboardingStarter("customer", ["CRM", "Projects", "Calendar", "Messages", "Documents"]),
       reputationStarter("customer", ["CRM", "Messages", "Reputation", "Projects", "Documents"]),
       talentStarter("people_talent", ["Forms", "Calendar", "Messages", "Documents", "Tables", "Workflows", "Analytics", "Learning", "Progression"]),
+      financeStarter(),
+      legalStarter(),
+      vendorStarter(),
+      offerEvolutionStarter("product", ["Projects", "Documents", "Analytics", "Workflows"]),
     ],
   },
   {
@@ -203,6 +271,10 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
       clientOnboardingStarter("customer", ["CRM", "Projects", "Calendar", "Messages", "Documents"]),
       reputationStarter("customer", ["CRM", "Messages", "Reputation", "Projects", "Documents"]),
       talentStarter("people_talent", ["Forms", "Calendar", "Messages", "Documents", "Tables", "Workflows", "Analytics", "Learning", "Progression"]),
+      financeStarter(),
+      legalStarter(),
+      vendorStarter(),
+      offerEvolutionStarter("product_operations", ["Projects", "Tables", "Documents", "Analytics", "Workflows"]),
     ],
   },
   {
@@ -212,7 +284,7 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
     appliesTo: ["hybrid", "other"],
     roles: [
       { key: "company_ceo", title: "Company CEO", department: "Executive", kind: "company_ceo", agentName: "Company CEO Agent", mandate: "Translate founder direction into a coherent company operating plan.", tools: commonExecutiveTools },
-      { key: "growth", title: "Growth & Commercial", department: "Growth & Revenue", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Commercial Agent", mandate: "Build qualified pipeline and learn the repeatable value proposition.", tools: ["CRM", "Dialer", "Calendar", "Messages", "Forms", "Websites", "Analytics"] },
+      { key: "growth", title: "Growth & Commercial", department: "Growth & Revenue", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Commercial Agent", mandate: "Build qualified pipeline and learn the repeatable value proposition.", tools: ["CRM", "Dialer", "Calendar", "Messages", "Forms", "Websites", "Projects", "Documents", "Workflows", "Analytics"] },
       { key: "operations", title: "Operations & Delivery", department: "Operations & Delivery", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Operations Agent", mandate: "Produce reliable delivery, workflow execution, and quality evidence.", tools: ["Projects", "Tasks", "Documents", "Workflows", "CRM", "Calendar", "Messages", "Reputation"] },
       ...universalCoreRoles,
     ],
@@ -222,6 +294,10 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
       clientOnboardingStarter("operations", ["CRM", "Projects", "Tasks", "Calendar", "Messages", "Documents"]),
       reputationStarter("operations", ["CRM", "Messages", "Reputation", "Projects", "Documents"]),
       talentStarter("people_talent", ["Forms", "Calendar", "Messages", "Documents", "Tables", "Workflows", "Analytics", "Learning", "Progression"]),
+      financeStarter(),
+      legalStarter(),
+      vendorStarter(),
+      offerEvolutionStarter("growth", ["CRM", "Projects", "Documents", "Analytics", "Workflows"]),
     ],
   },
 ];

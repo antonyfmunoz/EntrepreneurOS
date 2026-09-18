@@ -2476,6 +2476,13 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       (seat: { title: string }) => seat.title === "Growth & Revenue",
     );
     expect(growthSeat).toBeTruthy();
+    expect(instantiated.body.createdStarterProcessIds).toHaveLength(9);
+    expect(instantiated.body.starterArtifacts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "finance-control-foundation" }),
+      expect.objectContaining({ key: "legal-governance-foundation" }),
+      expect.objectContaining({ key: "vendor-control-foundation" }),
+      expect.objectContaining({ key: "offer-evolution-foundation" }),
+    ]));
     expect(instantiated.body.createdNativeAssetIds).toHaveLength(5);
     expect(instantiated.body.createdNativeAssetIds.every((id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))).toBe(true);
     const nativeAssets = await sql<Array<{ id: string; objectKey: string; data: Record<string, unknown> }>>`
