@@ -789,7 +789,7 @@ export default function OrgStudioPage() {
                           const destination = asset.instrumentKey === "crm"
                             ? { href: `/company/${companyId}?focus=native-crm-studio#work-room`, label: "Native CRM" }
                             : asset.instrumentKey === "forms"
-                              ? { href: `/company/${companyId}?focus=native-lead-capture#work-room`, label: "Lead Capture Studio" }
+                              ? { href: `/company/${companyId}?focus=native-lead-capture${asset.object?.id ? `&nativeObjectId=${encodeURIComponent(asset.object.id)}` : ""}#work-room`, label: "Lead Capture Studio" }
                               : asset.instrumentKey === "websites"
                                 ? { href: `/company/${companyId}?focus=native-funnel-studio#work-room`, label: "Website & Funnel Studio" }
                                 : asset.instrumentKey === "commerce"

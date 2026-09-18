@@ -9,5 +9,6 @@ describe("native lead capture controls", () => {
     expect(studio).toContain("Save new version");
     expect(studio).toContain("lead-form-save");
     expect(studio).toContain("expectedVersion: editingForm.version");
+    expect(studio).toContain("nativeObjectId");
   });
 });

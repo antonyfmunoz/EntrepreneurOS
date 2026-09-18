@@ -47,6 +47,13 @@ export function LeadCaptureStudio({ root, canExecute, canDecide }: { root: strin
     queryFn: async () => (await apiRequest("GET", root + "/instruments/forms")).json(),
   });
   const forms = useMemo(() => (query.data?.objects || []).filter((item: Json) => item.objectType === "form" && item.data?.publicCapture === true), [query.data]);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const objectId = params.get("nativeObjectId");
+    if (params.get("focus") !== "native-lead-capture" || !objectId) return;
+    const form = forms.find((item: Json) => item.id === objectId);
+    if (form && editingForm?.id !== form.id) beginEdit(form);
+  }, [forms, editingForm?.id]);
   const refresh = async () => queryClient.invalidateQueries({ queryKey: [root, "native-lead-capture"] });
   const create = useMutation({
     mutationFn: async () => (await apiRequest("POST", root + "/instrument-objects", {
