@@ -5463,6 +5463,18 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
 
   it("enforces membership, reporting scope, role navigation, and assistant-mode Role Agents", async () => {
     currentUserId = ownerId;
+    const operationsDirector = await api
+      .post(`/api/eos/companies/${companyId}/seats`)
+      .send({
+        title: "Operations Director",
+        department: "Operations",
+        kind: "functional_executive",
+        agentName: "Operations Director Agent",
+        mandate: "Own the operating system for reliable delivery",
+        authority: {},
+        toolEntitlements: ["docs"],
+      })
+      .expect(201);
     const managerSeat = await api
       .post(`/api/eos/companies/${companyId}/seats`)
       .send({
@@ -5474,6 +5486,39 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         toolEntitlements: ["docs", "gmail.send_with_local_approval"],
       })
       .expect(201);
+    const updatedManager = await api
+      .patch(`/api/eos/companies/${companyId}/seats/${managerSeat.body.id}`)
+      .send({
+        department: "Delivery Operations",
+        agentName: "Atlas Prime",
+        supervisorSeatId: operationsDirector.body.id,
+        mandate: "Own delivery operations and escalate material exceptions.",
+        toolEntitlements: ["docs", "gmail.send_with_local_approval"],
+      })
+      .expect(200);
+    expect(updatedManager.body).toMatchObject({
+      department: "Delivery Operations",
+      agentName: "Atlas Prime",
+      supervisorSeatId: operationsDirector.body.id,
+      toolEntitlements: ["docs", "gmail.send_with_local_approval"],
+    });
+    const organizationAfterSeatUpdate = await api
+      .get(`/api/eos/companies/${companyId}/organization-runtime`)
+      .expect(200);
+    expect(
+      organizationAfterSeatUpdate.body.authoritySubjects.find(
+        (subject: { subjectKey: string }) =>
+          subject.subjectKey === `agent:${managerSeat.body.id}:primary`,
+      ),
+    ).toMatchObject({
+      displayName: "Atlas Prime",
+      supervisorSeatId: operationsDirector.body.id,
+    });
+    const cycle = await api
+      .patch(`/api/eos/companies/${companyId}/seats/${operationsDirector.body.id}`)
+      .send({ supervisorSeatId: managerSeat.body.id })
+      .expect(409);
+    expect(cycle.body.code).toBe("seat_reporting_cycle");
     const retiredDirectAssignment = await api
       .post(`/api/eos/companies/${companyId}/memberships`)
       .send({ email: "other@example.test", seatId: managerSeat.body.id })
@@ -5533,7 +5578,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       .get(`/api/eos/companies/${companyId}/context`)
       .expect(200);
     expect(context.body.principalContext.role).toBe("manager");
-    expect(context.body.principalContext.communicationAgent).toBe("Atlas");
+    expect(context.body.principalContext.communicationAgent).toBe("Atlas Prime");
     expect(context.body.principalContext.communicationMode).toBe(
       "role_agent_assistant",
     );
