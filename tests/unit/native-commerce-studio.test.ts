@@ -18,6 +18,13 @@ describe("native commerce studio", () => {
     expect(commerceStudio).toContain("expectedVersion: object.version");
   });
 
+  it("lets a compiled offer be configured in place instead of requiring a duplicate offer", () => {
+    expect(commerceStudio).toContain("native-offer-configure");
+    expect(commerceStudio).toContain("Configure native offer");
+    expect(commerceStudio).toContain('priceState: "configured"');
+    expect(commerceStudio).toContain("This updates the compiled EOS offer in place");
+  });
+
   it("does not claim that an order is paid before an approved provider execution returns a receipt", () => {
     expect(commerceStudio).toContain('paymentExecution: "not_dispatched"');
     expect(commerceStudio).toContain("pending_authorized_collection");
