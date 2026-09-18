@@ -20,6 +20,10 @@ describe("native marketing studio", () => {
     expect(marketingStudio).toContain('objectType: "budget"');
     expect(marketingStudio).toContain("expectedVersion: object.version");
     expect(marketingStudio).toContain("expectedVersion: selectedMeasurementCampaign.version");
+    expect(marketingStudio).toContain("Edit campaign");
+    expect(marketingStudio).toContain("Save native campaign");
+    expect(marketingStudio).toContain("native-campaign-configure");
+    expect(marketingStudio).toContain("expectedVersion: editingCampaign.version");
   });
 
   it("does not represent a plan as provider delivery or a provider receipt", () => {
