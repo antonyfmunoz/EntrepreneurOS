@@ -138,8 +138,6 @@ async function assertNativeMessageCreate(
   const conversationObjectId = data.conversationObjectId;
   if (typeof conversationObjectId !== "string" || !conversationObjectId)
     throw new EosRouteError(400, "message_conversation_required", "Messages and threads must identify their native conversation.");
-  if (input.parentObjectId !== conversationObjectId)
-    throw new EosRouteError(400, "message_parent_required", "Messages and threads must be nested beneath their named native conversation.");
   const [conversation] = await db.select().from(eosInstrumentObjects).where(and(
     eq(eosInstrumentObjects.companyId, access.company.id),
     eq(eosInstrumentObjects.id, conversationObjectId),
@@ -151,6 +149,29 @@ async function assertNativeMessageCreate(
   const participantSeatIds = recordValue(conversation.data).participantSeatIds;
   if (!Array.isArray(participantSeatIds) || !participantSeatIds.includes(access.seat.id))
     throw new EosRouteError(403, "message_conversation_membership_required", "Only a named participant may add messages or threads to this conversation.");
+  if (input.objectType === "thread") {
+    if (input.parentObjectId !== conversationObjectId)
+      throw new EosRouteError(400, "message_parent_required", "Native threads must be nested beneath their named conversation.");
+    return;
+  }
+
+  const threadObjectId = data.threadObjectId;
+  if (threadObjectId !== undefined && (typeof threadObjectId !== "string" || !threadObjectId))
+    throw new EosRouteError(400, "message_thread_invalid", "A message thread reference must be a non-empty native thread identifier.");
+  if (typeof threadObjectId === "string") {
+    const [thread] = await db.select().from(eosInstrumentObjects).where(and(
+      eq(eosInstrumentObjects.companyId, access.company.id),
+      eq(eosInstrumentObjects.id, threadObjectId),
+      eq(eosInstrumentObjects.instrumentKey, "messages"),
+      eq(eosInstrumentObjects.objectType, "thread"),
+    )).limit(1);
+    if (!thread || recordValue(thread.data).conversationObjectId !== conversationObjectId)
+      throw new EosRouteError(409, "message_thread_scope_invalid", "The selected thread must belong to this native conversation.");
+    if (input.parentObjectId !== threadObjectId)
+      throw new EosRouteError(400, "message_thread_parent_required", "A threaded message must be nested beneath its named native thread.");
+  } else if (input.parentObjectId !== conversationObjectId) {
+    throw new EosRouteError(400, "message_parent_required", "An unthreaded message must be nested beneath its named native conversation.");
+  }
   if (input.objectType === "message") {
     if (typeof data.body !== "string" || !data.body.trim())
       throw new EosRouteError(400, "message_body_required", "A native message requires a non-empty body.");

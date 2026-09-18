@@ -79,6 +79,7 @@ export function NativeMessageHub({ root, roleScopeKey, activeSeatId, seats, canE
   canDecide: boolean;
 }) {
   const [selectedConversationId, setSelectedConversationId] = useState("");
+  const [selectedThreadId, setSelectedThreadId] = useState("");
   const [conversationTitle, setConversationTitle] = useState("");
   const [conversationPurpose, setConversationPurpose] = useState("");
   const [participantSeatIds, setParticipantSeatIds] = useState<string[]>([]);
@@ -105,6 +106,11 @@ export function NativeMessageHub({ root, roleScopeKey, activeSeatId, seats, canE
   const selectedConversation = conversations.find((item) => item.id === selectedConversationId) || conversations[0];
   const messages = useMemo(() => objects.filter((item) => item.objectType === "message" && item.data?.conversationObjectId === selectedConversation?.id), [objects, selectedConversation?.id]);
   const threads = useMemo(() => objects.filter((item) => item.objectType === "thread" && item.data?.conversationObjectId === selectedConversation?.id), [objects, selectedConversation?.id]);
+  const selectedThread = threads.find((item) => item.id === selectedThreadId) || null;
+  const visibleMessages = useMemo(
+    () => selectedThread ? messages.filter((message) => message.data?.threadObjectId === selectedThread.id) : messages,
+    [messages, selectedThread],
+  );
   // Relationship context is deliberately optional. A role that can use the
   // Message Hub but has no CRM visibility must not receive a CRM request or a
   // selector that leaks another team's relationship records.
@@ -184,6 +190,11 @@ export function NativeMessageHub({ root, roleScopeKey, activeSeatId, seats, canE
       setSelectedRelationshipId("");
   }, [relationshipChoices, selectedRelationshipId]);
 
+  useEffect(() => {
+    if (selectedThreadId && !threads.some((thread) => thread.id === selectedThreadId))
+      setSelectedThreadId("");
+  }, [selectedThreadId, threads]);
+
   const refresh = async () => queryClient.invalidateQueries({ queryKey: [root, roleScopeKey, "native-messages"] });
   const createConversation = useMutation({
     mutationFn: async () => (await apiRequest("POST", `${root}/instrument-objects`, {
@@ -191,7 +202,7 @@ export function NativeMessageHub({ root, roleScopeKey, activeSeatId, seats, canE
       title: conversationTitle.trim(), summary: conversationPurpose.trim(), classification: "confidential", visibility: "team",
         data: { participantSeatIds: conversationParticipantSeatIds }, sourceReference: { authority: "native_eos" }, evidenceIds: [], idempotencyKey: commandKey("message-conversation"),
     })).json(),
-    onSuccess: async (result) => { setSelectedConversationId(result.object.id); setConversationTitle(""); setConversationPurpose(""); setParticipantSeatIds([]); await refresh(); },
+    onSuccess: async (result) => { setSelectedConversationId(result.object.id); setSelectedThreadId(""); setConversationTitle(""); setConversationPurpose(""); setParticipantSeatIds([]); await refresh(); },
     onError: (cause: Error) => setError(cause.message),
   });
   const chooseRelationship = (relationshipId: string) => {
@@ -208,9 +219,10 @@ export function NativeMessageHub({ root, roleScopeKey, activeSeatId, seats, canE
     const result = await (await apiRequest("POST", `${root}/instrument-objects`, {
       instrumentKey: "messages", objectType: "message", objectKey: `message:${safeKey(selectedConversation.title)}:${Date.now()}`,
       title: `${selectedChannel.label} · ${selectedConversation.title}`, summary: messageBody.trim().slice(0, 300), classification: "confidential", visibility: "team",
-      parentObjectId: selectedConversation.id,
+      parentObjectId: selectedThread?.id || selectedConversation.id,
       data: {
         conversationObjectId: selectedConversation.id,
+        ...(selectedThread ? { threadObjectId: selectedThread.id } : {}),
         body: messageBody.trim(),
         channelType: channel,
         deliveryState: input.deliveryState,
@@ -226,7 +238,7 @@ export function NativeMessageHub({ root, roleScopeKey, activeSeatId, seats, canE
       },
       sourceReference: { authority: "native_eos", providerEffect: false }, evidenceIds: [], idempotencyKey: commandKey("message-record"),
     })).json();
-    await apiRequest("POST", `${root}/instrument-links`, { sourceObjectId: selectedConversation.id, targetObjectId: result.object.id, relationshipType: "contains", metadata: { channelType: channel }, idempotencyKey: commandKey("message-link") });
+    await apiRequest("POST", `${root}/instrument-links`, { sourceObjectId: selectedThread?.id || selectedConversation.id, targetObjectId: result.object.id, relationshipType: "contains", metadata: { channelType: channel, ...(selectedThread ? { threadObjectId: selectedThread.id } : {}) }, idempotencyKey: commandKey("message-link") });
     let relationshipLinked = true;
     if (selectedRelationshipChoice) {
       try {
@@ -307,7 +319,7 @@ export function NativeMessageHub({ root, roleScopeKey, activeSeatId, seats, canE
       await apiRequest("POST", `${root}/instrument-links`, { sourceObjectId: selectedConversation.id, targetObjectId: result.object.id, relationshipType: "contains", metadata: {}, idempotencyKey: commandKey("thread-link") });
       return result;
     },
-    onSuccess: async () => { setThreadTitle(""); await refresh(); },
+    onSuccess: async (result) => { setSelectedThreadId(result.object.id); setThreadTitle(""); await refresh(); },
     onError: (cause: Error) => setError(cause.message),
   });
   const activate = useMutation({
@@ -333,8 +345,9 @@ export function NativeMessageHub({ root, roleScopeKey, activeSeatId, seats, canE
         <section className="rounded-xl border p-4"><div className="flex items-center gap-2"><UsersRound className="h-4 w-4 text-primary" /><h3 className="font-semibold">1. Start a governed conversation</h3></div><p className="mt-1 text-sm text-muted-foreground">You are included automatically. Select only a direct manager or direct report; non-adjacent work belongs with your role assistant, which coordinates through the reporting chain.</p><div className="mt-4 grid gap-3"><div><Label htmlFor="message-conversation-title">Conversation name</Label><Input id="message-conversation-title" className="mt-1" value={conversationTitle} onChange={(event) => setConversationTitle(event.target.value)} placeholder="Revenue recovery operating thread" /></div><div><Label htmlFor="message-conversation-purpose">Purpose</Label><Textarea id="message-conversation-purpose" className="mt-1" value={conversationPurpose} onChange={(event) => setConversationPurpose(event.target.value)} placeholder="What work, decision, or coordination belongs here?" /></div><div><p className="text-sm font-medium">Reporting-line participants</p><div className="mt-2 flex flex-wrap gap-2">{eligibleSeats.map((seat) => <label key={seat.id} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-xs ${seat.id === activeSeatId ? "bg-muted/50" : "cursor-pointer"}`}><input type="checkbox" checked={seat.id === activeSeatId || participantSeatIds.includes(seat.id)} disabled={seat.id === activeSeatId} onChange={() => toggleSeat(seat.id)} />{seat.title}{seat.id === activeSeatId ? " (you)" : ""}</label>)}</div>{!adjacentSeats.length && <p className="mt-2 text-xs text-muted-foreground">No active direct manager or report is available in this role scope. Use your role assistant to route the request.</p>}</div><Button disabled={!canExecute || conversationTitle.trim().length < 2 || conversationParticipantSeatIds.length < 2 || createConversation.isPending} onClick={() => createConversation.mutate()}><Plus className="mr-2 h-4 w-4" />{createConversation.isPending ? "Creating conversation…" : "Create native conversation"}</Button></div><div className="mt-4 space-y-2">{conversations.map((conversation) => <button type="button" key={conversation.id} onClick={() => setSelectedConversationId(conversation.id)} className={`w-full rounded-lg border p-3 text-left ${selectedConversation?.id === conversation.id ? "border-primary bg-primary/5" : "bg-muted/30"}`}><div className="flex justify-between gap-3"><span className="font-medium">{conversation.title}</span><Badge variant={stateVariant(conversation.state)}>{conversation.state}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{conversation.summary || "No purpose recorded"} · {Array.isArray(conversation.data?.participantSeatIds) ? conversation.data.participantSeatIds.length : 0} seats</p></button>)}{!conversations.length && <p className="py-3 text-sm text-muted-foreground">No native conversations yet.</p>}</div></section>
         <section className="rounded-xl border p-4">
           <div className="flex items-center gap-2"><Send className="h-4 w-4 text-primary" /><h3 className="font-semibold">2. Record a message or prepare governed delivery</h3></div>
-          <p className="mt-1 text-sm text-muted-foreground">Native EOS messages are stored in this conversation. Email and Slack can also create a provider delivery plan; EOS still requires the exact company binding, role entitlement, approval, and provider receipt before it sends anything externally.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Native EOS messages are stored in this conversation{selectedThread ? ` under the ${selectedThread.title} thread` : ""}. Email and Slack can also create a provider delivery plan; EOS still requires the exact company binding, role entitlement, approval, and provider receipt before it sends anything externally.</p>
           <div className="mt-4 grid gap-3">
+            {threads.length > 0 && <div><Label htmlFor="message-thread-focus">Focused thread</Label><select id="message-thread-focus" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={selectedThreadId} onChange={(event) => setSelectedThreadId(event.target.value)}><option value="">All conversation messages</option>{threads.map((thread) => <option key={thread.id} value={thread.id}>{thread.title}</option>)}</select><p className="mt-1 text-xs text-muted-foreground">New messages are nested in the selected thread. Clear the selection to keep a message at the conversation level.</p></div>}
             <div><Label htmlFor="message-channel">Channel</Label><select id="message-channel" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={channel} onChange={(event) => setChannel(event.target.value as MessageChannel)}>{channels.map((item) => <option key={item.key} value={item.key}>{item.label} — {item.detail}</option>)}</select></div>
             {canViewCrm && <div><Label htmlFor="message-relationship">Relationship context (optional)</Label><select id="message-relationship" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={selectedRelationshipId} onChange={(event) => chooseRelationship(event.target.value)} disabled={crmQuery.isFetching}><option value="">No CRM relationship</option>{relationshipChoices.map((choice) => <option key={choice.relationship.id} value={choice.relationship.id}>{choice.label}</option>)}</select><p className="mt-1 text-xs text-muted-foreground">Only relationships already visible to this role appear here. EOS records an auditable link from the message to the selected relationship; choosing an email contact only prepares an editable draft.</p>{!crmQuery.isFetching && !crmQuery.isSuccess && <p className="mt-1 text-xs text-muted-foreground">CRM context is unavailable for this session. You can still record a governed message without it.</p>}</div>}
             <div><Label htmlFor="message-body">Message</Label><Textarea id="message-body" className="mt-1" value={messageBody} onChange={(event) => setMessageBody(event.target.value)} placeholder="Write the accountable update, request, decision context, or handoff." /></div>

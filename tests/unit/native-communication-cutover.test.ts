@@ -43,10 +43,14 @@ describe("native communication authority cutover", () => {
     expect(instrumentRuntime).toContain("message_reporting_path_required");
     expect(instrumentRuntime).toContain("message_conversation_membership_required");
     expect(instrumentRuntime).toContain("message_parent_required");
+    expect(instrumentRuntime).toContain("message_thread_scope_invalid");
+    expect(instrumentRuntime).toContain("message_thread_parent_required");
     expect(instrumentRuntime).toContain("messageConversationParticipants");
     expect(messageHub).toContain("eligibleNativeConversationSeats");
     expect(messageHub).toContain("Reporting-line participants");
     expect(messageHub).toContain("role assistant to route the request");
+    expect(messageHub).toContain("threadObjectId");
+    expect(messageHub).toContain("Focused thread");
   });
 
   it("uses the existing governed provider run queue for Email and Slack instead of claiming delivery from the native ledger", () => {
