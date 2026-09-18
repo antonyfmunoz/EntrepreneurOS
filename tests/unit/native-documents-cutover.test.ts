@@ -12,6 +12,7 @@ describe("native documents cutover", () => {
     expect(documentsStudio).toContain('data-testid="native-documents-studio"');
     expect(documentsStudio).toContain("Native Docs");
     expect(documentsStudio).toContain("Save new version");
+    expect(documentsStudio).toContain("nativeObjectId");
   });
 
   it("preserves document-template composition without mutating the source template", () => {

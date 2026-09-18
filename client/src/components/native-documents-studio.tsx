@@ -96,6 +96,13 @@ export function NativeDocumentsStudio({ root, roleScopeKey, canExecute, canDecid
   const selectedEvents = useMemo(() => (query.data?.events || []).filter((event: Json) => event.objectId === selected?.id), [query.data?.events, selected?.id]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const objectId = params.get("nativeObjectId");
+    if (params.get("focus") !== "native-documents-studio" || !objectId || mode !== "documents") return;
+    if (documents.some((item) => item.id === objectId)) setSelectedId(objectId);
+  }, [documents, mode]);
+
+  useEffect(() => {
     setSelectedId("");
     setError("");
   }, [mode]);

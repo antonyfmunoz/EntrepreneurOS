@@ -57,6 +57,7 @@ describe("Company Mission blueprint handoff", () => {
   it("routes each compiled native tool to its actual EOS operating surface", () => {
     expect(orgStudio).toContain("native-commerce-studio");
     expect(orgStudio).toContain("native-documents-studio");
+    expect(orgStudio).toContain("nativeObjectId");
     expect(orgStudio).toContain('label: "Finance & Capital"');
   });
 
