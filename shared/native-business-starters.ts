@@ -1,6 +1,6 @@
 export type NativeBusinessStarter = {
   key: string;
-  instrumentKey: "crm" | "forms" | "websites";
+  instrumentKey: "commerce" | "crm" | "docs" | "finance" | "forms" | "websites";
   objectType: string;
   title: string;
   summary: string;
@@ -28,22 +28,37 @@ export function materializeNativeBusinessStarters(input: {
    * to the CEO just because a template was written for a service studio.
    */
   ownerRoleKey?: string;
+  /**
+   * The universal control records are intentionally owned by their
+   * accountable institutional seats.  The commercial owner remains the
+   * compatibility fallback for callers that predate the complete control
+   * foundation.
+   */
+  ownerRoleKeys?: {
+    commercial?: string;
+    finance?: string;
+    legal?: string;
+    operations?: string;
+  };
 }) : readonly NativeBusinessStarter[] {
   const companyName = input.companyName.trim() || "This company";
   const offer = input.offer.trim() || "the declared offer";
   const targetCustomer = input.targetCustomer.trim() || "the declared customer";
-  const ownerRoleKey = input.ownerRoleKey?.trim() || "growth";
+  const commercialOwnerRoleKey = input.ownerRoleKeys?.commercial?.trim() || input.ownerRoleKey?.trim() || "growth";
+  const financeOwnerRoleKey = input.ownerRoleKeys?.finance?.trim() || "finance_capital";
+  const legalOwnerRoleKey = input.ownerRoleKeys?.legal?.trim() || "legal_governance";
+  const operationsOwnerRoleKey = input.ownerRoleKeys?.operations?.trim() || "operations_administration";
   return [
-    { key: "commercial-pipeline", instrumentKey: "crm", objectType: "pipeline", title: `${offer} pipeline`, summary: `Native commercial pipeline for ${targetCustomer}.`, ownerRoleKey, data: { stages: ["Qualified", "Discovery", "Proposal", "Won", "Lost"], compilerStarter: true } },
-    { key: "commercial-intake", instrumentKey: "forms", objectType: "form", title: `${offer} discovery`, summary: `Private native intake draft for ${targetCustomer}.`, ownerRoleKey, data: { publicCapture: true, compilerStarter: true, questions: [{ id: "name", label: "Full name", type: "short_text", required: true, options: [] }, { id: "email", label: "Work email", type: "email", required: true, options: [] }, { id: "company", label: "Company", type: "short_text", required: false, options: [] }, { id: "goals", label: "What are you looking to accomplish?", type: "long_text", required: false, options: [] }], consentVersion: "native-eos-lead-capture-v1", consentLabel: `I agree that ${companyName} may use my information to respond to my request.`, confirmationMessage: "Thank you. Your request has been received." } },
-    { key: "company-site", instrumentKey: "websites", objectType: "site", title: companyName, summary: "EOS-owned native website draft.", ownerRoleKey, data: { brandName: companyName, compilerStarter: true } },
+    { key: "commercial-pipeline", instrumentKey: "crm", objectType: "pipeline", title: `${offer} pipeline`, summary: `Native commercial pipeline for ${targetCustomer}.`, ownerRoleKey: commercialOwnerRoleKey, data: { stages: ["Qualified", "Discovery", "Proposal", "Won", "Lost"], compilerStarter: true } },
+    { key: "commercial-intake", instrumentKey: "forms", objectType: "form", title: `${offer} discovery`, summary: `Private native intake draft for ${targetCustomer}.`, ownerRoleKey: commercialOwnerRoleKey, data: { publicCapture: true, compilerStarter: true, questions: [{ id: "name", label: "Full name", type: "short_text", required: true, options: [] }, { id: "email", label: "Work email", type: "email", required: true, options: [] }, { id: "company", label: "Company", type: "short_text", required: false, options: [] }, { id: "goals", label: "What are you looking to accomplish?", type: "long_text", required: false, options: [] }], consentVersion: "native-eos-lead-capture-v1", consentLabel: `I agree that ${companyName} may use my information to respond to my request.`, confirmationMessage: "Thank you. Your request has been received." } },
+    { key: "company-site", instrumentKey: "websites", objectType: "site", title: companyName, summary: "EOS-owned native website draft.", ownerRoleKey: commercialOwnerRoleKey, data: { brandName: companyName, compilerStarter: true } },
     {
       key: "commercial-page",
       instrumentKey: "websites",
       objectType: "page",
       title: `${offer} · Start here`,
       summary: `Native public-page draft for ${targetCustomer}.`,
-      ownerRoleKey,
+      ownerRoleKey: commercialOwnerRoleKey,
       data: {
         publicPage: true,
         compilerStarter: true,
@@ -67,7 +82,7 @@ export function materializeNativeBusinessStarters(input: {
       objectType: "funnel",
       title: `${offer} · Discovery funnel`,
       summary: `Native funnel draft that routes ${targetCustomer} into EOS intake.`,
-      ownerRoleKey,
+      ownerRoleKey: commercialOwnerRoleKey,
       data: {
         publicFunnel: true,
         compilerStarter: true,
@@ -77,5 +92,10 @@ export function materializeNativeBusinessStarters(input: {
         captureFormObjectId: nativeBusinessStarterReference("commercial-intake"),
       },
     },
+    { key: "native-offer-catalog", instrumentKey: "commerce", objectType: "offer", title: offer, summary: `Native EOS offer record for ${targetCustomer}; commercial activation remains governed.`, ownerRoleKey: commercialOwnerRoleKey, data: { name: offer, priceMinor: 0, currency: "USD", operatingMode: "native_eos", compilerStarter: true, priceState: "unconfigured" } },
+    { key: "finance-control-plan", instrumentKey: "finance", objectType: "plan", title: `${companyName} finance control plan`, summary: "Native finance planning record with explicit source and approval boundaries.", ownerRoleKey: financeOwnerRoleKey, data: { compilerStarter: true, period: "initial_operating_cycle", sourceAuthority: "native_eos", sourceBoundary: "Provider, accounting, bank, payroll, tax, and payment rails remain authoritative until a verified receipt is reconciled.", approvalBoundary: "No money movement, tax or accounting conclusion, capital allocation, or provider action is implied by this plan." } },
+    { key: "finance-reconciliation-register", instrumentKey: "finance", objectType: "reconciliation", title: `${companyName} reconciliation register`, summary: "Native queue for finance-source freshness, variance, exception, and resolution evidence.", ownerRoleKey: financeOwnerRoleKey, data: { compilerStarter: true, state: "ready_for_sources", providerReceipts: "not_asserted", manualFallback: "Record and review a source-labeled exception before treating any provider value as reconciled." } },
+    { key: "governance-obligation-register", instrumentKey: "docs", objectType: "document", title: `${companyName} governance and obligation register`, summary: "Controlled native record for policies, obligations, rights, risks, and review dates.", ownerRoleKey: legalOwnerRoleKey, data: { compilerStarter: true, format: "markdown", body: `# Governance and obligation register\n\nUse this controlled record to identify source authority, affected parties, effective dates, obligations, rights, risks, evidence needs, and professional-review boundaries for ${companyName}.\n\nThis document is not legal advice and does not establish compliance, an executed agreement, or any external legal effect.`, reviewState: "draft" } },
+    { key: "vendor-service-pipeline", instrumentKey: "crm", objectType: "pipeline", title: `${companyName} vendor and service review`, summary: "Native vendor/service control pipeline. A stage does not establish a contract, payment, access grant, or provider connection.", ownerRoleKey: operationsOwnerRoleKey, data: { compilerStarter: true, stages: ["Proposed need", "Scope and risk review", "Awaiting approval", "Approved service", "Offboarding or replacement"], authorityBoundary: "An authorized human approves any contract, spend, access, data disclosure, account connection, or other irreversible external effect." } },
   ];
 }

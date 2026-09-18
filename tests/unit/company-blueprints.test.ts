@@ -140,6 +140,11 @@ describe("company operating blueprints", () => {
       "websites:site",
       "websites:page",
       "websites:funnel",
+      "commerce:offer",
+      "finance:plan",
+      "finance:reconciliation",
+      "docs:document",
+      "crm:pipeline",
     ]);
     expect(starters.find((starter) => starter.key === "commercial-pipeline")).toMatchObject({
       title: "Revenue recovery service pipeline",
@@ -161,6 +166,26 @@ describe("company operating blueprints", () => {
       publicFunnel: true,
       captureFormObjectId: { starterAssetId: "commercial-intake" },
     });
+    expect(starters.find((starter) => starter.key === "native-offer-catalog")).toMatchObject({
+      ownerRoleKey: "growth",
+      data: { operatingMode: "native_eos", priceState: "unconfigured" },
+    });
+    expect(starters.find((starter) => starter.key === "finance-control-plan")).toMatchObject({
+      ownerRoleKey: "finance_capital",
+      data: { compilerStarter: true, sourceAuthority: "native_eos" },
+    });
+    expect(starters.find((starter) => starter.key === "finance-reconciliation-register")).toMatchObject({
+      ownerRoleKey: "finance_capital",
+      data: { providerReceipts: "not_asserted" },
+    });
+    expect(starters.find((starter) => starter.key === "governance-obligation-register")).toMatchObject({
+      ownerRoleKey: "legal_governance",
+      data: { reviewState: "draft" },
+    });
+    expect(starters.find((starter) => starter.key === "vendor-service-pipeline")).toMatchObject({
+      ownerRoleKey: "operations_administration",
+      data: { stages: expect.arrayContaining(["Awaiting approval"]) },
+    });
   });
 
   it("assigns commercial native assets to the active blueprint's commercial role", () => {
@@ -170,8 +195,11 @@ describe("company operating blueprints", () => {
       targetCustomer: "Independent creators",
       ownerRoleKey: "brand_growth",
     });
-    expect(productAssets.every((starter) => starter.ownerRoleKey === "brand_growth")).toBe(true);
-    expect(companyBlueprintForBusinessModel("product").roles.some((role) => role.key === productAssets[0].ownerRoleKey)).toBe(true);
+    const commercialAssets = productAssets.filter((starter) => ["commercial-pipeline", "commercial-intake", "company-site", "commercial-page", "commercial-funnel", "native-offer-catalog"].includes(starter.key));
+    expect(commercialAssets.every((starter) => starter.ownerRoleKey === "brand_growth")).toBe(true);
+    expect(productAssets.find((starter) => starter.key === "finance-control-plan")?.ownerRoleKey).toBe("finance_capital");
+    expect(productAssets.find((starter) => starter.key === "governance-obligation-register")?.ownerRoleKey).toBe("legal_governance");
+    expect(productAssets.find((starter) => starter.key === "vendor-service-pipeline")?.ownerRoleKey).toBe("operations_administration");
   });
 
   it("maps role-designer labels to the canonical tool keys used by policy enforcement", () => {

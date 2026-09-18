@@ -2483,7 +2483,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       expect.objectContaining({ key: "vendor-control-foundation" }),
       expect.objectContaining({ key: "offer-evolution-foundation" }),
     ]));
-    expect(instantiated.body.createdNativeAssetIds).toHaveLength(5);
+    expect(instantiated.body.createdNativeAssetIds).toHaveLength(10);
     expect(instantiated.body.createdNativeAssetIds.every((id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))).toBe(true);
     const nativeAssets = await sql<Array<{ id: string; objectKey: string; data: Record<string, unknown> }>>`
       SELECT id, object_key AS "objectKey", data
@@ -2506,7 +2506,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       .send({ blueprintKey: "service_studio" })
       .expect(201);
     expect(compilerReplay.body.createdNativeAssetIds).toHaveLength(0);
-    expect(compilerReplay.body.preservedNativeAssetIds).toHaveLength(5);
+    expect(compilerReplay.body.preservedNativeAssetIds).toHaveLength(10);
 
     // Simulate an established company that compiled before the native funnel
     // tools were added, while preserving its deliberate custom entitlement.
@@ -2592,14 +2592,16 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     );
     expect(brandGrowthSeat).toBeTruthy();
 
-    const nativeAssets = await sql<Array<{ ownerSeatId: string }>>`
-      SELECT owner_seat_id AS "ownerSeatId"
+    const nativeAssets = await sql<Array<{ ownerSeatId: string; objectKey: string }>>`
+      SELECT owner_seat_id AS "ownerSeatId", object_key AS "objectKey"
       FROM eos_instrument_objects
       WHERE company_id = ${productCompany.id}
         AND object_key LIKE 'company-blueprint:product_company:%'
     `;
-    expect(nativeAssets).toHaveLength(5);
-    expect(nativeAssets.every((asset) => asset.ownerSeatId === brandGrowthSeat.id)).toBe(true);
+    expect(nativeAssets).toHaveLength(10);
+    expect(nativeAssets.filter((asset) => [
+      "commercial-pipeline", "commercial-intake", "company-site", "commercial-page", "commercial-funnel", "native-offer-catalog",
+    ].some((key) => asset.objectKey.endsWith(`:${key}`))).every((asset) => asset.ownerSeatId === brandGrowthSeat.id)).toBe(true);
   });
 
   it("compiles the organization from its one company mission, then activates an evidence-bearing approved mission", async () => {

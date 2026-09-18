@@ -3197,6 +3197,12 @@ export function registerEosRuntimeRoutes(app: Express): void {
               offer: access.company.offer || "",
               targetCustomer: access.company.targetCustomer || "",
               ownerRoleKey: blueprint.starters.find((starter) => starter.key === "commercial-foundation")?.ownerRoleKey,
+              ownerRoleKeys: {
+                commercial: blueprint.starters.find((starter) => starter.key === "commercial-foundation")?.ownerRoleKey,
+                finance: blueprint.starters.find((starter) => starter.key === "finance-control-foundation")?.ownerRoleKey,
+                legal: blueprint.starters.find((starter) => starter.key === "legal-governance-foundation")?.ownerRoleKey,
+                operations: blueprint.starters.find((starter) => starter.key === "vendor-control-foundation")?.ownerRoleKey,
+              },
             }).map((starter) => {
               const objectKey = `company-blueprint:${blueprint.key}:${starter.key}`;
               const original = instruments.find((candidate) => candidate.instrumentKey === starter.instrumentKey && candidate.objectKey === objectKey);
@@ -3617,6 +3623,12 @@ export function registerEosRuntimeRoutes(app: Express): void {
           offer: access.company.offer || "",
           targetCustomer: access.company.targetCustomer || "",
           ownerRoleKey: blueprint.starters.find((starter) => starter.key === "commercial-foundation")?.ownerRoleKey,
+          ownerRoleKeys: {
+            commercial: blueprint.starters.find((starter) => starter.key === "commercial-foundation")?.ownerRoleKey,
+            finance: blueprint.starters.find((starter) => starter.key === "finance-control-foundation")?.ownerRoleKey,
+            legal: blueprint.starters.find((starter) => starter.key === "legal-governance-foundation")?.ownerRoleKey,
+            operations: blueprint.starters.find((starter) => starter.key === "vendor-control-foundation")?.ownerRoleKey,
+          },
         });
         const existingNativeAssets = await tx
           .select()
