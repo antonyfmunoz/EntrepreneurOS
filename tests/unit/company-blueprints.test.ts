@@ -37,6 +37,7 @@ describe("company operating blueprints", () => {
       expect(ceo?.tools.length).toBeGreaterThan(0);
       expect(blueprint.roles.find((role) => role.key === "finance_capital")).toMatchObject({ kind: "functional_executive", department: "Finance", supervisorKey: "company_ceo" });
       expect(blueprint.roles.find((role) => role.key === "legal_governance")).toMatchObject({ kind: "functional_executive", department: "Legal & Governance", supervisorKey: "company_ceo" });
+      expect(blueprint.roles.find((role) => role.key === "people_talent")).toMatchObject({ kind: "functional_executive", department: "People, Talent & Culture", supervisorKey: "company_ceo" });
       expect(blueprint.roles.every((role) => role.department.trim().length > 0)).toBe(true);
     }
   });
@@ -163,8 +164,18 @@ describe("company operating blueprints", () => {
 
   it("maps role-designer labels to the canonical tool keys used by policy enforcement", () => {
     expect(canonicalToolEntitlements([
-      "CRM", "Documents", "Content Calendar", "Campaigns", "Roadmap", "CRM",
-    ])).toEqual(["crm", "docs", "calendar", "ads", "projects"]);
+      "CRM", "Documents", "Content Calendar", "Campaigns", "Roadmap", "Learning", "Development / Progression", "CRM",
+    ])).toEqual(["crm", "docs", "calendar", "ads", "projects", "learning", "progression"]);
+  });
+
+  it("gives every company an accountable talent function with native tools for an agent-first or hybrid team", () => {
+    for (const blueprint of companyBlueprints) {
+      const people = blueprint.roles.find((role) => role.key === "people_talent");
+      expect(people?.agentName).toBe("People & Talent Agent");
+      expect(canonicalToolEntitlements(people?.tools || [])).toEqual(expect.arrayContaining([
+        "forms", "calendar", "messages", "docs", "tables", "workflows", "analytics", "learning", "progression",
+      ]));
+    }
   });
 
   it("equips compiled growth roles to operate the native demand engine they own", () => {

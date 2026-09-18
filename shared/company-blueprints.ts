@@ -58,6 +58,16 @@ const universalCoreRoles: readonly CompanyBlueprintRole[] = [
     mandate: "Maintain company policy, contract, entity, risk, and decision records; prepare governed work while routing legal advice and sign-off to qualified counsel.",
     tools: ["Documents", "Workflows", "Conference Rooms", "Analytics"],
   },
+  {
+    key: "people_talent",
+    title: "People, Talent & Culture",
+    department: "People, Talent & Culture",
+    kind: "functional_executive",
+    supervisorKey: "company_ceo",
+    agentName: "People & Talent Agent",
+    mandate: "Maintain accountable capacity planning, recruiting, fair evidence-based assessment, onboarding, development, succession, and the human-to-agent assistant transition. Escalate employment, compensation, and other regulated people decisions to the authorized human or qualified professional.",
+    tools: ["Forms", "Calendar", "Messages", "Documents", "Tables", "Workflows", "Analytics", "Learning", "Progression"],
+  },
 ];
 
 const commercialStarter = (ownerRoleKey: string, tools: string[]): CompanyBlueprintStarter => ({
