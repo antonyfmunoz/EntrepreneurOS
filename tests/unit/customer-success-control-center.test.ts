@@ -74,8 +74,16 @@ describe("native customer-success control contracts", () => {
     expect(control).toContain("makes this Work Packet executable only through that exact version");
     expect(control).toContain("Released process attached:");
     expect(control).toContain("EOS will only run the exact attached process version");
+    expect(control).toContain("Client workspace access");
+    expect(control).toContain("Begin workspace configuration");
+    expect(control).toContain("Activate client workspace");
+    expect(control).toContain("Issue private link once");
+    expect(control).toContain("Revoke access");
+    expect(control).toContain("EOS never sends the link automatically or stores its raw token.");
+    expect(control).toContain("access-grants/${grantId}/revoke");
     expect(portalRoutes).toContain('state: "dormant"');
     expect(portalRoutes).toContain("tokenDisclosedOnce: true");
+    expect(portalRoutes).toContain("stakeholder_portal_activation_incomplete");
   });
 
   it("adds database-enforced immutable receipts and governed projections", () => {
