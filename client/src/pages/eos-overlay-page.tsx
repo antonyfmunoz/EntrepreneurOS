@@ -119,6 +119,7 @@ const ArtifactClosureControlCenter = lazy(() => import("@/components/artifact-cl
 const NativeOperatingControlCenter = lazy(() => import("@/components/native-operating-control-center").then((module) => ({ default: module.NativeOperatingControlCenter })));
 const CanonicalInstrumentControlCenter = lazy(() => import("@/components/canonical-instrument-control-center").then((module) => ({ default: module.CanonicalInstrumentControlCenter })));
 const LeadCaptureStudio = lazy(() => import("@/components/lead-capture-studio").then((module) => ({ default: module.LeadCaptureStudio })));
+const NativeFormsStudio = lazy(() => import("@/components/native-forms-studio").then((module) => ({ default: module.NativeFormsStudio })));
 const NativeFunnelStudio = lazy(() => import("@/components/native-funnel-studio").then((module) => ({ default: module.NativeFunnelStudio })));
 const NativeCalendarStudio = lazy(() => import("@/components/native-calendar-studio").then((module) => ({ default: module.NativeCalendarStudio })));
 const NativeMessageHub = lazy(() => import("@/components/native-message-hub").then((module) => ({ default: module.NativeMessageHub })));
@@ -1545,6 +1546,13 @@ export default function EosOverlayPage() {
     canUseInstrument("crm") &&
     (isFounder ||
       (toolEntitlements.has("forms") && toolEntitlements.has("crm")));
+  // Private operating forms are useful outside of Growth: a role can create
+  // or complete its authorized internal intake without inheriting CRM or a
+  // public-funnel surface. The route still verifies the Forms tool and the
+  // record's classification/visibility on every command.
+  const mayOperateNativeForms =
+    canUseInstrument("forms") &&
+    (isFounder || toolEntitlements.has("forms"));
   const mayOperateNativeFunnels =
     mayOperateNativeLeadCapture &&
     canUseInstrument("websites") &&
@@ -2793,7 +2801,10 @@ export default function EosOverlayPage() {
     onSuccess: async (_, variables) => {
       setDecisionDraft(null);
       setDecisionReason("");
-      await refresh();
+      // A decision receipt is already returned by the command. Show its
+      // acknowledgement immediately; waiting on every surrounding workspace
+      // query made a successful rejection look unresponsive when a secondary
+      // refresh was slow. The refreshed state still follows in the background.
       toast({
         title:
           variables.decision === "approved" ? "Work approved" : "Work rejected",
@@ -2801,6 +2812,7 @@ export default function EosOverlayPage() {
           variables.reason ||
           "The decision and resulting state change were recorded.",
       });
+      await refresh();
     },
     onError: (error) => showMutationError("Approval decision", error),
   });
@@ -11022,6 +11034,13 @@ export default function EosOverlayPage() {
             </Suspense>}
             {mayOperateNativeLeadCapture && <Suspense fallback={<DeferredControlFallback />}>
               <LeadCaptureStudio
+                root={root}
+                canExecute={effectiveAuthorityClasses.has("execute")}
+                canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
+            {mayOperateNativeForms && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeFormsStudio
                 root={root}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
