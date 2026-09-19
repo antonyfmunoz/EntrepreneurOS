@@ -105,6 +105,83 @@ function recordValue(value: unknown): Record<string, unknown> {
     : {};
 }
 
+// Internal operating forms intentionally use the same question grammar as
+// public lead capture, but never cross the public route boundary.  This lets a
+// company build meeting check-ins, project intakes, hiring reviews, and other
+// native workflows without turning an internal record into a public endpoint.
+const nativeInternalFormQuestionSchema = z.object({
+  id: z.string().trim().min(2).max(100).regex(/^[a-z][a-z0-9_:-]*$/i),
+  label: z.string().trim().min(2).max(500),
+  type: z.enum(["short_text", "long_text", "email", "phone", "select"]),
+  required: z.boolean().default(false),
+  options: z.array(z.string().trim().min(1).max(250)).max(100).default([]),
+});
+const nativeInternalFormDefinitionSchema = z.object({
+  internalCapture: z.literal(true),
+  questions: z.array(nativeInternalFormQuestionSchema).min(1).max(100),
+  consentVersion: z.string().trim().min(2).max(200),
+  confirmationMessage: z.string().trim().min(2).max(2_000),
+});
+const nativeInternalFormSubmissionSchema = z.object({
+  answers: z.record(z.string().max(10_000)).default({}),
+  idempotencyKey: z.string().trim().min(2).max(200).regex(/^[a-z0-9][a-z0-9._:-]*$/i),
+});
+
+function internalFormDefinition(value: unknown) {
+  const parsed = nativeInternalFormDefinitionSchema.safeParse(recordValue(value));
+  if (!parsed.success)
+    throw new EosRouteError(409, "native_form_definition_invalid", "This form must be configured in Native Forms Studio before it can accept internal submissions.");
+  const ids = parsed.data.questions.map((question) => question.id);
+  if (new Set(ids).size !== ids.length)
+    throw new EosRouteError(409, "native_form_question_duplicate", "A native form cannot contain duplicate question identifiers.");
+  for (const question of parsed.data.questions) {
+    if (question.type === "select" && !question.options.length)
+      throw new EosRouteError(409, "native_form_select_options_missing", "Every select question needs at least one permitted option.");
+  }
+  return parsed.data;
+}
+
+function validateInternalFormAnswers(
+  definition: z.infer<typeof nativeInternalFormDefinitionSchema>,
+  answers: Record<string, string>,
+) {
+  const allowed = new Set(definition.questions.map((question) => question.id));
+  for (const key of Object.keys(answers)) {
+    if (!allowed.has(key))
+      throw new EosRouteError(400, "native_form_answer_unknown", "An answer does not correspond to a question in this native form.");
+  }
+  const normalized: Record<string, string> = {};
+  for (const question of definition.questions) {
+    const value = String(answers[question.id] || "").trim();
+    if (question.required && !value)
+      throw new EosRouteError(400, "native_form_answer_required", `${question.label} is required.`);
+    if (question.type === "email" && value && !z.string().email().safeParse(value).success)
+      throw new EosRouteError(400, "native_form_email_invalid", "Enter a valid email address.");
+    if (question.type === "select" && value && !question.options.includes(value))
+      throw new EosRouteError(400, "native_form_selection_invalid", "Choose one of the listed options.");
+    normalized[question.id] = value;
+  }
+  return normalized;
+}
+
+function assertNativeInternalFormDefinition(
+  current: typeof eosInstrumentObjects.$inferSelect,
+  nextData: Record<string, unknown>,
+) {
+  if (current.instrumentKey !== "forms" || current.objectType !== "form") return;
+  const currentData = recordValue(current.data);
+  if (currentData.publicCapture === true || currentData.internalCapture !== true) return;
+  const next = internalFormDefinition(nextData);
+  // Once active, an answer means exactly what the published question set said
+  // at the time it was accepted. Retire or pause the form before changing that
+  // semantic contract; a silent active-edit would corrupt review history.
+  if (current.state === "active") {
+    const currentDefinition = internalFormDefinition(current.data);
+    if (JSON.stringify(currentDefinition.questions) !== JSON.stringify(next.questions) || currentDefinition.consentVersion !== next.consentVersion)
+      throw new EosRouteError(409, "native_form_active_definition_immutable", "Pause this active native form before changing its questions or consent version.");
+  }
+}
+
 /**
  * A public form or booking calendar can optionally compile an accepted,
  * consented intake signal into an EOS-native CRM opportunity. That is a
@@ -984,6 +1061,119 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
   }));
 
   /**
+   * Record a response to an EOS-owned internal form.  This is deliberately a
+   * specialized command rather than a generic Form object write: the server
+   * validates the exact published definition, scopes the parent form to the
+   * caller's role visibility, preserves the form owner as accountable for the
+   * response queue, and records a receipt without echoing answer content into
+   * audit/event payloads.
+   */
+  app.post("/api/eos/companies/:companyId/forms/:formId/submissions", route(async (req, res) => {
+    const input = nativeInternalFormSubmissionSchema.parse(req.body);
+    const { access, policy } = await instrumentAccess(req, "execute", "forms", "native_form.submit", "confidential");
+    const replay = await replayCommand(access.company.id, input.idempotencyKey, "forms", "form.submit");
+    if (replay) { res.status(200).json(replay); return; }
+
+    const [form] = await db.select().from(eosInstrumentObjects).where(and(
+      eq(eosInstrumentObjects.id, req.params.formId),
+      eq(eosInstrumentObjects.companyId, access.company.id),
+      eq(eosInstrumentObjects.instrumentKey, "forms"),
+      eq(eosInstrumentObjects.objectType, "form"),
+      eq(eosInstrumentObjects.state, "active"),
+    )).limit(1);
+    if (!form || !(await visibleObjectSet(access, [form])).length)
+      throw new EosRouteError(404, "native_form_unavailable", "This active native form is unavailable in your current role scope.");
+    if (recordValue(form.data).publicCapture === true)
+      throw new EosRouteError(409, "native_form_public_boundary", "Public lead forms accept submissions only through their public, consent-protected route.");
+    const definition = internalFormDefinition(form.data);
+    const answers = validateInternalFormAnswers(definition, input.answers);
+    const now = new Date();
+    const objectId = randomUUID();
+    const commandId = randomUUID();
+    const objectKey = `submission:${form.id}:${objectId}`;
+    const sourceReference = {
+      authority: "native_eos",
+      capability: "internal_forms",
+      formObjectId: form.id,
+      submittedBySeatId: access.seat.id,
+    };
+    const data = {
+      formObjectId: form.id,
+      responses: answers,
+      submittedAt: now.toISOString(),
+      consentVersion: definition.consentVersion,
+      submissionChannel: "internal_eos",
+    };
+    const projection = {
+      schemaVersion: "eos.instrument-object.v1",
+      companyId: access.company.id,
+      instrumentKey: "forms",
+      objectType: "submission",
+      objectKey,
+      title: `Response · ${form.title}`,
+      summary: "Internal native-form response awaiting the form owner's governed review.",
+      state: "active",
+      classification: form.classification,
+      visibility: "team",
+      ownerSeatId: form.ownerSeatId,
+      parentObjectId: form.id,
+      data,
+      sourceReference,
+      evidenceIds: [],
+      version: 1,
+    };
+    const submission = {
+      id: objectId,
+      companyId: access.company.id,
+      instrumentKey: "forms",
+      objectType: "submission",
+      objectKey,
+      title: projection.title,
+      summary: projection.summary,
+      state: "active",
+      classification: form.classification,
+      visibility: "team",
+      ownerSeatId: form.ownerSeatId,
+      parentObjectId: form.id,
+      data,
+      sourceReference,
+      evidenceIds: [],
+      contentSha256: nativeContractContentSha256(projection),
+      version: 1,
+      recordedByUserId: req.user.id,
+      createdAt: now,
+      updatedAt: now,
+      archivedAt: null,
+    };
+    await db.transaction(async (tx) => {
+      await tx.insert(eosInstrumentObjects).values(submission);
+      await tx.insert(eosInstrumentCommands).values({
+        id: commandId, companyId: access.company.id, instrumentKey: "forms", objectId,
+        commandType: "form.submit", idempotencyKey: input.idempotencyKey, expectedVersion: form.version,
+        payload: { formObjectId: form.id, questionIds: definition.questions.map((question) => question.id), submissionChannel: "internal_eos" },
+        state: "completed", result: { submissionObjectId: objectId, version: 1 }, policyDecisionId: policy.decisionId,
+        requestedByUserId: req.user.id, createdAt: now, completedAt: now,
+      });
+      await tx.insert(eosInstrumentEvents).values({
+        id: randomUUID(), companyId: access.company.id, instrumentKey: "forms", objectId, commandId,
+        eventType: "form.submission_recorded", fromState: null, toState: "active", objectVersion: 1,
+        payload: { formObjectId: form.id, questionIds: definition.questions.map((question) => question.id), submissionChannel: "internal_eos" },
+        evidenceIds: [],
+        contentSha256: eventHash({ companyId: access.company.id, objectId, commandId, eventType: "form.submission_recorded", toState: "active", objectVersion: 1, formObjectId: form.id }),
+        recordedByUserId: req.user.id, createdAt: now,
+      });
+      await tx.insert(eosAuditRecords).values({
+        id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id,
+        action: "native_form.submission_recorded", targetType: "form", targetId: form.id,
+        traceId: policy.traceId, correlationId: policy.correlationId, result: "active",
+        details: { submissionObjectId: objectId, questionIds: definition.questions.map((question) => question.id), policyDecisionId: policy.decisionId, submissionChannel: "internal_eos" },
+        createdAt: now,
+      });
+    });
+    res.status(201).json({ command: { id: commandId, state: "completed" }, object: submission, confirmationMessage: definition.confirmationMessage, replayed: false });
+  }));
+
+  /**
    * Convert an EOS-owned commercial opportunity into an EOS-owned order in a
    * single transaction.  A generic object create is deliberately insufficient
    * here: it could leave an order detached from the buyer/opportunity that
@@ -1304,6 +1494,8 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     const [current] = await db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.id, req.params.objectId), eq(eosInstrumentObjects.companyId, Number(req.params.companyId)))).limit(1);
     if (!current) throw new EosRouteError(404, "instrument_object_not_found", "Instrument object not found.");
     const { access, policy } = await instrumentAccess(req, "execute", current.instrumentKey, "instrument.object.update", input.classification || current.classification);
+    if (current.instrumentKey === "forms" && !(await visibleObjectSet(access, [current])).length)
+      throw new EosRouteError(404, "native_form_unavailable", "This native form is unavailable in your current role scope.");
     const replay = await replayCommand(access.company.id, input.idempotencyKey, current.instrumentKey, "object.update"); if (replay) { res.json(replay); return; }
     if (current.version !== input.expectedVersion) throw new EosRouteError(409, "instrument_version_conflict", "The instrument object changed before this update.");
     if (current.state === "archived") throw new EosRouteError(409, "instrument_object_archived", "Archived instrument objects are immutable through the normal lifecycle.");
@@ -1311,6 +1503,7 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     const next = { title: input.title ?? current.title, summary: input.summary ?? current.summary, classification: input.classification ?? current.classification, visibility: input.visibility ?? current.visibility, data: input.data ?? current.data as Record<string, unknown>, sourceReference: input.sourceReference ?? current.sourceReference as Record<string, unknown>, evidenceIds: evidence, version: current.version + 1, updatedAt: new Date() };
     await assertNativeMessageUpdate(access, current, next);
     await assertNativeCanvasUpdate(access, current, next);
+    await assertNativeInternalFormDefinition(current, next.data);
     if (input.data !== undefined) await assertPublicCommercialRouting(req, access, { instrumentKey: current.instrumentKey, objectType: current.objectType, data: next.data, classification: next.classification });
     if (input.data !== undefined) await assertNativeCommerceOrderSource(req, access, { instrumentKey: current.instrumentKey, objectType: current.objectType, data: next.data, classification: next.classification });
     if (["active", "completed"].includes(current.state)) {
@@ -1463,6 +1656,8 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     if (!current) throw new EosRouteError(404, "instrument_object_not_found", "Instrument object not found.");
     const consequential = ["active", "completed", "cancelled", "archived"].includes(input.state);
     const { access, policy } = await instrumentAccess(req, consequential ? "decide" : "execute", current.instrumentKey, "instrument.object.transition", current.classification);
+    if (current.instrumentKey === "forms" && !(await visibleObjectSet(access, [current])).length)
+      throw new EosRouteError(404, "native_form_unavailable", "This native form is unavailable in your current role scope.");
     const replay = await replayCommand(access.company.id, input.idempotencyKey, current.instrumentKey, "object.transition"); if (replay) { res.json(replay); return; }
     if (current.version !== input.expectedVersion) throw new EosRouteError(409, "instrument_version_conflict", "The instrument object changed before this transition.");
     if (!mayTransitionInstrumentObject(current.state, input.state)) throw new EosRouteError(409, "instrument_transition_invalid", `Instrument objects cannot move from ${current.state} to ${input.state}.`);
@@ -1473,6 +1668,8 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     if (["active", "completed"].includes(input.state)) {
       const findings = instrumentDomainFindings(eosInstrumentKeySchema.parse(current.instrumentKey), current.objectType, current.data);
       if (findings.length) throw new EosRouteError(409, findings[0].code, findings[0].message);
+      if (current.instrumentKey === "forms" && current.objectType === "form" && recordValue(current.data).internalCapture === true && recordValue(current.data).publicCapture !== true)
+        internalFormDefinition(current.data);
     }
     await assertNativeCanvasUpdate(access, current, { data: recordValue(current.data) });
     await checkedEvidence(access.company.id, input.evidenceIds, input.state === "completed");
