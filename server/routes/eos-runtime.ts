@@ -1400,6 +1400,32 @@ async function assertOutreachReferences(
       "outreach_reference_graph_mismatch",
       "The outreach relationship must belong to a party in the selected commercial case.",
     );
+
+  // A do-not-contact instruction belongs to the relationship, not merely the
+  // outreach sequence that happened to record it. Do this check at the
+  // command boundary so a new sequence cannot silently bypass a prior
+  // instruction by changing its title, channel, or linked commercial case.
+  const [doNotContact] = await db
+    .select({ id: eosOutreachAttempts.id })
+    .from(eosOutreachAttempts)
+    .innerJoin(
+      eosOutreachSequences,
+      eq(eosOutreachAttempts.sequenceId, eosOutreachSequences.id),
+    )
+    .where(
+      and(
+        eq(eosOutreachSequences.companyId, companyId),
+        eq(eosOutreachSequences.relationshipId, relationshipId),
+        eq(eosOutreachAttempts.outcome, "do_not_contact"),
+      ),
+    )
+    .limit(1);
+  if (doNotContact)
+    throw new EosRouteError(
+      409,
+      "outreach_do_not_contact",
+      "This relationship has an accountable do-not-contact instruction. Do not create further outreach.",
+    );
   return { relationship, commercialCase };
 }
 
