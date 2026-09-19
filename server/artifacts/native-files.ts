@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from "node:crypto";
-import path from "node:path";
 import {
   nativeEsignStorageProvider,
   readNativeEsignArtifact,
@@ -49,10 +48,16 @@ export function nativeFileSha256(buffer: Buffer): string {
 }
 
 export function sanitizeNativeFileName(value: string): string {
-  const base = path
-    .basename(value.trim())
+  // `path.basename` only recognizes the host platform separator. Treat both
+  // separators as hostile path input so a Windows-style traversal name cannot
+  // become a visible or downloadable filename on a Linux deployment.
+  const base = value
+    .trim()
+    .split(/[\\/]+/)
+    .pop()!
     .replace(/[\u0000-\u001f\u007f]/g, "")
     .replace(/[\\/:*?\"<>|]/g, "-")
+    .replace(/^\.+/, "")
     .replace(/\s+/g, " ")
     .slice(0, 180);
   return base || "eos-file";
