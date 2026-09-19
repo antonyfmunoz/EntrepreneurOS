@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   stakeholderPortalIntakeFormCreateSchema,
   stakeholderPortalIntakeReviewSchema,
+  stakeholderPortalIntakeReviewHandoffSchema,
   stakeholderPortalIntakeSubmissionSchema,
 } from "../../shared/stakeholder-portal";
 
@@ -35,6 +36,11 @@ describe("native client portal onboarding intake contracts", () => {
     expect(() => stakeholderPortalIntakeReviewSchema.parse({ disposition: "acknowledged", reviewerSummary: "Too short", nextAction: "Too short" })).toThrow();
   });
 
+  it("requires a bounded native-work handoff after an accountable review", () => {
+    expect(stakeholderPortalIntakeReviewHandoffSchema.parse({ title: "Confirm the client launch access boundary", priority: "high" }).priority).toBe("high");
+    expect(() => stakeholderPortalIntakeReviewHandoffSchema.parse({ title: "No" })).toThrow();
+  });
+
   it("uses the grant-bound private portal route and records submissions as unverified EOS input", () => {
     const routes = readFileSync(resolve(process.cwd(), "server/routes/stakeholder-portal.ts"), "utf8");
     const page = readFileSync(resolve(process.cwd(), "client/src/pages/stakeholder-portal-page.tsx"), "utf8");
@@ -45,9 +51,11 @@ describe("native client portal onboarding intake contracts", () => {
     expect(routes).toContain("publicPortalIntakeRateLimit");
     expect(routes).toContain("hasActiveIntake");
     expect(routes).toContain("stakeholder_portal.intake_form.read");
-    expect(routes).toContain("eos.stakeholder-portal-intake-review.v2");
+    expect(routes).toContain("eos.stakeholder-portal-intake-review.v3");
     expect(routes).toContain("stakeholder_portal.intake_form.review");
     expect(routes).toContain("human_disposition_only_client_answers_remain_unverified");
+    expect(routes).toContain("stakeholder_portal.intake_form.handoff");
+    expect(routes).toContain("native_work_packet_only_no_provider_or_customer_effect");
     expect(page).toContain("Submit onboarding intake");
     expect(page).toContain("does not automatically grant access, start work, or change any agreement");
   });
