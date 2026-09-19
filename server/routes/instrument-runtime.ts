@@ -14,6 +14,7 @@ import {
 } from "@shared/schema";
 import {
   commerceOrderFromCrmSchema,
+  commerceOrderDeliveryProjectSchema,
   eosInstrumentKeySchema,
   crmOpportunityFollowUpActionSchema,
   instrumentDomainFindings,
@@ -542,13 +543,11 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     const directObjects = Array.from(directObjectIds).map((id) => visibleById.get(id)).filter((object): object is typeof eosInstrumentObjects.$inferSelect => Boolean(object));
     const meetingIds = new Set(directObjects.filter((object) => object.instrumentKey === "conference_rooms" && object.objectType === "meeting").map((object) => object.id));
     const decisionObjects = visibleObjects.filter((object) => object.instrumentKey === "conference_rooms" && object.objectType === "decision" && meetingIds.has(object.parentObjectId || ""));
-    // A relationship reaches a native order through its CRM opportunity:
-    // relationship -> opportunity -> order.  Projecting that one additional
-    // edge makes the commercial outcome visible where a role already manages
-    // the relationship, while the visible-object map ensures CRM access alone
-    // never discloses a Commerce object.  We deliberately do not traverse
-    // arbitrary graph edges here; this is the bounded, governed conversion
-    // path recorded by the native order command.
+    // A relationship reaches its commercial fulfillment through an explicit,
+    // bounded chain: relationship -> opportunity -> order -> delivery project.
+    // The visible-object map ensures CRM access alone never discloses Commerce
+    // or Projects records, and this route deliberately does not traverse
+    // arbitrary graph edges beyond the governed conversion path.
     const opportunityIds = directObjects
       .filter((object) => object.instrumentKey === "crm" && object.objectType === "opportunity")
       .map((object) => object.id);
@@ -562,14 +561,26 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     const orderObjects = opportunityOrderLinks
       .map((link) => visibleById.get(link.targetObjectId))
       .filter((object): object is typeof eosInstrumentObjects.$inferSelect => Boolean(object && object.instrumentKey === "commerce" && object.objectType === "order"));
-    const returnedIds = new Set([...directObjects.map((object) => object.id), ...decisionObjects.map((object) => object.id), ...orderObjects.map((object) => object.id)]);
+    const orderIds = orderObjects.map((object) => object.id);
+    const orderDeliveryLinks = orderIds.length
+      ? await db.select().from(eosInstrumentLinks).where(and(
+        eq(eosInstrumentLinks.companyId, access.company.id),
+        inArray(eosInstrumentLinks.sourceObjectId, orderIds),
+        eq(eosInstrumentLinks.relationshipType, "fulfills_order"),
+      ))
+      : [];
+    const deliveryProjectObjects = orderDeliveryLinks
+      .map((link) => visibleById.get(link.targetObjectId))
+      .filter((object): object is typeof eosInstrumentObjects.$inferSelect => Boolean(object && object.instrumentKey === "projects" && object.objectType === "project"));
+    const returnedIds = new Set([...directObjects.map((object) => object.id), ...decisionObjects.map((object) => object.id), ...orderObjects.map((object) => object.id), ...deliveryProjectObjects.map((object) => object.id)]);
     res.json({
       schemaVersion: "eos.crm.relationship-operating-context.v1",
       relationship: visibleRelationship[0],
-      objects: [...directObjects, ...decisionObjects, ...orderObjects],
+      objects: [...directObjects, ...decisionObjects, ...orderObjects, ...deliveryProjectObjects],
       links: [
         ...directLinks.filter((link) => returnedIds.has(link.sourceObjectId) || returnedIds.has(link.targetObjectId)),
         ...opportunityOrderLinks.filter((link) => returnedIds.has(link.sourceObjectId) && returnedIds.has(link.targetObjectId)),
+        ...orderDeliveryLinks.filter((link) => returnedIds.has(link.sourceObjectId) && returnedIds.has(link.targetObjectId)),
       ],
     });
   }));
@@ -923,6 +934,100 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
       return { command: { id: commandId, state: "completed" }, order, linkId, replayed: false };
     });
     res.status(result.replayed ? 200 : 201).json(result);
+  }));
+
+  /**
+   * Compile an authorized native order into its first accountable delivery
+   * project. Creating the project is deliberately distinct from activating
+   * it: an order does not prove payment, agreement execution, or readiness to
+   * start delivery. The atomic link preserves the commercial origin while the
+   * project remains a normal governed work object from that point onward.
+   */
+  app.post("/api/eos/companies/:companyId/commerce/orders/:objectId/delivery-projects", route(async (req, res) => {
+    const input = commerceOrderDeliveryProjectSchema.parse(req.body);
+    assertCredentialFree(input);
+    const { access, policy: commercePolicy } = await instrumentAccess(req, "execute", "commerce", "commerce.order.delivery_project.create", "confidential");
+    const { policy: projectsPolicy } = await instrumentAccess(req, "execute", "projects", "commerce.order.delivery_project.create", "confidential");
+    const replay = await replayCommand(access.company.id, input.idempotencyKey, "commerce", "order.delivery_project.create");
+    if (replay) {
+      const result = recordValue(replay.command.result);
+      const projectId = typeof result.projectObjectId === "string" ? result.projectObjectId : "";
+      const [project] = projectId ? await db.select().from(eosInstrumentObjects).where(and(
+        eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.id, projectId),
+        eq(eosInstrumentObjects.instrumentKey, "projects"), eq(eosInstrumentObjects.objectType, "project"),
+      )).limit(1) : [];
+      res.json({ command: replay.command, order: replay.object, project: project || null, replayed: true });
+      return;
+    }
+
+    const [order] = await db.select().from(eosInstrumentObjects).where(and(
+      eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.id, req.params.objectId),
+      eq(eosInstrumentObjects.instrumentKey, "commerce"), eq(eosInstrumentObjects.objectType, "order"),
+    )).limit(1);
+    if (!order || !(await visibleObjectSet(access, [order])).length)
+      throw new EosRouteError(404, "commerce_order_not_found", "The selected native order is unavailable for this role.");
+    if (order.state === "archived") throw new EosRouteError(409, "commerce_order_archived", "An archived order cannot receive a delivery project.");
+    if (order.version !== input.expectedOrderVersion)
+      throw new EosRouteError(409, "commerce_order_version_conflict", "The order changed before its delivery project could be recorded.");
+    const orderData = recordValue(order.data);
+    if (typeof orderData.deliveryProjectObjectId === "string" && orderData.deliveryProjectObjectId)
+      throw new EosRouteError(409, "commerce_order_delivery_project_exists", "This order already has a governed delivery project. Configure that project or create additional work within it.");
+
+    // The project owner must remain within the requester's governed operating
+    // hierarchy. That works identically whether the destination seat is held
+    // by an agent or by a human supported by that role's assistant.
+    const visibleSeatIdSet = await visibleSeatIds(access.company.id, access.seat.id, access.role);
+    if (!visibleSeatIdSet.has(input.ownerSeatId))
+      throw new EosRouteError(403, "commerce_delivery_owner_scope_denied", "Choose an active role that is visible within your operating hierarchy.");
+    const [ownerSeat] = await db.select().from(eosSeats).where(and(
+      eq(eosSeats.companyId, access.company.id), eq(eosSeats.id, input.ownerSeatId), eq(eosSeats.status, "active"),
+    )).limit(1);
+    if (!ownerSeat) throw new EosRouteError(409, "commerce_delivery_owner_unavailable", "The selected delivery owner is no longer active in this company.");
+
+    const now = new Date();
+    const projectId = randomUUID();
+    const projectCommandId = randomUUID();
+    const orderCommandId = randomUUID();
+    const linkId = randomUUID();
+    const projectData = {
+      objective: input.objective,
+      ownerSeatId: ownerSeat.id,
+      orderObjectId: order.id,
+      buyerReference: typeof orderData.buyerReference === "string" ? orderData.buyerReference : null,
+      sourceOpportunityObjectId: typeof orderData.sourceOpportunityObjectId === "string" ? orderData.sourceOpportunityObjectId : null,
+      operatingMode: "native_eos",
+    };
+    const projectSource = { authority: "native_eos", capability: "commerce_delivery_project", orderObjectId: order.id };
+    const project = {
+      id: projectId, companyId: access.company.id, instrumentKey: "projects", objectType: "project",
+      objectKey: `project:order-delivery:${order.id}:${projectId}`, title: input.title, summary: input.objective,
+      state: "draft", classification: order.classification, visibility: "team", ownerSeatId: ownerSeat.id,
+      parentObjectId: null, data: projectData, sourceReference: projectSource, evidenceIds: [],
+      contentSha256: nativeContractContentSha256({ schemaVersion: "eos.instrument-object.v1", companyId: access.company.id, instrumentKey: "projects", objectType: "project", objectKey: `project:order-delivery:${order.id}:${projectId}`, title: input.title, summary: input.objective, state: "draft", classification: order.classification, visibility: "team", ownerSeatId: ownerSeat.id, data: projectData, sourceReference: projectSource, evidenceIds: [], version: 1 }),
+      version: 1, recordedByUserId: req.user.id, createdAt: now, updatedAt: now, archivedAt: null,
+    };
+    const nextOrderData = { ...orderData, deliveryProjectObjectId: projectId, deliveryProjectOwnerSeatId: ownerSeat.id, operatingMode: "native_eos" };
+    const nextOrder = { ...order, data: nextOrderData, version: order.version + 1, updatedAt: now };
+
+    await db.transaction(async (tx) => {
+      await tx.insert(eosInstrumentObjects).values(project);
+      const [updatedOrder] = await tx.update(eosInstrumentObjects).set({
+        data: nextOrderData, version: nextOrder.version, updatedAt: now,
+        contentSha256: nativeContractContentSha256({ schemaVersion: "eos.instrument-object.v1", companyId: access.company.id, instrumentKey: order.instrumentKey, objectType: order.objectType, objectKey: order.objectKey, title: order.title, summary: order.summary, state: order.state, classification: order.classification, visibility: order.visibility, ownerSeatId: order.ownerSeatId, data: nextOrderData, sourceReference: order.sourceReference, evidenceIds: order.evidenceIds, version: nextOrder.version }),
+      }).where(and(eq(eosInstrumentObjects.id, order.id), eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.version, order.version))).returning();
+      if (!updatedOrder) throw new EosRouteError(409, "commerce_order_concurrent_change", "The order changed before its delivery project could be recorded.");
+      await tx.insert(eosInstrumentLinks).values({ id: linkId, companyId: access.company.id, sourceObjectId: order.id, targetObjectId: projectId, relationshipType: "fulfills_order", metadata: { ownerSeatId: ownerSeat.id }, createdByUserId: req.user.id, createdAt: now });
+      await tx.insert(eosInstrumentCommands).values([
+        { id: orderCommandId, companyId: access.company.id, instrumentKey: "commerce", objectId: order.id, commandType: "order.delivery_project.create", idempotencyKey: input.idempotencyKey, expectedVersion: order.version, payload: { projectObjectId: projectId, ownerSeatId: ownerSeat.id }, state: "completed", result: { projectObjectId: projectId, linkId, orderVersion: nextOrder.version }, policyDecisionId: commercePolicy.decisionId, requestedByUserId: req.user.id, createdAt: now, completedAt: now },
+        { id: projectCommandId, companyId: access.company.id, instrumentKey: "projects", objectId: projectId, commandType: "project.create_from_order", idempotencyKey: `${input.idempotencyKey}:project`, expectedVersion: null, payload: { orderObjectId: order.id, ownerSeatId: ownerSeat.id }, state: "completed", result: { projectObjectId: projectId, linkId }, policyDecisionId: projectsPolicy.decisionId, requestedByUserId: req.user.id, createdAt: now, completedAt: now },
+      ]);
+      await tx.insert(eosInstrumentEvents).values([
+        { id: randomUUID(), companyId: access.company.id, instrumentKey: "projects", objectId: projectId, commandId: projectCommandId, eventType: "object.created", fromState: null, toState: "draft", objectVersion: 1, payload: { objectType: "project", orderObjectId: order.id, ownerSeatId: ownerSeat.id }, evidenceIds: [], contentSha256: eventHash({ companyId: access.company.id, objectId: projectId, commandId: projectCommandId, eventType: "object.created", toState: "draft", objectVersion: 1 }), recordedByUserId: req.user.id, createdAt: now },
+        { id: randomUUID(), companyId: access.company.id, instrumentKey: "commerce", objectId: order.id, commandId: orderCommandId, eventType: "order.delivery_project.created", fromState: order.state, toState: order.state, objectVersion: nextOrder.version, payload: { projectObjectId: projectId, linkId, ownerSeatId: ownerSeat.id }, evidenceIds: [], contentSha256: eventHash({ companyId: access.company.id, objectId: order.id, commandId: orderCommandId, eventType: "order.delivery_project.created", projectId, linkId, objectVersion: nextOrder.version }), recordedByUserId: req.user.id, createdAt: now },
+      ]);
+      await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "commerce.order.delivery_project.created", targetType: "commerce_order", targetId: order.id, traceId: commercePolicy.traceId, correlationId: commercePolicy.correlationId, result: "draft_project_created", details: { projectObjectId: projectId, linkId, ownerSeatId: ownerSeat.id, commercePolicyDecisionId: commercePolicy.decisionId, projectsPolicyDecisionId: projectsPolicy.decisionId }, createdAt: now });
+    });
+    res.status(201).json({ command: { id: orderCommandId, state: "completed" }, order: nextOrder, project, link: { id: linkId, relationshipType: "fulfills_order" }, replayed: false });
   }));
 
   app.patch("/api/eos/companies/:companyId/instrument-objects/:objectId", route(async (req, res) => {

@@ -183,6 +183,17 @@ export const commerceOrderFromCrmSchema = z.object({
   idempotencyKey: identifier,
 });
 
+// Delivery work is not a side effect of recording an order. It begins as a
+// separate, role-owned project so the commercial source remains traceable and
+// an explicit lifecycle decision is still required before fulfillment starts.
+export const commerceOrderDeliveryProjectSchema = z.object({
+  expectedOrderVersion: z.number().int().positive(),
+  title: z.string().trim().min(2).max(300),
+  objective: z.string().trim().min(3).max(5_000),
+  ownerSeatId: z.string().trim().min(1).max(200),
+  idempotencyKey: identifier,
+});
+
 export const instrumentSearchSchema = z.object({
   query: z.string().trim().max(200).default(""),
   instrumentKey: eosInstrumentKeySchema.optional(),

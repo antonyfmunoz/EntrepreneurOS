@@ -609,16 +609,34 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(orderFromOpportunity.body.linkId).toBeTruthy();
     const replayedOrderFromOpportunity = await api.post(`/api/eos/companies/${companyId}/commerce/orders`).send(orderFromOpportunityPayload).expect(200);
     expect(replayedOrderFromOpportunity.body).toMatchObject({ replayed: true, order: { id: orderFromOpportunity.body.order.id }, linkId: orderFromOpportunity.body.linkId });
+    const deliveryProjectPayload = {
+      expectedOrderVersion: orderFromOpportunity.body.order.version,
+      title: "Deliver public intake recovery service",
+      objective: "Deliver the approved recovery scope through one accountable EOS-native project.",
+      ownerSeatId: instrumentFounderSeat.id,
+      idempotencyKey: "commerce:create:public-intake-delivery-project",
+    };
+    const deliveryProject = await api.post(`/api/eos/companies/${companyId}/commerce/orders/${orderFromOpportunity.body.order.id}/delivery-projects`).send(deliveryProjectPayload).expect(201);
+    expect(deliveryProject.body).toMatchObject({
+      replayed: false,
+      order: { id: orderFromOpportunity.body.order.id, version: 2, data: { deliveryProjectObjectId: expect.any(String), deliveryProjectOwnerSeatId: instrumentFounderSeat.id } },
+      project: { instrumentKey: "projects", objectType: "project", state: "draft", ownerSeatId: instrumentFounderSeat.id, data: { orderObjectId: orderFromOpportunity.body.order.id, ownerSeatId: instrumentFounderSeat.id } },
+      link: { relationshipType: "fulfills_order" },
+    });
+    const replayedDeliveryProject = await api.post(`/api/eos/companies/${companyId}/commerce/orders/${orderFromOpportunity.body.order.id}/delivery-projects`).send(deliveryProjectPayload).expect(200);
+    expect(replayedDeliveryProject.body).toMatchObject({ replayed: true, order: { id: orderFromOpportunity.body.order.id, version: 2 }, project: { id: deliveryProject.body.project.id } });
     const instrumentsAfterOrder = await api.get(`/api/eos/companies/${companyId}/instruments`).expect(200);
     expect(instrumentsAfterOrder.body.links).toEqual(expect.arrayContaining([expect.objectContaining({ id: orderFromOpportunity.body.linkId, sourceObjectId: capturedOpportunities[0].id, targetObjectId: orderFromOpportunity.body.order.id, relationshipType: "converts_to_order" })]));
     const relationshipOperatingContext = await api.get(`/api/eos/companies/${companyId}/instruments/crm/relationships/${capturedRelationships[0].id}/operating-context`).expect(200);
     expect(relationshipOperatingContext.body.objects).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: capturedOpportunities[0].id, instrumentKey: "crm", objectType: "opportunity" }),
       expect.objectContaining({ id: orderFromOpportunity.body.order.id, instrumentKey: "commerce", objectType: "order", data: expect.objectContaining({ sourceOpportunityObjectId: capturedOpportunities[0].id }) }),
+      expect.objectContaining({ id: deliveryProject.body.project.id, instrumentKey: "projects", objectType: "project", data: expect.objectContaining({ orderObjectId: orderFromOpportunity.body.order.id }) }),
     ]));
     expect(relationshipOperatingContext.body.links).toEqual(expect.arrayContaining([
       expect.objectContaining({ sourceObjectId: capturedRelationships[0].id, targetObjectId: capturedOpportunities[0].id, relationshipType: "has_opportunity" }),
       expect.objectContaining({ sourceObjectId: capturedOpportunities[0].id, targetObjectId: orderFromOpportunity.body.order.id, relationshipType: "converts_to_order" }),
+      expect.objectContaining({ sourceObjectId: orderFromOpportunity.body.order.id, targetObjectId: deliveryProject.body.project.id, relationshipType: "fulfills_order" }),
     ]));
     const capturedForms = await api.get(`/api/eos/companies/${companyId}/instruments/forms`).expect(200);
     expect(capturedForms.body.objects.filter((object: any) => object.objectType === "submission" && object.data?.formObjectId === captureForm.body.object.id)).toHaveLength(2);
