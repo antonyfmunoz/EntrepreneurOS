@@ -123,6 +123,20 @@ export type OrganizationBlueprintMission = {
 export function deriveOrganizationBlueprintPlan(input: ManifestInput) {
   const blueprint = organizationBlueprintInputSchema.parse(input.blueprint);
   const names = (items: string[]) => items.length ? items.join(", ") : "Not yet specified";
+  const existingSystems = Array.from(
+    blueprint.existingSystems.reduce((systems, system) => {
+        const name = system.trim();
+        const key = name
+          .normalize("NFKC")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "") || "named-system";
+        // Preserve the first display name the founder entered while using a
+        // case-insensitive key to make repeated inventory lines idempotent.
+        if (!systems.has(key)) systems.set(key, name);
+        return systems;
+      }, new Map<string, string>()).entries(),
+  );
   const setupMissions: OrganizationBlueprintMission[] = [
     {
       key: "make-context-authoritative",
@@ -157,7 +171,7 @@ export function deriveOrganizationBlueprintPlan(input: ManifestInput) {
     },
   ];
 
-  if (blueprint.startingPoint === "existing_company" || blueprint.existingSystems.length) {
+  if (blueprint.startingPoint === "existing_company" || existingSystems.length) {
     setupMissions.push({
       key: "reconcile-existing-systems",
       title: "Reconcile existing systems",
@@ -167,6 +181,32 @@ export function deriveOrganizationBlueprintPlan(input: ManifestInput) {
       completionEvidence: ["Provider connection receipts", "Reconciliation report", "Native fallback acceptance"],
       status: "not_started",
     });
+
+    // A founder names systems during the same universal onboarding journey;
+    // each becomes a separately accountable overlay decision. This avoids a
+    // generic "integrations" task that can hide whether, for example,
+    // accounting and CRM data have different owners, scopes, fallback paths,
+    // or reconciliation evidence.
+    for (const [systemKey, systemName] of existingSystems) {
+      setupMissions.push({
+        key: `reconcile-system-${systemKey}`,
+        title: `Reconcile ${systemName}`,
+        objective: `Decide whether ${systemName} should remain an authoritative overlay for this company, map only its approved records into EOS, and verify the equivalent native operating path remains available without it.`,
+        owner: "executive_assistant",
+        requiredInputs: [
+          `${systemName} data owner and business purpose`,
+          "Authorized account and record scope",
+          "Capability-to-record mapping",
+          "Failure, recovery, and native fallback path",
+        ],
+        completionEvidence: [
+          `${systemName} connection or explicit no-connection decision`,
+          "Source-to-EOS reconciliation report",
+          "Native fallback acceptance",
+        ],
+        status: "not_started",
+      });
+    }
   }
 
   return {

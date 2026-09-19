@@ -2664,13 +2664,18 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       )
       .send({})
       .expect(201);
-    expect(materialized.body.created).toHaveLength(4);
+    expect(materialized.body.created).toHaveLength(5);
     expect(materialized.body.created).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           source: "compiler",
           status: "ready",
           sourceLineage: expect.stringContaining("reconcile-existing-systems"),
+        }),
+        expect.objectContaining({
+          source: "compiler",
+          status: "ready",
+          sourceLineage: expect.stringContaining("reconcile-system-quickbooks"),
         }),
       ]),
     );

@@ -178,8 +178,42 @@ describe("EOS overlay runtime contracts", () => {
     expect(plan.setupMissions.map((mission) => mission.key)).toContain(
       "reconcile-existing-systems",
     );
+    expect(plan.setupMissions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "reconcile-system-quickbooks",
+          title: "Reconcile QuickBooks",
+          owner: "executive_assistant",
+        }),
+        expect.objectContaining({
+          key: "reconcile-system-google-workspace",
+          title: "Reconcile Google Workspace",
+          owner: "executive_assistant",
+        }),
+      ]),
+    );
     expect(plan.setupMissions.every((mission) => mission.status === "not_started")).toBe(true);
     expect(plan.activationBoundary).toMatch(/does not activate/i);
+  });
+
+  it("creates one governed overlay mission per distinct declared system", () => {
+    const plan = deriveOrganizationBlueprintPlan(manifestInputSchema.parse({
+      ...manifest,
+      blueprint: {
+        startingPoint: "existing_company",
+        operatingModel: "agent_first",
+        businessModel: "services",
+        primaryGrowthMotion: "Founder-led outbound",
+        departments: [],
+        priorityTools: [],
+        existingSystems: ["QuickBooks", " quickbooks ", "Airtable"],
+      },
+    }));
+    expect(plan.setupMissions.filter((mission) => mission.key.startsWith("reconcile-system-")))
+      .toEqual([
+        expect.objectContaining({ key: "reconcile-system-quickbooks", title: "Reconcile QuickBooks" }),
+        expect.objectContaining({ key: "reconcile-system-airtable", title: "Reconcile Airtable" }),
+      ]);
   });
 
   it("defaults a manual Work Packet to a safe local lifecycle", () => {
