@@ -68,3 +68,9 @@ export const stakeholderPortalIntakeReviewSchema = z.object({
   reviewerSummary: z.string().trim().min(20).max(6_000),
   nextAction: z.string().trim().min(10).max(2_000),
 });
+
+export const stakeholderPortalIntakeReviewHandoffSchema = z.object({
+  title: z.string().trim().min(3).max(200),
+  priority: z.enum(["low", "medium", "high", "urgent"]).default("high"),
+  dueAt: z.string().datetime().optional(),
+});
