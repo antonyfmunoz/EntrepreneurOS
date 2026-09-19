@@ -652,8 +652,8 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       nativeRelationshipObjectId: capturedRelationships[0].id,
       ownerSeatId: instrumentFounderSeat.id,
       reviewCadenceDays: 30,
-      nextReviewAt: date(30),
-      renewalAt: date(120),
+      nextReviewAt: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
+      renewalAt: new Date(Date.now() + 120 * 86_400_000).toISOString().slice(0, 10),
       successDefinition: "The customer receives the agreed recovery operating result through traceable delivery, health, and outcome reviews.",
       classification: "confidential",
     };
