@@ -74,6 +74,9 @@ describe("native customer-success control contracts", () => {
     expect(control).toContain("makes this Work Packet executable only through that exact version");
     expect(control).toContain("Released process attached:");
     expect(control).toContain("EOS will only run the exact attached process version");
+    expect(control).toContain("Open owned onboarding work");
+    expect(control).toContain("onOpenOperations");
+    expect(control).toContain("onOpenOperations &&");
     expect(control).toContain("Client workspace access");
     expect(control).toContain("Begin workspace configuration");
     expect(control).toContain("Activate client workspace");
