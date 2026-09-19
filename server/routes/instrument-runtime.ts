@@ -420,6 +420,99 @@ async function assertNativeConferenceRoomCreate(
     throw new EosRouteError(409, "conference_decision_maker_invalid", "The recorded decision-maker must be a named participant in the governing meeting.");
 }
 
+/**
+ * Canvas is intentionally a visual layer over canonical records, not an
+ * alternate graph that can smuggle hidden or cross-company references into a
+ * role's workspace.  The UI only offers role-visible records, but the API
+ * must enforce the same boundary for a direct caller as well.
+ */
+async function assertNativeCanvasCreate(
+  access: Awaited<ReturnType<typeof companyAccess>>,
+  input: {
+    instrumentKey: string;
+    objectType: string;
+    data: Record<string, unknown>;
+    parentObjectId?: string;
+  },
+) {
+  if (input.instrumentKey !== "canvas" || !["node", "edge"].includes(input.objectType)) return;
+  const data = recordValue(input.data);
+  const parentObjectId = input.parentObjectId || "";
+  if (!parentObjectId)
+    throw new EosRouteError(400, "canvas_parent_required", "A Canvas node or edge must be nested beneath its named visual map.");
+  const [canvas] = await db.select().from(eosInstrumentObjects).where(and(
+    eq(eosInstrumentObjects.id, parentObjectId), eq(eosInstrumentObjects.companyId, access.company.id),
+    eq(eosInstrumentObjects.instrumentKey, "canvas"), eq(eosInstrumentObjects.objectType, "canvas"),
+  )).limit(1);
+  if (!canvas || !(await visibleObjectSet(access, [canvas])).length)
+    throw new EosRouteError(409, "canvas_parent_unavailable", "The selected visual map is unavailable in this authority scope.");
+
+  if (input.objectType === "node") {
+    const sourceObjectId = typeof data.sourceObjectId === "string" ? data.sourceObjectId : "";
+    if (!sourceObjectId) throw new EosRouteError(400, "canvas_node_source_required", "A Canvas node must name a visible canonical source record.");
+    const [source] = await db.select().from(eosInstrumentObjects).where(and(
+      eq(eosInstrumentObjects.id, sourceObjectId), eq(eosInstrumentObjects.companyId, access.company.id),
+    )).limit(1);
+    if (!source || source.instrumentKey === "canvas" || !(await visibleObjectSet(access, [source])).length)
+      throw new EosRouteError(409, "canvas_node_source_unavailable", "The selected source record is unavailable in this authority scope.");
+    const position = recordValue(data.position);
+    const positionX = typeof position.x === "number" ? position.x : Number.NaN;
+    const positionY = typeof position.y === "number" ? position.y : Number.NaN;
+    if (!Number.isFinite(positionX) || !Number.isFinite(positionY) || positionX < 0 || positionY < 0)
+      throw new EosRouteError(400, "canvas_node_position_invalid", "A Canvas node needs a finite non-negative x and y position.");
+    return;
+  }
+
+  const sourceNodeId = typeof data.sourceNodeId === "string" ? data.sourceNodeId : "";
+  const targetNodeId = typeof data.targetNodeId === "string" ? data.targetNodeId : "";
+  if (!sourceNodeId || !targetNodeId || sourceNodeId === targetNodeId)
+    throw new EosRouteError(400, "canvas_edge_nodes_invalid", "A Canvas edge must connect two different nodes.");
+  const edgeNodes = await db.select().from(eosInstrumentObjects).where(and(
+    eq(eosInstrumentObjects.companyId, access.company.id), inArray(eosInstrumentObjects.id, [sourceNodeId, targetNodeId]),
+    eq(eosInstrumentObjects.instrumentKey, "canvas"), eq(eosInstrumentObjects.objectType, "node"), eq(eosInstrumentObjects.parentObjectId, parentObjectId),
+  ));
+  if (edgeNodes.length !== 2 || (await visibleObjectSet(access, edgeNodes)).length !== 2)
+    throw new EosRouteError(409, "canvas_edge_nodes_unavailable", "Both Canvas nodes must be visible members of the selected visual map.");
+}
+
+/** Keep generic PATCH from changing a visual map into a hidden-reference
+ * channel. Nodes and edges retain their identities, and a canvas list can
+ * only contain visible children of that canvas. */
+async function assertNativeCanvasUpdate(
+  access: Awaited<ReturnType<typeof companyAccess>>,
+  current: typeof eosInstrumentObjects.$inferSelect,
+  next: { data: Record<string, unknown> },
+) {
+  if (current.instrumentKey !== "canvas") return;
+  const currentData = recordValue(current.data);
+  const nextData = recordValue(next.data);
+  if (["node", "edge"].includes(current.objectType)) {
+    await assertNativeCanvasCreate(access, {
+      instrumentKey: current.instrumentKey, objectType: current.objectType, data: nextData, parentObjectId: current.parentObjectId || undefined,
+    });
+    if (current.objectType === "node" && nextData.sourceObjectId !== currentData.sourceObjectId)
+      throw new EosRouteError(409, "canvas_node_source_immutable", "A Canvas node keeps its canonical source; create a new node for a different record.");
+    if (current.objectType === "edge" && (nextData.sourceNodeId !== currentData.sourceNodeId || nextData.targetNodeId !== currentData.targetNodeId))
+      throw new EosRouteError(409, "canvas_edge_nodes_immutable", "A Canvas edge keeps its endpoints; create a new edge for a different relationship.");
+    return;
+  }
+  if (current.objectType !== "canvas") return;
+  const nodeIds = nextData.nodes;
+  const edgeIds = nextData.edges;
+  if (!Array.isArray(nodeIds) || !Array.isArray(edgeIds) || [...nodeIds, ...edgeIds].some((id) => typeof id !== "string"))
+    throw new EosRouteError(400, "canvas_members_invalid", "A Canvas map must list only native node and edge identifiers.");
+  const memberIds = Array.from(new Set([...nodeIds, ...edgeIds] as string[]));
+  if (memberIds.length !== nodeIds.length + edgeIds.length)
+    throw new EosRouteError(400, "canvas_members_duplicate", "A Canvas map cannot list the same node or edge more than once.");
+  if (!memberIds.length) return;
+  const members = await db.select().from(eosInstrumentObjects).where(and(
+    eq(eosInstrumentObjects.companyId, access.company.id), inArray(eosInstrumentObjects.id, memberIds), eq(eosInstrumentObjects.instrumentKey, "canvas"), eq(eosInstrumentObjects.parentObjectId, current.id),
+  ));
+  const memberTypes = new Map(members.map((member) => [member.id, member.objectType]));
+  if (members.length !== memberIds.length || nodeIds.some((id) => memberTypes.get(id) !== "node") || edgeIds.some((id) => memberTypes.get(id) !== "edge") || (await visibleObjectSet(access, members)).length !== members.length)
+    throw new EosRouteError(409, "canvas_members_unavailable", "Canvas nodes and edges must be visible children of this same visual map.");
+}
+
 async function visibleObjectSet(access: Awaited<ReturnType<typeof companyAccess>>, objects: typeof eosInstrumentObjects.$inferSelect[]) {
   const seatIds = await visibleSeatIds(access.company.id, access.seat.id, access.role);
   const messageConversationParticipants = new Map<string, Set<string>>(
@@ -869,6 +962,7 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     if (replay) { res.status(200).json(replay); return; }
     await assertNativeMessageCreate(access, input);
     await assertNativeConferenceRoomCreate(access, input);
+    await assertNativeCanvasCreate(access, input);
     await assertPublicCommercialRouting(req, access, input);
     await assertNativeCommerceOrderSource(req, access, input);
     await checkedEvidence(access.company.id, input.evidenceIds);
@@ -1216,6 +1310,7 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     const evidence = input.evidenceIds ?? current.evidenceIds as string[]; await checkedEvidence(access.company.id, evidence);
     const next = { title: input.title ?? current.title, summary: input.summary ?? current.summary, classification: input.classification ?? current.classification, visibility: input.visibility ?? current.visibility, data: input.data ?? current.data as Record<string, unknown>, sourceReference: input.sourceReference ?? current.sourceReference as Record<string, unknown>, evidenceIds: evidence, version: current.version + 1, updatedAt: new Date() };
     await assertNativeMessageUpdate(access, current, next);
+    await assertNativeCanvasUpdate(access, current, next);
     if (input.data !== undefined) await assertPublicCommercialRouting(req, access, { instrumentKey: current.instrumentKey, objectType: current.objectType, data: next.data, classification: next.classification });
     if (input.data !== undefined) await assertNativeCommerceOrderSource(req, access, { instrumentKey: current.instrumentKey, objectType: current.objectType, data: next.data, classification: next.classification });
     if (["active", "completed"].includes(current.state)) {
@@ -1379,6 +1474,7 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
       const findings = instrumentDomainFindings(eosInstrumentKeySchema.parse(current.instrumentKey), current.objectType, current.data);
       if (findings.length) throw new EosRouteError(409, findings[0].code, findings[0].message);
     }
+    await assertNativeCanvasUpdate(access, current, { data: recordValue(current.data) });
     await checkedEvidence(access.company.id, input.evidenceIds, input.state === "completed");
     const commandId = randomUUID(); const instrumentEventId = randomUUID(); const agentEventId = randomUUID(); const now = new Date(); const nextVersion = current.version + 1;
     const [updated] = await db.transaction(async (tx) => {

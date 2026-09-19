@@ -2301,9 +2301,35 @@ try {
   await mobile.goto(`${origin}/settings?companyId=${companyId}`, {
     waitUntil: "domcontentloaded",
   });
-  await mobile
-    .getByRole("heading", { name: "Settings", exact: true })
-    .waitFor();
+  try {
+    await mobile
+      .getByRole("heading", { name: "Settings", exact: true })
+      .waitFor();
+  } catch (error) {
+    // This route passes through the legal gate before Settings loads. Keep a
+    // failed qualification diagnosable: a bare locator timeout cannot tell us
+    // whether the gate, account read, company read, or route itself failed.
+    const diagnostic = await mobile.evaluate(async () => {
+      const inspect = async (url: string) => {
+        try {
+          const response = await fetch(url);
+          return { url, status: response.status, body: (await response.text()).slice(0, 500) };
+        } catch (cause) {
+          return { url, error: cause instanceof Error ? cause.message : String(cause) };
+        }
+      };
+      return {
+        url: window.location.href,
+        body: document.body.innerText.slice(0, 1_200),
+        requests: await Promise.all([
+          inspect("/api/legal/status"),
+          inspect("/api/users/me"),
+          inspect("/api/companies"),
+        ]),
+      };
+    });
+    throw new Error(`Mobile Settings did not render: ${JSON.stringify(diagnostic)}`, { cause: error });
+  }
   await mobile
     .getByRole("tab", { name: "Access & payments", exact: true })
     .click();
