@@ -49,6 +49,31 @@ export const commandOutcomeSchema = z.object({
 
 export type CommandOutcome = z.infer<typeof commandOutcomeSchema>;
 
+/**
+ * Federation events may be emitted by more than one EOS subsystem.  Keep
+ * lineage on the transport envelope even when a producer stores the original
+ * command trace as a nested payload value.  This preserves cross-runtime
+ * reconciliation without requiring an external system to inspect EOS-only
+ * event payload shapes.
+ */
+export function federationEventLineage(payload: Record<string, unknown>): {
+  traceId?: string;
+  correlationId?: string;
+} {
+  const nestedTrace = payload.trace;
+  const trace = nestedTrace && typeof nestedTrace === "object" && !Array.isArray(nestedTrace)
+    ? nestedTrace as Record<string, unknown>
+    : undefined;
+  return {
+    traceId: typeof payload.traceId === "string"
+      ? payload.traceId
+      : typeof trace?.traceId === "string" ? trace.traceId : undefined,
+    correlationId: typeof payload.correlationId === "string"
+      ? payload.correlationId
+      : typeof trace?.correlationId === "string" ? trace.correlationId : undefined,
+  };
+}
+
 export function capabilityManifest(enabled: boolean) {
   return {
     protocolVersion: FEDERATION_PROTOCOL_VERSION,

@@ -1,6 +1,6 @@
 import { generateKeyPairSync, sign } from "crypto";
 import { describe, expect, it } from "vitest";
-import { commandEnvelopeSchema, FEDERATION_PROTOCOL_VERSION } from "../../server/umh/contracts";
+import { commandEnvelopeSchema, federationEventLineage, FEDERATION_PROTOCOL_VERSION } from "../../server/umh/contracts";
 import { canonicalCommandBytes, commandHash, verifyCommandSignature } from "../../server/umh/crypto";
 import { validateFederatedCommandTransport } from "../../server/umh/validation";
 
@@ -39,6 +39,18 @@ describe("EntrepreneurOS UMH federation contract", () => {
   it("has a deterministic request hash regardless of object key order", () => {
     const reordered = { ...command, payload: { parameters: { title: "Draft" }, agentId: "agent_123", actionType: "create_document" } };
     expect(commandHash(command)).toBe(commandHash(reordered));
+  });
+
+  it("keeps nested command lineage on the outbound event envelope", () => {
+    expect(federationEventLineage({
+      workPacketId: "packet_123",
+      trace: command.trace,
+    })).toEqual(command.trace);
+    expect(federationEventLineage({
+      traceId: "root-trace",
+      correlationId: "root-correlation",
+      trace: command.trace,
+    })).toEqual({ traceId: "root-trace", correlationId: "root-correlation" });
   });
 
   it("rejects invalid, expired, and wrongly scoped signed transports", () => {

@@ -1,7 +1,7 @@
 import { and, eq, asc, lt, lte, isNull, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { umhEventOutbox, umhInstallations } from "@shared/schema";
-import { FEDERATION_PROTOCOL_VERSION } from "./contracts";
+import { FEDERATION_PROTOCOL_VERSION, federationEventLineage } from "./contracts";
 import { federationConfig, outboundFederationConfigured } from "./config";
 import { signFederationMessage } from "./crypto";
 
@@ -52,14 +52,14 @@ export async function deliverFederationOutboxOnce(): Promise<number> {
     if (!claimed) continue;
 
     const payload = claimed.payload as Record<string, unknown>;
+    const lineage = federationEventLineage(payload);
     const envelope = {
       protocolVersion: FEDERATION_PROTOCOL_VERSION,
       eventId: claimed.id,
       eventType: claimed.eventType,
       installationId: config.installationId,
       occurredAt: (claimed.createdAt || new Date()).toISOString(),
-      traceId: typeof payload.traceId === "string" ? payload.traceId : undefined,
-      correlationId: typeof payload.correlationId === "string" ? payload.correlationId : undefined,
+      ...lineage,
       payload,
     };
     try {
