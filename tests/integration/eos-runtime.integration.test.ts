@@ -2670,6 +2670,15 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(draft.body.manifest.blueprint.primaryGrowthMotion).toBe(
       "Founder-led outbound and referral partnerships",
     );
+    const retiredParallelCompiler = await api
+      .post(`/api/eos/companies/${companyId}/compiler/drafts`)
+      .send({ purpose: "A parallel client story must never compile." })
+      .expect(410);
+    expect(retiredParallelCompiler.body).toMatchObject({
+      code: "parallel_manifest_compiler_retired",
+      replacement: `/api/eos/companies/:companyId/compiler/from-company-mission`,
+      sunset: true,
+    });
     expect(draft.body.manifest.sourceAssertions).toEqual(
       expect.arrayContaining([expect.objectContaining({ label: "Company Mission Journey" })]),
     );
