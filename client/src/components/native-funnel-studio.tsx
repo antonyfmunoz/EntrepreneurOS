@@ -32,7 +32,7 @@ import {
 } from "@shared/native-site-sections";
 
 type Json = Record<string, any>;
-type PageCtaTarget = "manual" | "capture_form" | "funnel";
+type PageCtaTarget = "manual" | "capture_form" | "funnel" | "booking_calendar";
 
 const pageSectionStarter: NativeSiteSection[] = [
   {
@@ -132,6 +132,10 @@ export function NativeFunnelStudio({
     queryFn: async () =>
       (await apiRequest("GET", root + "/instruments/websites")).json(),
   });
+  const calendarsQuery = useQuery<Json>({
+    queryKey: [root, "native-funnel-calendars"],
+    queryFn: async () => (await apiRequest("GET", root + "/instruments/calendar")).json(),
+  });
   const publishedForms = useMemo(
     () =>
       (formsQuery.data?.objects || []).filter(
@@ -173,6 +177,10 @@ export function NativeFunnelStudio({
     () => funnels.filter((funnel: Json) => funnel.state === "active"),
     [funnels],
   );
+  const publishedBookingCalendars = useMemo(
+    () => (calendarsQuery.data?.objects || []).filter((item: Json) => item.objectType === "calendar" && item.state === "active" && item.data?.publicBooking === true),
+    [calendarsQuery.data],
+  );
   const selectedSite =
     activeSites.find((site: Json) => site.id === selectedSiteId) || null;
   const selectedSiteConfig = sites.find((site: Json) => site.id === selectedSiteConfigId) || sites[0] || null;
@@ -199,6 +207,7 @@ export function NativeFunnelStudio({
         queryKey: [root, "native-funnel-forms"],
       }),
       queryClient.invalidateQueries({ queryKey: [root, "native-websites"] }),
+      queryClient.invalidateQueries({ queryKey: [root, "native-funnel-calendars"] }),
     ]);
   };
   const create = useMutation({
@@ -381,7 +390,7 @@ export function NativeFunnelStudio({
     onError: (cause: Error) => setError(cause.message),
   });
   const beginPageEdit = (page: Json) => {
-    const target = ["capture_form", "funnel"].includes(
+    const target = ["capture_form", "funnel", "booking_calendar"].includes(
       page.data?.primaryCtaTarget,
     )
       ? (page.data.primaryCtaTarget as PageCtaTarget)
@@ -678,6 +687,7 @@ export function NativeFunnelStudio({
                 <option value="manual">A manual link</option>
                 <option value="capture_form">An EOS intake form</option>
                 <option value="funnel">An EOS funnel</option>
+                <option value="booking_calendar">An EOS booking calendar</option>
               </select>
             </div>
           </div>
@@ -705,11 +715,11 @@ export function NativeFunnelStudio({
               >
                 <option value="">
                   Choose an active{" "}
-                  {pageCtaTarget === "capture_form" ? "intake form" : "funnel"}
+                  {pageCtaTarget === "capture_form" ? "intake form" : pageCtaTarget === "funnel" ? "funnel" : "booking calendar"}
                 </option>
                 {(pageCtaTarget === "capture_form"
                   ? publishedForms
-                  : activeFunnels
+                  : pageCtaTarget === "funnel" ? activeFunnels : publishedBookingCalendars
                 ).map((target: Json) => (
                   <option key={target.id} value={target.id}>
                     {target.title}

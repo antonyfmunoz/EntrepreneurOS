@@ -27,7 +27,7 @@ const publicPageSchema = z
     // Existing pages remain compatible with a manually entered destination, but
     // new pages can bind the CTA to an EOS-owned intake form or funnel by ID.
     primaryCtaTarget: z
-      .enum(["manual", "capture_form", "funnel"])
+      .enum(["manual", "capture_form", "funnel", "booking_calendar"])
       .default("manual"),
     primaryCtaTargetId: z.string().uuid().nullable().optional(),
     primaryCtaHref: z.string().trim().max(1_000).default(""),
@@ -43,6 +43,9 @@ const publicCaptureFormSchema = z
   .passthrough();
 const publicFunnelSchema = z
   .object({ publicFunnel: z.literal(true) })
+  .passthrough();
+const publicBookingCalendarSchema = z
+  .object({ publicBooking: z.literal(true) })
   .passthrough();
 
 function headers(res: Response) {
@@ -77,6 +80,25 @@ async function resolvedCtaHref(
     // company's object or turns an unpublished intake point into a public URL.
     return form && publicCaptureFormSchema.safeParse(form.data).success
       ? `/capture/${form.id}`
+      : "";
+  }
+
+  if (definition.primaryCtaTarget === "booking_calendar") {
+    const [calendar] = await db
+      .select()
+      .from(eosInstrumentObjects)
+      .where(
+        and(
+          eq(eosInstrumentObjects.id, definition.primaryCtaTargetId),
+          eq(eosInstrumentObjects.companyId, page.companyId),
+          eq(eosInstrumentObjects.instrumentKey, "calendar"),
+          eq(eosInstrumentObjects.objectType, "calendar"),
+          eq(eosInstrumentObjects.state, "active"),
+        ),
+      )
+      .limit(1);
+    return calendar && publicBookingCalendarSchema.safeParse(calendar.data).success
+      ? `/book/${calendar.id}`
       : "";
   }
 
