@@ -151,6 +151,19 @@ export function registerStakeholderPortalRoutes(app: Express): void {
     res.json(updated);
   }));
 
+  app.get("/api/eos/companies/:companyId/stakeholder-portals/:portalId/intake-forms/:formId/submissions", route(async (req, res) => {
+    const { access } = await portalAccess(req, "stakeholder_portal.intake_form.read", true);
+    const [portal, form] = await Promise.all([
+      db.select().from(eosStakeholderPortals).where(and(eq(eosStakeholderPortals.id, req.params.portalId), eq(eosStakeholderPortals.companyId, access.company.id))).limit(1).then((rows) => rows[0]),
+      db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.id, req.params.formId), eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.instrumentKey, "forms"), eq(eosInstrumentObjects.objectType, "form"))).limit(1).then((rows) => rows[0]),
+    ]);
+    const definition = form ? intakeDefinition(form) : null;
+    if (!portal || !form || !definition || definition.portalId !== portal.id || portal.portalType !== "client") throw new EosRouteError(404, "stakeholder_portal_intake_form_not_found", "The requested client onboarding intake is unavailable.");
+    const submissions = await db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.instrumentKey, "forms"), eq(eosInstrumentObjects.objectType, "submission"), eq(eosInstrumentObjects.parentObjectId, form.id))).orderBy(desc(eosInstrumentObjects.createdAt));
+    const visibleSubmissions = submissions.filter((submission) => { const data = recordValue(submission.data); return data.clientPortalIntakeSubmission === true && data.stakeholderPortalId === portal.id && data.formObjectId === form.id; });
+    res.json({ schemaVersion: "eos.stakeholder-portal-intake-review.v1", portal: { id: portal.id, name: portal.name }, form: { id: form.id, title: form.title, questions: definition.questions.map((question) => ({ id: question.id, label: question.label })) }, submissions: visibleSubmissions.map((submission) => { const data = recordValue(submission.data); return { id: submission.id, submittedAt: data.submittedAt, verificationState: data.verificationState || "unverified", acknowledgement: data.acknowledgement === true, responses: recordValue(data.responses) }; }) });
+  }));
+
   app.patch("/api/eos/companies/:companyId/stakeholder-portals/:portalId", route(async (req, res) => {
     const input = stakeholderPortalTransitionSchema.parse(req.body); const { access, policy } = await portalAccess(req, "stakeholder_portal.transition");
     const [portal] = await db.select().from(eosStakeholderPortals).where(and(eq(eosStakeholderPortals.id, req.params.portalId), eq(eosStakeholderPortals.companyId, access.company.id))).limit(1);
