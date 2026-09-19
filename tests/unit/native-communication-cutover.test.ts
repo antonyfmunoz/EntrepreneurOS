@@ -63,6 +63,9 @@ describe("native communication authority cutover", () => {
     expect(messageHub).toContain('deliveryState: "provider_delivery_planned"');
     expect(messageHub).toContain("Planning creates no provider effect.");
     expect(messageHub).toContain("provider receipt");
+    expect(messageHub).toContain("Open governed delivery run");
+    expect(messageHub).toContain("onOpenOperations");
+    expect(overlay).toContain('onOpenOperations={() => goToSurface("operations")}');
   });
 
   it("records iMessage and Instagram work truthfully until EOS has an approved provider delivery contract", () => {
