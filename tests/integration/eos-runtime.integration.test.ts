@@ -558,7 +558,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     await api.post(`/api/eos/companies/${companyId}/instrument-objects/${funnel.body.object.id}/transitions`).send({ expectedVersion: 1, state: "active", rationale: "Founder publishes the synthetic native EOS funnel after its intake point is active.", evidenceIds: [], idempotencyKey: "instrument:transition:public-funnel:active" }).expect(200);
     const publicFunnel = await api.get(`/api/public/funnels/${funnel.body.object.id}`).expect(200);
     expect(publicFunnel.headers["x-robots-tag"]).toContain("noindex");
-    expect(publicFunnel.body).toMatchObject({ schemaVersion: "eos.public-funnel.v1", funnel: { id: funnel.body.object.id, headline: "A native EOS public funnel", primaryCtaLabel: "Request a review", captureUrl: `/capture/${captureForm.body.object.id}` } });
+    expect(publicFunnel.body).toMatchObject({ schemaVersion: "eos.public-funnel.v2", funnel: { id: funnel.body.object.id, headline: "A native EOS public funnel", primaryCtaLabel: "Request a review", primaryCtaTarget: "capture_form", primaryCtaUrl: `/capture/${captureForm.body.object.id}` } });
     expect(JSON.stringify(publicFunnel.body)).not.toMatch(/ownerSeatId|sourceReference|evidenceIds|policyDecision/i);
 
     const bookingCalendar = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({
@@ -573,6 +573,14 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       sourceReference: { authority: "native_eos", capability: "native_public_booking" }, evidenceIds: [], idempotencyKey: "instrument:create:public-booking-availability",
     }).expect(201);
     await api.post(`/api/eos/companies/${companyId}/instrument-objects/${bookingAvailability.body.object.id}/transitions`).send({ expectedVersion: 1, state: "active", rationale: "Founder approves synthetic native booking availability.", evidenceIds: [], idempotencyKey: "instrument:transition:public-booking-availability:active" }).expect(200);
+    const bookingFunnel = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({
+      instrumentKey: "websites", objectType: "funnel", objectKey: "funnel:public-booking-fixture", title: "Public booking funnel fixture", summary: "Synthetic EOS-owned scheduling conversion page.", classification: "confidential", visibility: "organization",
+      data: { publicFunnel: true, headline: "Book an EOS-native next step", supportingCopy: "A visitor schedules directly with this organization's EOS calendar.", primaryCtaLabel: "Choose a time", primaryCtaTarget: "booking_calendar", bookingCalendarObjectId: bookingCalendar.body.object.id },
+      sourceReference: { authority: "native_eos", capability: "native_website_funnel" }, evidenceIds: [], idempotencyKey: "instrument:create:public-booking-funnel",
+    }).expect(201);
+    await api.post(`/api/eos/companies/${companyId}/instrument-objects/${bookingFunnel.body.object.id}/transitions`).send({ expectedVersion: 1, state: "active", rationale: "Founder publishes the synthetic EOS booking funnel after its calendar is active.", evidenceIds: [], idempotencyKey: "instrument:transition:public-booking-funnel:active" }).expect(200);
+    const publicBookingFunnel = await api.get(`/api/public/funnels/${bookingFunnel.body.object.id}`).expect(200);
+    expect(publicBookingFunnel.body).toMatchObject({ schemaVersion: "eos.public-funnel.v2", funnel: { id: bookingFunnel.body.object.id, primaryCtaTarget: "booking_calendar", primaryCtaUrl: `/book/${bookingCalendar.body.object.id}` } });
     const publicBooking = await api.get(`/api/public/bookings/${bookingCalendar.body.object.id}`).expect(200);
     expect(publicBooking.headers["x-robots-tag"]).toContain("noindex");
     expect(publicBooking.body).toMatchObject({ schemaVersion: "eos.public-booking.v1", calendar: { id: bookingCalendar.body.object.id, durationMinutes: 30, consentLabel: "I consent to this meeting request being recorded." } });

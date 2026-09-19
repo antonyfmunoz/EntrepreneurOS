@@ -12,9 +12,19 @@ const publicFunnelDataSchema = z.object({
   headline: z.string().trim().min(2).max(240),
   supportingCopy: z.string().trim().max(4_000).default(""),
   primaryCtaLabel: z.string().trim().min(2).max(80),
-  captureFormObjectId: z.string().uuid(),
-}).passthrough();
-const publicCaptureFormSchema = z.object({ publicCapture: z.literal(true) }).passthrough();
+  // Legacy compiled funnels retain captureFormObjectId. New funnels state the
+  // next EOS-owned step explicitly, which permits native booking without any
+  // external scheduling system.
+  primaryCtaTarget: z.enum(["capture_form", "booking_calendar"]).optional(),
+  captureFormObjectId: z.string().uuid().optional(),
+  bookingCalendarObjectId: z.string().uuid().optional(),
+}).passthrough().superRefine((value, context) => {
+  const target = value.primaryCtaTarget || "capture_form";
+  if (target === "capture_form" && !value.captureFormObjectId)
+    context.addIssue({ code: "custom", path: ["captureFormObjectId"], message: "A published native intake form is required." });
+  if (target === "booking_calendar" && !value.bookingCalendarObjectId)
+    context.addIssue({ code: "custom", path: ["bookingCalendarObjectId"], message: "A published native booking calendar is required." });
+});
 
 class PublicFunnelError extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
@@ -55,20 +65,28 @@ export function registerPublicFunnelRoutes(app: Express): void {
     const definition = publicFunnelDataSchema.safeParse(funnel.data);
     if (!definition.success) throw new PublicFunnelError(404, "public_funnel_unavailable", "This EOS funnel is unavailable.");
 
-    const [form] = await db.select().from(eosInstrumentObjects).where(and(
-      eq(eosInstrumentObjects.id, definition.data.captureFormObjectId),
+    const target = definition.data.primaryCtaTarget || "capture_form";
+    const targetId = target === "capture_form"
+      ? definition.data.captureFormObjectId
+      : definition.data.bookingCalendarObjectId;
+    const [nextStep] = await db.select().from(eosInstrumentObjects).where(and(
+      eq(eosInstrumentObjects.id, targetId!),
       eq(eosInstrumentObjects.companyId, funnel.companyId),
-      eq(eosInstrumentObjects.instrumentKey, "forms"),
-      eq(eosInstrumentObjects.objectType, "form"),
+      eq(eosInstrumentObjects.instrumentKey, target === "capture_form" ? "forms" : "calendar"),
+      eq(eosInstrumentObjects.objectType, target === "capture_form" ? "form" : "calendar"),
       eq(eosInstrumentObjects.state, "active"),
     )).limit(1);
-    if (!form || !publicCaptureFormSchema.safeParse(form.data).success) {
-      throw new PublicFunnelError(404, "public_funnel_intake_unavailable", "This EOS funnel's intake point is unavailable.");
+    const nextStepData = nextStep?.data as Record<string, unknown> | undefined;
+    const nextStepPublished = target === "capture_form"
+      ? nextStepData?.publicCapture === true
+      : nextStepData?.publicBooking === true;
+    if (!nextStep || !nextStepPublished) {
+      throw new PublicFunnelError(404, "public_funnel_next_step_unavailable", "This EOS funnel's published next step is unavailable.");
     }
     const [company] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, funnel.companyId)).limit(1);
     publicHeaders(res);
     res.json({
-      schemaVersion: "eos.public-funnel.v1",
+      schemaVersion: "eos.public-funnel.v2",
       funnel: {
         id: funnel.id,
         title: funnel.title,
@@ -76,7 +94,8 @@ export function registerPublicFunnelRoutes(app: Express): void {
         headline: definition.data.headline,
         supportingCopy: definition.data.supportingCopy,
         primaryCtaLabel: definition.data.primaryCtaLabel,
-        captureUrl: `/capture/${form.id}`,
+        primaryCtaTarget: target,
+        primaryCtaUrl: target === "capture_form" ? `/capture/${nextStep.id}` : `/book/${nextStep.id}`,
       },
     });
   }));

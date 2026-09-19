@@ -33,6 +33,7 @@ import {
 
 type Json = Record<string, any>;
 type PageCtaTarget = "manual" | "capture_form" | "funnel" | "booking_calendar";
+type FunnelCtaTarget = "capture_form" | "booking_calendar";
 
 const pageSectionStarter: NativeSiteSection[] = [
   {
@@ -101,7 +102,8 @@ export function NativeFunnelStudio({
   const [headline, setHeadline] = useState("");
   const [supportingCopy, setSupportingCopy] = useState("");
   const [primaryCtaLabel, setPrimaryCtaLabel] = useState("Start here");
-  const [captureFormObjectId, setCaptureFormObjectId] = useState("");
+  const [funnelCtaTarget, setFunnelCtaTarget] = useState<FunnelCtaTarget>("capture_form");
+  const [funnelCtaTargetId, setFunnelCtaTargetId] = useState("");
   const [siteName, setSiteName] = useState("");
   const [selectedSiteId, setSelectedSiteId] = useState("");
   const [selectedSiteConfigId, setSelectedSiteConfigId] = useState("");
@@ -226,7 +228,11 @@ export function NativeFunnelStudio({
             headline: headline.trim(),
             supportingCopy: supportingCopy.trim(),
             primaryCtaLabel: primaryCtaLabel.trim(),
-            captureFormObjectId,
+            primaryCtaTarget: funnelCtaTarget,
+            captureFormObjectId:
+              funnelCtaTarget === "capture_form" ? funnelCtaTargetId : undefined,
+            bookingCalendarObjectId:
+              funnelCtaTarget === "booking_calendar" ? funnelCtaTargetId : undefined,
           },
           sourceReference: {
             authority: "native_eos",
@@ -241,7 +247,8 @@ export function NativeFunnelStudio({
       setHeadline("");
       setSupportingCopy("");
       setPrimaryCtaLabel("Start here");
-      setCaptureFormObjectId("");
+      setFunnelCtaTarget("capture_form");
+      setFunnelCtaTargetId("");
       await refresh();
     },
     onError: (cause: Error) => setError(cause.message),
@@ -967,10 +974,9 @@ export function NativeFunnelStudio({
             <Globe2 className="h-4 w-4 text-primary" />
             <h3 className="font-semibold">Create an EOS-owned funnel</h3>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            A funnel is a specialized conversion page. It can only route to an
-            already-published native form, keeping public intent, consent, and
-            CRM intake in EOS.
+           <p className="mt-1 text-sm text-muted-foreground">
+             A funnel is a specialized conversion page. Route a visitor into a
+             published EOS intake form or a published native booking calendar.
           </p>
           <div className="mt-4 grid gap-3">
             <div className="grid gap-3 md:grid-cols-2">
@@ -1015,26 +1021,59 @@ export function NativeFunnelStudio({
                 placeholder="Explain the outcome, who it is for, and what happens after the visitor starts."
               />
             </div>
-            <div>
-              <Label htmlFor="funnel-form">Published native intake point</Label>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <Label htmlFor="funnel-target">Primary next step</Label>
+                <select
+                  id="funnel-target"
+                  className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  value={funnelCtaTarget}
+                  onChange={(event) => {
+                    setFunnelCtaTarget(event.target.value as FunnelCtaTarget);
+                    setFunnelCtaTargetId("");
+                  }}
+                >
+                  <option value="capture_form">Native intake form</option>
+                  <option value="booking_calendar">Native booking calendar</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="funnel-next-step">
+                  {funnelCtaTarget === "capture_form"
+                    ? "Published native intake form"
+                    : "Published native booking calendar"}
+                </Label>
               <select
-                id="funnel-form"
+                id="funnel-next-step"
                 className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
-                value={captureFormObjectId}
-                onChange={(event) => setCaptureFormObjectId(event.target.value)}
+                value={funnelCtaTargetId}
+                onChange={(event) => setFunnelCtaTargetId(event.target.value)}
               >
-                <option value="">Choose a published native form</option>
-                {publishedForms.map((form: Json) => (
-                  <option key={form.id} value={form.id}>
-                    {form.title}
-                  </option>
+                <option value="">
+                  {funnelCtaTarget === "capture_form"
+                    ? "Choose a published native form"
+                    : "Choose a published native booking calendar"}
+                </option>
+                {(funnelCtaTarget === "capture_form"
+                  ? publishedForms
+                  : publishedBookingCalendars
+                ).map((item: Json) => (
+                  <option key={item.id} value={item.id}>{item.title}</option>
                 ))}
               </select>
-              {!publishedForms.length && (
+              </div>
+              {funnelCtaTarget === "capture_form" && !publishedForms.length && (
                 <p className="mt-2 text-sm text-amber-700">
                   Publish a native form in Lead Capture Studio first. EOS will
                   not publish a funnel with nowhere governed to send the
                   visitor.
+                </p>
+              )}
+              {funnelCtaTarget === "booking_calendar" && !publishedBookingCalendars.length && (
+                <p className="mt-2 text-sm text-amber-700">
+                  Publish a calendar and its public booking settings in Calendar
+                  Studio first. EOS will not publish a funnel with nowhere
+                  governed to send the visitor.
                 </p>
               )}
             </div>
@@ -1044,7 +1083,7 @@ export function NativeFunnelStudio({
                 title.trim().length < 2 ||
                 headline.trim().length < 2 ||
                 primaryCtaLabel.trim().length < 2 ||
-                !captureFormObjectId ||
+                !funnelCtaTargetId ||
                 create.isPending
               }
               onClick={() => create.mutate()}
@@ -1063,8 +1102,11 @@ export function NativeFunnelStudio({
           </div>
           {funnels.map((funnel: Json) => {
             const url = funnelUrl(funnel.id);
-            const linkedForm = publishedForms.find(
-              (form: Json) => form.id === funnel.data?.captureFormObjectId,
+            const target: FunnelCtaTarget = funnel.data?.primaryCtaTarget === "booking_calendar"
+              ? "booking_calendar"
+              : "capture_form";
+            const linkedTarget = (target === "capture_form" ? publishedForms : publishedBookingCalendars).find(
+              (item: Json) => item.id === (target === "capture_form" ? funnel.data?.captureFormObjectId : funnel.data?.bookingCalendarObjectId),
             );
             return (
               <div key={funnel.id} className="rounded-xl border p-4">
@@ -1082,15 +1124,15 @@ export function NativeFunnelStudio({
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {funnel.data?.headline || "No public headline recorded."}
-                      {linkedForm
-                        ? " · Routes to " + linkedForm.title
-                        : " · Intake point is unavailable"}
+                      {linkedTarget
+                        ? " · Routes to " + linkedTarget.title
+                        : " · Published next step is unavailable"}
                     </p>
                   </div>
                   {funnel.state === "draft" && (
                     <Button
                       size="sm"
-                      disabled={!canDecide || !linkedForm || publish.isPending}
+                      disabled={!canDecide || !linkedTarget || publish.isPending}
                       onClick={() => publish.mutate(funnel)}
                     >
                       {publish.isPending
