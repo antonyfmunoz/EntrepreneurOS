@@ -136,6 +136,7 @@ const NativeWorkflowComposer = lazy(() => import("@/components/native-workflow-c
 const EndStateGovernanceControlCenter = lazy(() => import("@/components/end-state-governance-control-center").then((module) => ({ default: module.EndStateGovernanceControlCenter })));
 const InstitutionalLearningControlCenter = lazy(() => import("@/components/institutional-learning-control-center").then((module) => ({ default: module.InstitutionalLearningControlCenter })));
 const NativeKnowledgeHub = lazy(() => import("@/components/native-knowledge-hub").then((module) => ({ default: module.NativeKnowledgeHub })));
+const NativeSearchStudio = lazy(() => import("@/components/native-search-studio").then((module) => ({ default: module.NativeSearchStudio })));
 
 function DeferredControlFallback() {
   return <div className="rounded-2xl border bg-muted/40 p-6 text-sm text-muted-foreground">Loading governed control…</div>;
@@ -1479,6 +1480,8 @@ export default function EosOverlayPage() {
     canUseInstrument("files") && (isFounder || toolEntitlements.has("files"));
   const mayOperateNativeKnowledge =
     canUseInstrument("knowledge") && (isFounder || toolEntitlements.has("knowledge"));
+  const mayOperateNativeSearch =
+    canUseInstrument("search") && (isFounder || toolEntitlements.has("search"));
   const mayOperateNativeSheets =
     canUseInstrument("sheets") && (isFounder || toolEntitlements.has("sheets"));
   // CRM belongs to the founder's initial operating set and to a role that has
@@ -10957,6 +10960,12 @@ export default function EosOverlayPage() {
                 root={root}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
+            {mayOperateNativeSearch && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeSearchStudio
+                root={root}
+                canExecute={effectiveAuthorityClasses.has("execute")}
               />
             </Suspense>}
             {mayOperateNativeSheets && <Suspense fallback={<DeferredControlFallback />}>
