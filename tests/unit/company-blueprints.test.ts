@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { compiledOperatingFormation, compileCompanyBlueprintStarters, companyBlueprintForBusinessModel, companyBlueprints } from "../../shared/company-blueprints";
 import { materializeNativeWorkflowStarter } from "../../shared/native-workflow-starters";
-import { materializeNativeBusinessStarters } from "../../shared/native-business-starters";
+import { materializeNativeBusinessStarters, nativeBusinessStarterRelationships } from "../../shared/native-business-starters";
 import { allowedSurfacesForRoleTools, canonicalToolEntitlements, reconcileLegacyToolEntitlements, seatCreateSchema } from "../../shared/eos-runtime";
 
 describe("company operating blueprints", () => {
@@ -275,6 +275,16 @@ describe("company operating blueprints", () => {
       );
       expect(editorial).toMatchObject({ ownerRoleKey: growth.key, workflowTemplateKey: "editorial-cadence" });
     }
+  });
+
+  it("declares the native business-in-a-box dependencies as first-class governed graph edges", () => {
+    expect(nativeBusinessStarterRelationships).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceStarterKey: "commercial-page", targetStarterKey: "company-site", relationshipType: "belongs_to_site" }),
+      expect.objectContaining({ sourceStarterKey: "commercial-page", targetStarterKey: "commercial-intake", relationshipType: "captures_with" }),
+      expect.objectContaining({ sourceStarterKey: "commercial-intake", targetStarterKey: "commercial-pipeline", relationshipType: "creates_demand_for" }),
+      expect.objectContaining({ sourceStarterKey: "finance-control-workbook", targetStarterKey: "finance-control-worksheet", relationshipType: "contains_worksheet" }),
+      expect.objectContaining({ sourceStarterKey: "vendor-service-pipeline", targetStarterKey: "governance-obligation-register", relationshipType: "governed_by" }),
+    ]));
   });
 
   it("compiles the client lifecycle for every business model rather than leaving delivery and feedback outside the box", () => {

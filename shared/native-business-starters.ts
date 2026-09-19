@@ -17,6 +17,31 @@ export type NativeBusinessStarter = {
 export type NativeBusinessStarterReference = { starterAssetId: string };
 export const nativeBusinessStarterReference = (starterAssetId: string): NativeBusinessStarterReference => ({ starterAssetId });
 
+/**
+ * The compiler resolves each stable starter key to a tenant-local object ID,
+ * then materializes these edges in the canonical instrument graph.  Keeping
+ * the relationships alongside the starter assets makes the business-in-a-box
+ * structure inspectable without relying on a UI to infer meaning from nested
+ * IDs inside individual record payloads.
+ */
+export type NativeBusinessStarterRelationship = {
+  sourceStarterKey: string;
+  targetStarterKey: string;
+  relationshipType: string;
+  metadata?: Record<string, unknown>;
+};
+
+export const nativeBusinessStarterRelationships: readonly NativeBusinessStarterRelationship[] = [
+  { sourceStarterKey: "commercial-page", targetStarterKey: "company-site", relationshipType: "belongs_to_site" },
+  { sourceStarterKey: "commercial-page", targetStarterKey: "commercial-intake", relationshipType: "captures_with" },
+  { sourceStarterKey: "commercial-funnel", targetStarterKey: "commercial-intake", relationshipType: "captures_with" },
+  { sourceStarterKey: "commercial-intake", targetStarterKey: "commercial-pipeline", relationshipType: "creates_demand_for" },
+  { sourceStarterKey: "commercial-pipeline", targetStarterKey: "native-offer-catalog", relationshipType: "commercializes" },
+  { sourceStarterKey: "finance-control-plan", targetStarterKey: "finance-reconciliation-register", relationshipType: "governs" },
+  { sourceStarterKey: "finance-control-workbook", targetStarterKey: "finance-control-worksheet", relationshipType: "contains_worksheet" },
+  { sourceStarterKey: "vendor-service-pipeline", targetStarterKey: "governance-obligation-register", relationshipType: "governed_by" },
+];
+
 export function materializeNativeBusinessStarters(input: {
   companyName: string;
   offer: string;
