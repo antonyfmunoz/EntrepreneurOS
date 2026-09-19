@@ -137,6 +137,7 @@ const EndStateGovernanceControlCenter = lazy(() => import("@/components/end-stat
 const InstitutionalLearningControlCenter = lazy(() => import("@/components/institutional-learning-control-center").then((module) => ({ default: module.InstitutionalLearningControlCenter })));
 const NativeKnowledgeHub = lazy(() => import("@/components/native-knowledge-hub").then((module) => ({ default: module.NativeKnowledgeHub })));
 const NativeSearchStudio = lazy(() => import("@/components/native-search-studio").then((module) => ({ default: module.NativeSearchStudio })));
+const NativeSlidesStudio = lazy(() => import("@/components/native-slides-studio").then((module) => ({ default: module.NativeSlidesStudio })));
 
 function DeferredControlFallback() {
   return <div className="rounded-2xl border bg-muted/40 p-6 text-sm text-muted-foreground">Loading governed control…</div>;
@@ -1482,6 +1483,8 @@ export default function EosOverlayPage() {
     canUseInstrument("knowledge") && (isFounder || toolEntitlements.has("knowledge"));
   const mayOperateNativeSearch =
     canUseInstrument("search") && (isFounder || toolEntitlements.has("search"));
+  const mayOperateNativeSlides =
+    canUseInstrument("slides") && (isFounder || toolEntitlements.has("slides"));
   const mayOperateNativeSheets =
     canUseInstrument("sheets") && (isFounder || toolEntitlements.has("sheets"));
   // CRM belongs to the founder's initial operating set and to a role that has
@@ -10967,6 +10970,9 @@ export default function EosOverlayPage() {
                 root={root}
                 canExecute={effectiveAuthorityClasses.has("execute")}
               />
+            </Suspense>}
+            {mayOperateNativeSlides && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeSlidesStudio root={root} canExecute={effectiveAuthorityClasses.has("execute")} canDecide={effectiveAuthorityClasses.has("decide")} />
             </Suspense>}
             {mayOperateNativeSheets && <Suspense fallback={<DeferredControlFallback />}>
               <NativeSheetsStudio
