@@ -138,6 +138,7 @@ const InstitutionalLearningControlCenter = lazy(() => import("@/components/insti
 const NativeKnowledgeHub = lazy(() => import("@/components/native-knowledge-hub").then((module) => ({ default: module.NativeKnowledgeHub })));
 const NativeSearchStudio = lazy(() => import("@/components/native-search-studio").then((module) => ({ default: module.NativeSearchStudio })));
 const NativeSlidesStudio = lazy(() => import("@/components/native-slides-studio").then((module) => ({ default: module.NativeSlidesStudio })));
+const NativeCanvasStudio = lazy(() => import("@/components/native-canvas-studio").then((module) => ({ default: module.NativeCanvasStudio })));
 
 function DeferredControlFallback() {
   return <div className="rounded-2xl border bg-muted/40 p-6 text-sm text-muted-foreground">Loading governed control…</div>;
@@ -1485,6 +1486,12 @@ export default function EosOverlayPage() {
     canUseInstrument("search") && (isFounder || toolEntitlements.has("search"));
   const mayOperateNativeSlides =
     canUseInstrument("slides") && (isFounder || toolEntitlements.has("slides"));
+  // Canvas is a visual operating layer over records the role is already
+  // allowed to see. It is still a distinct authoring tool: roles only get it
+  // when their operating pack grants Canvas, while founders receive the
+  // initial native operating set.
+  const mayOperateNativeCanvas =
+    canUseInstrument("canvas") && (isFounder || toolEntitlements.has("canvas"));
   const mayOperateNativeSheets =
     canUseInstrument("sheets") && (isFounder || toolEntitlements.has("sheets"));
   // CRM belongs to the founder's initial operating set and to a role that has
@@ -10973,6 +10980,9 @@ export default function EosOverlayPage() {
             </Suspense>}
             {mayOperateNativeSlides && <Suspense fallback={<DeferredControlFallback />}>
               <NativeSlidesStudio root={root} canExecute={effectiveAuthorityClasses.has("execute")} canDecide={effectiveAuthorityClasses.has("decide")} />
+            </Suspense>}
+            {mayOperateNativeCanvas && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeCanvasStudio root={root} canExecute={effectiveAuthorityClasses.has("execute")} canDecide={effectiveAuthorityClasses.has("decide")} />
             </Suspense>}
             {mayOperateNativeSheets && <Suspense fallback={<DeferredControlFallback />}>
               <NativeSheetsStudio
