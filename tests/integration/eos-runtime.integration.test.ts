@@ -2716,8 +2716,9 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       (seat: { title: string }) => seat.title === "Growth & Revenue",
     );
     expect(growthSeat).toBeTruthy();
-    expect(instantiated.body.createdStarterProcessIds).toHaveLength(9);
+    expect(instantiated.body.createdStarterProcessIds).toHaveLength(10);
     expect(instantiated.body.starterArtifacts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "editorial-cadence-foundation", ownerSeatId: growthSeat.id }),
       expect.objectContaining({ key: "finance-control-foundation" }),
       expect.objectContaining({ key: "legal-governance-foundation" }),
       expect.objectContaining({ key: "vendor-control-foundation" }),

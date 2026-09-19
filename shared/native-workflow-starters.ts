@@ -112,6 +112,23 @@ export const nativeWorkflowStarters: readonly NativeWorkflowStarter[] = [
     ],
   },
   {
+    key: "editorial-cadence",
+    label: "Editorial cadence",
+    description: "Turn the company offer into a role-owned native content plan without implying external publication.",
+    name: "{{company_name}} editorial cadence · {{offer}}",
+    purpose: "Plan, review, and learn from an evidence-bearing native editorial cadence for {{offer}} and {{target_customer}} while keeping publishing-provider actions separate and explicit.",
+    outcome: "A role-owned content plan, approved message boundary, schedule, and observed-publication evidence path are recorded.",
+    trigger: "The company needs a repeatable owned-content cadence for {{offer}}.",
+    approvals: ["An authorized human or assigned decision authority approves material brand claims, publishing commitments, paid distribution, or public representations before they are released externally."],
+    branches: ["If message evidence, rights, consent, approval, or publishing authority is incomplete, keep the item in draft or review and do not represent it as published."],
+    steps: [
+      { title: "Frame the audience and message", instructions: "Use the native CRM, operating brief, and evidence sources to define the audience, point of view, call to action, proof boundary, and required assets for {{offer}}.", completionCriteria: "The content brief names {{target_customer}}, the intended outcome, evidence limits, owner, and the native source records it relies on.", actionKind: "manual", authorityClass: "execute", toolKey: "docs", onFailure: "Keep the concept as an unqualified idea and assign the missing customer, offer, consent, rights, or evidence question." },
+      { title: "Create the native editorial item", instructions: "Create and schedule the content item in the EOS Content Calendar with its type, channel, brief, owner, and working state.", completionCriteria: "A native content item exists with a scheduled review point and is not represented as externally delivered.", actionKind: "native", authorityClass: "execute", toolKey: "calendar", onFailure: "Retain the brief in draft and create a role-owned follow-up instead of inventing a schedule or external post." },
+      { title: "Review public representation boundary", instructions: "Review claims, audience fit, rights, consent, brand standards, and whether the item requires a material public-representation decision.", completionCriteria: "The item is approved, revised, paused, or kept in review with the authority and unresolved risk explicit.", actionKind: "approval", authorityClass: "decide", toolKey: "docs", onFailure: "Pause the item and preserve the reason; do not publish, schedule paid distribution, or imply approval." },
+      { title: "Observe external outcome only when evidenced", instructions: "When an authorized publishing rail or manual operator provides an external post URL, platform ID, or retained evidence, record the observed result and related learning.", completionCriteria: "Any published state has attributable external evidence; otherwise the item remains a native plan, review, or scheduled intent.", actionKind: "native", authorityClass: "execute", toolKey: "analytics", onFailure: "Keep the delivery state as not dispatched or unresolved and create an evidence follow-up." },
+    ],
+  },
+  {
     key: "capability-to-placement",
     label: "Capability to placement",
     description: "Turn a verified capability gap into a fair, governed candidate and onboarding path.",

@@ -138,6 +138,22 @@ const reputationStarter = (ownerRoleKey: string, tools: string[]): CompanyBluepr
 });
 
 /**
+ * Owned content is a native company capability, not an optional social-media
+ * integration. The starter creates the accountable planning and review loop;
+ * a provider connection may later perform a separately authorized dispatch.
+ */
+const editorialCadenceStarter = (ownerRoleKey: string, tools: string[]): CompanyBlueprintStarter => ({
+  key: "editorial-cadence-foundation",
+  title: "Establish the editorial cadence foundation",
+  statement: "Create an owned, role-accountable content planning and review cadence that turns the company’s offer into evidence-bearing communication without claiming an external post or campaign has been delivered.",
+  ownerRoleKey,
+  priority: "medium",
+  tools,
+  workflowTemplateKey: "editorial-cadence",
+  successExitCriteria: "An accountable content owner, native editorial plan, message-review boundary, schedule, and observed-publication evidence path are ready for governed use.",
+});
+
+/**
  * A first company should not have to invent its people system only after a
  * hiring emergency. This starter remains native and reversible: it creates a
  * role-owned capacity and candidate path, not an employment decision, offer,
@@ -212,14 +228,15 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
     appliesTo: ["services"],
     roles: [
       { key: "company_ceo", title: "Company CEO", department: "Executive", kind: "company_ceo", agentName: "Company CEO Agent", mandate: "Turn founder direction into an accountable company operating plan and escalate consequential decisions.", tools: commonExecutiveTools },
-      { key: "growth", title: "Growth & Revenue", department: "Growth & Revenue", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Growth Agent", mandate: "Create qualified demand and move prospects through a measured commercial pipeline.", tools: ["CRM", "Dialer", "Calendar", "Messages", "Documents", "Forms", "Websites", "Projects", "Workflows", "Analytics"] },
+      { key: "growth", title: "Growth & Revenue", department: "Growth & Revenue", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Growth Agent", mandate: "Create qualified demand and move prospects through a measured commercial pipeline.", tools: ["CRM", "Dialer", "Content Calendar", "Calendar", "Messages", "Documents", "Forms", "Websites", "Projects", "Workflows", "Analytics"] },
       { key: "client_delivery", title: "Client Delivery", department: "Operations & Delivery", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Delivery Agent", mandate: "Deliver the promised client outcome with evidence, quality controls, and clear handoffs.", tools: ["Projects", "Tasks", "Documents", "Messages", "Calendar"] },
       { key: "client_success", title: "Client Success", department: "Client Success", kind: "manager", supervisorKey: "client_delivery", agentName: "Client Success Agent", mandate: "Protect client communication, onboarding, retention, and outcome visibility.", tools: ["CRM", "Messages", "Documents", "Calendar", "Projects", "Tasks", "Reputation"] },
       ...universalCoreRoles,
     ],
     starters: [
-      commercialStarter("growth", ["CRM", "Dialer", "Calendar", "Messages", "Documents", "Forms", "Websites", "Analytics"]),
+      commercialStarter("growth", ["CRM", "Dialer", "Content Calendar", "Calendar", "Messages", "Documents", "Forms", "Websites", "Analytics"]),
       operatingStarter("client_delivery", ["Projects", "Tasks", "Documents", "Workflows"]),
+      editorialCadenceStarter("growth", ["Content Calendar", "CRM", "Documents", "Websites", "Analytics"]),
       clientOnboardingStarter("client_success", ["CRM", "Projects", "Tasks", "Calendar", "Messages", "Documents"]),
       reputationStarter("client_success", ["CRM", "Messages", "Reputation", "Projects", "Documents"]),
       talentStarter("people_talent", ["Forms", "Calendar", "Messages", "Documents", "Tables", "Workflows", "Analytics", "Learning", "Progression"]),
@@ -237,13 +254,14 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
     roles: [
       { key: "company_ceo", title: "Company CEO", department: "Executive", kind: "company_ceo", agentName: "Company CEO Agent", mandate: "Translate founder direction into company priorities, capital-aware tradeoffs, and operating accountability.", tools: commonExecutiveTools },
       { key: "product", title: "Product & Engineering", department: "Product & Engineering", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Product Agent", mandate: "Own product learning, roadmap evidence, delivery quality, and technical operating choices.", tools: ["Projects", "Roadmap", "Documents", "Analytics", "Workflows"] },
-      { key: "growth", title: "Growth & Revenue", department: "Growth & Revenue", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Growth Agent", mandate: "Create demand, operate the commercial funnel, and report repeatable revenue evidence.", tools: ["CRM", "Dialer", "Calendar", "Messages", "Forms", "Websites", "Analytics", "Campaigns"] },
+      { key: "growth", title: "Growth & Revenue", department: "Growth & Revenue", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Growth Agent", mandate: "Create demand, operate the commercial funnel, and report repeatable revenue evidence.", tools: ["CRM", "Dialer", "Content Calendar", "Calendar", "Messages", "Documents", "Forms", "Websites", "Analytics", "Campaigns"] },
       { key: "customer", title: "Customer Success", department: "Client Success", kind: "manager", supervisorKey: "company_ceo", agentName: "Customer Success Agent", mandate: "Protect onboarding, adoption, retention, and customer outcome feedback.", tools: ["CRM", "Messages", "Documents", "Analytics", "Projects", "Calendar", "Reputation"] },
       ...universalCoreRoles,
     ],
     starters: [
-      commercialStarter("growth", ["CRM", "Dialer", "Messages", "Calendar", "Forms", "Websites", "Analytics"]),
+      commercialStarter("growth", ["CRM", "Dialer", "Content Calendar", "Messages", "Calendar", "Forms", "Websites", "Analytics"]),
       operatingStarter("product", ["Projects", "Documents", "Analytics", "Workflows"]),
+      editorialCadenceStarter("growth", ["Content Calendar", "CRM", "Documents", "Websites", "Analytics"]),
       clientOnboardingStarter("customer", ["CRM", "Projects", "Calendar", "Messages", "Documents"]),
       reputationStarter("customer", ["CRM", "Messages", "Reputation", "Projects", "Documents"]),
       talentStarter("people_talent", ["Forms", "Calendar", "Messages", "Documents", "Tables", "Workflows", "Analytics", "Learning", "Progression"]),
@@ -268,6 +286,7 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
     starters: [
       commercialStarter("brand_growth", ["CRM", "Dialer", "Content Calendar", "Campaigns", "Forms", "Websites", "Analytics"]),
       operatingStarter("product_operations", ["Projects", "Tables", "Documents", "Workflows"]),
+      editorialCadenceStarter("brand_growth", ["Content Calendar", "CRM", "Documents", "Websites", "Analytics"]),
       clientOnboardingStarter("customer", ["CRM", "Projects", "Calendar", "Messages", "Documents"]),
       reputationStarter("customer", ["CRM", "Messages", "Reputation", "Projects", "Documents"]),
       talentStarter("people_talent", ["Forms", "Calendar", "Messages", "Documents", "Tables", "Workflows", "Analytics", "Learning", "Progression"]),
@@ -284,13 +303,14 @@ export const companyBlueprints: readonly CompanyBlueprint[] = [
     appliesTo: ["hybrid", "other"],
     roles: [
       { key: "company_ceo", title: "Company CEO", department: "Executive", kind: "company_ceo", agentName: "Company CEO Agent", mandate: "Translate founder direction into a coherent company operating plan.", tools: commonExecutiveTools },
-      { key: "growth", title: "Growth & Commercial", department: "Growth & Revenue", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Commercial Agent", mandate: "Build qualified pipeline and learn the repeatable value proposition.", tools: ["CRM", "Dialer", "Calendar", "Messages", "Forms", "Websites", "Projects", "Documents", "Workflows", "Analytics"] },
+      { key: "growth", title: "Growth & Commercial", department: "Growth & Revenue", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Commercial Agent", mandate: "Build qualified pipeline and learn the repeatable value proposition.", tools: ["CRM", "Dialer", "Content Calendar", "Calendar", "Messages", "Forms", "Websites", "Projects", "Documents", "Workflows", "Analytics"] },
       { key: "operations", title: "Operations & Delivery", department: "Operations & Delivery", kind: "functional_executive", supervisorKey: "company_ceo", agentName: "Operations Agent", mandate: "Produce reliable delivery, workflow execution, and quality evidence.", tools: ["Projects", "Tasks", "Documents", "Workflows", "CRM", "Calendar", "Messages", "Reputation"] },
       ...universalCoreRoles,
     ],
     starters: [
-      commercialStarter("growth", ["CRM", "Dialer", "Calendar", "Messages", "Forms", "Websites", "Analytics"]),
+      commercialStarter("growth", ["CRM", "Dialer", "Content Calendar", "Calendar", "Messages", "Forms", "Websites", "Analytics"]),
       operatingStarter("operations", ["Projects", "Tasks", "Documents", "Workflows"]),
+      editorialCadenceStarter("growth", ["Content Calendar", "CRM", "Documents", "Websites", "Analytics"]),
       clientOnboardingStarter("operations", ["CRM", "Projects", "Tasks", "Calendar", "Messages", "Documents"]),
       reputationStarter("operations", ["CRM", "Messages", "Reputation", "Projects", "Documents"]),
       talentStarter("people_talent", ["Forms", "Calendar", "Messages", "Documents", "Tables", "Workflows", "Analytics", "Learning", "Progression"]),
@@ -420,6 +440,10 @@ export function compileCompanyBlueprintStarters(
       "reputation-foundation": {
         title: `Feedback and improvement foundation · ${offer}`,
         statement: `${starter.statement} This applies to ${targetCustomer} receiving ${offer}; feedback consent and evidence remain required.`,
+      },
+      "editorial-cadence-foundation": {
+        title: `Editorial cadence foundation · ${offer}`,
+        statement: `${starter.statement} This adapts ${offer} for ${targetCustomer}; it remains a native plan until an authorized publishing rail or retained external evidence establishes an observed result.`,
       },
       "talent-foundation": {
         title: `People and talent foundation · ${goal}`,
