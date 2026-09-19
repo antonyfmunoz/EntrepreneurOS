@@ -128,6 +128,7 @@ const NativeDocumentsStudio = lazy(() => import("@/components/native-documents-s
 const NativeFilesStudio = lazy(() => import("@/components/native-files-studio").then((module) => ({ default: module.NativeFilesStudio })));
 const NativeSheetsStudio = lazy(() => import("@/components/native-sheets-studio").then((module) => ({ default: module.NativeSheetsStudio })));
 const NativeCrmStudio = lazy(() => import("@/components/native-crm-studio").then((module) => ({ default: module.NativeCrmStudio })));
+const NativeCrmImportStudio = lazy(() => import("@/components/native-crm-import-studio").then((module) => ({ default: module.NativeCrmImportStudio })));
 const NativeMarketingStudio = lazy(() => import("@/components/native-marketing-studio").then((module) => ({ default: module.NativeMarketingStudio })));
 const NativeCommerceStudio = lazy(() => import("@/components/native-commerce-studio").then((module) => ({ default: module.NativeCommerceStudio })));
 const NativeProjectsStudio = lazy(() => import("@/components/native-projects-studio").then((module) => ({ default: module.NativeProjectsStudio })));
@@ -10910,6 +10911,12 @@ export default function EosOverlayPage() {
                 canCreateFollowUp={mayCreateNativeTasks}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
+            {mayOperateNativeCrm && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeCrmImportStudio
+                root={root}
+                canExecute={effectiveAuthorityClasses.has("execute")}
               />
             </Suspense>}
             {mayOperateNativeMarketing && <Suspense fallback={<DeferredControlFallback />}>
