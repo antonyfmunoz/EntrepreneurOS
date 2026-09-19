@@ -11,6 +11,7 @@ import {
 } from "@shared/eos-runtime";
 
 const runtime = readFileSync(new URL("../../server/routes/eos-runtime.ts", import.meta.url), "utf8");
+const overlay = readFileSync(new URL("../../client/src/pages/eos-overlay-page.tsx", import.meta.url), "utf8");
 
 describe("native outreach and dialer runtime", () => {
   const relationshipId = "b35a8be3-33dd-4f9e-84ad-616126aea63b";
@@ -50,6 +51,14 @@ describe("native outreach and dialer runtime", () => {
     expect(runtime).toContain("A do-not-contact instruction belongs to the relationship");
     expect(runtime).toContain("eq(eosOutreachSequences.relationshipId, relationshipId)");
     expect(runtime).toContain('eq(eosOutreachAttempts.outcome, "do_not_contact")');
+  });
+
+  it("shows the relationship-wide suppression before an operator can draft another sequence", () => {
+    expect(overlay).toContain("suppressedOutreachRelationshipIds");
+    expect(overlay).toContain('attempt.outcome === "do_not_contact"');
+    expect(overlay).toContain('disabled={suppressed}');
+    expect(overlay).toContain("Outreach suppressed");
+    expect(overlay).toContain("selectedOutreachRelationshipSuppressed ||");
   });
 
   it("treats Dialer as a real role capability rather than a display label", () => {

@@ -2894,6 +2894,26 @@ export default function EosOverlayPage() {
     onError: (error) => showMutationError("Outreach outcome", error),
   });
 
+  // This is a usability projection of the authoritative server-side guard.
+  // A do-not-contact instruction suppresses the relationship itself, so the
+  // operator should see that before attempting to draft another sequence.
+  const suppressedOutreachRelationshipIds = useMemo(
+    () =>
+      new Set(
+        (commercialStateQuery.data?.outreachSequences || [])
+          .filter((sequence: JsonRecord) =>
+            (sequence.attempts || []).some(
+              (attempt: JsonRecord) => attempt.outcome === "do_not_contact",
+            ),
+          )
+          .map((sequence: JsonRecord) => String(sequence.relationshipId)),
+      ),
+    [commercialStateQuery.data?.outreachSequences],
+  );
+  const selectedOutreachRelationshipSuppressed =
+    Boolean(outreachRelationshipId) &&
+    suppressedOutreachRelationshipIds.has(outreachRelationshipId);
+
   const attachIntegrationMutation = useMutation({
     mutationFn: (integration: JsonRecord) => {
       const provider = integration.id === "google_workspace" ? "gmail" : integration.id;
@@ -7941,9 +7961,11 @@ export default function EosOverlayPage() {
                       <option value="">Choose a relationship</option>
                       {(commercialStateQuery.data?.relationships || []).filter((item: JsonRecord) => item.state !== "closed").map((item: JsonRecord) => {
                         const party = (commercialStateQuery.data?.stakeholders || []).find((candidate: JsonRecord) => candidate.id === item.stakeholderId);
-                        return <option key={item.id} value={item.id}>{party?.name || "Withheld party"} · {item.title}</option>;
+                        const suppressed = suppressedOutreachRelationshipIds.has(String(item.id));
+                        return <option key={item.id} value={item.id} disabled={suppressed}>{party?.name || "Withheld party"} · {item.title}{suppressed ? " · do not contact" : ""}</option>;
                       })}
                     </select>
+                    {selectedOutreachRelationshipSuppressed && <Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Outreach suppressed</AlertTitle><AlertDescription>This relationship has a recorded do-not-contact instruction. EOS will not draft a new sequence; review the accountable outcome record instead.</AlertDescription></Alert>}
                     <select aria-label="Outreach commercial case" value={outreachCaseId} onChange={(event) => setOutreachCaseId(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
                       <option value="">No linked commercial case</option>
                       {(commercialStateQuery.data?.cases || []).filter((item: JsonRecord) => !["won", "lost", "closed", "disqualified"].includes(item.state)).map((item: JsonRecord) => <option key={item.id} value={item.id}>{item.title}</option>)}
@@ -7954,7 +7976,7 @@ export default function EosOverlayPage() {
                     <Textarea aria-label="Outreach purpose" value={outreachPurpose} onChange={(event) => setOutreachPurpose(event.target.value)} placeholder="Why this relationship should be contacted now" />
                     <Textarea aria-label="Outreach script" value={outreachScript} onChange={(event) => setOutreachScript(event.target.value)} placeholder="Call outline, discovery prompts, or approved talking points" />
                     <Textarea aria-label="Outreach consent basis" value={outreachConsentBasis} onChange={(event) => setOutreachConsentBasis(event.target.value)} placeholder="Documented consent, existing relationship, or other applicable legal basis" />
-                    <Button className="w-full" disabled={!outreachTitle.trim() || !outreachRelationshipId || outreachPurpose.trim().length < 3 || outreachConsentBasis.trim().length < 3 || !effectiveAuthorityClasses.has("execute") || outreachSequenceMutation.isPending} onClick={() => outreachSequenceMutation.mutate()}>
+                    <Button className="w-full" disabled={!outreachTitle.trim() || !outreachRelationshipId || selectedOutreachRelationshipSuppressed || outreachPurpose.trim().length < 3 || outreachConsentBasis.trim().length < 3 || !effectiveAuthorityClasses.has("execute") || outreachSequenceMutation.isPending} onClick={() => outreachSequenceMutation.mutate()}>
                       <Plus className="mr-2 h-4 w-4" />{outreachSequenceMutation.isPending ? "Drafting…" : "Draft native outreach sequence"}
                     </Button>
                   </div>
