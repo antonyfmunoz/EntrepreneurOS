@@ -1491,6 +1491,11 @@ export default function EosOverlayPage() {
   const mayOperateNativeProjects =
     canUseInstrument("projects") && canUseInstrument("tasks") &&
     (isFounder || (toolEntitlements.has("projects") && toolEntitlements.has("tasks")));
+  // A commercial role can turn an opportunity into a controlled native Task
+  // without also receiving the broader Projects surface.  The server still
+  // enforces both CRM and Tasks authority for the atomic cross-tool command.
+  const mayCreateNativeTasks =
+    canUseInstrument("tasks") && (isFounder || toolEntitlements.has("tasks"));
   // Reputation is founder-controlled by default. Other roles need an explicit
   // Reputation tool grant so customer-facing records stay authority-bound.
   const mayOperateNativeReputation =
@@ -10846,6 +10851,9 @@ export default function EosOverlayPage() {
               <NativeCrmStudio
                 root={root}
                 roleScopeKey={roleScopeKey}
+                activeSeatId={principalContext?.seatId || ""}
+                seats={visibleSeats}
+                canCreateFollowUp={mayCreateNativeTasks}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
               />

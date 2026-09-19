@@ -158,6 +158,19 @@ export const instrumentLinkCreateSchema = z.object({
   idempotencyKey: identifier,
 });
 
+// A commercial follow-up is intentionally a single cross-instrument command:
+// one native CRM opportunity creates one role-owned native Task and records
+// the accountable next action back on that opportunity.  Keeping its grammar
+// here prevents a UI from stitching together partially applied CRM, Task, and
+// relationship-link writes.
+export const crmOpportunityFollowUpActionSchema = z.object({
+  expectedOpportunityVersion: z.number().int().positive(),
+  title: z.string().trim().min(2).max(300),
+  objective: z.string().trim().min(3).max(5_000),
+  ownerSeatId: z.string().trim().min(1).max(200),
+  idempotencyKey: identifier,
+});
+
 export const instrumentSearchSchema = z.object({
   query: z.string().trim().max(200).default(""),
   instrumentKey: eosInstrumentKeySchema.optional(),

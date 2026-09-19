@@ -556,6 +556,29 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const capturedOpportunities = capturedCrm.body.objects.filter((object: any) => object.objectType === "opportunity" && object.data?.relationshipObjectId === capturedRelationships[0].id && object.data?.pipelineObjectId === inboundPipeline.body.object.id);
     expect(capturedOpportunities).toHaveLength(1);
     expect(capturedOpportunities[0].data).toMatchObject({ stage: "Qualified", amountMinor: 0, sourceFormObjectId: captureForm.body.object.id });
+    const [instrumentFounderSeat] = await sql<{ id: string }[]>`SELECT id FROM eos_seats WHERE company_id = ${companyId} AND kind = 'founder' AND status = 'active' ORDER BY created_at LIMIT 1`;
+    expect(instrumentFounderSeat?.id).toBeTruthy();
+    const followUp = await api.post(`/api/eos/companies/${companyId}/crm/opportunities/${capturedOpportunities[0].id}/follow-up-actions`).send({
+      expectedOpportunityVersion: capturedOpportunities[0].version,
+      title: "Confirm fit and schedule discovery",
+      objective: "Confirm the prospect's fit for the native EOS offer and schedule the next discovery conversation.",
+      ownerSeatId: instrumentFounderSeat.id,
+      idempotencyKey: "instrument:create:public-intake-opportunity-follow-up",
+    }).expect(201);
+    expect(followUp.body).toMatchObject({
+      replayed: false,
+      opportunity: { id: capturedOpportunities[0].id, version: 2, data: { nextActionTaskObjectId: expect.any(String), nextActionOwnerSeatId: instrumentFounderSeat.id } },
+      task: { instrumentKey: "tasks", objectType: "task", state: "draft", ownerSeatId: instrumentFounderSeat.id, data: { opportunityObjectId: capturedOpportunities[0].id, ownerSeatId: instrumentFounderSeat.id } },
+      link: { relationshipType: "has_follow_up" },
+    });
+    const followUpReplay = await api.post(`/api/eos/companies/${companyId}/crm/opportunities/${capturedOpportunities[0].id}/follow-up-actions`).send({
+      expectedOpportunityVersion: capturedOpportunities[0].version,
+      title: "Confirm fit and schedule discovery",
+      objective: "Confirm the prospect's fit for the native EOS offer and schedule the next discovery conversation.",
+      ownerSeatId: instrumentFounderSeat.id,
+      idempotencyKey: "instrument:create:public-intake-opportunity-follow-up",
+    }).expect(200);
+    expect(followUpReplay.body).toMatchObject({ replayed: true, task: { id: followUp.body.task.id }, opportunity: { id: capturedOpportunities[0].id, version: 2 } });
     const capturedForms = await api.get(`/api/eos/companies/${companyId}/instruments/forms`).expect(200);
     expect(capturedForms.body.objects.filter((object: any) => object.objectType === "submission" && object.data?.formObjectId === captureForm.body.object.id)).toHaveLength(2);
     const funnel = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({
