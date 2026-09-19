@@ -254,7 +254,7 @@ export const instrumentActivationRequirements: Partial<Record<EosInstrumentKey, 
   finance: { account: ["accountType", "currency"], plan: ["periodStart", "periodEnd", "lines"], transaction: ["accountObjectId", "amountMinor", "occurredAt"], reconciliation: ["sourceObjectIds", "evidenceIds"], obligation: ["counterpartyReference", "dueAt", "amountMinor"] },
   ads: { account: ["providerReference", "currency"], campaign: ["objective", "budgetMinor", "currency"], ad_group: ["campaignObjectId", "audienceObjectIds"], creative: ["claim", "assetObjectIds"], audience: ["definition", "sourceObjectIds"], budget: ["campaignObjectId", "limitMinor", "currency"], placement: ["campaignObjectId", "channel"] },
   reputation: { review: ["rating", "sourceReference", "receivedAt"], review_request: ["relationshipObjectId", "channel", "consentReference"], response: ["reviewObjectId", "body", "approvedBySeatId"], testimonial: ["body", "consentReference", "evidenceIds"], rating_summary: ["sourceReviewObjectIds", "averageRating", "generatedAt"] },
-  websites: { site: ["brandName"], page: ["headline", "path"], funnel: ["headline", "primaryCtaLabel", "captureFormObjectId"], section: ["pageObjectId", "content"] },
+  websites: { site: ["brandName"], page: ["headline", "path"], funnel: ["headline", "primaryCtaLabel", "primaryCtaTarget", "captureFormObjectId", "bookingCalendarObjectId"], section: ["pageObjectId", "content"] },
 };
 
 const dateFieldNames = new Set(["startsAt", "endsAt", "targetAt", "startedAt", "submittedAt", "generatedAt", "observedAt", "occurredAt", "dueAt", "receivedAt", "periodStart", "periodEnd"]);
