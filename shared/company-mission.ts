@@ -27,11 +27,15 @@ export type CompanyMissionInput = {
   businessModel?: string;
   offer?: string;
   targetCustomer?: string;
+  /** The demand-generation motion the compiler should make visible in early work. */
+  primaryGrowthMotion?: string;
   assistantName?: string;
   founderVision?: string;
   founderValues?: string;
   decisionStyle?: string;
   workingStyle?: string;
+  /** Founder-selected review rhythm for the first organization manifest. */
+  operatingCadence?: "weekly" | "biweekly" | "monthly";
   goals?: string;
   formation?: "agent_first" | "hybrid" | "existing_team";
   /**
