@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const messageHub = readFileSync(new URL("../../client/src/components/native-message-hub.tsx", import.meta.url), "utf8");
+const runtime = readFileSync(new URL("../../server/routes/instrument-runtime.ts", import.meta.url), "utf8");
 
 describe("native conversation controls", () => {
   it("lets an authorized operator configure conversation identity without rewriting participants", () => {
@@ -10,5 +11,12 @@ describe("native conversation controls", () => {
     expect(messageHub).toContain("message-conversation-configure");
     expect(messageHub).toContain("expectedVersion: selectedConversation.version");
     expect(messageHub).toContain('data: { ...selectedConversation.data, operatingMode: "native_eos" }');
+  });
+
+  it("keeps the reporting-line and membership boundary intact when generic records are updated", () => {
+    expect(runtime).toContain("assertNativeMessageUpdate");
+    expect(runtime).toContain("Only a named participant may update this native conversation.");
+    expect(runtime).toContain("message_conversation_immutable");
+    expect(runtime).toContain("await assertNativeMessageCreate(access, {");
   });
 });
