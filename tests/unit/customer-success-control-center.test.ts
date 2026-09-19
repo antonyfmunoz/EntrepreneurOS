@@ -56,6 +56,18 @@ describe("native customer-success control contracts", () => {
     expect(routes).toContain("customer_success.native_crm_customer.read");
   });
 
+  it("provisions one dormant, customer-bound workspace without treating setup as disclosure", () => {
+    const control = readFileSync(resolve(process.cwd(), "client/src/components/customer-success-control-center.tsx"), "utf8");
+    const portalRoutes = readFileSync(resolve(process.cwd(), "server/routes/stakeholder-portal.ts"), "utf8");
+    expect(control).toContain("Client workspace");
+    expect(control).toContain("portalKey: `client-${account.id}`");
+    expect(control).toContain("stakeholderId: account.stakeholderId");
+    expect(control).toContain("Provisioning creates no external access, message, or disclosure.");
+    expect(control).toContain("evidence-backed activation, publication, and access issuance remain governed separately");
+    expect(portalRoutes).toContain('state: "dormant"');
+    expect(portalRoutes).toContain("tokenDisclosedOnce: true");
+  });
+
   it("adds database-enforced immutable receipts and governed projections", () => {
     const migration = readFileSync(resolve(process.cwd(), "migrations/0083_add_customer_success_control_center.sql"), "utf8");
     expect(migration).toContain("CREATE TABLE IF NOT EXISTS eos_customer_success_accounts");

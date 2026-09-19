@@ -27,14 +27,33 @@ function badge(state: string) { const variant = ["healthy", "achieved", "resolve
 export function CustomerSuccessControlCenter({ root, canExecute, canDecide }: Props) {
   const endpoint = `${root}/customer-success`; const queryClient = useQueryClient(); const { toast } = useToast();
   const state = useQuery<Row>({ queryKey: [endpoint], queryFn: () => json("GET", endpoint) });
+  const portalEndpoint = `${root}/stakeholder-portals`;
+  const portals = useQuery<Row>({ queryKey: [portalEndpoint], queryFn: () => json("GET", portalEndpoint), enabled: canDecide });
   const [accountId, setAccountId] = useState("");
   const refresh = async () => queryClient.invalidateQueries({ queryKey: [endpoint] });
+  const refreshPortals = async () => queryClient.invalidateQueries({ queryKey: [portalEndpoint] });
   const action = useMutation({
     mutationFn: (input: { url: string; body: unknown; success: string }) => json("POST", input.url, input.body),
     onSuccess: async (_value, input) => { await refresh(); toast({ title: input.success, description: "The current projection and immutable receipt history were updated together." }); },
     onError: (error) => toast({ title: "Customer-success action failed", description: error instanceof Error ? error.message : String(error), variant: "destructive" }),
   });
   const run = (url: string, body: unknown, success: string) => action.mutate({ url, body, success });
+  const provisionClientWorkspace = useMutation({
+    mutationFn: (account: Row) => json("POST", portalEndpoint, {
+      portalKey: `client-${account.id}`,
+      name: `${account.customerName} workspace`,
+      portalType: "client",
+      stakeholderId: account.stakeholderId,
+      visibleSections: ["updates", "documents"],
+      activationRequirements: [
+        "Verify the intended recipient and disclosure scope.",
+        "Review each publication with verified supporting Evidence.",
+        "Set a time-bounded access expiry before issuing a private link.",
+      ],
+    }),
+    onSuccess: async () => { await refreshPortals(); toast({ title: "Client workspace provisioned", description: "It is dormant and private. Configuration, evidence-backed activation, publication, and access issuance remain governed separately." }); },
+    onError: (error) => toast({ title: "Client workspace could not be provisioned", description: error instanceof Error ? error.message : String(error), variant: "destructive" }),
+  });
 
   const [account, setAccount] = useState({ relationshipId: "", nativeRelationshipObjectId: "", ownerSeatId: "", reviewCadenceDays: 30, nextReviewAt: dateFromNow(30), renewalAt: "", successDefinition: "", classification: "confidential" });
   const [health, setHealth] = useState({ deliveryScore: 75, outcomeScore: 75, adoptionScore: 75, relationshipScore: 75, riskScore: 25, evidenceId: "", summary: "", nextActions: "", nextReviewAt: dateFromNow(30) });
@@ -48,6 +67,7 @@ export function CustomerSuccessControlCenter({ root, canExecute, canDecide }: Pr
   const [renewal, setRenewal] = useState({ intent: "defer", evidenceId: "", rationale: "", nextReviewAt: dateFromNow(30) });
 
   const selected = state.data?.accounts?.find((item: Row) => item.id === accountId);
+  const selectedClientWorkspace = (portals.data?.portals || []).find((item: Row) => item.portalType === "client" && item.stakeholderId === selected?.stakeholderId);
   const eligible = state.data?.eligibleCustomers?.find((item: Row) => item.relationship.id === account.relationshipId);
   const nativeEligible = state.data?.eligibleNativeCustomers?.find((item: Row) => item.relationship.id === account.nativeRelationshipObjectId);
   const accountOutcomes = useMemo(() => (state.data?.outcomes || []).filter((item: Row) => item.accountId === accountId), [state.data?.outcomes, accountId]);
@@ -74,6 +94,7 @@ export function CustomerSuccessControlCenter({ root, canExecute, canDecide }: Pr
     </CardContent></Card>
 
     {selected && <>
+      {canDecide && <Card><CardHeader><CardTitle>Client workspace</CardTitle><CardDescription>One governed client workspace is bound to this customer record. Provisioning creates no external access, message, or disclosure.</CardDescription></CardHeader><CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div>{portals.isLoading ? <p className="text-sm text-muted-foreground">Checking the customer workspace…</p> : selectedClientWorkspace ? <><div className="flex flex-wrap items-center gap-2"><Badge variant={selectedClientWorkspace.state === "active" ? "default" : "secondary"}>{selectedClientWorkspace.state}</Badge><span className="text-sm font-medium">{selectedClientWorkspace.name}</span></div><p className="mt-2 text-sm text-muted-foreground">Continue configuration, evidence-backed activation, publication review, and private access issuance from Stakeholder portals in Governance.</p></> : <p className="text-sm text-muted-foreground">No client workspace exists yet. Provision one here; it will remain dormant until a founder completes the separate governance gates.</p>}</div>{!portals.isLoading && !selectedClientWorkspace && <Button disabled={provisionClientWorkspace.isPending || !selected.stakeholderId} onClick={() => provisionClientWorkspace.mutate(selected)}><Plus className="mr-2 h-4 w-4"/>{provisionClientWorkspace.isPending ? "Provisioning…" : "Provision client workspace"}</Button>}</CardContent></Card>}
       <Card><CardHeader><CardTitle className="flex items-center gap-2"><Activity className="h-5 w-5"/>Evidence-backed health review</CardTitle><CardDescription>EOS calculates health deterministically from delivery, outcome, adoption, relationship, and risk dimensions.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{(["deliveryScore", "outcomeScore", "adoptionScore", "relationshipScore", "riskScore"] as const).map((key) => <label key={key} className="space-y-1 text-xs text-muted-foreground">{key.replace("Score", " score")}<Input type="number" min={0} max={100} value={health[key]} onChange={(event) => setHealth((value) => ({ ...value, [key]: Number(event.target.value) }))}/></label>)}</div><div className="grid gap-3 md:grid-cols-2">{evidenceSelect("Health review Evidence", health.evidenceId, (evidenceId) => setHealth((value) => ({ ...value, evidenceId })))}<label className="space-y-1 text-xs text-muted-foreground">Next review<Input type="date" value={health.nextReviewAt} onChange={(event) => setHealth((value) => ({ ...value, nextReviewAt: event.target.value }))}/></label><Textarea placeholder="Observed customer-health facts and limits" value={health.summary} onChange={(event) => setHealth((value) => ({ ...value, summary: event.target.value }))}/><Textarea placeholder="Accountable next actions" value={health.nextActions} onChange={(event) => setHealth((value) => ({ ...value, nextActions: event.target.value }))}/></div><Button disabled={!canExecute || action.isPending || !health.evidenceId || health.summary.trim().length < 20 || health.nextActions.trim().length < 10} onClick={() => run(`${endpoint}/accounts/${selected.id}/health-reviews`, { expectedVersion: selected.version, ...health, evidenceIds: [health.evidenceId], evidenceId: undefined }, "Health review recorded")}><CheckCircle2 className="mr-2 h-4 w-4"/>Record health review</Button>{accountReviews[0] && <div className="rounded-lg bg-muted p-3 text-sm"><span className="font-medium">Latest: {accountReviews[0].healthScore}/100 · {accountReviews[0].healthState.replaceAll("_", " ")}</span><p className="mt-1 text-muted-foreground">{accountReviews[0].summary}</p></div>}</CardContent></Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
