@@ -429,6 +429,11 @@ function manifestFromCompanyMission(
   const businessModel = company.type || (typeof profile.businessModel === "string" ? profile.businessModel : "");
   const template = companyBlueprintForBusinessModel(businessModel);
   const existingSystems = profileStringList(profile.existingSystems);
+  const operatingCadence = profile.operatingCadence === "weekly"
+    || profile.operatingCadence === "biweekly"
+    || profile.operatingCadence === "monthly"
+    ? profile.operatingCadence
+    : "weekly";
   const hasCurrentReality = Boolean(profile.currentReality && typeof profile.currentReality === "object" && !Array.isArray(profile.currentReality));
   const currentRealityUnknown = currentRealityUnknowns(profile.currentReality);
   const goals = String(company.goals || "")
@@ -447,7 +452,7 @@ function manifestFromCompanyMission(
     goals: goals.length ? goals : [purpose],
     enabledModules: Array.from({ length: 14 }, (_, index) => index + 1),
     ownerSeat: { title: "Founder / Owner", authority: "owner" },
-    operatingCadence: "weekly",
+    operatingCadence,
     founderProfile: {
       vision: typeof profile.vision === "string" ? profile.vision : "",
       values: typeof profile.values === "string" ? profile.values : "",

@@ -2634,6 +2634,8 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
           founder_profile = ${JSON.stringify({
             vision: "Operate a durable client-value loop.",
             operatingFormation: "hybrid",
+            operatingCadence: "biweekly",
+            primaryGrowthMotion: "Founder-led outbound and referral partnerships",
             existingSystems: ["QuickBooks"],
             currentReality: {
               assetsAndObligations: "Two active client engagements.",
@@ -2655,6 +2657,10 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       source: "company_mission_journey",
       journeyVersion: "company-mission-journey-v1",
     });
+    expect(draft.body.manifest.operatingCadence).toBe("biweekly");
+    expect(draft.body.manifest.blueprint.primaryGrowthMotion).toBe(
+      "Founder-led outbound and referral partnerships",
+    );
     expect(draft.body.manifest.sourceAssertions).toEqual(
       expect.arrayContaining([expect.objectContaining({ label: "Company Mission Journey" })]),
     );
