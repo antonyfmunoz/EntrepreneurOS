@@ -175,7 +175,7 @@ async function assertNativeMessageCreate(
   if (input.objectType === "message") {
     if (typeof data.body !== "string" || !data.body.trim())
       throw new EosRouteError(400, "message_body_required", "A native message requires a non-empty body.");
-    if (!['native_eos', 'email', 'slack', 'sms', 'social'].includes(String(data.channelType)))
+    if (!['native_eos', 'email', 'slack', 'sms', 'imessage', 'instagram', 'social'].includes(String(data.channelType)))
       throw new EosRouteError(400, "message_channel_invalid", "Messages must use a declared native or external delivery channel.");
   }
 }
