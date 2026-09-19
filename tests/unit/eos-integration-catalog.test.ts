@@ -1,9 +1,15 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   eosIntegrationCatalog,
   eosIntegrationKeys,
   integrationReadiness,
 } from "../../shared/eos-integration-catalog";
+
+const overlay = readFileSync(
+  new URL("../../client/src/pages/eos-overlay-page.tsx", import.meta.url),
+  "utf8",
+);
 
 describe("EOS integration catalog", () => {
   it("holds every selected provider to the same seven control planes", () => {
@@ -57,5 +63,12 @@ describe("EOS integration catalog", () => {
       execution: "blocked",
       recovery: "blocked",
     });
+  });
+
+  it("keeps DocuSign on the same OAuth company-connection lifecycle", () => {
+    expect(overlay).toContain('query.get("docusign") === "authorized"');
+    expect(overlay).toContain("attachIntegrationMutation.mutate(integration)");
+    expect(overlay).not.toContain("docusign-jwt-demo-v1");
+    expect(overlay).not.toContain("CompanyVaultConnectionDraft");
   });
 });
