@@ -37,4 +37,15 @@ describe("native projects and tasks", () => {
     expect(studio).toContain("has not been granted Commerce");
     expect(studio).toContain("sourceOpportunityObjectId");
   });
+
+  it("starts the released company client-onboarding process from the linked delivery project without creating a duplicate checklist or provider effect", () => {
+    expect(overlay).toContain("processes={operationsStateQuery.data?.processes || []}");
+    expect(overlay).toContain('canUseWorkflows={mayOperateNativeWorkflows && allowedSurfaces.has("operations")}');
+    expect(studio).toContain('workflowKey === "client-onboarding"');
+    expect(studio).toContain('`${root}/workflow-runs`');
+    expect(studio).toContain('deliveryProjectObjectId: selectedProject.id');
+    expect(studio).toContain('orderObjectId: selectedProjectOrderId');
+    expect(studio).toContain("externalEffectsPermitted: false");
+    expect(studio).toContain("EOS already has a client-onboarding run for this delivery project");
+  });
 });

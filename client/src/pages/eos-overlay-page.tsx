@@ -10883,6 +10883,8 @@ export default function EosOverlayPage() {
                 roleScopeKey={roleScopeKey}
                 activeSeatId={principalContext?.seatId || ""}
                 seats={visibleSeats}
+                processes={operationsStateQuery.data?.processes || []}
+                canUseWorkflows={mayOperateNativeWorkflows && allowedSurfaces.has("operations")}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
               />

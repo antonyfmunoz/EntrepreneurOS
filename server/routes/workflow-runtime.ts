@@ -8,6 +8,7 @@ import {
   eosAuditRecords,
   eosEvidence,
   eosIntegrationBindings,
+  eosInstrumentObjects,
   eosProcessDefinitions,
   eosSeats,
   eosSkillDefinitions,
@@ -104,6 +105,55 @@ function appendRunEventValues(input: {
   };
 }
 
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function classificationRank(value: string) {
+  return ["internal", "confidential", "restricted"].indexOf(value);
+}
+
+/**
+ * Delivery-project onboarding is a first-class native seam, not a free-form
+ * hint in a workflow payload.  Validate it server-side so a caller cannot
+ * attach a released workflow to an arbitrary project or downgrade the
+ * project's visibility simply by crafting a request outside the UI.
+ */
+async function assertNativeDeliveryProjectContext(input: {
+  companyId: number;
+  visibleSeatIds: Set<string>;
+  access: Awaited<ReturnType<typeof companyAccess>>;
+  workflowInput: Record<string, unknown>;
+  runClassification: string;
+}) {
+  if (input.workflowInput.source !== "native_delivery_project") return null;
+  const deliveryProjectObjectId = input.workflowInput.deliveryProjectObjectId;
+  const orderObjectId = input.workflowInput.orderObjectId;
+  if (typeof deliveryProjectObjectId !== "string" || !z.string().uuid().safeParse(deliveryProjectObjectId).success || typeof orderObjectId !== "string" || !z.string().uuid().safeParse(orderObjectId).success)
+    throw new EosRouteError(400, "native_delivery_context_invalid", "A native delivery workflow requires its exact delivery project and native order identifiers.");
+  const [project] = await db.select().from(eosInstrumentObjects).where(and(
+    eq(eosInstrumentObjects.id, deliveryProjectObjectId),
+    eq(eosInstrumentObjects.companyId, input.companyId),
+    eq(eosInstrumentObjects.instrumentKey, "projects"),
+    eq(eosInstrumentObjects.objectType, "project"),
+  )).limit(1);
+  if (!project || !input.visibleSeatIds.has(project.ownerSeatId) || !mayAccessClassification(input.access, project.classification))
+    throw new EosRouteError(404, "native_delivery_project_not_found", "The requested delivery project is not visible in this authority scope.");
+  if (project.state !== "active")
+    throw new EosRouteError(409, "native_delivery_project_not_active", "Activate the governed native delivery project before starting its client-onboarding workflow.");
+  const projectData = recordValue(project.data);
+  if (projectData.orderObjectId !== orderObjectId)
+    throw new EosRouteError(409, "native_delivery_order_mismatch", "The onboarding order must be the exact native order linked to this delivery project.");
+  const opportunityObjectId = input.workflowInput.sourceOpportunityObjectId;
+  if (opportunityObjectId !== undefined && opportunityObjectId !== projectData.sourceOpportunityObjectId)
+    throw new EosRouteError(409, "native_delivery_opportunity_mismatch", "The onboarding opportunity must match the delivery project's governed commercial source.");
+  if (classificationRank(input.runClassification) < classificationRank(project.classification))
+    throw new EosRouteError(409, "native_delivery_classification_downgrade", "The workflow run classification cannot be lower than its delivery project's classification.");
+  return project;
+}
+
 export function registerWorkflowRuntimeRoutes(app: Express): void {
   app.get("/api/eos/companies/:companyId/workflow-runtime", route(async (req, res) => {
     const { access } = await runtimeAccess(req, "view", "workflow_runtime.read");
@@ -177,6 +227,13 @@ export function registerWorkflowRuntimeRoutes(app: Express): void {
     if (!process || !visible.has(process.accountableSeatId) || !mayAccessClassification(access, process.classification)) throw new EosRouteError(404, "process_not_found", "Released process definition not found in this authority scope.");
     if (process.releaseState !== "released" || !["implemented", "pre_live_qualified", "field_qualified"].includes(process.qualificationState))
       throw new EosRouteError(409, "process_not_executable", "A workflow run requires an implemented and released process version.");
+    await assertNativeDeliveryProjectContext({
+      companyId: access.company.id,
+      visibleSeatIds: visible,
+      access,
+      workflowInput: input.input,
+      runClassification: input.classification,
+    });
     const [ownerSeat] = await db.select().from(eosSeats).where(and(eq(eosSeats.id, process.accountableSeatId), eq(eosSeats.companyId, access.company.id), eq(eosSeats.status, "active"))).limit(1);
     if (!ownerSeat) throw new EosRouteError(409, "workflow_owner_unavailable", "The accountable process seat is not active.");
     if (input.executionMode === "autonomous" && (ownerSeat.occupantUserId || ownerSeat.agentMode !== "autonomous"))
