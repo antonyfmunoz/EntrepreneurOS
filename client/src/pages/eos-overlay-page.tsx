@@ -1511,11 +1511,20 @@ export default function EosOverlayPage() {
   const mayOperateNativeWorkflows =
     canUseInstrument("workflows") &&
     (isFounder || toolEntitlements.has("workflows"));
-  // A role's Work Room is its assigned operating queue, not a copy of every
-  // company-wide control surface. Founder-owned growth controls are exposed
-  // here; role communication continues through the hierarchical assistant
-  // drawer until a role has been explicitly assigned a native tool surface.
-  const mayOperateFounderGrowthTools = isFounder;
+  // Native lead capture and funnels are commercial operating surfaces, not a
+  // founder-only shortcut. A Growth or Customer-facing role that has the same
+  // governed CRM, Forms, and Websites tools must be able to operate the same
+  // EOS-owned records from its Work Room. The components remain native-only;
+  // provider dispatch still needs its own authority, approval, and evidence.
+  const mayOperateNativeLeadCapture =
+    canUseInstrument("forms") &&
+    canUseInstrument("crm") &&
+    (isFounder ||
+      (toolEntitlements.has("forms") && toolEntitlements.has("crm")));
+  const mayOperateNativeFunnels =
+    mayOperateNativeLeadCapture &&
+    canUseInstrument("websites") &&
+    (isFounder || toolEntitlements.has("websites"));
   const mayAdminOrganization =
     ["founder", "company_ceo"].includes(principalContext?.role) &&
     effectiveAuthorityClasses.has("grant_access");
@@ -10952,14 +10961,14 @@ export default function EosOverlayPage() {
                 canDecide={effectiveAuthorityClasses.has("decide")}
               />
             </Suspense>}
-            {mayOperateFounderGrowthTools && canUseInstrument("forms") && canUseInstrument("crm") && <Suspense fallback={<DeferredControlFallback />}>
+            {mayOperateNativeLeadCapture && <Suspense fallback={<DeferredControlFallback />}>
               <LeadCaptureStudio
                 root={root}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
               />
             </Suspense>}
-            {mayOperateFounderGrowthTools && canUseInstrument("forms") && canUseInstrument("crm") && canUseInstrument("websites") && <Suspense fallback={<DeferredControlFallback />}>
+            {mayOperateNativeFunnels && <Suspense fallback={<DeferredControlFallback />}>
               <NativeFunnelStudio
                 root={root}
                 canExecute={effectiveAuthorityClasses.has("execute")}
