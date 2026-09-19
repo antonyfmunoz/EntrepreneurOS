@@ -11,6 +11,7 @@ describe("native workflow starters", () => {
     expect(starterLibrary).toContain('key: "client-onboarding"');
     expect(starterLibrary).toContain('key: "weekly-operating-review"');
     expect(starterLibrary).toContain('key: "reputation-follow-through"');
+    expect(starterLibrary).toContain('key: "editorial-cadence"');
     expect(starterLibrary).toContain('key: "capability-to-placement"');
     expect(starterLibrary).toContain('key: "finance-control-cycle"');
     expect(starterLibrary).toContain('key: "policy-obligation-control"');
@@ -36,6 +37,8 @@ describe("native workflow starters", () => {
     expect(starterLibrary).toContain("without presenting legal advice");
     expect(starterLibrary).toContain("without creating an external commitment");
     expect(starterLibrary).toContain("without silently mutating a reusable EOS template");
+    expect(starterLibrary).toContain("without implying external publication");
+    expect(starterLibrary).toContain("observed-publication evidence");
   });
 
   it("materializes all universal control loops with company context and explicit human decision boundaries", () => {
@@ -57,5 +60,21 @@ describe("native workflow starters", () => {
       expect(workflow.approvals.join(" ")).toMatch(/authorized human/i);
       expect(workflow.branches.join(" ")).toMatch(/stop|preserve/i);
     }
+  });
+
+  it("keeps the compiled editorial cadence native-first until external publication is actually evidenced", () => {
+    const workflow = materializeNativeWorkflowStarter("editorial-cadence", {
+      companyName: "Empyrean Studios",
+      offer: "Revenue recovery service",
+      targetCustomer: "B2B service companies",
+      goal: "Validate the offer",
+    });
+    expect(workflow.name).toContain("Empyrean Studios");
+    expect(workflow.purpose).toContain("Revenue recovery service");
+    expect(workflow.purpose).toContain("B2B service companies");
+    expect(workflow.steps.map((step) => step.toolKey)).toEqual(["docs", "calendar", "docs", "analytics"]);
+    expect(workflow.steps.some((step) => step.actionKind === "approval")).toBe(true);
+    expect(workflow.steps.map((step) => `${step.title} ${step.instructions} ${step.completionCriteria} ${step.onFailure}`).join(" ")).toContain("external post URL");
+    expect(workflow.branches.join(" ")).toMatch(/do not represent it as published/i);
   });
 });

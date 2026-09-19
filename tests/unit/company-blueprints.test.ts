@@ -78,7 +78,7 @@ describe("company operating blueprints", () => {
       targetCustomer: "B2B service companies",
       goals: "Validate the offer\nClose the first three clients",
     });
-    expect(starters).toHaveLength(9);
+    expect(starters).toHaveLength(10);
     expect(starters[0]).toMatchObject({
       key: "commercial-foundation",
       ownerRoleKey: "growth",
@@ -89,38 +89,45 @@ describe("company operating blueprints", () => {
     expect(starters[0].statement).toContain("B2B service companies");
     expect(starters[1].statement).toContain("Validate the offer");
     expect(starters[2]).toMatchObject({
+      key: "editorial-cadence-foundation",
+      ownerRoleKey: "growth",
+      workflowTemplateKey: "editorial-cadence",
+    });
+    expect(starters[2].statement).toContain("Revenue recovery service");
+    expect(starters[2].statement).toContain("native plan until an authorized publishing rail");
+    expect(starters[3]).toMatchObject({
       key: "client-onboarding-foundation",
       ownerRoleKey: "client_success",
       workflowTemplateKey: "client-onboarding",
     });
-    expect(starters[2].statement).toContain("Revenue recovery service");
-    expect(starters[2].statement).toContain("without implying that commercial authorization already exists");
-    expect(starters[3]).toMatchObject({
+    expect(starters[3].statement).toContain("Revenue recovery service");
+    expect(starters[3].statement).toContain("without implying that commercial authorization already exists");
+    expect(starters[4]).toMatchObject({
       key: "reputation-foundation",
       ownerRoleKey: "client_success",
       workflowTemplateKey: "reputation-follow-through",
     });
-    expect(starters[3].statement).toContain("B2B service companies");
-    expect(starters[4]).toMatchObject({
+    expect(starters[4].statement).toContain("B2B service companies");
+    expect(starters[5]).toMatchObject({
       key: "talent-foundation",
       ownerRoleKey: "people_talent",
       workflowTemplateKey: "capability-to-placement",
     });
-    expect(starters[4].statement).toContain("Validate the offer");
-    expect(starters[4].statement).toContain("does not imply an employment, compensation, or access decision");
-    expect(starters[5]).toMatchObject({ key: "finance-control-foundation", ownerRoleKey: "finance_capital", workflowTemplateKey: "finance-control-cycle" });
-    expect(starters[6]).toMatchObject({ key: "legal-governance-foundation", ownerRoleKey: "legal_governance", workflowTemplateKey: "policy-obligation-control" });
-    expect(starters[7]).toMatchObject({ key: "vendor-control-foundation", ownerRoleKey: "operations_administration", workflowTemplateKey: "vendor-to-approved-service" });
-    expect(starters[8]).toMatchObject({ key: "offer-evolution-foundation", ownerRoleKey: "growth", workflowTemplateKey: "offer-learning-loop" });
-    expect(starters[5]).toMatchObject({ title: "Finance control foundation · Validate the offer" });
-    expect(starters[5].statement).toContain("does not assert accounting, bank, tax, payroll, or payment truth");
-    expect(starters[6]).toMatchObject({ title: "Legal and governance foundation · Validate the offer" });
-    expect(starters[6].statement).toContain("does not provide legal advice or claim a legal conclusion");
-    expect(starters[7]).toMatchObject({ title: "Vendor and service-control foundation · Validate the offer" });
-    expect(starters[7].statement).toContain("no vendor authorization, purchase, contract, access grant, or provider effect is inferred");
-    expect(starters[8]).toMatchObject({ title: "Offer learning foundation · Revenue recovery service" });
-    expect(starters[8].statement).toContain("Revenue recovery service for B2B service companies");
-    expect(starters.slice(5).every((starter) => !starter.title.startsWith("Feedback and improvement"))).toBe(true);
+    expect(starters[5].statement).toContain("Validate the offer");
+    expect(starters[5].statement).toContain("does not imply an employment, compensation, or access decision");
+    expect(starters[6]).toMatchObject({ key: "finance-control-foundation", ownerRoleKey: "finance_capital", workflowTemplateKey: "finance-control-cycle" });
+    expect(starters[7]).toMatchObject({ key: "legal-governance-foundation", ownerRoleKey: "legal_governance", workflowTemplateKey: "policy-obligation-control" });
+    expect(starters[8]).toMatchObject({ key: "vendor-control-foundation", ownerRoleKey: "operations_administration", workflowTemplateKey: "vendor-to-approved-service" });
+    expect(starters[9]).toMatchObject({ key: "offer-evolution-foundation", ownerRoleKey: "growth", workflowTemplateKey: "offer-learning-loop" });
+    expect(starters[6]).toMatchObject({ title: "Finance control foundation · Validate the offer" });
+    expect(starters[6].statement).toContain("does not assert accounting, bank, tax, payroll, or payment truth");
+    expect(starters[7]).toMatchObject({ title: "Legal and governance foundation · Validate the offer" });
+    expect(starters[7].statement).toContain("does not provide legal advice or claim a legal conclusion");
+    expect(starters[8]).toMatchObject({ title: "Vendor and service-control foundation · Validate the offer" });
+    expect(starters[8].statement).toContain("no vendor authorization, purchase, contract, access grant, or provider effect is inferred");
+    expect(starters[9]).toMatchObject({ title: "Offer learning foundation · Revenue recovery service" });
+    expect(starters[9].statement).toContain("Revenue recovery service for B2B service companies");
+    expect(starters.slice(6).every((starter) => !starter.title.startsWith("Feedback and improvement"))).toBe(true);
   });
 
   it("turns the matching shared workflow pattern into an editable company-specific native draft", () => {
@@ -260,11 +267,13 @@ describe("company operating blueprints", () => {
       const growth = blueprint.roles.find((role) => ["growth", "brand_growth"].includes(role.key));
       if (!growth) continue;
       const nativeTools = canonicalToolEntitlements(growth.tools);
-      expect(nativeTools).toEqual(expect.arrayContaining(["crm", "forms", "websites"]));
+      expect(nativeTools).toEqual(expect.arrayContaining(["crm", "forms", "websites", "calendar"]));
       const commercialStarter = blueprint.starters.find((starter) => starter.ownerRoleKey === growth.key);
+      const editorial = blueprint.starters.find((starter) => starter.key === "editorial-cadence-foundation");
       expect(canonicalToolEntitlements(commercialStarter?.tools || [])).toEqual(
         expect.arrayContaining(["crm", "forms", "websites"]),
       );
+      expect(editorial).toMatchObject({ ownerRoleKey: growth.key, workflowTemplateKey: "editorial-cadence" });
     }
   });
 
@@ -272,21 +281,27 @@ describe("company operating blueprints", () => {
     for (const blueprint of companyBlueprints) {
       const onboarding = blueprint.starters.find((starter) => starter.key === "client-onboarding-foundation");
       const reputation = blueprint.starters.find((starter) => starter.key === "reputation-foundation");
+      const editorial = blueprint.starters.find((starter) => starter.key === "editorial-cadence-foundation");
       const talent = blueprint.starters.find((starter) => starter.key === "talent-foundation");
       expect(onboarding).toBeDefined();
       expect(reputation).toBeDefined();
+      expect(editorial).toBeDefined();
       expect(talent).toBeDefined();
       expect(blueprint.roles.some((role) => role.key === onboarding?.ownerRoleKey)).toBe(true);
       expect(blueprint.roles.some((role) => role.key === reputation?.ownerRoleKey)).toBe(true);
+      expect(blueprint.roles.some((role) => role.key === editorial?.ownerRoleKey)).toBe(true);
       expect(blueprint.roles.some((role) => role.key === talent?.ownerRoleKey)).toBe(true);
       expect(canonicalToolEntitlements(onboarding?.tools || [])).toEqual(expect.arrayContaining(["crm", "projects", "calendar"]));
       expect(canonicalToolEntitlements(reputation?.tools || [])).toEqual(expect.arrayContaining(["crm", "reputation", "projects"]));
+      expect(canonicalToolEntitlements(editorial?.tools || [])).toEqual(expect.arrayContaining(["calendar", "crm", "docs", "websites", "analytics"]));
       expect(canonicalToolEntitlements(talent?.tools || [])).toEqual(expect.arrayContaining(["forms", "calendar", "learning", "progression"]));
       const onboardingOwner = blueprint.roles.find((role) => role.key === onboarding?.ownerRoleKey);
       const reputationOwner = blueprint.roles.find((role) => role.key === reputation?.ownerRoleKey);
+      const editorialOwner = blueprint.roles.find((role) => role.key === editorial?.ownerRoleKey);
       const talentOwner = blueprint.roles.find((role) => role.key === talent?.ownerRoleKey);
       expect(canonicalToolEntitlements(onboardingOwner?.tools || [])).toEqual(expect.arrayContaining(canonicalToolEntitlements(onboarding?.tools || [])));
       expect(canonicalToolEntitlements(reputationOwner?.tools || [])).toEqual(expect.arrayContaining(canonicalToolEntitlements(reputation?.tools || [])));
+      expect(canonicalToolEntitlements(editorialOwner?.tools || [])).toEqual(expect.arrayContaining(canonicalToolEntitlements(editorial?.tools || [])));
       expect(canonicalToolEntitlements(talentOwner?.tools || [])).toEqual(expect.arrayContaining(canonicalToolEntitlements(talent?.tools || [])));
     }
   });
