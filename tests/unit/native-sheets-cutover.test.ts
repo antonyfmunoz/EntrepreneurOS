@@ -30,5 +30,9 @@ describe("native sheets cutover", () => {
     expect(sheetsStudio).toContain("=SUM(Amount)");
     expect(sheetsStudio).toContain('objectType: "chart"');
     expect(sheetsStudio).toContain("Create chart view");
+    expect(sheetsStudio).toContain("Configure");
+    expect(sheetsStudio).toContain("Save chart view");
+    expect(sheetsStudio).toContain("sheets-chart-configure");
+    expect(sheetsStudio).toContain("expectedVersion: selectedChart.version");
   });
 });
