@@ -101,6 +101,10 @@ export function NativeMessageHub({ root, roleScopeKey, activeSeatId, seats, canE
   const [deliveryThreadReference, setDeliveryThreadReference] = useState("");
   const [deliveryBindingId, setDeliveryBindingId] = useState("");
   const [plannedRunId, setPlannedRunId] = useState("");
+  const [observingMessageId, setObservingMessageId] = useState("");
+  const [manualObservationOutcome, setManualObservationOutcome] = useState("sent");
+  const [manualObservationNote, setManualObservationNote] = useState("");
+  const [manualObservationReference, setManualObservationReference] = useState("");
   const [threadTitle, setThreadTitle] = useState("");
   const [selectedRelationshipId, setSelectedRelationshipId] = useState("");
   const [error, setError] = useState("");
@@ -302,6 +306,32 @@ export function NativeMessageHub({ root, roleScopeKey, activeSeatId, seats, canE
     },
     onError: (cause: Error) => setError(cause.message),
   });
+  const recordManualExternalObservation = useMutation({
+    mutationFn: async (message: Json) => {
+      if (manualObservationNote.trim().length < 10 || manualObservationReference.trim().length < 3)
+        throw new Error("Record a meaningful observation and an external message, conversation, or evidence reference.");
+      return (await apiRequest("PATCH", `${root}/instrument-objects/${message.id}`, {
+        expectedVersion: message.version,
+        data: {
+          ...message.data,
+          deliveryState: "manual_external_observed",
+          manualExternalObservation: {
+            outcome: manualObservationOutcome,
+            note: manualObservationNote.trim(),
+            reference: manualObservationReference.trim(),
+            observedAt: new Date().toISOString(),
+          },
+        },
+        sourceReference: { ...message.sourceReference, authority: "native_eos", providerEffect: false, externalObservation: "operator_attested" },
+        idempotencyKey: commandKey("message-manual-external-observation"),
+      })).json();
+    },
+    onSuccess: async () => {
+      setObservingMessageId(""); setManualObservationOutcome("sent"); setManualObservationNote(""); setManualObservationReference("");
+      await refresh();
+    },
+    onError: (cause: Error) => setError(cause.message),
+  });
   const planProviderDelivery = useMutation({
     mutationFn: async () => {
       if (!providerOperation || !providerRequest || !selectedDeliveryBinding) throw new Error("Choose a connected company provider and complete its delivery details before planning delivery.");
@@ -405,7 +435,34 @@ export function NativeMessageHub({ root, roleScopeKey, activeSeatId, seats, canE
           </div>
         </section>
       </div>
-      <section className="rounded-xl border p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Conversation ledger</p><h3 className="mt-1 font-semibold">{selectedConversation ? selectedConversation.title : "Choose a conversation"}</h3>{selectedThread && <p className="mt-1 text-xs text-muted-foreground">Showing only <span className="font-medium text-foreground">{selectedThread.title}</span>. Clear the focused-thread selector to return to the full conversation.</p>}</div>{selectedConversation?.state === "draft" && <Button size="sm" variant="outline" disabled={!canDecide || activate.isPending} onClick={() => activate.mutate(selectedConversation)}>Activate conversation</Button>}</div>{selectedConversation && <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]"><div className="space-y-3">{visibleMessages.map((message) => { const deliveryState = String(message.data?.deliveryState || "native_recorded"); const providerPlan = deliveryState === "provider_delivery_planned"; const manualExternalIntent = deliveryState === "manual_external_intent"; const relationshipContext = message.data?.relationshipContext; return <article key={message.id} className="rounded-xl bg-muted/50 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><Badge variant="outline">{String(message.data?.channelType || "native_eos").replaceAll("_", " ")}</Badge><Badge variant={providerPlan || deliveryState === "provider_intent" ? "secondary" : "default"}>{providerPlan ? "provider plan" : deliveryState === "provider_intent" ? "provider intent" : manualExternalIntent ? "manual external intent" : "native record"}</Badge>{relationshipContext?.label && <Badge variant="secondary">{String(relationshipContext.label)}</Badge>}</div><span className="text-xs text-muted-foreground">{new Date(message.createdAt).toLocaleString()}</span></div><p className="mt-3 whitespace-pre-wrap text-sm">{message.data?.body || message.summary}</p>{manualExternalIntent && <p className="mt-2 text-xs text-muted-foreground">This is an EOS record of an intended external action only. No provider delivery or receipt is claimed.</p>}{providerPlan && <p className="mt-2 text-xs text-muted-foreground">Planned {message.data?.operation || "provider operation"} · run {message.data?.integrationRunId}. No external delivery is claimed until the governed run succeeds with a provider receipt.</p>}{message.state === "draft" && <Button size="sm" variant="outline" className="mt-3" disabled={!canDecide || activate.isPending} onClick={() => activate.mutate(message)}>Activate record</Button>}</article>; })}{!visibleMessages.length && <p className="py-4 text-sm text-muted-foreground">{selectedThread ? "No messages recorded in this focused thread." : "No messages recorded in this conversation."}</p>}</div><aside className="rounded-xl border bg-muted/30 p-3"><p className="text-sm font-medium">Threads</p><div className="mt-3 space-y-2">{threads.map((thread) => <button type="button" key={thread.id} onClick={() => setSelectedThreadId(thread.id)} className={`w-full rounded-lg p-3 text-left transition-colors ${selectedThread?.id === thread.id ? "bg-primary/10 ring-1 ring-primary/30" : "bg-background hover:bg-primary/5"}`}><div className="flex justify-between gap-2"><span className="text-sm font-medium">{thread.title}</span><Badge variant={stateVariant(thread.state)}>{thread.state}</Badge></div>{thread.state === "draft" && <Button size="sm" variant="ghost" className="mt-2 h-7 px-2 text-xs" disabled={!canDecide || activate.isPending} onClick={(event) => { event.stopPropagation(); activate.mutate(thread); }}>Activate</Button>}</button>)}{!threads.length && <p className="text-xs text-muted-foreground">No focused threads yet.</p>}</div></aside></div>}</section>
+      <section className="rounded-xl border p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><p className="eos-label">Conversation ledger</p><h3 className="mt-1 font-semibold">{selectedConversation ? selectedConversation.title : "Choose a conversation"}</h3>{selectedThread && <p className="mt-1 text-xs text-muted-foreground">Showing only <span className="font-medium text-foreground">{selectedThread.title}</span>. Clear the focused-thread selector to return to the full conversation.</p>}</div>
+          {selectedConversation?.state === "draft" && <Button size="sm" variant="outline" disabled={!canDecide || activate.isPending} onClick={() => activate.mutate(selectedConversation)}>Activate conversation</Button>}
+        </div>
+        {selectedConversation && <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="space-y-3">
+            {visibleMessages.map((message) => {
+              const deliveryState = String(message.data?.deliveryState || "native_recorded");
+              const providerPlan = deliveryState === "provider_delivery_planned";
+              const manualExternalIntent = deliveryState === "manual_external_intent";
+              const manualExternalObserved = deliveryState === "manual_external_observed";
+              const observation = message.data?.manualExternalObservation;
+              const relationshipContext = message.data?.relationshipContext;
+              return <article key={message.id} className="rounded-xl bg-muted/50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><Badge variant="outline">{String(message.data?.channelType || "native_eos").replaceAll("_", " ")}</Badge><Badge variant={providerPlan || deliveryState === "provider_intent" ? "secondary" : "default"}>{providerPlan ? "provider plan" : deliveryState === "provider_intent" ? "provider intent" : manualExternalObserved ? "manual external observation" : manualExternalIntent ? "manual external intent" : "native record"}</Badge>{relationshipContext?.label && <Badge variant="secondary">{String(relationshipContext.label)}</Badge>}</div><span className="text-xs text-muted-foreground">{new Date(message.createdAt).toLocaleString()}</span></div>
+                <p className="mt-3 whitespace-pre-wrap text-sm">{message.data?.body || message.summary}</p>
+                {manualExternalIntent && <div className="mt-2 space-y-3"><p className="text-xs text-muted-foreground">This is an EOS record of an intended external action only. No provider delivery or receipt is claimed.</p><Button size="sm" variant="outline" disabled={!canExecute || recordManualExternalObservation.isPending} onClick={() => { setObservingMessageId(message.id); setManualObservationOutcome("sent"); setManualObservationNote(""); setManualObservationReference(""); }}>Record observed external outcome</Button>{observingMessageId === message.id && <div className="grid gap-3 rounded-lg border bg-background p-3"><div className="grid gap-3 md:grid-cols-2"><div><Label htmlFor={`message-observation-outcome-${message.id}`}>Observed outcome</Label><select id={`message-observation-outcome-${message.id}`} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={manualObservationOutcome} onChange={(event) => setManualObservationOutcome(event.target.value)}><option value="sent">Sent</option><option value="delivered">Delivered</option><option value="failed">Failed</option><option value="unknown">Unknown</option></select></div><div><Label htmlFor={`message-observation-reference-${message.id}`}>External reference</Label><Input id={`message-observation-reference-${message.id}`} className="mt-1" value={manualObservationReference} onChange={(event) => setManualObservationReference(event.target.value)} placeholder="Message, conversation, or evidence reference" /></div></div><div><Label htmlFor={`message-observation-note-${message.id}`}>What did the accountable operator observe?</Label><Textarea id={`message-observation-note-${message.id}`} className="mt-1" value={manualObservationNote} onChange={(event) => setManualObservationNote(event.target.value)} placeholder="Record observed facts and any remaining uncertainty." /></div><div className="flex gap-2"><Button size="sm" disabled={!canExecute || recordManualExternalObservation.isPending || manualObservationNote.trim().length < 10 || manualObservationReference.trim().length < 3} onClick={() => recordManualExternalObservation.mutate(message)}>{recordManualExternalObservation.isPending ? "Recording…" : "Record operator observation"}</Button><Button size="sm" variant="ghost" onClick={() => setObservingMessageId("")}>Cancel</Button></div><p className="text-xs text-muted-foreground">This is an accountable operator attestation, not a provider receipt. EOS retains it separately from any future connected-provider reconciliation.</p></div>}</div>}
+                {manualExternalObserved && <p className="mt-2 text-xs text-muted-foreground">Operator-recorded outcome: <span className="font-medium text-foreground">{String(observation?.outcome || "unknown")}</span> · {String(observation?.note || "No observation note recorded.")} · reference {String(observation?.reference || "not recorded")}. This is an attestation, not a provider receipt.</p>}
+                {providerPlan && <p className="mt-2 text-xs text-muted-foreground">Planned {message.data?.operation || "provider operation"} · run {message.data?.integrationRunId}. No external delivery is claimed until the governed run succeeds with a provider receipt.</p>}
+                {message.state === "draft" && <Button size="sm" variant="outline" className="mt-3" disabled={!canDecide || activate.isPending} onClick={() => activate.mutate(message)}>Activate record</Button>}
+              </article>;
+            })}
+            {!visibleMessages.length && <p className="py-4 text-sm text-muted-foreground">{selectedThread ? "No messages recorded in this focused thread." : "No messages recorded in this conversation."}</p>}
+          </div>
+          <aside className="rounded-xl border bg-muted/30 p-3"><p className="text-sm font-medium">Threads</p><div className="mt-3 space-y-2">{threads.map((thread) => <button type="button" key={thread.id} onClick={() => setSelectedThreadId(thread.id)} className={`w-full rounded-lg p-3 text-left transition-colors ${selectedThread?.id === thread.id ? "bg-primary/10 ring-1 ring-primary/30" : "bg-background hover:bg-primary/5"}`}><div className="flex justify-between gap-2"><span className="text-sm font-medium">{thread.title}</span><Badge variant={stateVariant(thread.state)}>{thread.state}</Badge></div>{thread.state === "draft" && <Button size="sm" variant="ghost" className="mt-2 h-7 px-2 text-xs" disabled={!canDecide || activate.isPending} onClick={(event) => { event.stopPropagation(); activate.mutate(thread); }}>Activate</Button>}</button>)}{!threads.length && <p className="text-xs text-muted-foreground">No focused threads yet.</p>}</div></aside>
+        </div>}
+      </section>
       <Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Communication stays truthful and hierarchical</AlertTitle><AlertDescription>This hub preserves native EOS records and governed external-delivery intent. Provider delivery, receipts, reconciliation, and retry remain separate authorized operations; it does not bypass the EA, reporting chain, approval controls, or role visibility.</AlertDescription></Alert>
     </CardContent>
   </Card>;

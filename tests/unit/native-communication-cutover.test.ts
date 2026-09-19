@@ -74,6 +74,11 @@ describe("native communication authority cutover", () => {
     expect(messageHub).toContain("manual external intent");
     expect(messageHub).toContain("It does not send through Apple, Meta, an SMS carrier, or any other provider.");
     expect(messageHub).toContain("No provider delivery or receipt is claimed.");
+    expect(messageHub).toContain("Record observed external outcome");
+    expect(messageHub).toContain('deliveryState: "manual_external_observed"');
+    expect(instrumentRuntime).toContain("message_external_observation_invalid");
+    expect(instrumentRuntime).toContain("message_external_observation_note_required");
+    expect(instrumentRuntime).toContain("message_external_observation_reference_required");
   });
 
   it("links a message to only an already-authorized native CRM relationship", () => {

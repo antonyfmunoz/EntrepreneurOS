@@ -231,6 +231,25 @@ async function assertNativeMessageUpdate(
     throw new EosRouteError(403, "message_conversation_membership_required", "Only a named participant may update records in this native conversation.");
   if (recordValue(next.data).conversationObjectId !== conversationObjectId)
     throw new EosRouteError(409, "message_conversation_immutable", "Messages and threads cannot be moved between native conversations.");
+
+  if (current.objectType !== "message") return;
+  const nextData = recordValue(next.data);
+  const currentDeliveryState = String(currentData.deliveryState || "native_recorded");
+  const nextDeliveryState = String(nextData.deliveryState || "native_recorded");
+  if (currentDeliveryState === "manual_external_observed" && nextDeliveryState !== "manual_external_observed")
+    throw new EosRouteError(409, "message_external_observation_immutable", "A recorded manual external observation cannot be downgraded or replaced through the normal message editor.");
+  if (nextDeliveryState !== "manual_external_observed") return;
+  if (!["manual_external_intent", "manual_external_observed"].includes(currentDeliveryState))
+    throw new EosRouteError(409, "message_external_observation_invalid", "Only an existing manual external intent may receive an observed external outcome.");
+  if (!["email", "slack", "sms", "imessage", "instagram", "social"].includes(String(currentData.channelType)))
+    throw new EosRouteError(409, "message_external_channel_invalid", "Only a declared external channel may receive an observed external outcome.");
+  const observation = recordValue(nextData.manualExternalObservation);
+  if (!["sent", "delivered", "failed", "unknown"].includes(String(observation.outcome)))
+    throw new EosRouteError(400, "message_external_outcome_invalid", "Choose a bounded observed external outcome before recording it.");
+  if (typeof observation.note !== "string" || observation.note.trim().length < 10)
+    throw new EosRouteError(400, "message_external_observation_note_required", "Record a meaningful operator observation before closing a manual external intent.");
+  if (typeof observation.reference !== "string" || observation.reference.trim().length < 3)
+    throw new EosRouteError(400, "message_external_observation_reference_required", "Record an external message, conversation, or evidence reference before closing a manual external intent.");
 }
 
 /**
