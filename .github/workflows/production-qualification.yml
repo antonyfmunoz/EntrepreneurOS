@@ -47,6 +47,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Node 22 currently bundles npm 10, which falls back to npm's retired
+      # quick-audit endpoint for this lockfile. Use the maintained audit
+      # client; the gate still fails closed for real findings or outages.
+      - name: Use maintained npm audit client
+        run: npm install --global npm@11.9.0
       - name: Install pinned browser runtime
         run: npx playwright install --with-deps chromium
       - name: Dependency vulnerability gate
