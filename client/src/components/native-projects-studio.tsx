@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CheckCircle2, CirclePlay, ClipboardList, FolderKanban, Plus, RefreshCw, UserRoundCheck } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -25,9 +25,16 @@ export function NativeProjectsStudio({ root, roleScopeKey, activeSeatId, seats, 
   const [projectOwnerId, setProjectOwnerId] = useState(activeSeatId);
   const [selectedRelationshipId, setSelectedRelationshipId] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [editingProjectTitle, setEditingProjectTitle] = useState("");
+  const [editingProjectObjective, setEditingProjectObjective] = useState("");
+  const [editingProjectOwnerId, setEditingProjectOwnerId] = useState(activeSeatId);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskObjective, setTaskObjective] = useState("");
   const [taskOwnerId, setTaskOwnerId] = useState(activeSeatId);
+  const [selectedTaskId, setSelectedTaskId] = useState("");
+  const [editingTaskTitle, setEditingTaskTitle] = useState("");
+  const [editingTaskObjective, setEditingTaskObjective] = useState("");
+  const [editingTaskOwnerId, setEditingTaskOwnerId] = useState(activeSeatId);
   const [error, setError] = useState("");
   const projectsQuery = useQuery<Json>({ queryKey: [root, roleScopeKey, "native-projects"], queryFn: async () => (await apiRequest("GET", `${root}/instruments/projects`)).json() });
   const tasksQuery = useQuery<Json>({ queryKey: [root, roleScopeKey, "native-tasks"], queryFn: async () => (await apiRequest("GET", `${root}/instruments/tasks`)).json() });
@@ -47,6 +54,17 @@ export function NativeProjectsStudio({ root, roleScopeKey, activeSeatId, seats, 
   const selectedRelationship = relationshipChoices.find((item) => item.relationship.id === selectedRelationshipId) || null;
   const activeSeats = seats.filter((seat) => seat.status !== "inactive");
   const selectedProject = projects.find((item) => item.id === selectedProjectId) || projects[0];
+  const selectedTask = tasks.find((item) => item.id === selectedTaskId) || tasks.find((item) => item.data?.projectObjectId === selectedProject?.id) || tasks[0];
+  useEffect(() => {
+    setEditingProjectTitle(String(selectedProject?.title || ""));
+    setEditingProjectObjective(String(selectedProject?.data?.objective || selectedProject?.summary || ""));
+    setEditingProjectOwnerId(String(selectedProject?.data?.ownerSeatId || activeSeatId));
+  }, [activeSeatId, selectedProject?.id, selectedProject?.version]);
+  useEffect(() => {
+    setEditingTaskTitle(String(selectedTask?.title || ""));
+    setEditingTaskObjective(String(selectedTask?.data?.objective || selectedTask?.summary || ""));
+    setEditingTaskOwnerId(String(selectedTask?.data?.ownerSeatId || activeSeatId));
+  }, [activeSeatId, selectedTask?.id, selectedTask?.version]);
   const refresh = async () => Promise.all([queryClient.invalidateQueries({ queryKey: [root, roleScopeKey, "native-projects"] }), queryClient.invalidateQueries({ queryKey: [root, roleScopeKey, "native-tasks"] })]);
   const createProject = useMutation({
     mutationFn: async () => {
@@ -65,6 +83,18 @@ export function NativeProjectsStudio({ root, roleScopeKey, activeSeatId, seats, 
     },
     onSuccess: async (result) => { setSelectedProjectId(result.object.id); setProjectTitle(""); setProjectObjective(""); if (!result.relationshipLinked) setError("The project was created, but EOS could not create its CRM relationship link. Review the project before relying on that context."); await refresh(); }, onError: (cause: Error) => setError(cause.message),
   });
+  const saveProject = useMutation({
+    mutationFn: async () => {
+      if (!selectedProject) throw new Error("Select a project to configure.");
+      return (await apiRequest("PATCH", `${root}/instrument-objects/${selectedProject.id}`, {
+        expectedVersion: selectedProject.version,
+        title: editingProjectTitle.trim(), summary: editingProjectObjective.trim(),
+        data: { ...selectedProject.data, objective: editingProjectObjective.trim(), ownerSeatId: editingProjectOwnerId, operatingMode: "native_eos" },
+        idempotencyKey: commandKey("native-project-configure"),
+      })).json();
+    },
+    onSuccess: async (result) => { setSelectedProjectId(result.object.id); await refresh(); }, onError: (cause: Error) => setError(cause.message),
+  });
   const createTask = useMutation({
     mutationFn: async () => {
       if (!selectedProject) throw new Error("Create or select a project first.");
@@ -72,7 +102,19 @@ export function NativeProjectsStudio({ root, roleScopeKey, activeSeatId, seats, 
         instrumentKey: "tasks", objectType: "task", objectKey: `task:${safeKey(taskTitle)}:${Date.now()}`, title: taskTitle.trim(), summary: taskObjective.trim(), classification: "confidential", visibility: "team", parentObjectId: selectedProject.id,
         data: { objective: taskObjective.trim(), ownerSeatId: taskOwnerId || activeSeatId, projectObjectId: selectedProject.id, operatingMode: "native_eos" }, sourceReference: { authority: "native_eos", capability: "task_management" }, evidenceIds: [], idempotencyKey: commandKey("native-task-create"),
       })).json();
-    }, onSuccess: async () => { setTaskTitle(""); setTaskObjective(""); await refresh(); }, onError: (cause: Error) => setError(cause.message),
+    }, onSuccess: async (result) => { setSelectedTaskId(result.object.id); setTaskTitle(""); setTaskObjective(""); await refresh(); }, onError: (cause: Error) => setError(cause.message),
+  });
+  const saveTask = useMutation({
+    mutationFn: async () => {
+      if (!selectedTask) throw new Error("Select a task to configure.");
+      return (await apiRequest("PATCH", `${root}/instrument-objects/${selectedTask.id}`, {
+        expectedVersion: selectedTask.version,
+        title: editingTaskTitle.trim(), summary: editingTaskObjective.trim(),
+        data: { ...selectedTask.data, objective: editingTaskObjective.trim(), ownerSeatId: editingTaskOwnerId, operatingMode: "native_eos" },
+        idempotencyKey: commandKey("native-task-configure"),
+      })).json();
+    },
+    onSuccess: async (result) => { setSelectedTaskId(result.object.id); await refresh(); }, onError: (cause: Error) => setError(cause.message),
   });
   const transition = useMutation({
     mutationFn: async ({ object, state }: { object: Json; state: "active" | "completed" }) => (await apiRequest("POST", `${root}/instrument-objects/${object.id}/transitions`, {
@@ -90,6 +132,8 @@ export function NativeProjectsStudio({ root, roleScopeKey, activeSeatId, seats, 
         <section className="rounded-xl border p-4"><div className="flex items-center gap-2"><ClipboardList className="h-4 w-4 text-primary" /><h3 className="font-semibold">Role-owned task</h3></div><p className="mt-1 text-sm text-muted-foreground">Assign work to a human or agent role. The role’s assistant and authority rules remain in effect; this does not bypass the hierarchy.</p><div className="mt-4 grid gap-3"><div><Label htmlFor="task-project">Project</Label><select id="task-project" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={selectedProject?.id || ""} onChange={(event) => setSelectedProjectId(event.target.value)}><option value="">Select project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></div><Input value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder="Task name" aria-label="Task name" /><Textarea value={taskObjective} onChange={(event) => setTaskObjective(event.target.value)} placeholder="What concrete result is required?" aria-label="Task objective" /><div><Label htmlFor="task-owner">Role owner</Label><select id="task-owner" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={taskOwnerId} onChange={(event) => setTaskOwnerId(event.target.value)}>{activeSeats.map((seat) => <option key={seat.id} value={seat.id}>{seat.title}</option>)}</select></div><Button disabled={!canExecute || !selectedProject || taskTitle.trim().length < 2 || taskObjective.trim().length < 3 || !taskOwnerId || createTask.isPending} onClick={() => createTask.mutate()}><Plus className="mr-2 h-4 w-4" />{createTask.isPending ? "Creating…" : "Create task"}</Button></div></section>
       </div>
       <section className="rounded-xl border p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Native operating view</p><h3 className="mt-1 font-semibold">Accountable work board</h3></div><Badge variant="outline">{projects.length} projects · {tasks.length} tasks</Badge></div><div className="mt-4 grid gap-3 xl:grid-cols-3">{projects.map((project) => { const projectTasks = tasks.filter((task) => task.data?.projectObjectId === project.id); return <div key={project.id} className="rounded-xl border bg-muted/20 p-3"><div className="flex items-start justify-between gap-2"><div><p className="font-medium">{project.title}</p><p className="mt-1 text-xs text-muted-foreground">{project.summary}</p></div><Badge variant={stateVariant(project.state)}>{project.state}</Badge></div><p className="mt-3 text-xs text-muted-foreground"><UserRoundCheck className="mr-1 inline h-3.5 w-3.5" />{ownerName(project.data?.ownerSeatId)}</p><div className="mt-3 space-y-2">{projectTasks.map((task) => <div key={task.id} className="rounded-lg border bg-background p-2.5"><div className="flex justify-between gap-2"><p className="text-sm font-medium">{task.title}</p><Badge variant={stateVariant(task.state)}>{task.state}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{ownerName(task.data?.ownerSeatId)}</p><div className="mt-2 flex gap-2">{task.state === "draft" && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" disabled={!canDecide || transition.isPending} onClick={() => transition.mutate({ object: task, state: "active" })}><CirclePlay className="mr-1 h-3.5 w-3.5" />Start</Button>}{task.state === "active" && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" disabled={!canDecide || transition.isPending} onClick={() => transition.mutate({ object: task, state: "completed" })}><CheckCircle2 className="mr-1 h-3.5 w-3.5" />Complete</Button>}</div></div>)}{!projectTasks.length && <p className="text-xs text-muted-foreground">No tasks yet.</p>}</div>{project.state === "draft" && <Button size="sm" className="mt-3" disabled={!canDecide || transition.isPending} onClick={() => transition.mutate({ object: project, state: "active" })}>Activate project</Button>}</div>; })}{!projects.length && <div className="col-span-full py-8 text-center text-sm text-muted-foreground">Create a project to turn company priorities into accountable work.</div>}</div></section>
+      {selectedProject && <section className="rounded-xl border border-primary/25 bg-primary/[0.03] p-4"><p className="eos-label">Configure selected project</p><div className="mt-3 grid gap-3 md:grid-cols-2"><div><Label htmlFor="native-edit-project-title">Project name</Label><Input id="native-edit-project-title" className="mt-1" value={editingProjectTitle} onChange={(event) => setEditingProjectTitle(event.target.value)} /></div><div><Label htmlFor="native-edit-project-owner">Accountable owner</Label><select id="native-edit-project-owner" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={editingProjectOwnerId} onChange={(event) => setEditingProjectOwnerId(event.target.value)}>{activeSeats.map((seat) => <option key={seat.id} value={seat.id}>{seat.title}</option>)}</select></div><div className="md:col-span-2"><Label htmlFor="native-edit-project-objective">Business outcome</Label><Textarea id="native-edit-project-objective" className="mt-1" value={editingProjectObjective} onChange={(event) => setEditingProjectObjective(event.target.value)} /></div><div className="md:col-span-2"><Button size="sm" disabled={!canExecute || editingProjectTitle.trim().length < 2 || editingProjectObjective.trim().length < 3 || !editingProjectOwnerId || saveProject.isPending} onClick={() => saveProject.mutate()}>{saveProject.isPending ? "Saving…" : "Save native project"}</Button></div></div></section>}
+      {selectedTask && <section className="rounded-xl border border-primary/25 bg-primary/[0.03] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Configure selected task</p><p className="mt-1 text-sm text-muted-foreground">The project connection and lifecycle remain unchanged while you refine the accountable work.</p></div>{tasks.length > 1 && <select aria-label="Task to configure" className="h-9 rounded-md border bg-background px-2 text-sm" value={selectedTask.id} onChange={(event) => setSelectedTaskId(event.target.value)}>{tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</select>}</div><div className="mt-3 grid gap-3 md:grid-cols-2"><div><Label htmlFor="native-edit-task-title">Task name</Label><Input id="native-edit-task-title" className="mt-1" value={editingTaskTitle} onChange={(event) => setEditingTaskTitle(event.target.value)} /></div><div><Label htmlFor="native-edit-task-owner">Role owner</Label><select id="native-edit-task-owner" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={editingTaskOwnerId} onChange={(event) => setEditingTaskOwnerId(event.target.value)}>{activeSeats.map((seat) => <option key={seat.id} value={seat.id}>{seat.title}</option>)}</select></div><div className="md:col-span-2"><Label htmlFor="native-edit-task-objective">Concrete result</Label><Textarea id="native-edit-task-objective" className="mt-1" value={editingTaskObjective} onChange={(event) => setEditingTaskObjective(event.target.value)} /></div><div className="md:col-span-2"><Button size="sm" disabled={!canExecute || editingTaskTitle.trim().length < 2 || editingTaskObjective.trim().length < 3 || !editingTaskOwnerId || saveTask.isPending} onClick={() => saveTask.mutate()}>{saveTask.isPending ? "Saving…" : "Save native task"}</Button></div></div></section>}
       <Alert><CheckCircle2 className="h-4 w-4" /><AlertTitle>Native execution, not a detached task list</AlertTitle><AlertDescription>EOS retains the project objective, owner seat, hierarchy, lifecycle, and linked tasks as governed company state. Work can be automated or carried by a human employee with the role agent acting as that person’s assistant, but ownership remains explicit.</AlertDescription></Alert>
     </CardContent>
   </Card>;
