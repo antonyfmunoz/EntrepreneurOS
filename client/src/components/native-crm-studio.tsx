@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type Json = Record<string, any>;
+type Seat = { id: string; title: string; status?: string };
 
 function commandKey(prefix: string) {
   const suffix = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -37,9 +38,12 @@ function opportunitiesForRelationship(opportunities: Json[], relationshipId?: st
   return relationshipId ? opportunities.filter((opportunity) => opportunity.data?.relationshipObjectId === relationshipId) : opportunities;
 }
 
-export function NativeCrmStudio({ root, roleScopeKey, canExecute, canDecide }: {
+export function NativeCrmStudio({ root, roleScopeKey, activeSeatId, seats, canCreateFollowUp, canExecute, canDecide }: {
   root: string;
   roleScopeKey: string;
+  activeSeatId: string;
+  seats: Seat[];
+  canCreateFollowUp: boolean;
   canExecute: boolean;
   canDecide: boolean;
 }) {
@@ -67,6 +71,9 @@ export function NativeCrmStudio({ root, roleScopeKey, canExecute, canDecide }: {
   const [editingOpportunityTitle, setEditingOpportunityTitle] = useState("");
   const [editingOpportunityAmount, setEditingOpportunityAmount] = useState("");
   const [editingOpportunityStage, setEditingOpportunityStage] = useState("Qualified");
+  const [followUpTitle, setFollowUpTitle] = useState("");
+  const [followUpObjective, setFollowUpObjective] = useState("");
+  const [followUpOwnerId, setFollowUpOwnerId] = useState(activeSeatId);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -108,6 +115,9 @@ export function NativeCrmStudio({ root, roleScopeKey, canExecute, canDecide }: {
     setEditingOpportunityTitle(String(selectedOpportunity?.title || ""));
     setEditingOpportunityAmount(selectedOpportunity?.data?.amountMinor === undefined || selectedOpportunity?.data?.amountMinor === null ? "" : String(Number(selectedOpportunity.data.amountMinor) / 100));
     setEditingOpportunityStage(String(selectedOpportunity?.data?.stage || "Qualified"));
+    setFollowUpTitle(selectedOpportunity ? `Follow up: ${selectedOpportunity.title}` : "");
+    setFollowUpObjective(String(selectedOpportunity?.data?.nextAction || ""));
+    setFollowUpOwnerId(String(selectedOpportunity?.data?.nextActionOwnerSeatId || activeSeatId));
   }, [selectedOpportunity?.id, selectedOpportunity?.version]);
   const relationshipContextQuery = useQuery<Json>({
     // The server returns only cross-instrument objects the current role can
@@ -232,6 +242,20 @@ export function NativeCrmStudio({ root, roleScopeKey, canExecute, canDecide }: {
     onSuccess: async (result) => { setSelectedOpportunityId(result.object.id); await refresh(); },
     onError: (cause: Error) => setError(cause.message),
   });
+  const createFollowUp = useMutation({
+    mutationFn: async () => {
+      if (!selectedOpportunity) throw new Error("Select an opportunity before creating its next action.");
+      return (await apiRequest("POST", `${root}/crm/opportunities/${selectedOpportunity.id}/follow-up-actions`, {
+        expectedOpportunityVersion: selectedOpportunity.version,
+        title: followUpTitle.trim(),
+        objective: followUpObjective.trim(),
+        ownerSeatId: followUpOwnerId,
+        idempotencyKey: commandKey("crm-opportunity-follow-up"),
+      })).json();
+    },
+    onSuccess: async (result) => { setSelectedOpportunityId(result.opportunity.id); await refresh(); },
+    onError: (cause: Error) => setError(cause.message),
+  });
   const savePipeline = useMutation({
     mutationFn: async () => {
       if (!editingPipeline) throw new Error("Choose a pipeline to configure.");
@@ -287,6 +311,8 @@ export function NativeCrmStudio({ root, roleScopeKey, canExecute, canDecide }: {
     documents: relationshipOperatingObjects.filter((object) => object.instrumentKey === "docs" && object.objectType === "document"),
     workbooks: relationshipOperatingObjects.filter((object) => object.instrumentKey === "sheets" && object.objectType === "workbook"),
   };
+  const activeSeats = seats.filter((seat) => seat.status !== "inactive");
+  const ownerName = (seatId?: string) => activeSeats.find((seat) => seat.id === seatId)?.title || "Owner not visible";
 
   return <Card id="native-crm-studio" data-testid="native-crm-studio">
     <CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2"><ContactRound className="h-5 w-5 text-primary" />Native Relationship CRM</CardTitle><CardDescription className="mt-1">Operate people, relationship context, commercial facets, pipelines, and opportunities directly in EOS. A connected CRM can reconcile here later; it is never required for the company to operate.</CardDescription></div><Button size="sm" variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}><RefreshCw className={`mr-2 h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />Refresh</Button></div></CardHeader>
@@ -301,7 +327,16 @@ export function NativeCrmStudio({ root, roleScopeKey, canExecute, canDecide }: {
       <section className="rounded-xl border p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Native operating view</p><h3 className="mt-1 font-semibold">Relationship and pipeline board</h3></div><Badge variant="outline">{people.length} people · {relationships.length} relationships · {facets.length} facets</Badge></div><div className="mt-4 grid gap-3 xl:grid-cols-5">{effectiveStages.map((stage) => <div key={stage} className="min-h-40 rounded-xl border bg-muted/20 p-3"><div className="flex items-center justify-between gap-2"><p className="text-sm font-medium">{stage}</p><Badge variant="outline">{opportunitiesForPipeline.filter((opportunity) => opportunity.data?.stage === stage).length}</Badge></div><div className="mt-3 space-y-2">{opportunitiesForPipeline.filter((opportunity) => opportunity.data?.stage === stage).map((opportunity) => { const relationship = relationships.find((item) => item.id === opportunity.data?.relationshipObjectId); const person = relationship && relationshipPerson(relationship); return <div key={opportunity.id} className="rounded-lg border bg-background p-2.5"><div className="flex justify-between gap-2"><p className="text-sm font-medium">{opportunity.title}</p><Badge variant={stateVariant(opportunity.state)}>{opportunity.state}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{person?.data?.displayName || person?.title || "Relationship not visible"}{opportunity.data?.amountMinor ? ` · $${(Number(opportunity.data.amountMinor) / 100).toLocaleString()}` : ""}</p><div className="mt-2 flex flex-wrap gap-1">{stage !== effectiveStages[0] && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" disabled={!canExecute || moveOpportunity.isPending} onClick={() => moveOpportunity.mutate({ opportunity, stage: effectiveStages[Math.max(0, effectiveStages.indexOf(stage) - 1)] })}>←</Button>}{stage !== effectiveStages[effectiveStages.length - 1] && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" disabled={!canExecute || moveOpportunity.isPending} onClick={() => moveOpportunity.mutate({ opportunity, stage: effectiveStages[Math.min(effectiveStages.length - 1, effectiveStages.indexOf(stage) + 1)] })}>Move <ArrowRight className="ml-1 h-3.5 w-3.5" /></Button>}{opportunity.state === "draft" && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" disabled={!canDecide || activate.isPending} onClick={() => activate.mutate(opportunity)}>Activate</Button>}</div></div>; })}{!opportunitiesForPipeline.some((opportunity) => opportunity.data?.stage === stage) && <p className="text-xs text-muted-foreground">No opportunities.</p>}</div></div>)}</div></section>
       {selectedPerson && <section className="rounded-xl border border-primary/25 bg-primary/[0.03] p-4"><p className="eos-label">Configure selected person</p><div className="mt-3 grid gap-3 md:grid-cols-2"><div><Label htmlFor="crm-edit-person-name">Name</Label><Input id="crm-edit-person-name" className="mt-1" value={editingPersonName} onChange={(event) => setEditingPersonName(event.target.value)} /></div><div><Label htmlFor="crm-edit-person-email">Email</Label><Input id="crm-edit-person-email" className="mt-1" type="email" value={editingPersonEmail} onChange={(event) => setEditingPersonEmail(event.target.value)} /></div><div><Label htmlFor="crm-edit-person-phone">Phone</Label><Input id="crm-edit-person-phone" className="mt-1" value={editingPersonPhone} onChange={(event) => setEditingPersonPhone(event.target.value)} /></div><div className="flex items-end"><Button size="sm" disabled={!canExecute || editingPersonName.trim().length < 2 || savePerson.isPending} onClick={() => savePerson.mutate()}>{savePerson.isPending ? "Saving…" : "Save native person"}</Button></div></div></section>}
       {selectedRelationship && <section className="rounded-xl border border-primary/25 bg-primary/[0.03] p-4"><p className="eos-label">Configure selected relationship</p><div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]"><div><Label htmlFor="crm-edit-relationship-type">Relationship type</Label><select id="crm-edit-relationship-type" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={editingRelationshipType} onChange={(event) => setEditingRelationshipType(event.target.value)}><option value="prospect">Prospect</option><option value="customer">Customer</option><option value="partner">Partner</option><option value="vendor">Vendor</option><option value="candidate">Candidate</option></select></div><div className="flex items-end"><Button size="sm" disabled={!canExecute || saveRelationship.isPending} onClick={() => saveRelationship.mutate()}>{saveRelationship.isPending ? "Saving…" : "Save native relationship"}</Button></div></div></section>}
-      {selectedOpportunity && <section className="rounded-xl border border-primary/25 bg-primary/[0.03] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Configure selected opportunity</p><p className="mt-1 text-sm text-muted-foreground">Change the commercial record in place while keeping its linked relationship and pipeline intact.</p></div>{opportunities.length > 1 && <select aria-label="Opportunity to configure" className="h-9 rounded-md border bg-background px-2 text-sm" value={selectedOpportunity.id} onChange={(event) => setSelectedOpportunityId(event.target.value)}>{opportunities.map((opportunity) => <option key={opportunity.id} value={opportunity.id}>{opportunity.title}</option>)}</select>}</div><div className="mt-3 grid gap-3 md:grid-cols-3"><div><Label htmlFor="crm-edit-opportunity-title">Opportunity name</Label><Input id="crm-edit-opportunity-title" className="mt-1" value={editingOpportunityTitle} onChange={(event) => setEditingOpportunityTitle(event.target.value)} /></div><div><Label htmlFor="crm-edit-opportunity-amount">Expected amount (USD)</Label><Input id="crm-edit-opportunity-amount" className="mt-1" inputMode="decimal" value={editingOpportunityAmount} onChange={(event) => setEditingOpportunityAmount(event.target.value)} /></div><div><Label htmlFor="crm-edit-opportunity-stage">Stage</Label><select id="crm-edit-opportunity-stage" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={editingOpportunityStage} onChange={(event) => setEditingOpportunityStage(event.target.value)}>{stagesFrom((pipelines.find((item) => item.id === selectedOpportunity.data?.pipelineObjectId) || selectedPipeline)?.data?.stages).map((stage) => <option key={stage} value={stage}>{stage}</option>)}</select></div><div className="md:col-span-3"><Button size="sm" disabled={!canExecute || editingOpportunityTitle.trim().length < 2 || saveOpportunity.isPending} onClick={() => saveOpportunity.mutate()}>{saveOpportunity.isPending ? "Saving…" : "Save native opportunity"}</Button></div></div></section>}
+      {selectedOpportunity && <section className="rounded-xl border border-primary/25 bg-primary/[0.03] p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Configure selected opportunity</p><p className="mt-1 text-sm text-muted-foreground">Change the commercial record in place while keeping its linked relationship and pipeline intact.</p></div>{opportunities.length > 1 && <select aria-label="Opportunity to configure" className="h-9 rounded-md border bg-background px-2 text-sm" value={selectedOpportunity.id} onChange={(event) => setSelectedOpportunityId(event.target.value)}>{opportunities.map((opportunity) => <option key={opportunity.id} value={opportunity.id}>{opportunity.title}</option>)}</select>}</div>
+        <div className="mt-3 grid gap-3 md:grid-cols-3"><div><Label htmlFor="crm-edit-opportunity-title">Opportunity name</Label><Input id="crm-edit-opportunity-title" className="mt-1" value={editingOpportunityTitle} onChange={(event) => setEditingOpportunityTitle(event.target.value)} /></div><div><Label htmlFor="crm-edit-opportunity-amount">Expected amount (USD)</Label><Input id="crm-edit-opportunity-amount" className="mt-1" inputMode="decimal" value={editingOpportunityAmount} onChange={(event) => setEditingOpportunityAmount(event.target.value)} /></div><div><Label htmlFor="crm-edit-opportunity-stage">Stage</Label><select id="crm-edit-opportunity-stage" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={editingOpportunityStage} onChange={(event) => setEditingOpportunityStage(event.target.value)}>{stagesFrom((pipelines.find((item) => item.id === selectedOpportunity.data?.pipelineObjectId) || selectedPipeline)?.data?.stages).map((stage) => <option key={stage} value={stage}>{stage}</option>)}</select></div><div className="md:col-span-3"><Button size="sm" disabled={!canExecute || editingOpportunityTitle.trim().length < 2 || saveOpportunity.isPending} onClick={() => saveOpportunity.mutate()}>{saveOpportunity.isPending ? "Saving…" : "Save native opportunity"}</Button></div></div>
+        <div className="mt-5 border-t pt-4">
+          <p className="eos-label">Accountable next action</p>
+          <p className="mt-1 text-sm text-muted-foreground">Turn this opportunity into one native, role-owned task. EOS records the commercial action, assignee, and relationship together; the task starts as a draft so a consequential activation remains an explicit decision.</p>
+          {selectedOpportunity.data?.nextActionTaskObjectId && <p className="mt-2 text-xs text-muted-foreground">Current follow-up: {String(selectedOpportunity.data.nextAction || "No objective recorded")} · {ownerName(String(selectedOpportunity.data.nextActionOwnerSeatId || ""))}</p>}
+          {canCreateFollowUp ? <div className="mt-3 grid gap-3 md:grid-cols-2"><div><Label htmlFor="crm-follow-up-title">Task name</Label><Input id="crm-follow-up-title" className="mt-1" value={followUpTitle} onChange={(event) => setFollowUpTitle(event.target.value)} /></div><div><Label htmlFor="crm-follow-up-owner">Accountable role</Label><select id="crm-follow-up-owner" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={followUpOwnerId} onChange={(event) => setFollowUpOwnerId(event.target.value)}>{activeSeats.map((seat) => <option key={seat.id} value={seat.id}>{seat.title}</option>)}</select></div><div className="md:col-span-2"><Label htmlFor="crm-follow-up-objective">Concrete next action</Label><Input id="crm-follow-up-objective" className="mt-1" value={followUpObjective} onChange={(event) => setFollowUpObjective(event.target.value)} placeholder="Confirm fit and book the discovery call" /></div><div className="md:col-span-2"><Button size="sm" disabled={!canExecute || !followUpOwnerId || followUpTitle.trim().length < 2 || followUpObjective.trim().length < 3 || createFollowUp.isPending} onClick={() => createFollowUp.mutate()}>{createFollowUp.isPending ? "Creating follow-up…" : "Create role-owned follow-up"}</Button></div></div> : <p className="mt-3 text-sm text-muted-foreground">Your role can operate CRM but has not been assigned Tasks, so EOS will not create a hidden work item. An authorized leader can assign both tools in Org Studio.</p>}
+        </div>
+      </section>}
       <Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Native first, overlay ready</AlertTitle><AlertDescription>EOS owns the governed people, context, commercial stages, and opportunity state. A connected provider may later import or reconcile records with their source and freshness retained; it cannot become a hidden requirement or bypass EOS authority.</AlertDescription></Alert>
     </CardContent>
   </Card>;

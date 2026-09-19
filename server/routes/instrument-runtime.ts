@@ -14,6 +14,7 @@ import {
 } from "@shared/schema";
 import {
   eosInstrumentKeySchema,
+  crmOpportunityFollowUpActionSchema,
   instrumentDomainFindings,
   instrumentLinkCreateSchema,
   instrumentImportSchema,
@@ -651,6 +652,134 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
       return rows;
     });
     res.json({ command: { id: commandId, state: "completed" }, object: updated, replayed: false });
+  }));
+
+  app.post("/api/eos/companies/:companyId/crm/opportunities/:objectId/follow-up-actions", route(async (req, res) => {
+    const input = crmOpportunityFollowUpActionSchema.parse(req.body);
+    assertCredentialFree(input);
+
+    // Both tools are independently authorized.  CRM permission alone cannot
+    // silently create company work, and Tasks permission alone cannot infer a
+    // hidden commercial record by guessing its identifier.
+    const { access, policy: crmPolicy } = await instrumentAccess(req, "execute", "crm", "crm.opportunity.follow_up.create", "confidential");
+    const { policy: tasksPolicy } = await instrumentAccess(req, "execute", "tasks", "crm.opportunity.follow_up.create", "confidential");
+    const replay = await replayCommand(access.company.id, input.idempotencyKey, "crm", "opportunity.follow_up.create");
+    if (replay) {
+      const result = recordValue(replay.command.result);
+      const taskId = typeof result.taskObjectId === "string" ? result.taskObjectId : "";
+      const [task] = taskId ? await db.select().from(eosInstrumentObjects).where(and(
+        eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.id, taskId), eq(eosInstrumentObjects.instrumentKey, "tasks"),
+      )).limit(1) : [];
+      res.json({ command: replay.command, opportunity: replay.object, task: task || null, replayed: true });
+      return;
+    }
+
+    const [opportunity] = await db.select().from(eosInstrumentObjects).where(and(
+      eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.id, req.params.objectId),
+      eq(eosInstrumentObjects.instrumentKey, "crm"), eq(eosInstrumentObjects.objectType, "opportunity"),
+    )).limit(1);
+    if (!opportunity) throw new EosRouteError(404, "crm_opportunity_not_found", "The selected native CRM opportunity is unavailable in this company.");
+    if (!(await visibleObjectSet(access, [opportunity])).length)
+      throw new EosRouteError(404, "crm_opportunity_not_found", "The selected native CRM opportunity is unavailable for this role.");
+    if (opportunity.state === "archived") throw new EosRouteError(409, "crm_opportunity_archived", "An archived opportunity cannot receive new follow-up work.");
+    if (opportunity.version !== input.expectedOpportunityVersion)
+      throw new EosRouteError(409, "crm_opportunity_version_conflict", "The opportunity changed before its follow-up action could be recorded.");
+
+    // A role can only delegate down its visible operating graph (or to itself).
+    // This keeps the task hierarchy consistent whether the assignee is an
+    // autonomous agent seat or a human occupying that same role.
+    const visibleSeatIdSet = await visibleSeatIds(access.company.id, access.seat.id, access.role);
+    if (!visibleSeatIdSet.has(input.ownerSeatId))
+      throw new EosRouteError(403, "crm_follow_up_owner_scope_denied", "Choose an active role that is visible within your operating hierarchy.");
+    const [ownerSeat] = await db.select().from(eosSeats).where(and(
+      eq(eosSeats.companyId, access.company.id), eq(eosSeats.id, input.ownerSeatId), eq(eosSeats.status, "active"),
+    )).limit(1);
+    if (!ownerSeat)
+      throw new EosRouteError(409, "crm_follow_up_owner_unavailable", "The selected role is no longer active in this company.");
+
+    const now = new Date();
+    const taskId = randomUUID();
+    const taskCommandId = randomUUID();
+    const opportunityCommandId = randomUUID();
+    const linkId = randomUUID();
+    const nextOpportunityData = {
+      ...recordValue(opportunity.data),
+      nextAction: input.objective,
+      nextActionOwnerSeatId: ownerSeat.id,
+      nextActionTaskObjectId: taskId,
+      operatingMode: "native_eos",
+    };
+    const nextOpportunity = {
+      ...opportunity,
+      data: nextOpportunityData,
+      version: opportunity.version + 1,
+      updatedAt: now,
+    };
+    const taskData = {
+      objective: input.objective,
+      ownerSeatId: ownerSeat.id,
+      opportunityObjectId: opportunity.id,
+      relationshipObjectId: recordValue(opportunity.data).relationshipObjectId || null,
+      operatingMode: "native_eos",
+    };
+    const task = {
+      id: taskId,
+      companyId: access.company.id,
+      instrumentKey: "tasks",
+      objectType: "task",
+      objectKey: `task:opportunity-follow-up:${opportunity.id}:${taskId}`,
+      title: input.title,
+      summary: input.objective,
+      state: "draft",
+      classification: opportunity.classification,
+      visibility: "team",
+      // The canonical object owner is the accountable role, not merely the
+      // user who made the assignment.  That lets the task appear in that
+      // role's governed work surface when an agent is replaced by a human.
+      ownerSeatId: ownerSeat.id,
+      parentObjectId: null,
+      data: taskData,
+      sourceReference: { authority: "native_eos", capability: "crm_follow_up" },
+      evidenceIds: [],
+      contentSha256: nativeContractContentSha256({
+        schemaVersion: "eos.instrument-object.v1", companyId: access.company.id, instrumentKey: "tasks", objectType: "task",
+        objectKey: `task:opportunity-follow-up:${opportunity.id}:${taskId}`, title: input.title, summary: input.objective, state: "draft",
+        classification: opportunity.classification, visibility: "team", ownerSeatId: ownerSeat.id, data: taskData,
+        sourceReference: { authority: "native_eos", capability: "crm_follow_up" }, evidenceIds: [], version: 1,
+      }),
+      version: 1,
+      recordedByUserId: req.user.id,
+      createdAt: now,
+      updatedAt: now,
+      archivedAt: null,
+    };
+
+    await db.transaction(async (tx) => {
+      await tx.insert(eosInstrumentObjects).values(task);
+      const [updated] = await tx.update(eosInstrumentObjects).set({
+        data: nextOpportunityData,
+        version: nextOpportunity.version,
+        updatedAt: now,
+        contentSha256: nativeContractContentSha256({
+          schemaVersion: "eos.instrument-object.v1", companyId: access.company.id, instrumentKey: opportunity.instrumentKey,
+          objectType: opportunity.objectType, objectKey: opportunity.objectKey, title: opportunity.title, summary: opportunity.summary,
+          state: opportunity.state, classification: opportunity.classification, visibility: opportunity.visibility, ownerSeatId: opportunity.ownerSeatId,
+          data: nextOpportunityData, sourceReference: opportunity.sourceReference, evidenceIds: opportunity.evidenceIds, version: nextOpportunity.version,
+        }),
+      }).where(and(eq(eosInstrumentObjects.id, opportunity.id), eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.version, opportunity.version))).returning();
+      if (!updated) throw new EosRouteError(409, "crm_opportunity_concurrent_change", "The opportunity changed before its follow-up action could be recorded.");
+      await tx.insert(eosInstrumentLinks).values({ id: linkId, companyId: access.company.id, sourceObjectId: opportunity.id, targetObjectId: taskId, relationshipType: "has_follow_up", metadata: { ownerSeatId: ownerSeat.id }, createdByUserId: req.user.id, createdAt: now });
+      await tx.insert(eosInstrumentCommands).values([
+        { id: opportunityCommandId, companyId: access.company.id, instrumentKey: "crm", objectId: opportunity.id, commandType: "opportunity.follow_up.create", idempotencyKey: input.idempotencyKey, expectedVersion: opportunity.version, payload: { taskObjectId: taskId, ownerSeatId: ownerSeat.id }, state: "completed", result: { taskObjectId: taskId, linkId, opportunityVersion: nextOpportunity.version }, policyDecisionId: crmPolicy.decisionId, requestedByUserId: req.user.id, createdAt: now, completedAt: now },
+        { id: taskCommandId, companyId: access.company.id, instrumentKey: "tasks", objectId: taskId, commandType: "task.create_from_opportunity", idempotencyKey: `${input.idempotencyKey}:task`, expectedVersion: null, payload: { opportunityObjectId: opportunity.id, ownerSeatId: ownerSeat.id }, state: "completed", result: { taskObjectId: taskId, linkId }, policyDecisionId: tasksPolicy.decisionId, requestedByUserId: req.user.id, createdAt: now, completedAt: now },
+      ]);
+      await tx.insert(eosInstrumentEvents).values([
+        { id: randomUUID(), companyId: access.company.id, instrumentKey: "tasks", objectId: taskId, commandId: taskCommandId, eventType: "object.created", fromState: null, toState: "draft", objectVersion: 1, payload: { objectType: "task", opportunityObjectId: opportunity.id, ownerSeatId: ownerSeat.id }, evidenceIds: [], contentSha256: eventHash({ companyId: access.company.id, objectId: taskId, commandId: taskCommandId, eventType: "object.created", toState: "draft", objectVersion: 1 }), recordedByUserId: req.user.id, createdAt: now },
+        { id: randomUUID(), companyId: access.company.id, instrumentKey: "crm", objectId: opportunity.id, commandId: opportunityCommandId, eventType: "opportunity.follow_up.created", fromState: opportunity.state, toState: opportunity.state, objectVersion: nextOpportunity.version, payload: { taskObjectId: taskId, linkId, ownerSeatId: ownerSeat.id }, evidenceIds: [], contentSha256: eventHash({ companyId: access.company.id, objectId: opportunity.id, commandId: opportunityCommandId, eventType: "opportunity.follow_up.created", taskId, linkId, objectVersion: nextOpportunity.version }), recordedByUserId: req.user.id, createdAt: now },
+      ]);
+      await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "crm.opportunity.follow_up.created", targetType: "crm_opportunity", targetId: opportunity.id, traceId: crmPolicy.traceId, correlationId: crmPolicy.correlationId, result: "draft_task_created", details: { taskObjectId: taskId, linkId, ownerSeatId: ownerSeat.id, crmPolicyDecisionId: crmPolicy.decisionId, tasksPolicyDecisionId: tasksPolicy.decisionId }, createdAt: now });
+    });
+    res.status(201).json({ command: { id: opportunityCommandId, state: "completed" }, opportunity: nextOpportunity, task, link: { id: linkId, relationshipType: "has_follow_up" }, replayed: false });
   }));
 
   app.post("/api/eos/companies/:companyId/instrument-objects/:objectId/transitions", route(async (req, res) => {
