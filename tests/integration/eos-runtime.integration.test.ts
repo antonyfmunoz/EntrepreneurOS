@@ -611,6 +611,15 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(replayedOrderFromOpportunity.body).toMatchObject({ replayed: true, order: { id: orderFromOpportunity.body.order.id }, linkId: orderFromOpportunity.body.linkId });
     const instrumentsAfterOrder = await api.get(`/api/eos/companies/${companyId}/instruments`).expect(200);
     expect(instrumentsAfterOrder.body.links).toEqual(expect.arrayContaining([expect.objectContaining({ id: orderFromOpportunity.body.linkId, sourceObjectId: capturedOpportunities[0].id, targetObjectId: orderFromOpportunity.body.order.id, relationshipType: "converts_to_order" })]));
+    const relationshipOperatingContext = await api.get(`/api/eos/companies/${companyId}/instruments/crm/relationships/${capturedRelationships[0].id}/operating-context`).expect(200);
+    expect(relationshipOperatingContext.body.objects).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: capturedOpportunities[0].id, instrumentKey: "crm", objectType: "opportunity" }),
+      expect.objectContaining({ id: orderFromOpportunity.body.order.id, instrumentKey: "commerce", objectType: "order", data: expect.objectContaining({ sourceOpportunityObjectId: capturedOpportunities[0].id }) }),
+    ]));
+    expect(relationshipOperatingContext.body.links).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceObjectId: capturedRelationships[0].id, targetObjectId: capturedOpportunities[0].id, relationshipType: "has_opportunity" }),
+      expect.objectContaining({ sourceObjectId: capturedOpportunities[0].id, targetObjectId: orderFromOpportunity.body.order.id, relationshipType: "converts_to_order" }),
+    ]));
     const capturedForms = await api.get(`/api/eos/companies/${companyId}/instruments/forms`).expect(200);
     expect(capturedForms.body.objects.filter((object: any) => object.objectType === "submission" && object.data?.formObjectId === captureForm.body.object.id)).toHaveLength(2);
     const funnel = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({

@@ -107,6 +107,8 @@ describe("native communication authority cutover", () => {
     expect(nativeCrmStudio).toContain("native-crm-relationship-operating-context");
     expect(nativeCrmStudio).toContain("Relationship operating context");
     expect(nativeCrmStudio).toContain("only objects already visible to your role");
+    expect(nativeCrmStudio).toContain("orders:");
+    expect(instrumentRuntime).toContain("converts_to_order");
   });
 
   it("links native calendar bookings to only role-visible CRM relationships", () => {
