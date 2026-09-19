@@ -124,6 +124,7 @@ const NativeCalendarStudio = lazy(() => import("@/components/native-calendar-stu
 const NativeMessageHub = lazy(() => import("@/components/native-message-hub").then((module) => ({ default: module.NativeMessageHub })));
 const ConferenceRoomControlCenter = lazy(() => import("@/components/conference-room-control-center").then((module) => ({ default: module.ConferenceRoomControlCenter })));
 const NativeDocumentsStudio = lazy(() => import("@/components/native-documents-studio").then((module) => ({ default: module.NativeDocumentsStudio })));
+const NativeFilesStudio = lazy(() => import("@/components/native-files-studio").then((module) => ({ default: module.NativeFilesStudio })));
 const NativeSheetsStudio = lazy(() => import("@/components/native-sheets-studio").then((module) => ({ default: module.NativeSheetsStudio })));
 const NativeCrmStudio = lazy(() => import("@/components/native-crm-studio").then((module) => ({ default: module.NativeCrmStudio })));
 const NativeMarketingStudio = lazy(() => import("@/components/native-marketing-studio").then((module) => ({ default: module.NativeMarketingStudio })));
@@ -1468,6 +1469,12 @@ export default function EosOverlayPage() {
   // role pack, exactly as they are for Calendar and other tools.
   const mayOperateNativeDocuments =
     canUseInstrument("docs") && (isFounder || toolEntitlements.has("docs"));
+  // Files follow the same compiled role contract as Docs. A non-founder can
+  // only see or operate the custody UI when Org Studio assigned Files; the
+  // server independently enforces the same tool boundary for every upload
+  // and download.
+  const mayOperateNativeFiles =
+    canUseInstrument("files") && (isFounder || toolEntitlements.has("files"));
   const mayOperateNativeSheets =
     canUseInstrument("sheets") && (isFounder || toolEntitlements.has("sheets"));
   // CRM belongs to the founder's initial operating set and to a role that has
@@ -10919,6 +10926,14 @@ export default function EosOverlayPage() {
             </Suspense>}
             {mayOperateNativeDocuments && <Suspense fallback={<DeferredControlFallback />}>
               <NativeDocumentsStudio
+                root={root}
+                roleScopeKey={roleScopeKey}
+                canExecute={effectiveAuthorityClasses.has("execute")}
+                canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
+            {mayOperateNativeFiles && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeFilesStudio
                 root={root}
                 roleScopeKey={roleScopeKey}
                 canExecute={effectiveAuthorityClasses.has("execute")}
