@@ -2,10 +2,12 @@ import { randomUUID } from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z, ZodError } from "zod";
-import { companies, eosAuditRecords, eosInstrumentCommands, eosInstrumentEvents, eosInstrumentLinks, eosInstrumentObjects } from "@shared/schema";
+import { companies, eosAgentEventOutbox, eosAuditRecords, eosInstrumentCommands, eosInstrumentEvents, eosInstrumentLinks, eosInstrumentObjects } from "@shared/schema";
 import { nativeContractContentSha256 } from "../esign/template-generation";
+import { dispatchAgentEventOutboxEvent } from "../agents/scheduler";
 import { db } from "../db";
 import { fixedWindowRateLimit } from "../middleware/rate-limit";
+import { writeLog } from "../observability/logger";
 
 const publicBookingRateLimit = fixedWindowRateLimit({ limit: 30, windowMs: 60_000, namespace: "eos-public-booking" });
 const publicIdSchema = z.string().uuid();
@@ -173,7 +175,7 @@ export function registerPublicBookingRoutes(app: Express): void {
     if (!Number.isFinite(startsMs) || startsMs < Date.now() + 5 * 60_000) throw new PublicBookingError(400, "public_booking_time_invalid", "Choose a future available time.");
     if (startsMs > Date.now() + definition.publicBookingWindowDays * 86_400_000) throw new PublicBookingError(400, "public_booking_time_outside_window", "Choose a time inside the current booking window.");
     if (!fitsAvailability(startsAt, endsAt, definition.timeZone, availability)) throw new PublicBookingError(409, "public_booking_time_unavailable", "That time is not in the current availability. Refresh and choose another time.");
-    const now = new Date(); const bookingEventId = randomUUID(); const bookingId = randomUUID(); const commandId = randomUUID(); const normalizedEmail = input.email.toLowerCase();
+    const now = new Date(); const bookingEventId = randomUUID(); const bookingId = randomUUID(); const commandId = randomUUID(); const agentEventId = randomUUID(); const normalizedEmail = input.email.toLowerCase();
     await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`public-booking:${calendar.id}:${startsAt.toISOString()}`}))`);
       const [currentCalendar] = await tx.select().from(eosInstrumentObjects).where(and(
@@ -207,6 +209,39 @@ export function registerPublicBookingRoutes(app: Express): void {
       const command = { id: commandId, companyId: calendar.companyId, instrumentKey: "calendar", objectId: booking.id, commandType: "public_booking.recorded", idempotencyKey: `public-booking:${booking.id}`, expectedVersion: null, payload: { calendarObjectId: calendar.id, eventObjectId: event.id, source: "unverified_public_submitter" }, result: { objectId: booking.id, eventObjectId: event.id, state: "active" }, state: "completed", policyDecisionId: activation.policyDecisionId, requestedByUserId: calendar.recordedByUserId, createdAt: now, completedAt: now };
       await tx.insert(eosInstrumentCommands).values(command);
       await tx.insert(eosInstrumentEvents).values({ id: randomUUID(), companyId: calendar.companyId, instrumentKey: "calendar", objectId: booking.id, commandId: command.id, eventType: "public_booking.recorded", fromState: null, toState: "active", objectVersion: 1, payload: { calendarObjectId: calendar.id, eventObjectId: event.id, relationshipObjectId: relationship.id }, evidenceIds: [], contentSha256: eventHash({ companyId: calendar.companyId, bookingId: booking.id, eventId: event.id, commandId: command.id }), recordedByUserId: calendar.recordedByUserId, createdAt: now });
+      // Public form captures and public booking captures are both consented
+      // commercial handoffs. Publish the same durable, privacy-bounded event
+      // so an assigned commercial Role Agent can operate the next step through
+      // its ordinary company and role scope. The outbox intentionally contains
+      // references only: it never copies the visitor's contact details or note.
+      await tx.insert(eosAgentEventOutbox).values({
+        id: agentEventId,
+        companyId: calendar.companyId,
+        eventType: "eos.crm.consented_lead_recorded.v1",
+        aggregateType: "calendar_booking",
+        aggregateId: booking.id,
+        payload: {
+          schemaVersion: "eos.crm.consented_lead_recorded.v1",
+          sourceType: "public_booking",
+          calendarObjectId: calendar.id,
+          bookingObjectId: booking.id,
+          eventObjectId: event.id,
+          crmPersonObjectId: person.id,
+          crmRelationshipObjectId: relationship.id,
+          consentRecorded: true,
+          consentVersion: definition.publicBookingConsentVersion,
+          classification: "confidential",
+          externalEffectsExecuted: false,
+        },
+        state: "pending",
+        attempts: 0,
+        dispatchedRunIds: [],
+        lastError: "",
+        occurredAt: now,
+        dispatchedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
       await tx.insert(eosInstrumentLinks).values([
         { id: randomUUID(), companyId: calendar.companyId, sourceObjectId: calendar.id, targetObjectId: event.id, relationshipType: "schedules", metadata: { source: "public_eos_booking" }, createdByUserId: calendar.recordedByUserId, createdAt: now },
         { id: randomUUID(), companyId: calendar.companyId, sourceObjectId: event.id, targetObjectId: booking.id, relationshipType: "booked_as", metadata: { source: "public_eos_booking" }, createdByUserId: calendar.recordedByUserId, createdAt: now },
@@ -215,6 +250,14 @@ export function registerPublicBookingRoutes(app: Express): void {
       ]);
       await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: calendar.companyId, actorUserId: calendar.recordedByUserId, action: "booking.public_reservation_recorded", targetType: "calendar_booking", targetId: booking.id, traceId: `public:${booking.id}`, correlationId: booking.id, result: "captured_unverified", details: { actorType: "unverified_public_submitter", calendarObjectId: calendar.id, eventObjectId: event.id, relationshipObjectId: relationship.id, consentVersion: definition.publicBookingConsentVersion, activationPolicyDecisionId: activation.policyDecisionId }, createdAt: now });
     });
+    // Preserve the booking even if a momentary scheduler fault prevents the
+    // immediate handoff. EOS retries the durable outbox; the public caller
+    // never receives an internal scheduling error or agent state.
+    try {
+      await dispatchAgentEventOutboxEvent(agentEventId);
+    } catch (error) {
+      writeLog("error", "public_booking_agent_event_dispatch_deferred", { agentEventId, companyId: calendar.companyId, error });
+    }
     headers(res);
     res.status(201).json({ schemaVersion: "eos.public-booking-reservation.v1", accepted: true, startsAt: startsAt.toISOString(), confirmationMessage: definition.publicBookingConfirmationMessage });
   }));

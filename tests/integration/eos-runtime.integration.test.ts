@@ -596,6 +596,27 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const nativeBooking = bookedCalendar.body.objects.find((object: any) => object.objectType === "booking" && object.data?.calendarObjectId === bookingCalendar.body.object.id);
     expect(nativeBooking).toBeTruthy();
     expect(nativeBooking.data.eventObjectId).toMatch(/^[0-9a-f-]{36}$/i);
+    // This suite intentionally defers application database imports until after
+    // beforeAll replaces Vitest's non-routable default URL. Use its existing
+    // disposable SQL connection here so this assertion does not create an
+    // early client bound to that dummy URL.
+    const bookingAgentEvents = await sql<{ eventType: string; aggregateType: string; payload: Record<string, unknown> }[]>`
+      SELECT event_type AS "eventType", aggregate_type AS "aggregateType", payload
+      FROM eos_agent_event_outbox
+      WHERE company_id = ${companyId} AND aggregate_id = ${nativeBooking.id}
+    `;
+    expect(bookingAgentEvents).toHaveLength(1);
+    expect(bookingAgentEvents[0]).toMatchObject({
+      eventType: "eos.crm.consented_lead_recorded.v1",
+      aggregateType: "calendar_booking",
+      payload: expect.objectContaining({
+        sourceType: "public_booking",
+        bookingObjectId: nativeBooking.id,
+        crmRelationshipObjectId: expect.any(String),
+        consentRecorded: true,
+      }),
+    });
+    expect(JSON.stringify(bookingAgentEvents[0].payload)).not.toMatch(/fixture-booking@example.com|Fixture Booking Lead/i);
 
     const site = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({
       instrumentKey: "websites", objectType: "site", objectKey: "site:public-fixture", title: "Public site fixture", summary: "Synthetic EOS-owned website.", classification: "confidential", visibility: "organization",
