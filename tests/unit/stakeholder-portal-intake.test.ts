@@ -38,6 +38,7 @@ describe("native client portal onboarding intake contracts", () => {
 
   it("requires a bounded native-work handoff after an accountable review", () => {
     expect(stakeholderPortalIntakeReviewHandoffSchema.parse({ title: "Confirm the client launch access boundary", priority: "high" }).priority).toBe("high");
+    expect(stakeholderPortalIntakeReviewHandoffSchema.parse({ title: "Confirm the client launch access boundary", processDefinitionId: "00000000-0000-4000-8000-000000000001" }).processDefinitionId).toBe("00000000-0000-4000-8000-000000000001");
     expect(() => stakeholderPortalIntakeReviewHandoffSchema.parse({ title: "No" })).toThrow();
   });
 
@@ -63,6 +64,9 @@ describe("native client portal onboarding intake contracts", () => {
     expect(routes).toContain("targetSeatId: portal.ownerSeatId");
     expect(routes).toContain("externalEffectsExecuted: false");
     expect(routes).toContain("dispatchAgentEventOutboxEvent(agentEventId)");
+    expect(routes).toContain("stakeholder_portal_handoff_process_invalid");
+    expect(routes).toContain("targetProcessDefinitionId: process?.id");
+    expect(routes).toContain("!visible.has(process.accountableSeatId)");
     expect(page).toContain("Submit onboarding intake");
     expect(page).toContain("does not automatically grant access, start work, or change any agreement");
   });
