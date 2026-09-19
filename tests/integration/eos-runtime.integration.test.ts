@@ -585,7 +585,9 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const bookingCrm = await api.get(`/api/eos/companies/${companyId}/instruments/crm`).expect(200);
     expect(bookingCrm.body.objects.filter((object: any) => object.objectType === "person" && object.data?.email === "fixture-booking@example.com")).toHaveLength(1);
     const bookedCalendar = await api.get(`/api/eos/companies/${companyId}/instruments/calendar`).expect(200);
-    expect(bookedCalendar.body.objects.filter((object: any) => object.objectType === "booking" && object.data?.eventObjectId).map((object: any) => object.data?.eventObjectId)).toContain(expect.any(String));
+    const nativeBooking = bookedCalendar.body.objects.find((object: any) => object.objectType === "booking" && object.data?.calendarObjectId === bookingCalendar.body.object.id);
+    expect(nativeBooking).toBeTruthy();
+    expect(nativeBooking.data.eventObjectId).toMatch(/^[0-9a-f-]{36}$/i);
 
     const site = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({
       instrumentKey: "websites", objectType: "site", objectKey: "site:public-fixture", title: "Public site fixture", summary: "Synthetic EOS-owned website.", classification: "confidential", visibility: "organization",
