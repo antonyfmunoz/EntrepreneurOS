@@ -171,6 +171,18 @@ export const crmOpportunityFollowUpActionSchema = z.object({
   idempotencyKey: identifier,
 });
 
+// A native order may begin with an EOS-owned CRM opportunity, but creating an
+// order must never be mistaken for payment collection or a closed sale. This
+// command keeps the offer, governed buyer, optional opportunity, and pending
+// collection boundary together in one durable record.
+export const commerceOrderFromCrmSchema = z.object({
+  offerObjectId: z.string().uuid(),
+  buyerObjectId: z.string().uuid(),
+  opportunityObjectId: z.string().uuid().optional(),
+  title: z.string().trim().min(2).max(300),
+  idempotencyKey: identifier,
+});
+
 export const instrumentSearchSchema = z.object({
   query: z.string().trim().max(200).default(""),
   instrumentKey: eosInstrumentKeySchema.optional(),

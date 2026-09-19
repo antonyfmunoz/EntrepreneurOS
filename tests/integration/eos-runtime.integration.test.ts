@@ -579,6 +579,38 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       idempotencyKey: "instrument:create:public-intake-opportunity-follow-up",
     }).expect(200);
     expect(followUpReplay.body).toMatchObject({ replayed: true, task: { id: followUp.body.task.id }, opportunity: { id: capturedOpportunities[0].id, version: 2 } });
+    const publicIntakeOffer = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({
+      instrumentKey: "commerce", objectType: "offer", objectKey: "offer:public-intake-fixture", title: "Public intake recovery offer", summary: "A synthetic native commercial offer for opportunity-to-order qualification.", classification: "confidential", visibility: "organization",
+      data: { name: "Public intake recovery offer", priceMinor: 250000, currency: "USD", operatingMode: "native_eos" }, sourceReference: { authority: "native_eos", capability: "offer_catalog" }, evidenceIds: [], idempotencyKey: "instrument:create:public-intake-offer",
+    }).expect(201);
+    await api.post(`/api/eos/companies/${companyId}/instrument-objects/${publicIntakeOffer.body.object.id}/transitions`).send({ expectedVersion: 1, state: "active", rationale: "Founder activates the synthetic EOS offer before turning an actual CRM opportunity into an order.", evidenceIds: [], idempotencyKey: "instrument:transition:public-intake-offer:active" }).expect(200);
+    const orderFromOpportunityPayload = {
+      offerObjectId: publicIntakeOffer.body.object.id,
+      buyerObjectId: capturedPeople[0].id,
+      opportunityObjectId: capturedOpportunities[0].id,
+      title: "Public intake recovery order",
+      idempotencyKey: "commerce:create:public-intake-opportunity-order",
+    };
+    const orderFromOpportunity = await api.post(`/api/eos/companies/${companyId}/commerce/orders`).send(orderFromOpportunityPayload).expect(201);
+    expect(orderFromOpportunity.body).toMatchObject({
+      replayed: false,
+      order: {
+        instrumentKey: "commerce",
+        objectType: "order",
+        state: "draft",
+        parentObjectId: publicIntakeOffer.body.object.id,
+        data: {
+          buyerReference: capturedPeople[0].id,
+          sourceOpportunityObjectId: capturedOpportunities[0].id,
+          paymentState: "pending_authorized_collection",
+        },
+      },
+    });
+    expect(orderFromOpportunity.body.linkId).toBeTruthy();
+    const replayedOrderFromOpportunity = await api.post(`/api/eos/companies/${companyId}/commerce/orders`).send(orderFromOpportunityPayload).expect(200);
+    expect(replayedOrderFromOpportunity.body).toMatchObject({ replayed: true, order: { id: orderFromOpportunity.body.order.id }, linkId: orderFromOpportunity.body.linkId });
+    const instrumentsAfterOrder = await api.get(`/api/eos/companies/${companyId}/instruments`).expect(200);
+    expect(instrumentsAfterOrder.body.links).toEqual(expect.arrayContaining([expect.objectContaining({ id: orderFromOpportunity.body.linkId, sourceObjectId: capturedOpportunities[0].id, targetObjectId: orderFromOpportunity.body.order.id, relationshipType: "converts_to_order" })]));
     const capturedForms = await api.get(`/api/eos/companies/${companyId}/instruments/forms`).expect(200);
     expect(capturedForms.body.objects.filter((object: any) => object.objectType === "submission" && object.data?.formObjectId === captureForm.body.object.id)).toHaveLength(2);
     const funnel = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({

@@ -13,4 +13,9 @@ describe("native commerce record controls", () => {
     expect(commerceStudio).toContain("Configure selected entitlement");
     expect(commerceStudio).toContain("native-entitlement-configure");
   });
+
+  it("does not permit a source-bound order to silently change its CRM buyer", () => {
+    expect(commerceStudio).toContain("disabled={Boolean(selectedOrder.data?.sourceOpportunityObjectId)}");
+    expect(commerceStudio).toContain("source buyer stays fixed");
+  });
 });

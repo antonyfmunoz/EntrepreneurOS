@@ -13,6 +13,7 @@ import {
   eosSeats,
 } from "@shared/schema";
 import {
+  commerceOrderFromCrmSchema,
   eosInstrumentKeySchema,
   crmOpportunityFollowUpActionSchema,
   instrumentDomainFindings,
@@ -127,6 +128,58 @@ async function assertPublicCommercialRouting(
   const stages = recordValue(pipeline?.data).stages;
   if (!pipeline || !Array.isArray(stages) || !stages.includes(initialStage))
     throw new EosRouteError(409, "public_intake_commercial_routing_unavailable", "The selected native commercial pipeline or first stage is unavailable in this company.");
+}
+
+/**
+ * A CRM-linked order is not just a UI convenience: it creates a company
+ * commitment that may later drive an approved collection and delivery.  Keep
+ * the commercial source truthful by requiring that the caller can actually
+ * read the named buyer and, when present, that the opportunity belongs to
+ * that buyer through its canonical CRM relationship.
+ */
+async function assertNativeCommerceOrderSource(
+  req: Request,
+  access: Awaited<ReturnType<typeof companyAccess>>,
+  input: { instrumentKey: string; objectType: string; data: Record<string, unknown>; classification: string },
+) {
+  if (input.instrumentKey !== "commerce" || input.objectType !== "order") return null;
+  const buyerObjectId = input.data.buyerReference;
+  const opportunityObjectId = input.data.sourceOpportunityObjectId;
+  if (typeof buyerObjectId !== "string" || !buyerObjectId)
+    throw new EosRouteError(400, "commerce_order_buyer_required", "A native order must name a governed CRM buyer.");
+  if (opportunityObjectId !== undefined && (typeof opportunityObjectId !== "string" || !opportunityObjectId))
+    throw new EosRouteError(400, "commerce_order_opportunity_invalid", "The CRM opportunity reference must be a valid native object identifier when supplied.");
+  await authorizeAction(req, access, {
+    authorityClass: "view",
+    resource: "instrument:crm",
+    actionKey: "commerce.order.crm_source.read",
+    purpose: "inspect_instrument",
+    classification: input.classification,
+    consequence: "routine",
+    targetSeatId: access.seat.id,
+    toolKey: "crm",
+  });
+  const [buyer] = await db.select().from(eosInstrumentObjects).where(and(
+    eq(eosInstrumentObjects.id, buyerObjectId), eq(eosInstrumentObjects.companyId, access.company.id),
+    eq(eosInstrumentObjects.instrumentKey, "crm"), eq(eosInstrumentObjects.objectType, "person"),
+  )).limit(1);
+  if (!buyer || !(await visibleObjectSet(access, [buyer])).length)
+    throw new EosRouteError(409, "commerce_order_buyer_unavailable", "The selected CRM buyer is unavailable for this role.");
+  if (!opportunityObjectId) return { buyer, opportunity: null, relationship: null };
+  const [opportunity] = await db.select().from(eosInstrumentObjects).where(and(
+    eq(eosInstrumentObjects.id, opportunityObjectId), eq(eosInstrumentObjects.companyId, access.company.id),
+    eq(eosInstrumentObjects.instrumentKey, "crm"), eq(eosInstrumentObjects.objectType, "opportunity"),
+  )).limit(1);
+  if (!opportunity || !(await visibleObjectSet(access, [opportunity])).length)
+    throw new EosRouteError(409, "commerce_order_opportunity_unavailable", "The selected CRM opportunity is unavailable for this role.");
+  const relationshipObjectId = recordValue(opportunity.data).relationshipObjectId;
+  const [relationship] = typeof relationshipObjectId === "string" ? await db.select().from(eosInstrumentObjects).where(and(
+    eq(eosInstrumentObjects.id, relationshipObjectId), eq(eosInstrumentObjects.companyId, access.company.id),
+    eq(eosInstrumentObjects.instrumentKey, "crm"), eq(eosInstrumentObjects.objectType, "relationship"),
+  )).limit(1) : [];
+  if (!relationship || !(await visibleObjectSet(access, [relationship])).length || recordValue(relationship.data).personObjectId !== buyer.id)
+    throw new EosRouteError(409, "commerce_order_opportunity_buyer_mismatch", "The selected opportunity does not belong to the selected CRM buyer.");
+  return { buyer, opportunity, relationship };
 }
 
 /**
@@ -608,6 +661,7 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     await assertNativeMessageCreate(access, input);
     await assertNativeConferenceRoomCreate(access, input);
     await assertPublicCommercialRouting(req, access, input);
+    await assertNativeCommerceOrderSource(req, access, input);
     await checkedEvidence(access.company.id, input.evidenceIds);
     if (input.parentObjectId) {
       const [parent] = await db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.id, input.parentObjectId), eq(eosInstrumentObjects.instrumentKey, input.instrumentKey))).limit(1);
@@ -626,6 +680,228 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     res.status(201).json({ command: { id: commandId, state: "completed" }, object, replayed: false });
   }));
 
+  /**
+   * Convert an EOS-owned commercial opportunity into an EOS-owned order in a
+   * single transaction.  A generic object create is deliberately insufficient
+   * here: it could leave an order detached from the buyer/opportunity that
+   * justified it, or create an apparent sale before payment has been
+   * authorized and verified.
+   */
+  app.post("/api/eos/companies/:companyId/commerce/orders", route(async (req, res) => {
+    const input = commerceOrderFromCrmSchema.parse(req.body);
+    assertCredentialFree(input);
+    const { access, policy } = await instrumentAccess(req, "execute", "commerce", "commerce.order.create_from_crm", "confidential");
+    const [offer] = await db.select().from(eosInstrumentObjects).where(and(
+      eq(eosInstrumentObjects.id, input.offerObjectId),
+      eq(eosInstrumentObjects.companyId, access.company.id),
+      eq(eosInstrumentObjects.instrumentKey, "commerce"),
+      eq(eosInstrumentObjects.objectType, "offer"),
+    )).limit(1);
+    if (!offer || offer.state === "archived" || !(await visibleObjectSet(access, [offer])).length)
+      throw new EosRouteError(409, "commerce_order_offer_unavailable", "The selected native offer is unavailable for this role.");
+    const source = await assertNativeCommerceOrderSource(req, access, {
+      instrumentKey: "commerce",
+      objectType: "order",
+      classification: offer.classification,
+      data: {
+        offerObjectId: offer.id,
+        buyerReference: input.buyerObjectId,
+        ...(input.opportunityObjectId ? { sourceOpportunityObjectId: input.opportunityObjectId } : {}),
+      },
+    });
+    if (!source) throw new EosRouteError(409, "commerce_order_source_invalid", "A native order needs a governed CRM buyer.");
+    const offerData = recordValue(offer.data);
+    const amountMinor = typeof offerData.priceMinor === "number" && Number.isFinite(offerData.priceMinor) && offerData.priceMinor >= 0
+      ? Math.round(offerData.priceMinor)
+      : 0;
+    const currency = typeof offerData.currency === "string" && /^[A-Z]{3}$/.test(offerData.currency)
+      ? offerData.currency
+      : "USD";
+    const now = new Date();
+    const orderId = randomUUID();
+    const commandId = randomUUID();
+    // Instrument events are one-to-one with their command receipt. The source
+    // opportunity therefore gets its own immutable receipt instead of reusing
+    // the order command ID (which would violate the append-only ledger's
+    // unique command-to-event boundary).
+    const opportunityCommandId = source.opportunity ? randomUUID() : null;
+    const linkId = source.opportunity ? randomUUID() : null;
+    const buyerData = recordValue(source.buyer.data);
+    const orderData = {
+      offerObjectId: offer.id,
+      buyerReference: source.buyer.id,
+      buyerDisplayName: buyerData.displayName || source.buyer.title,
+      amountMinor,
+      currency,
+      paymentState: "pending_authorized_collection",
+      operatingMode: "native_eos",
+      ...(source.opportunity ? {
+        sourceOpportunityObjectId: source.opportunity.id,
+        sourceRelationshipObjectId: source.relationship!.id,
+      } : {}),
+    };
+    const sourceReference = {
+      authority: "native_eos",
+      capability: "order_management",
+      paymentExecution: "not_dispatched",
+    };
+    const objectKey = `order:crm-handoff:${offer.id}:${orderId}`;
+    const projection = {
+      schemaVersion: "eos.instrument-object.v1",
+      companyId: access.company.id,
+      instrumentKey: "commerce",
+      objectType: "order",
+      objectKey,
+      title: input.title,
+      summary: "Native EOS commercial commitment pending the authorized payment path.",
+      state: "draft",
+      classification: offer.classification,
+      visibility: "team",
+      ownerSeatId: access.seat.id,
+      parentObjectId: offer.id,
+      data: orderData,
+      sourceReference,
+      evidenceIds: [],
+      version: 1,
+    };
+    const order = {
+      id: orderId,
+      companyId: access.company.id,
+      instrumentKey: "commerce",
+      objectType: "order",
+      objectKey,
+      title: input.title,
+      summary: "Native EOS commercial commitment pending the authorized payment path.",
+      state: "draft",
+      classification: offer.classification,
+      visibility: "team",
+      ownerSeatId: access.seat.id,
+      parentObjectId: offer.id,
+      data: orderData,
+      sourceReference,
+      evidenceIds: [],
+      contentSha256: nativeContractContentSha256(projection),
+      version: 1,
+      recordedByUserId: req.user.id,
+      createdAt: now,
+      updatedAt: now,
+      archivedAt: null,
+    };
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`commerce-order-from-crm:${access.company.id}:${input.idempotencyKey}`}))`);
+      const [prior] = await tx.select().from(eosInstrumentCommands).where(and(
+        eq(eosInstrumentCommands.companyId, access.company.id),
+        eq(eosInstrumentCommands.idempotencyKey, input.idempotencyKey),
+      )).limit(1);
+      if (prior) {
+        if (prior.instrumentKey !== "commerce" || prior.commandType !== "order.create_from_crm")
+          throw new EosRouteError(409, "instrument_idempotency_conflict", "This idempotency key is already bound to a different instrument command.");
+        const [priorOrder] = prior.objectId ? await tx.select().from(eosInstrumentObjects).where(and(
+          eq(eosInstrumentObjects.id, prior.objectId), eq(eosInstrumentObjects.companyId, access.company.id),
+        )).limit(1) : [];
+        if (!priorOrder) throw new EosRouteError(409, "commerce_order_replay_missing", "The prior native order no longer resolves in this company.");
+        const priorResult = recordValue(prior.result);
+        const priorLinkId = typeof priorResult.linkId === "string" ? priorResult.linkId : null;
+        return { command: prior, order: priorOrder, linkId: priorLinkId, replayed: true };
+      }
+      await tx.insert(eosInstrumentObjects).values(order);
+      if (source.opportunity && linkId) {
+        await tx.insert(eosInstrumentLinks).values({
+          id: linkId,
+          companyId: access.company.id,
+          sourceObjectId: source.opportunity.id,
+          targetObjectId: orderId,
+          relationshipType: "converts_to_order",
+          metadata: { offerObjectId: offer.id, buyerObjectId: source.buyer.id },
+          createdByUserId: req.user.id,
+          createdAt: now,
+        });
+      }
+      const resultPayload = { orderObjectId: orderId, linkId };
+      await tx.insert(eosInstrumentCommands).values({
+        id: commandId,
+        companyId: access.company.id,
+        instrumentKey: "commerce",
+        objectId: orderId,
+        commandType: "order.create_from_crm",
+        idempotencyKey: input.idempotencyKey,
+        expectedVersion: null,
+        payload: { offerObjectId: offer.id, buyerObjectId: source.buyer.id, opportunityObjectId: source.opportunity?.id || null },
+        state: "completed",
+        result: resultPayload,
+        policyDecisionId: policy.decisionId,
+        requestedByUserId: req.user.id,
+        createdAt: now,
+        completedAt: now,
+      });
+      await tx.insert(eosInstrumentEvents).values({
+        id: randomUUID(),
+        companyId: access.company.id,
+        instrumentKey: "commerce",
+        objectId: orderId,
+        commandId,
+        eventType: "order.created_from_crm",
+        fromState: null,
+        toState: "draft",
+        objectVersion: 1,
+        payload: { offerObjectId: offer.id, buyerObjectId: source.buyer.id, opportunityObjectId: source.opportunity?.id || null, linkId },
+        evidenceIds: [],
+        contentSha256: eventHash({ companyId: access.company.id, objectId: orderId, commandId, eventType: "order.created_from_crm", toState: "draft", objectVersion: 1, linkId }),
+        recordedByUserId: req.user.id,
+        createdAt: now,
+      });
+      if (source.opportunity && linkId) {
+        await tx.insert(eosInstrumentCommands).values({
+          id: opportunityCommandId!,
+          companyId: access.company.id,
+          instrumentKey: "crm",
+          objectId: source.opportunity.id,
+          commandType: "opportunity.order_recorded",
+          idempotencyKey: `${input.idempotencyKey.slice(0, 180)}:opportunity-event`,
+          expectedVersion: source.opportunity.version,
+          payload: { orderObjectId: orderId, linkId },
+          state: "completed",
+          result: { orderObjectId: orderId, linkId },
+          policyDecisionId: policy.decisionId,
+          requestedByUserId: req.user.id,
+          createdAt: now,
+          completedAt: now,
+        });
+        await tx.insert(eosInstrumentEvents).values({
+          id: randomUUID(),
+          companyId: access.company.id,
+          instrumentKey: "crm",
+          objectId: source.opportunity.id,
+          commandId: opportunityCommandId!,
+          eventType: "opportunity.order_created",
+          fromState: source.opportunity.state,
+          toState: source.opportunity.state,
+          objectVersion: source.opportunity.version,
+          payload: { orderObjectId: orderId, linkId },
+          evidenceIds: [],
+          contentSha256: eventHash({ companyId: access.company.id, objectId: source.opportunity.id, commandId: opportunityCommandId!, eventType: "opportunity.order_created", orderObjectId: orderId, linkId }),
+          recordedByUserId: req.user.id,
+          createdAt: now,
+        });
+      }
+      await tx.insert(eosAuditRecords).values({
+        id: randomUUID(),
+        companyId: access.company.id,
+        actorUserId: req.user.id,
+        action: "commerce.order.created_from_crm",
+        targetType: "commerce_order",
+        targetId: orderId,
+        traceId: policy.traceId,
+        correlationId: policy.correlationId,
+        result: "draft_pending_collection",
+        details: { offerObjectId: offer.id, buyerObjectId: source.buyer.id, opportunityObjectId: source.opportunity?.id || null, linkId, policyDecisionId: policy.decisionId },
+        createdAt: now,
+      });
+      return { command: { id: commandId, state: "completed" }, order, linkId, replayed: false };
+    });
+    res.status(result.replayed ? 200 : 201).json(result);
+  }));
+
   app.patch("/api/eos/companies/:companyId/instrument-objects/:objectId", route(async (req, res) => {
     const input = instrumentObjectUpdateSchema.parse(req.body); assertCredentialFree(input);
     const [current] = await db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.id, req.params.objectId), eq(eosInstrumentObjects.companyId, Number(req.params.companyId)))).limit(1);
@@ -638,6 +914,7 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     const next = { title: input.title ?? current.title, summary: input.summary ?? current.summary, classification: input.classification ?? current.classification, visibility: input.visibility ?? current.visibility, data: input.data ?? current.data as Record<string, unknown>, sourceReference: input.sourceReference ?? current.sourceReference as Record<string, unknown>, evidenceIds: evidence, version: current.version + 1, updatedAt: new Date() };
     await assertNativeMessageUpdate(access, current, next);
     if (input.data !== undefined) await assertPublicCommercialRouting(req, access, { instrumentKey: current.instrumentKey, objectType: current.objectType, data: next.data, classification: next.classification });
+    if (input.data !== undefined) await assertNativeCommerceOrderSource(req, access, { instrumentKey: current.instrumentKey, objectType: current.objectType, data: next.data, classification: next.classification });
     if (["active", "completed"].includes(current.state)) {
       const findings = instrumentDomainFindings(eosInstrumentKeySchema.parse(current.instrumentKey), current.objectType, next.data);
       if (findings.length) throw new EosRouteError(409, findings[0].code, findings[0].message);
@@ -791,7 +1068,10 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     const replay = await replayCommand(access.company.id, input.idempotencyKey, current.instrumentKey, "object.transition"); if (replay) { res.json(replay); return; }
     if (current.version !== input.expectedVersion) throw new EosRouteError(409, "instrument_version_conflict", "The instrument object changed before this transition.");
     if (!mayTransitionInstrumentObject(current.state, input.state)) throw new EosRouteError(409, "instrument_transition_invalid", `Instrument objects cannot move from ${current.state} to ${input.state}.`);
-    if (["active", "completed"].includes(input.state)) await assertPublicCommercialRouting(req, access, { instrumentKey: current.instrumentKey, objectType: current.objectType, data: recordValue(current.data), classification: current.classification });
+    if (["active", "completed"].includes(input.state)) {
+      await assertPublicCommercialRouting(req, access, { instrumentKey: current.instrumentKey, objectType: current.objectType, data: recordValue(current.data), classification: current.classification });
+      await assertNativeCommerceOrderSource(req, access, { instrumentKey: current.instrumentKey, objectType: current.objectType, data: recordValue(current.data), classification: current.classification });
+    }
     if (["active", "completed"].includes(input.state)) {
       const findings = instrumentDomainFindings(eosInstrumentKeySchema.parse(current.instrumentKey), current.objectType, current.data);
       if (findings.length) throw new EosRouteError(409, findings[0].code, findings[0].message);
