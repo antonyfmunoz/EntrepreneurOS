@@ -161,7 +161,7 @@ async function projectNativeCrmCustomer(
     const [created] = await tx.insert(eosStakeholderRelationships).values({
       id: randomUUID(), companyId: values.companyId, portfolioId: values.portfolioId,
       relationshipKey, stakeholderId: stakeholder.id, relationshipType: "customer",
-      title: values.native.relationship.title || `Customer · ${values.native.person.title}`,
+      title: `Customer · ${values.native.person.title}`,
       state: "active", ownerSeatId: values.native.relationship.ownerSeatId,
       needConstraint: "", fitHypothesis: "", nextBestAction: "Define evidence-backed customer success outcomes.",
       evidenceKeys: values.native.relationship.evidenceIds, sourceAuthority: "reconciled",
@@ -242,7 +242,7 @@ export function registerCustomerSuccessRoutes(app: Express): void {
       seats: seats.filter((seat) => visible.has(seat.id)).map((seat) => ({ id: seat.id, title: seat.title, kind: seat.kind })),
       eligibleCustomers: visibleRelationships.filter((item) => item.relationshipType === "customer" && item.state === "active" && !existingStakeholders.has(item.stakeholderId)).map((relationship) => ({ relationship, stakeholder: visibleStakeholders.find((item) => item.id === relationship.stakeholderId) })).filter((item) => item.stakeholder),
       eligibleNativeCustomers: eligibleNativeCustomers.map(({ relationship, person }) => ({
-        relationship: { id: relationship.id, title: relationship.title, ownerSeatId: relationship.ownerSeatId, classification: relationship.classification },
+        relationship: { id: relationship.id, title: `Customer · ${person!.title}`, ownerSeatId: relationship.ownerSeatId, classification: relationship.classification },
         person: { id: person!.id, title: person!.title },
       })),
       counts: { accounts: visibleAccounts.length, healthy: visibleAccounts.filter((item) => item.healthState === "healthy").length, atRisk: visibleAccounts.filter((item) => ["at_risk", "critical"].includes(item.healthState)).length, overdueReviews: visibleAccounts.filter((item) => item.nextReviewAt <= today).length, openIssues: issues.filter((item) => accountIds.has(item.accountId) && item.state === "open").length, renewalReviews: visibleAccounts.filter((item) => item.lifecycleState === "renewal_review").length },
