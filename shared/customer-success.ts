@@ -20,8 +20,13 @@ const rejectsSecrets = <T extends z.ZodTypeAny>(schema: T) => schema.superRefine
 });
 
 export const customerSuccessAccountSchema = rejectsSecrets(z.object({
-  stakeholderId: id,
-  relationshipId: id,
+  // A customer-success account may begin from the established canonical
+  // relationship graph or from a visible EOS-native CRM customer.  The latter
+  // is projected into the compatibility graph by the server as one audited,
+  // idempotent operation; clients never create a parallel contact by hand.
+  stakeholderId: id.optional(),
+  relationshipId: id.optional(),
+  nativeRelationshipObjectId: id.optional(),
   ownerSeatId: id,
   contractEnvelopeId: z.union([id, z.literal("")]).optional(),
   reviewCadenceDays: z.coerce.number().int().min(1).max(365),
@@ -29,6 +34,19 @@ export const customerSuccessAccountSchema = rejectsSecrets(z.object({
   renewalAt: z.union([isoDate, z.literal("")]).optional(),
   successDefinition: text(20, 5000),
   classification: classification.default("confidential"),
+}).superRefine((value, context) => {
+  const canonicalSource = Boolean(value.stakeholderId && value.relationshipId);
+  const nativeSource = Boolean(value.nativeRelationshipObjectId);
+  if (canonicalSource === nativeSource) context.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ["nativeRelationshipObjectId"],
+    message: "Choose either one canonical customer relationship or one visible EOS-native CRM customer relationship.",
+  });
+  if (!nativeSource && (!value.stakeholderId || !value.relationshipId)) context.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ["relationshipId"],
+    message: "A canonical customer source requires both its party and relationship identifiers.",
+  });
 }));
 
 export const customerHealthReviewSchema = rejectsSecrets(z.object({

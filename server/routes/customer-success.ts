@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { ZodError } from "zod";
@@ -12,6 +12,7 @@ import {
   eosCustomerSuccessReports,
   eosEsignEnvelopes,
   eosEvidence,
+  eosInstrumentObjects,
   eosSeats,
   eosStakeholderRelationships,
   eosStakeholders,
@@ -34,7 +35,7 @@ import {
 import { allowedSurfacesFor } from "@shared/eos-runtime";
 import { db } from "../db";
 import { nativeContractContentSha256 } from "../esign/template-generation";
-import { EosRouteError, authorizeAction, companyAccess, mayAccessClassification, visibleSeatIds } from "./eos-runtime";
+import { EosRouteError, authorizeAction, companyAccess, mayAccessClassification, visibleInstrumentKeysForAccess, visibleSeatIds } from "./eos-runtime";
 
 function route(handler: (req: Request, res: Response) => Promise<void>) {
   return async (req: Request, res: Response, next: (error?: unknown) => void) => {
@@ -81,6 +82,103 @@ function auditRecord(companyId: number, userId: string, action: string, targetTy
   return { id: randomUUID(), companyId, actorUserId: userId, action, targetType, targetId, traceId: randomUUID(), correlationId: randomUUID(), result, details };
 }
 
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function identityReferenceHash(value: string) {
+  return createHash("sha256").update(value.trim().toLowerCase().normalize("NFKC")).digest("hex");
+}
+
+type NativeCrmCustomerSource = {
+  person: typeof eosInstrumentObjects.$inferSelect;
+  relationship: typeof eosInstrumentObjects.$inferSelect;
+};
+
+async function visibleNativeCrmCustomer(
+  companyId: number,
+  relationshipObjectId: string,
+  access: Awaited<ReturnType<typeof companyAccess>>,
+): Promise<NativeCrmCustomerSource> {
+  const visible = await visibleSeatIds(companyId, access.seat.id, access.role);
+  const [relationship] = await db.select().from(eosInstrumentObjects).where(and(
+    eq(eosInstrumentObjects.id, relationshipObjectId), eq(eosInstrumentObjects.companyId, companyId),
+    eq(eosInstrumentObjects.instrumentKey, "crm"), eq(eosInstrumentObjects.objectType, "relationship"), eq(eosInstrumentObjects.state, "active"),
+  )).limit(1);
+  const relationshipData = recordValue(relationship?.data);
+  const personObjectId = relationshipData.personObjectId;
+  if (!relationship || relationshipData.relationshipType !== "customer" || typeof personObjectId !== "string")
+    throw new EosRouteError(409, "customer_success_native_customer_invalid", "Choose one active EOS-native CRM relationship that has been explicitly designated as a customer.");
+  const [person] = await db.select().from(eosInstrumentObjects).where(and(
+    eq(eosInstrumentObjects.id, personObjectId), eq(eosInstrumentObjects.companyId, companyId),
+    eq(eosInstrumentObjects.instrumentKey, "crm"), eq(eosInstrumentObjects.objectType, "person"), eq(eosInstrumentObjects.state, "active"),
+  )).limit(1);
+  if (!person || !visible.has(person.ownerSeatId) || !visible.has(relationship.ownerSeatId) || !mayAccessClassification(access, person.classification) || !mayAccessClassification(access, relationship.classification))
+    throw new EosRouteError(404, "customer_success_native_customer_not_found", "The selected EOS-native CRM customer is outside this role's visible authority scope.");
+  return { person, relationship };
+}
+
+async function projectNativeCrmCustomer(
+  tx: any,
+  values: { companyId: number; userId: string; portfolioId: number | null; native: NativeCrmCustomerSource; policyDecisionId: string },
+) {
+  const personData = recordValue(values.native.person.data);
+  const relationshipData = recordValue(values.native.relationship.data);
+  const email = typeof personData.email === "string" && personData.email.trim() ? personData.email.trim().toLowerCase() : "";
+  // The identity key favors the native CRM object's stable identity, while an
+  // email is used when present to reconcile a pre-existing canonical party.
+  const identityReference = email || `eos-native-crm-person:${values.native.person.id}`;
+  const identityHash = identityReferenceHash(identityReference);
+  const [externalMatch] = await tx.select().from(eosStakeholders).where(and(
+    eq(eosStakeholders.companyId, values.companyId), eq(eosStakeholders.sourceSystem, "eos_native_crm"), eq(eosStakeholders.externalId, values.native.person.id),
+  )).limit(1);
+  const [identityMatch] = externalMatch ? [] : await tx.select().from(eosStakeholders).where(and(
+    eq(eosStakeholders.companyId, values.companyId), eq(eosStakeholders.identityReferenceHash, identityHash),
+  )).limit(1);
+  let stakeholder = externalMatch || identityMatch;
+  const now = new Date();
+  if (!stakeholder) {
+    const [created] = await tx.insert(eosStakeholders).values({
+      id: randomUUID(), companyId: values.companyId, portfolioId: values.portfolioId,
+      stakeholderKey: `native-crm-party:${values.native.person.id}`, name: values.native.person.title,
+      partyType: "customer", state: "active", ownerSeatId: values.native.person.ownerSeatId,
+      identityReference, identityReferenceHash: identityHash, externalId: values.native.person.id,
+      sourceSystem: "eos_native_crm", consentLegalBasis: "", relationshipRole: "customer",
+      evidenceKeys: values.native.person.evidenceIds, sourceAuthority: "reconciled",
+      classification: values.native.person.classification, recordedByUserId: values.userId, createdAt: now, updatedAt: now,
+    }).returning();
+    stakeholder = created;
+  } else if (stakeholder.partyType !== "customer" || stakeholder.state !== "active") {
+    const [promoted] = await tx.update(eosStakeholders).set({ partyType: "customer", state: "active", updatedAt: now }).where(eq(eosStakeholders.id, stakeholder.id)).returning();
+    stakeholder = promoted;
+  }
+  const relationshipKey = `native-crm-relationship:${values.native.relationship.id}`;
+  const [existingRelationship] = await tx.select().from(eosStakeholderRelationships).where(and(
+    eq(eosStakeholderRelationships.companyId, values.companyId), eq(eosStakeholderRelationships.relationshipKey, relationshipKey),
+  )).limit(1);
+  let relationship = existingRelationship;
+  if (!relationship) {
+    const [created] = await tx.insert(eosStakeholderRelationships).values({
+      id: randomUUID(), companyId: values.companyId, portfolioId: values.portfolioId,
+      relationshipKey, stakeholderId: stakeholder.id, relationshipType: "customer",
+      title: values.native.relationship.title || `Customer · ${values.native.person.title}`,
+      state: "active", ownerSeatId: values.native.relationship.ownerSeatId,
+      needConstraint: "", fitHypothesis: "", nextBestAction: "Define evidence-backed customer success outcomes.",
+      evidenceKeys: values.native.relationship.evidenceIds, sourceAuthority: "reconciled",
+      classification: values.native.relationship.classification, recordedByUserId: values.userId, createdAt: now, updatedAt: now,
+    }).returning();
+    relationship = created;
+  }
+  if (relationship.stakeholderId !== stakeholder.id || relationship.relationshipType !== "customer" || relationship.state !== "active")
+    throw new EosRouteError(409, "customer_success_native_projection_invalid", "The native CRM customer projection conflicts with an existing canonical relationship and cannot be used for Customer Success.");
+  await tx.insert(eosAuditRecords).values(auditRecord(values.companyId, values.userId, "customer_success.native_crm_customer.projected", "stakeholder_relationship", relationship.id, "active", {
+    nativePersonObjectId: values.native.person.id, nativeRelationshipObjectId: values.native.relationship.id,
+    stakeholderId: stakeholder.id, relationshipId: relationship.id, policyDecisionId: values.policyDecisionId,
+    projection: "compatibility_projection_not_a_second_user_managed_contact",
+  }));
+  return { stakeholder, relationship, nativeRelationshipObjectId: values.native.relationship.id, nativePersonObjectId: values.native.person.id, relationshipType: relationshipData.relationshipType };
+}
+
 async function appendEvent(tx: any, values: {
   companyId: number; accountId: string; eventType: string; subjectType: "account" | "outcome" | "issue" | "report"; subjectId: string;
   accountVersionBefore: number; accountVersionAfter: number; subjectVersionBefore: number; subjectVersionAfter: number;
@@ -104,7 +202,8 @@ export function registerCustomerSuccessRoutes(app: Express): void {
     const { access } = await customerSuccessAccess(req, "view", "customer_success.state.read");
     if (access.company.id !== companyId) throw new EosRouteError(404, "company_not_found", "Company not found in the active principal scope.");
     const visible = await visibleSeatIds(companyId, access.seat.id, access.role);
-    const [accounts, stakeholders, relationships, outcomes, issues, reports, events, healthReviews, evidenceRows, seats] = await Promise.all([
+    const crmEntitled = visibleInstrumentKeysForAccess(access, req.user.id).includes("crm");
+    const [accounts, stakeholders, relationships, outcomes, issues, reports, events, healthReviews, evidenceRows, seats, nativeCrmObjects] = await Promise.all([
       db.select().from(eosCustomerSuccessAccounts).where(eq(eosCustomerSuccessAccounts.companyId, companyId)).orderBy(desc(eosCustomerSuccessAccounts.updatedAt)),
       db.select().from(eosStakeholders).where(eq(eosStakeholders.companyId, companyId)).orderBy(eosStakeholders.name),
       db.select().from(eosStakeholderRelationships).where(eq(eosStakeholderRelationships.companyId, companyId)).orderBy(eosStakeholderRelationships.title),
@@ -115,6 +214,7 @@ export function registerCustomerSuccessRoutes(app: Express): void {
       db.select().from(eosCustomerHealthReviews).where(eq(eosCustomerHealthReviews.companyId, companyId)).orderBy(desc(eosCustomerHealthReviews.reviewedAt)),
       db.select({ evidence: eosEvidence, packet: eosWorkPackets }).from(eosEvidence).innerJoin(eosWorkPackets, eq(eosWorkPackets.id, eosEvidence.workPacketId)).where(and(eq(eosEvidence.companyId, companyId), eq(eosEvidence.verificationState, "verified"))),
       db.select().from(eosSeats).where(and(eq(eosSeats.companyId, companyId), eq(eosSeats.status, "active"))).orderBy(eosSeats.title),
+      crmEntitled ? db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, companyId), eq(eosInstrumentObjects.instrumentKey, "crm"), eq(eosInstrumentObjects.state, "active"))).orderBy(desc(eosInstrumentObjects.updatedAt)) : Promise.resolve([]),
     ]);
     const visibleStakeholders = stakeholders.filter((item) => visible.has(item.ownerSeatId) && mayAccessClassification(access, item.classification));
     const stakeholderIds = new Set(visibleStakeholders.map((item) => item.id));
@@ -124,6 +224,13 @@ export function registerCustomerSuccessRoutes(app: Express): void {
     const accountIds = new Set(visibleAccounts.map((item) => item.id));
     const visibleEvidence = evidenceRows.filter(({ evidence, packet }) => mayAccessClassification(access, evidence.dataClassification) && mayAccessClassification(access, packet.classification) && (access.isOwner || Boolean(packet.accountableSeatId && visible.has(packet.accountableSeatId))));
     const existingStakeholders = new Set(accounts.map((item) => item.stakeholderId));
+    const existingNativeCustomerIds = new Set(visibleAccounts.map((account) => visibleStakeholders.find((stakeholder) => stakeholder.id === account.stakeholderId)).filter((stakeholder) => stakeholder?.sourceSystem === "eos_native_crm").map((stakeholder) => stakeholder?.externalId));
+    const nativePeople = new Map(nativeCrmObjects.filter((item) => item.objectType === "person" && visible.has(item.ownerSeatId) && mayAccessClassification(access, item.classification)).map((item) => [item.id, item]));
+    const eligibleNativeCustomers = nativeCrmObjects
+      .filter((item) => item.objectType === "relationship" && visible.has(item.ownerSeatId) && mayAccessClassification(access, item.classification))
+      .map((relationship) => ({ relationship, data: recordValue(relationship.data) }))
+      .filter(({ relationship, data }) => data.relationshipType === "customer" && typeof data.personObjectId === "string" && nativePeople.has(data.personObjectId) && !existingNativeCustomerIds.has(data.personObjectId))
+      .map(({ relationship, data }) => ({ relationship, person: nativePeople.get(data.personObjectId as string) }));
     const today = new Date().toISOString().slice(0, 10);
     res.json({
       generatedAt: new Date().toISOString(), accounts: visibleAccounts.map((item) => ({ ...item, customerName: visibleStakeholders.find((stakeholder) => stakeholder.id === item.stakeholderId)?.name || "Customer", relationshipTitle: visibleRelationships.find((relationship) => relationship.id === item.relationshipId)?.title || "Customer relationship", reviewOverdue: item.nextReviewAt <= today })),
@@ -134,6 +241,10 @@ export function registerCustomerSuccessRoutes(app: Express): void {
       evidence: visibleEvidence.map(({ evidence }) => ({ id: evidence.id, title: evidence.title, evidenceType: evidence.evidenceType, dataClassification: evidence.dataClassification })),
       seats: seats.filter((seat) => visible.has(seat.id)).map((seat) => ({ id: seat.id, title: seat.title, kind: seat.kind })),
       eligibleCustomers: visibleRelationships.filter((item) => item.relationshipType === "customer" && item.state === "active" && !existingStakeholders.has(item.stakeholderId)).map((relationship) => ({ relationship, stakeholder: visibleStakeholders.find((item) => item.id === relationship.stakeholderId) })).filter((item) => item.stakeholder),
+      eligibleNativeCustomers: eligibleNativeCustomers.map(({ relationship, person }) => ({
+        relationship: { id: relationship.id, title: relationship.title, ownerSeatId: relationship.ownerSeatId, classification: relationship.classification },
+        person: { id: person!.id, title: person!.title },
+      })),
       counts: { accounts: visibleAccounts.length, healthy: visibleAccounts.filter((item) => item.healthState === "healthy").length, atRisk: visibleAccounts.filter((item) => ["at_risk", "critical"].includes(item.healthState)).length, overdueReviews: visibleAccounts.filter((item) => item.nextReviewAt <= today).length, openIssues: issues.filter((item) => accountIds.has(item.accountId) && item.state === "open").length, renewalReviews: visibleAccounts.filter((item) => item.lifecycleState === "renewal_review").length },
       boundary: "EOS preserves evidence-backed customer-success and provider-receipt state. It does not infer customer consent, independently prove attribution, deliver a report, or renew a contract without separate authority and external evidence.",
     });
@@ -146,11 +257,22 @@ export function registerCustomerSuccessRoutes(app: Express): void {
     if (!mayAccessClassification(access, input.classification)) throw new EosRouteError(403, "classification_ceiling_exceeded", "The account classification exceeds this seat's disclosure ceiling.");
     const visible = await visibleSeatIds(companyId, access.seat.id, access.role);
     if (!visible.has(input.ownerSeatId)) throw new EosRouteError(403, "customer_success_owner_scope_denied", "The account owner is outside this operator's visible hierarchy.");
-    const [stakeholder, relationship] = await Promise.all([
-      db.query.eosStakeholders.findFirst({ where: and(eq(eosStakeholders.id, input.stakeholderId), eq(eosStakeholders.companyId, companyId)) }),
-      db.query.eosStakeholderRelationships.findFirst({ where: and(eq(eosStakeholderRelationships.id, input.relationshipId), eq(eosStakeholderRelationships.companyId, companyId)) }),
-    ]);
-    if (!stakeholder || !relationship || relationship.stakeholderId !== stakeholder.id || relationship.relationshipType !== "customer" || relationship.state !== "active" || !visible.has(stakeholder.ownerSeatId) || !visible.has(relationship.ownerSeatId)) throw new EosRouteError(409, "customer_success_customer_invalid", "Select one visible active canonical customer relationship.");
+    let nativeSource: NativeCrmCustomerSource | null = null;
+    let stakeholder: typeof eosStakeholders.$inferSelect | undefined;
+    let relationship: typeof eosStakeholderRelationships.$inferSelect | undefined;
+    if (input.nativeRelationshipObjectId) {
+      await authorizeAction(req, access, {
+        authorityClass: "view", resource: "instrument:crm", actionKey: "customer_success.native_crm_customer.read",
+        purpose: "inspect_instrument", classification: input.classification, consequence: "routine", targetSeatId: access.seat.id, toolKey: "crm",
+      });
+      nativeSource = await visibleNativeCrmCustomer(companyId, input.nativeRelationshipObjectId, access);
+    } else {
+      [stakeholder, relationship] = await Promise.all([
+        db.query.eosStakeholders.findFirst({ where: and(eq(eosStakeholders.id, input.stakeholderId!), eq(eosStakeholders.companyId, companyId)) }),
+        db.query.eosStakeholderRelationships.findFirst({ where: and(eq(eosStakeholderRelationships.id, input.relationshipId!), eq(eosStakeholderRelationships.companyId, companyId)) }),
+      ]);
+      if (!stakeholder || !relationship || relationship.stakeholderId !== stakeholder.id || relationship.relationshipType !== "customer" || relationship.state !== "active" || !visible.has(stakeholder.ownerSeatId) || !visible.has(relationship.ownerSeatId)) throw new EosRouteError(409, "customer_success_customer_invalid", "Select one visible active canonical customer relationship.");
+    }
     let contractEnvelopeId: string | null = null;
     if (input.contractEnvelopeId) {
       const envelope = await db.query.eosEsignEnvelopes.findFirst({ where: and(eq(eosEsignEnvelopes.id, input.contractEnvelopeId), eq(eosEsignEnvelopes.companyId, companyId)) });
@@ -159,12 +281,21 @@ export function registerCustomerSuccessRoutes(app: Express): void {
     }
     const now = new Date(); const id = randomUUID();
     const account = await db.transaction(async (tx) => {
+      if (nativeSource) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`customer-success-native-crm:${companyId}:${nativeSource.relationship.id}`}))`);
+        const projected = await projectNativeCrmCustomer(tx, { companyId, userId: req.user.id, portfolioId: access.company.portfolioId, native: nativeSource, policyDecisionId: policy.decisionId });
+        stakeholder = projected.stakeholder;
+        relationship = projected.relationship;
+      }
+      if (!stakeholder || !relationship) throw new EosRouteError(409, "customer_success_customer_invalid", "A canonical customer source could not be resolved.");
+      if (!visible.has(stakeholder.ownerSeatId) || !visible.has(relationship.ownerSeatId) || !mayAccessClassification(access, stakeholder.classification) || !mayAccessClassification(access, relationship.classification))
+        throw new EosRouteError(404, "customer_success_customer_not_found", "The resolved customer is outside this role's visible authority scope.");
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`customer-success:${companyId}:${stakeholder.id}`}))`);
       const [existing] = await tx.select().from(eosCustomerSuccessAccounts).where(and(eq(eosCustomerSuccessAccounts.companyId, companyId), eq(eosCustomerSuccessAccounts.stakeholderId, stakeholder.id))).limit(1);
       if (existing) throw new EosRouteError(409, "customer_success_account_exists", "This canonical customer already has a customer-success account.");
       const [created] = await tx.insert(eosCustomerSuccessAccounts).values({ id, companyId, stakeholderId: stakeholder.id, relationshipId: relationship.id, contractEnvelopeId, ownerSeatId: input.ownerSeatId, reviewCadenceDays: input.reviewCadenceDays, nextReviewAt: input.nextReviewAt, renewalAt: input.renewalAt || null, successDefinition: input.successDefinition, classification: input.classification, recordedByUserId: req.user.id, createdAt: now, updatedAt: now }).returning();
-      const event = await appendEvent(tx, { companyId, accountId: id, eventType: "account_created", subjectType: "account", subjectId: id, accountVersionBefore: 0, accountVersionAfter: 1, subjectVersionBefore: 0, subjectVersionAfter: 1, evidenceIds: [], payload: { stakeholderId: stakeholder.id, relationshipId: relationship.id, contractEnvelopeId, successDefinition: input.successDefinition }, policyDecisionId: policy.decisionId, recordedByUserId: req.user.id, recordedAt: now });
-      await tx.insert(eosAuditRecords).values(auditRecord(companyId, req.user.id, "customer_success.account.created", "customer_success_account", id, "active", { stakeholderId: stakeholder.id, eventSha256: event.eventSha256, policyDecisionId: policy.decisionId }));
+      const event = await appendEvent(tx, { companyId, accountId: id, eventType: "account_created", subjectType: "account", subjectId: id, accountVersionBefore: 0, accountVersionAfter: 1, subjectVersionBefore: 0, subjectVersionAfter: 1, evidenceIds: [], payload: { stakeholderId: stakeholder.id, relationshipId: relationship.id, nativeRelationshipObjectId: nativeSource?.relationship.id || null, contractEnvelopeId, successDefinition: input.successDefinition }, policyDecisionId: policy.decisionId, recordedByUserId: req.user.id, recordedAt: now });
+      await tx.insert(eosAuditRecords).values(auditRecord(companyId, req.user.id, "customer_success.account.created", "customer_success_account", id, "active", { stakeholderId: stakeholder.id, relationshipId: relationship.id, nativeRelationshipObjectId: nativeSource?.relationship.id || null, eventSha256: event.eventSha256, policyDecisionId: policy.decisionId }));
       return created;
     });
     res.status(201).json(account);

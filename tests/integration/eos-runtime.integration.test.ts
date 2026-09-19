@@ -638,6 +638,35 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       expect.objectContaining({ sourceObjectId: capturedOpportunities[0].id, targetObjectId: orderFromOpportunity.body.order.id, relationshipType: "converts_to_order" }),
       expect.objectContaining({ sourceObjectId: orderFromOpportunity.body.order.id, targetObjectId: deliveryProject.body.project.id, relationshipType: "fulfills_order" }),
     ]));
+    const customerRelationship = await api.patch(`/api/eos/companies/${companyId}/instrument-objects/${capturedRelationships[0].id}`).send({
+      expectedVersion: capturedRelationships[0].version,
+      data: { ...capturedRelationships[0].data, relationshipType: "customer" },
+      idempotencyKey: "instrument:promote:public-intake-customer",
+    }).expect(200);
+    expect(customerRelationship.body.object).toMatchObject({ id: capturedRelationships[0].id, version: capturedRelationships[0].version + 1, data: { relationshipType: "customer", personObjectId: capturedPeople[0].id } });
+    const customerSuccessBefore = await api.get(`/api/eos/companies/${companyId}/customer-success`).expect(200);
+    expect(customerSuccessBefore.body.eligibleNativeCustomers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ relationship: { id: capturedRelationships[0].id }, person: { id: capturedPeople[0].id } }),
+    ]));
+    const nativeCustomerAccountPayload = {
+      nativeRelationshipObjectId: capturedRelationships[0].id,
+      ownerSeatId: instrumentFounderSeat.id,
+      reviewCadenceDays: 30,
+      nextReviewAt: date(30),
+      renewalAt: date(120),
+      successDefinition: "The customer receives the agreed recovery operating result through traceable delivery, health, and outcome reviews.",
+      classification: "confidential",
+    };
+    const nativeCustomerAccount = await api.post(`/api/eos/companies/${companyId}/customer-success/accounts`).send(nativeCustomerAccountPayload).expect(201);
+    expect(nativeCustomerAccount.body).toMatchObject({ companyId, ownerSeatId: instrumentFounderSeat.id, lifecycleState: "active" });
+    const customerSuccessAfter = await api.get(`/api/eos/companies/${companyId}/customer-success`).expect(200);
+    expect(customerSuccessAfter.body.accounts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: nativeCustomerAccount.body.id, customerName: capturedPeople[0].title }),
+    ]));
+    expect(customerSuccessAfter.body.eligibleNativeCustomers).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ relationship: { id: capturedRelationships[0].id } }),
+    ]));
+    await api.post(`/api/eos/companies/${companyId}/customer-success/accounts`).send(nativeCustomerAccountPayload).expect(409).expect(({ body }) => expect(body.code).toBe("customer_success_account_exists"));
     const capturedForms = await api.get(`/api/eos/companies/${companyId}/instruments/forms`).expect(200);
     expect(capturedForms.body.objects.filter((object: any) => object.objectType === "submission" && object.data?.formObjectId === captureForm.body.object.id)).toHaveLength(2);
     const funnel = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({
