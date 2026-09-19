@@ -228,6 +228,9 @@ describe("EOS overlay runtime contracts", () => {
     expect(packet.requiresApproval).toBe(false);
     expect(packet.source).toBe("manual");
     expect(packet.evidenceRequirements).toEqual([]);
+    expect(packet.constraintsPolicies).toBe("");
+    expect(packet.failureEscalationCompensation).toBe("");
+    expect(packet.humanFallback).toBe("");
   });
 
   it("requires a current decision and an explicit accountable attendee before creating follow-on work", () => {

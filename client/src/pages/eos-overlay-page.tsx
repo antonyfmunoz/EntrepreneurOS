@@ -758,6 +758,9 @@ export default function EosOverlayPage() {
   const [packetResourceIds, setPacketResourceIds] = useState<string[]>([]);
   const [packetExpectedOutput, setPacketExpectedOutput] = useState("");
   const [packetAcceptanceCriteria, setPacketAcceptanceCriteria] = useState("");
+  const [packetConstraintsPolicies, setPacketConstraintsPolicies] = useState("");
+  const [packetFailureEscalation, setPacketFailureEscalation] = useState("");
+  const [packetHumanFallback, setPacketHumanFallback] = useState("");
   const [capabilityName, setCapabilityName] = useState("");
   const [capabilityKey, setCapabilityKey] = useState("");
   const [capabilityTrigger, setCapabilityTrigger] = useState("");
@@ -2713,6 +2716,9 @@ export default function EosOverlayPage() {
         resourceIds: packetResourceIds,
         expectedOutput: packetExpectedOutput,
         acceptanceCriteria: packetAcceptanceCriteria,
+        constraintsPolicies: packetConstraintsPolicies,
+        failureEscalationCompensation: packetFailureEscalation,
+        humanFallback: packetHumanFallback,
       }),
     onSuccess: async () => {
       setPacketTitle("");
@@ -2722,6 +2728,9 @@ export default function EosOverlayPage() {
       setPacketResourceIds([]);
       setPacketExpectedOutput("");
       setPacketAcceptanceCriteria("");
+      setPacketConstraintsPolicies("");
+      setPacketFailureEscalation("");
+      setPacketHumanFallback("");
       setPacketEvidenceRequirements([
         "A reviewable artifact or observed outcome",
       ]);
@@ -10425,6 +10434,37 @@ export default function EosOverlayPage() {
                             ? process.requiredOutputs.join("; ")
                             : "",
                         );
+                        setPacketAcceptanceCriteria(
+                          Array.isArray(process.qualityCriteria)
+                            ? process.qualityCriteria.join("; ")
+                            : "",
+                        );
+                        setPacketConstraintsPolicies(
+                          [
+                            Array.isArray(process.toolSystemBoundaries)
+                              ? `Tool and system boundaries: ${process.toolSystemBoundaries.join("; ")}`
+                              : "",
+                            Array.isArray(process.prohibitedActions)
+                              ? `Prohibited actions: ${process.prohibitedActions.join("; ")}`
+                              : "",
+                            Array.isArray(process.approvalGates)
+                              ? `Approval gates: ${process.approvalGates.join("; ")}`
+                              : "",
+                          ]
+                            .filter(Boolean)
+                            .join("\n"),
+                        );
+                        setPacketFailureEscalation(
+                          Array.isArray(process.failurePaths)
+                            ? process.failurePaths.join("; ")
+                            : "",
+                        );
+                        setPacketHumanFallback(
+                          Array.isArray(process.reviewerKeys) &&
+                            process.reviewerKeys.length
+                            ? `Escalate to the assigned reviewer: ${process.reviewerKeys.join(", ")}. Do not bypass the reporting and approval path.`
+                            : "Return the decision through the accountable reporting path; do not infer authority or completion.",
+                        );
                       }
                     }}
                     className="h-10 rounded-md border border-input bg-background px-3 text-sm"
@@ -10443,6 +10483,23 @@ export default function EosOverlayPage() {
                       ))}
                   </select>
                 </div>
+                {packetProcessId && (() => {
+                  const process = (operationsStateQuery.data?.processes || []).find(
+                    (item: JsonRecord) => item.id === packetProcessId,
+                  );
+                  if (!process) return null;
+                  return (
+                    <div className="rounded-xl border bg-muted/30 p-4 text-sm">
+                      <p className="eos-label">Compiled mission contract</p>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <Fact label="Prerequisites" value={Array.isArray(process.prerequisites) && process.prerequisites.length ? process.prerequisites.join("; ") : "No additional prerequisites declared"} />
+                        <Fact label="Training or simulation" value={Array.isArray(process.trainingPrerequisites) && process.trainingPrerequisites.length ? process.trainingPrerequisites.join("; ") : "No separate training prerequisite declared"} />
+                        <Fact label="Reviewer" value={Array.isArray(process.reviewerKeys) && process.reviewerKeys.length ? process.reviewerKeys.join(", ") : "Reporting-chain review"} />
+                        <Fact label="Branches" value={Array.isArray(process.branchConditions) && process.branchConditions.length ? process.branchConditions.join("; ") : "Use the released process state machine"} />
+                      </div>
+                    </div>
+                  );
+                })()}
                 <Input
                   value={packetTitle}
                   onChange={(event) => setPacketTitle(event.target.value)}
@@ -10471,6 +10528,15 @@ export default function EosOverlayPage() {
                     placeholder="Acceptance criteria"
                   />
                 </div>
+                <details className="rounded-xl border bg-muted/20 p-4">
+                  <summary className="cursor-pointer font-medium">Mission boundaries, recovery, and human fallback</summary>
+                  <p className="mt-2 text-sm text-muted-foreground">These instructions are part of the Work Packet contract. They define what must not be improvised when the normal method fails.</p>
+                  <div className="mt-4 grid gap-3">
+                    <Textarea aria-label="Work Packet boundaries and stop conditions" value={packetConstraintsPolicies} onChange={(event) => setPacketConstraintsPolicies(event.target.value)} placeholder="Tool and data boundaries, prohibited actions, approval gates, and stop conditions" />
+                    <Textarea aria-label="Work Packet failure and escalation path" value={packetFailureEscalation} onChange={(event) => setPacketFailureEscalation(event.target.value)} placeholder="Containment, recovery, rollback, and escalation path" />
+                    <Textarea aria-label="Work Packet human fallback" value={packetHumanFallback} onChange={(event) => setPacketHumanFallback(event.target.value)} placeholder="Named human or reporting-chain fallback when automation or the provider path cannot proceed" />
+                  </div>
+                </details>
                 {(operationsStateQuery.data?.resources || []).length > 0 && (
                   <div className="rounded-xl border p-4">
                     <p className="eos-label">Allocated resources</p>
@@ -10989,6 +11055,17 @@ export default function EosOverlayPage() {
                       }
                     />
                   </div>
+                  <section className="rounded-xl border bg-muted/20 p-4">
+                    <p className="eos-label">Mission contract</p>
+                    <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                      <Fact label="Expected output" value={selectedWorkPacket.expectedOutput || "Output has not been declared."} />
+                      <Fact label="Acceptance standard" value={selectedWorkPacket.acceptanceCriteria || "Use the linked process and evidence requirements."} />
+                      <Fact label="Boundaries and stop conditions" value={selectedWorkPacket.constraintsPolicies || "No additional packet boundary is recorded; authority and policy controls still apply."} />
+                      <Fact label="Failure and escalation" value={selectedWorkPacket.failureEscalationCompensation || "Keep the work open, retain evidence, and escalate through the reporting path."} />
+                      <Fact label="Human fallback" value={selectedWorkPacket.humanFallback || "Return to the accountable human through the reporting hierarchy."} />
+                      <Fact label="Lineage" value={selectedWorkPacket.sourceLineage || (selectedWorkPacket.processDefinitionId ? "Linked native process" : "Company-local manual Work Packet")} />
+                    </div>
+                  </section>
                   {selectedWorkNextRequirement ? (
                     <div className="rounded-xl bg-muted/60 p-4">
                       <p className="eos-label">Required next</p>
