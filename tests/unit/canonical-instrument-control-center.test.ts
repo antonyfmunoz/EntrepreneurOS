@@ -17,4 +17,12 @@ describe("canonical instrument relationship map", () => {
     expect(controlCenter).toContain("The related record is unavailable in your current role scope.");
     expect(runtime).toContain("inArray(eosInstrumentLinks.sourceObjectId, visibleIds), inArray(eosInstrumentLinks.targetObjectId, visibleIds)");
   });
+
+  it("offers an authorized, audited removal path for an obsolete relationship", () => {
+    expect(controlCenter).toContain("unlinkMutation.mutate(link)");
+    expect(controlCenter).toContain("Remove ${humanizeRelationship(link.relationshipType)} relationship");
+    expect(runtime).toContain('app.delete("/api/eos/companies/:companyId/instrument-links/:linkId"');
+    expect(runtime).toContain('action: "instrument.relationship.removed"');
+    expect(runtime).toContain('commandType: "link.remove"');
+  });
 });

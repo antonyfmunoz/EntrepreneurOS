@@ -19,6 +19,7 @@ import {
   crmOpportunityFollowUpActionSchema,
   instrumentDomainFindings,
   instrumentLinkCreateSchema,
+  instrumentLinkDeleteSchema,
   instrumentImportSchema,
   instrumentManifestProjection,
   instrumentObjectCreateSchema,
@@ -1780,5 +1781,34 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
       await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "instrument.relationship.created", targetType: source.instrumentKey, targetId: linkId, traceId: policy.traceId, correlationId: policy.correlationId, result: "created", details: { sourceObjectId: source.id, targetObjectId: input.targetObjectId, relationshipType: input.relationshipType, policyDecisionId: policy.decisionId }, createdAt: now });
     });
     res.status(201).json({ command: { id: commandId, state: "completed" }, link: { id: linkId, companyId: access.company.id, ...input, idempotencyKey: undefined, createdByUserId: req.user.id, createdAt: now }, replayed: false });
+  }));
+
+  app.delete("/api/eos/companies/:companyId/instrument-links/:linkId", route(async (req, res) => {
+    const input = instrumentLinkDeleteSchema.parse(req.body); assertCredentialFree(input);
+    const linkId = z.string().uuid().parse(req.params.linkId);
+    const companyId = Number(req.params.companyId);
+    const links = await db.select().from(eosInstrumentLinks).where(and(eq(eosInstrumentLinks.id, linkId), eq(eosInstrumentLinks.companyId, companyId)));
+    const link = links[0];
+    if (!link) throw new EosRouteError(404, "instrument_link_not_found", "The relationship is unavailable in this company.");
+    const objects = await db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, companyId), inArray(eosInstrumentObjects.id, [link.sourceObjectId, link.targetObjectId])));
+    if (objects.length !== 2) throw new EosRouteError(409, "instrument_link_scope_invalid", "Both relationship records must resolve inside the selected company.");
+    const source = objects.find((item) => item.id === link.sourceObjectId)!;
+    const target = objects.find((item) => item.id === link.targetObjectId)!;
+    const { access, policy } = await instrumentAccess(req, "execute", source.instrumentKey, "instrument.link.remove", source.classification);
+    if (!(await visibleObjectSet(access, [source])).length)
+      throw new EosRouteError(404, "instrument_link_source_unavailable", "The relationship source is unavailable in your current role scope.");
+    const targetAccess = await instrumentAccess(req, "view", target.instrumentKey, "instrument.read", target.classification);
+    if (!(await visibleObjectSet(targetAccess.access, [target])).length)
+      throw new EosRouteError(404, "instrument_link_target_unavailable", "The relationship target is unavailable in your current role scope.");
+    const replay = await replayCommand(access.company.id, input.idempotencyKey, source.instrumentKey, "link.remove"); if (replay) { res.json(replay); return; }
+    const now = new Date(); const commandId = randomUUID();
+    await db.transaction(async (tx) => {
+      const removed = await tx.delete(eosInstrumentLinks).where(and(eq(eosInstrumentLinks.id, link.id), eq(eosInstrumentLinks.companyId, access.company.id))).returning({ id: eosInstrumentLinks.id });
+      if (!removed[0]) throw new EosRouteError(409, "instrument_link_concurrent_change", "The relationship changed before it could be removed.");
+      await tx.insert(eosInstrumentCommands).values({ id: commandId, companyId: access.company.id, instrumentKey: source.instrumentKey, objectId: source.id, commandType: "link.remove", idempotencyKey: input.idempotencyKey, expectedVersion: source.version, payload: { linkId: link.id, targetObjectId: target.id, relationshipType: link.relationshipType, rationale: input.rationale }, state: "completed", result: { linkId: link.id, removed: true }, policyDecisionId: policy.decisionId, requestedByUserId: req.user.id, createdAt: now, completedAt: now });
+      await tx.insert(eosInstrumentEvents).values({ id: randomUUID(), companyId: access.company.id, instrumentKey: source.instrumentKey, objectId: source.id, commandId, eventType: "relationship.removed", fromState: source.state, toState: source.state, objectVersion: source.version, payload: { linkId: link.id, targetObjectId: target.id, relationshipType: link.relationshipType, rationale: input.rationale }, evidenceIds: [], contentSha256: eventHash({ companyId: access.company.id, objectId: source.id, commandId, eventType: "relationship.removed", linkId: link.id }), recordedByUserId: req.user.id, createdAt: now });
+      await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "instrument.relationship.removed", targetType: source.instrumentKey, targetId: link.id, traceId: policy.traceId, correlationId: policy.correlationId, result: "removed", details: { sourceObjectId: source.id, targetObjectId: target.id, relationshipType: link.relationshipType, rationale: input.rationale, policyDecisionId: policy.decisionId }, createdAt: now });
+    });
+    res.json({ command: { id: commandId, state: "completed" }, removedLink: { id: link.id, sourceObjectId: source.id, targetObjectId: target.id, relationshipType: link.relationshipType }, replayed: false });
   }));
 }
