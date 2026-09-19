@@ -134,6 +134,7 @@ const NativeReputationStudio = lazy(() => import("@/components/native-reputation
 const NativeAnalyticsStudio = lazy(() => import("@/components/native-analytics-studio").then((module) => ({ default: module.NativeAnalyticsStudio })));
 const NativeWorkflowComposer = lazy(() => import("@/components/native-workflow-composer").then((module) => ({ default: module.NativeWorkflowComposer })));
 const EndStateGovernanceControlCenter = lazy(() => import("@/components/end-state-governance-control-center").then((module) => ({ default: module.EndStateGovernanceControlCenter })));
+const InstitutionalLearningControlCenter = lazy(() => import("@/components/institutional-learning-control-center").then((module) => ({ default: module.InstitutionalLearningControlCenter })));
 
 function DeferredControlFallback() {
   return <div className="rounded-2xl border bg-muted/40 p-6 text-sm text-muted-foreground">Loading governed control…</div>;
@@ -9870,6 +9871,14 @@ export default function EosOverlayPage() {
             </Suspense>
             <Suspense fallback={<DeferredControlFallback />}>
               <EndStateGovernanceControlCenter
+                root={root}
+                canExecute={effectiveAuthorityClasses.has("execute")}
+                canDecide={effectiveAuthorityClasses.has("decide")}
+                isFounder={isFounder}
+              />
+            </Suspense>
+            <Suspense fallback={<DeferredControlFallback />}>
+              <InstitutionalLearningControlCenter
                 root={root}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
