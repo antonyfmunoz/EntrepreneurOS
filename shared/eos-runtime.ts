@@ -2,6 +2,24 @@ import { z } from "zod";
 import { recoveryProviderExecutionSchemas } from "./recovery-provider-executions";
 
 /**
+ * A bounded baseline for the company compiler. It is deliberately descriptive
+ * rather than a loose arbitrary JSON bag so EOS can surface missing evidence
+ * and turn it into discovery work instead of presenting assumptions as facts.
+ */
+export const currentOperatingRealityInputSchema = z
+  .object({
+    assetsAndObligations: z.string().trim().max(4_000).default(""),
+    marketAndDemand: z.string().trim().max(4_000).default(""),
+    economicsAndCapital: z.string().trim().max(4_000).default(""),
+    bottleneckAndGovernance: z.string().trim().max(4_000).default(""),
+    evidenceGaps: z.string().trim().max(4_000).default(""),
+    evidenceConfidence: z.enum(["high", "medium", "low", "unknown"]).default("unknown"),
+  })
+  .strict();
+
+export type CurrentOperatingRealityInput = z.infer<typeof currentOperatingRealityInputSchema>;
+
+/**
  * Founder-supplied context for the organization compiler. These are inputs to
  * a template, not assertions that the resulting operating system is already
  * provisioned or qualified.
@@ -17,6 +35,9 @@ export const organizationBlueprintInputSchema = z
     departments: z.array(z.string().trim().min(1).max(120)).max(30).default([]),
     priorityTools: z.array(z.string().trim().min(1).max(120)).max(30).default([]),
     existingSystems: z.array(z.string().trim().min(1).max(160)).max(50).default([]),
+    // Omitted by legacy company profiles. When it is supplied, its unknowns
+    // are preserved and compiled into a discovery mission.
+    currentReality: currentOperatingRealityInputSchema.optional(),
   })
   .strict();
 
@@ -196,6 +217,47 @@ export function deriveOrganizationBlueprintPlan(input: ManifestInput) {
     },
   ];
 
+  const currentReality = blueprint.currentReality;
+  if (currentReality) {
+    const unresolvedFamilies = [
+      !currentReality.assetsAndObligations && "assets and obligations",
+      !currentReality.marketAndDemand && "market and demand context",
+      !currentReality.economicsAndCapital && "economics and capital constraints",
+      !currentReality.bottleneckAndGovernance && "operating bottleneck and governance constraints",
+    ].filter((family): family is string => Boolean(family));
+    const needsDiscovery = unresolvedFamilies.length > 0
+      || Boolean(currentReality.evidenceGaps)
+      || currentReality.evidenceConfidence !== "high";
+
+    if (needsDiscovery) {
+      const confidenceLabel = currentReality.evidenceConfidence === "unknown"
+        ? "not yet assessed"
+        : currentReality.evidenceConfidence;
+      setupMissions.push({
+        key: "resolve-current-reality-assumptions",
+        title: "Resolve current-reality assumptions",
+        objective: `Establish a source-bounded baseline before material operating decisions rely on it. Evidence confidence is ${confidenceLabel}${unresolvedFamilies.length ? `; map ${unresolvedFamilies.join(", ")}` : ""}.`,
+        owner: "executive_assistant",
+        requiredInputs: [
+          "Current operating reality intake",
+          ...unresolvedFamilies.map((family) => `Evidence for ${family}`),
+          ...(currentReality.evidenceGaps ? ["Declared evidence gaps and contradictions"] : []),
+          "Founder decision on assumptions and safe boundaries",
+        ],
+        completionEvidence: [
+          "Source-backed current-reality baseline",
+          "Assumption and confidence record",
+          "Founder-approved conservative decision boundary",
+        ],
+        sourceAuthority: "native_eos",
+        scopeBoundary: "Use only the company-local current-reality intake and separately approved source evidence. Missing information remains an explicit assumption; this mission does not authorize a provider connection, record import, authority grant, or external fact claim.",
+        nativeFallback: "Keep the affected capability in its native EOS path with conservative authority and a visible evidence gap until the founder approves a stronger baseline.",
+        failureRecoveryPath: "Do not promote the assumption to an operating fact. Preserve the gap, contain any affected decision, and route the evidence or authority conflict through the Executive Assistant to the founder.",
+        status: "not_started",
+      });
+    }
+  }
+
   if (blueprint.startingPoint === "existing_company" || existingSystems.length) {
     setupMissions.push({
       key: "reconcile-existing-systems",
@@ -253,6 +315,18 @@ export function deriveOrganizationBlueprintPlan(input: ManifestInput) {
       departments: names(blueprint.departments),
       priorityTools: names(blueprint.priorityTools),
       existingSystems: names(blueprint.existingSystems),
+      currentReality: currentReality
+        ? {
+            declaredFamilies: 4 - [
+              currentReality.assetsAndObligations,
+              currentReality.marketAndDemand,
+              currentReality.economicsAndCapital,
+              currentReality.bottleneckAndGovernance,
+            ].filter((value) => !value).length,
+            evidenceConfidence: currentReality.evidenceConfidence,
+            evidenceGapsDeclared: Boolean(currentReality.evidenceGaps),
+          }
+        : { declaredFamilies: 0, evidenceConfidence: "not_provided", evidenceGapsDeclared: false },
     },
     setupMissions,
     activationBoundary:

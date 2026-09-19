@@ -167,6 +167,7 @@ import {
   effectiveAuthorityFor,
   eosSeatKinds,
   manifestInputSchema,
+  currentOperatingRealityInputSchema,
   membershipInvitationCreateSchema,
   membershipInvitationTokenSchema,
   teamRosterPlanSchema,
@@ -395,6 +396,24 @@ function profileStringList(value: unknown): string[] {
   ).slice(0, 50);
 }
 
+function currentRealityUnknowns(value: unknown): string[] {
+  if (value === undefined || value === null) return [];
+  const parsed = currentOperatingRealityInputSchema.safeParse(value);
+  if (!parsed.success)
+    return ["Current operating reality intake needs review before EOS may rely on it."];
+  const reality = parsed.data;
+  const unknowns = [
+    !reality.assetsAndObligations && "Current assets and obligations are not yet recorded.",
+    !reality.marketAndDemand && "Market and demand context is not yet recorded.",
+    !reality.economicsAndCapital && "Economics and capital constraints are not yet recorded.",
+    !reality.bottleneckAndGovernance && "Operating bottleneck and governance constraints are not yet recorded.",
+    reality.evidenceGaps && `Declared evidence gaps: ${reality.evidenceGaps}`,
+  ].filter((item): item is string => Boolean(item));
+  if (reality.evidenceConfidence !== "high")
+    unknowns.push(`Current-reality evidence confidence is ${reality.evidenceConfidence}.`);
+  return unknowns;
+}
+
 /**
  * The Company Mission Journey owns company-definition inputs. The compiler
  * deliberately derives its first manifest from that saved context instead of
@@ -410,6 +429,8 @@ function manifestFromCompanyMission(
   const businessModel = company.type || (typeof profile.businessModel === "string" ? profile.businessModel : "");
   const template = companyBlueprintForBusinessModel(businessModel);
   const existingSystems = profileStringList(profile.existingSystems);
+  const hasCurrentReality = Boolean(profile.currentReality && typeof profile.currentReality === "object" && !Array.isArray(profile.currentReality));
+  const currentRealityUnknown = currentRealityUnknowns(profile.currentReality);
   const goals = String(company.goals || "")
     .split(/[\n,]/)
     .map((goal) => goal.trim())
@@ -449,6 +470,7 @@ function manifestFromCompanyMission(
       departments: Array.from(new Set(template.roles.map((role) => role.department))),
       priorityTools: Array.from(new Set(template.roles.flatMap((role) => role.tools))),
       existingSystems,
+      ...(hasCurrentReality ? { currentReality: profile.currentReality } : {}),
     },
     sourceAssertions: [
       {
@@ -456,9 +478,16 @@ function manifestFromCompanyMission(
         value: `${company.name}: ${purpose}`.slice(0, 2_000),
         sourceType: "user_assertion",
       },
+      ...(hasCurrentReality ? [{
+        label: "Current operating reality intake",
+        value: "Founder-entered company baseline; evidence confidence and unresolved gaps are governed in the manifest.",
+        sourceType: "user_assertion" as const,
+      }] : []),
     ],
-    assumptions: [],
-    unknowns: [],
+    assumptions: currentRealityUnknown.length
+      ? ["Unresolved current-reality information remains an explicit assumption until its discovery mission has retained source-backed evidence."]
+      : [],
+    unknowns: currentRealityUnknown,
     packageSelections: [],
     provisioningChecklist: [],
     verificationChecks: [],

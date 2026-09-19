@@ -11,6 +11,7 @@ export const companyMissionKeys = [
   "founder_charter",
   "strategic_outcomes",
   "operating_formation",
+  "current_operating_reality",
   "systems_reconciliation",
 ] as const;
 
@@ -45,6 +46,13 @@ export type CompanyMissionInput = {
    * imported, reconciled, or activated anything from those systems.
    */
   existingSystems?: string[];
+  /**
+   * A deliberately bounded description of what is true today. This is shared
+   * by a first-time founder and an established organization: empty fields are
+   * useful signals for a governed discovery mission, not an invitation for the
+   * compiler to invent operating facts.
+   */
+  currentRealityProvided?: boolean;
 };
 
 export type CompanyMissionDefinition = {
@@ -108,10 +116,18 @@ export const companyMissionJourney: readonly CompanyMissionDefinition[] = [
       && (input.formation === "agent_first" || present(input.teamSnapshot)),
   },
   {
+    key: "current_operating_reality",
+    title: "Map the current operating reality",
+    purpose: "Record the assets, obligations, market, economics, constraints, and confidence EOS should use as its starting point. Unknowns remain visible and become governed discovery work.",
+    prerequisite: "operating_formation",
+    unlocks: "A source-bounded current-reality baseline, explicit assumptions, and discovery missions where evidence is incomplete.",
+    isComplete: (input) => Boolean(input.currentRealityProvided),
+  },
+  {
     key: "systems_reconciliation",
     title: "Reconcile systems when useful",
     purpose: "Optionally name systems that already hold records, then connect and reconcile them only after the company model is established. Native EOS instruments remain available without them.",
-    prerequisite: "operating_formation",
+    prerequisite: "current_operating_reality",
     unlocks: "Provider overlays, import plans, and controlled native cutover.",
     isComplete: () => true,
   },

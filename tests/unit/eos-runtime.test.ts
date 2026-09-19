@@ -220,6 +220,69 @@ describe("EOS overlay runtime contracts", () => {
       ]);
   });
 
+  it("compiles an incomplete current-reality intake into a governed discovery mission", () => {
+    const plan = deriveOrganizationBlueprintPlan(manifestInputSchema.parse({
+      ...manifest,
+      blueprint: {
+        startingPoint: "existing_company",
+        operatingModel: "hybrid_team",
+        businessModel: "services",
+        primaryGrowthMotion: "Founder-led outbound",
+        departments: ["Commercial"],
+        priorityTools: ["CRM"],
+        existingSystems: [],
+        currentReality: {
+          assetsAndObligations: "Two active clients and a signed delivery agreement.",
+          marketAndDemand: "",
+          economicsAndCapital: "Fixed-fee delivery with no outside capital planned.",
+          bottleneckAndGovernance: "",
+          evidenceGaps: "Current contract terms need review.",
+          evidenceConfidence: "low",
+        },
+      },
+    }));
+    expect(plan.context.currentReality).toEqual({
+      declaredFamilies: 2,
+      evidenceConfidence: "low",
+      evidenceGapsDeclared: true,
+    });
+    expect(plan.setupMissions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: "resolve-current-reality-assumptions",
+        owner: "executive_assistant",
+        sourceAuthority: "native_eos",
+        requiredInputs: expect.arrayContaining([
+          "Evidence for market and demand context",
+          "Evidence for operating bottleneck and governance constraints",
+          "Declared evidence gaps and contradictions",
+        ]),
+        scopeBoundary: expect.stringMatching(/does not authorize a provider connection/i),
+        nativeFallback: expect.stringMatching(/conservative authority/i),
+      }),
+    ]));
+  });
+
+  it("does not invent a current-reality discovery mission for legacy profiles with no intake", () => {
+    const plan = deriveOrganizationBlueprintPlan(manifestInputSchema.parse({
+      ...manifest,
+      blueprint: {
+        startingPoint: "new_company",
+        operatingModel: "agent_first",
+        businessModel: "services",
+        primaryGrowthMotion: "",
+        departments: [],
+        priorityTools: [],
+        existingSystems: [],
+      },
+    }));
+    expect(plan.context.currentReality).toEqual({
+      declaredFamilies: 0,
+      evidenceConfidence: "not_provided",
+      evidenceGapsDeclared: false,
+    });
+    expect(plan.setupMissions.map((mission) => mission.key)).not.toContain("resolve-current-reality-assumptions");
+  });
+
   it("defaults a manual Work Packet to a safe local lifecycle", () => {
     const packet = workPacketCreateSchema.parse({
       title: "Review offer",
