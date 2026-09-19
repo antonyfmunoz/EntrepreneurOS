@@ -46,7 +46,7 @@ const channels = [
   { key: "email", label: "Email", detail: "Plan a governed Gmail delivery" },
   { key: "slack", label: "Slack", detail: "Plan a governed Slack delivery" },
   { key: "sms", label: "SMS", detail: "Record a manual external delivery intent" },
-  { key: "iMessage", label: "iMessage", detail: "Record a manual external delivery intent" },
+  { key: "imessage", label: "iMessage", detail: "Record a manual external delivery intent" },
   { key: "instagram", label: "Instagram", detail: "Record a manual external delivery intent" },
   { key: "social", label: "Other social", detail: "Record a manual external delivery intent" },
 ] as const;
@@ -74,7 +74,7 @@ function providerRequestForChannel(input: { channel: MessageChannel; destination
 }
 
 function manualDestinationLabel(channel: MessageChannel) {
-  if (channel === "sms" || channel === "iMessage") return "Recipient phone or contact reference";
+  if (channel === "sms" || channel === "imessage") return "Recipient phone or contact reference";
   if (channel === "instagram") return "Instagram handle or conversation reference";
   return "External destination or conversation reference";
 }
