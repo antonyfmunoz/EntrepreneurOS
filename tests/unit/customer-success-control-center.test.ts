@@ -62,6 +62,9 @@ describe("native customer-success control contracts", () => {
     expect(control).toContain("Client workspace");
     expect(control).toContain("portalKey: `client-${account.id}`");
     expect(control).toContain("stakeholderId: account.stakeholderId");
+    expect(control).toContain("ownerSeatId: account.ownerSeatId");
+    expect(control).toContain("portalKey === `client-${selected?.id}`");
+    expect(control).toContain("owned by its accountable Customer Success role");
     expect(control).toContain("Provisioning creates no external access, message, or disclosure.");
     expect(control).toContain("draft native onboarding intake is ready");
     expect(control).toContain("formKey: \"client-onboarding\"");

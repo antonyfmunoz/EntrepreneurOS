@@ -55,6 +55,8 @@ describe("native client portal onboarding intake contracts", () => {
     expect(routes).toContain("stakeholder_portal.intake_form.review");
     expect(routes).toContain("human_disposition_only_client_answers_remain_unverified");
     expect(routes).toContain("stakeholder_portal.intake_form.handoff");
+    expect(routes).toContain("stakeholder_portal_owner_scope_denied");
+    expect(routes).toContain("targetSeatId: targetSeatId || access.seat.id");
     expect(routes).toContain("native_work_packet_only_no_provider_or_customer_effect");
     expect(page).toContain("Submit onboarding intake");
     expect(page).toContain("does not automatically grant access, start work, or change any agreement");
