@@ -1871,7 +1871,7 @@ try {
     .getByRole("link", { name: "Add organization", exact: true })
     .first()
     .click();
-  await desktop.getByLabel("Step 2 of 7: Establish company identity", { exact: true }).waitFor();
+  await desktop.getByLabel("Step 2 of 8: Establish company identity", { exact: true }).waitFor();
   await desktop
     .getByLabel("Operating company name", { exact: true })
     .fill("New Founder Company");
@@ -1910,6 +1910,10 @@ try {
     );
   await desktop.getByRole("button", { name: "Continue", exact: true }).click();
   await desktop.getByText("Agent-first", { exact: true }).click();
+  await desktop.getByRole("button", { name: "Continue", exact: true }).click();
+  // The shared journey now records a current-reality baseline before systems.
+  // A new founder may explicitly continue with unknowns; the compiler turns
+  // them into a governed discovery packet rather than fabricating facts.
   await desktop.getByRole("button", { name: "Continue", exact: true }).click();
   await desktop
     .getByRole("button", { name: "Create company and compile blueprint", exact: true })
@@ -2259,7 +2263,7 @@ try {
     waitUntil: "domcontentloaded",
   });
   await mobile.getByRole("heading", { name: "One company model. One path.", exact: true }).waitFor();
-  await mobile.getByLabel("Step 2 of 7: Establish company identity", { exact: true }).waitFor();
+  await mobile.getByLabel("Step 2 of 8: Establish company identity", { exact: true }).waitFor();
   if (
     await mobile
       .getByRole("button", { name: "Open navigation", exact: true })
@@ -2276,12 +2280,12 @@ try {
   if (setupOverflow)
     throw new Error("Mobile company setup has horizontal overflow.");
   await mobile.getByRole("button", { name: "Back", exact: true }).click();
-  await mobile.getByLabel("Step 1 of 7: Place the company", { exact: true }).waitFor();
+  await mobile.getByLabel("Step 1 of 8: Place the company", { exact: true }).waitFor();
   await mobile
     .getByText(portfolioName, { exact: true })
     .locator("xpath=ancestor::button[1]")
     .click();
-  await mobile.getByLabel("Step 2 of 7: Establish company identity", { exact: true }).waitFor();
+  await mobile.getByLabel("Step 2 of 8: Establish company identity", { exact: true }).waitFor();
   await mobile.goto(`${origin}/company/${companyId}#my-role`, {
     waitUntil: "domcontentloaded",
   });

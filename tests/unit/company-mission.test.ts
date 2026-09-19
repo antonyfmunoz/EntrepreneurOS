@@ -7,9 +7,10 @@ describe("Company Mission Journey", () => {
       portfolioId: "1", companyName: "Empyrean Creative", stage: "revenue", businessModel: "services",
       offer: "Revenue recovery", targetCustomer: "Professional services firms", assistantName: "Henna",
       founderVision: "Build enduring creative institutions", goals: "Close three retained clients", formation: "agent_first" as const,
+      currentRealityProvided: true,
     };
     const status = companyMissionStatus(input);
-    expect(status).toHaveLength(7);
+    expect(status).toHaveLength(8);
     expect(status.every((mission) => mission.complete)).toBe(true);
     expect(nextCompanyMission(input)).toBeNull();
   });
@@ -25,7 +26,9 @@ describe("Company Mission Journey", () => {
       founderVision: "Build enduring creative institutions", goals: "Close three retained clients", formation: "existing_team" as const,
     };
     expect(nextCompanyMission(established)?.key).toBe("operating_formation");
-    expect(nextCompanyMission({ ...established, teamSnapshot: "Founder; account director; two delivery specialists; growth seat vacant." })).toBeNull();
+    expect(nextCompanyMission({ ...established, teamSnapshot: "Founder; account director; two delivery specialists; growth seat vacant." })?.key)
+      .toBe("current_operating_reality");
+    expect(nextCompanyMission({ ...established, teamSnapshot: "Founder; account director; two delivery specialists; growth seat vacant.", currentRealityProvided: true })).toBeNull();
   });
 
   it("normalizes assumed business names without duplicates", () => {
