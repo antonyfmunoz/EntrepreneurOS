@@ -135,6 +135,12 @@ export function registerInstitutionalIntelligenceRoutes(app: Express): void {
 
   app.patch("/api/eos/companies/:companyId/learning-proposals/:proposalId", route(async (req, res) => {
     const input = learningDecisionSchema.parse(req.body); const { access, policy } = await intelligenceAccess(req, "decide", "learning_proposal.decide", "restricted");
+    // Learning may be proposed by accountable operating roles, but canonical
+    // institutional memory changes the company's durable decision context.
+    // Keep that promotion with the founder even when another role can decide
+    // a bounded postmortem or manage day-to-day work.
+    if (!access.isOwner)
+      throw new EosRouteError(403, "institutional_memory_founder_required", "Only the company founder may accept, reject, or promote institutional learning.");
     const [proposal] = await db.select().from(eosLearningProposals).where(and(eq(eosLearningProposals.id, req.params.proposalId), eq(eosLearningProposals.companyId, access.company.id))).limit(1);
     if (!proposal) throw new EosRouteError(404, "learning_proposal_not_found", "Learning proposal not found.");
     const allowed = proposal.state === "proposed" ? ["accepted", "rejected"] : proposal.state === "accepted" ? ["implemented"] : [];
