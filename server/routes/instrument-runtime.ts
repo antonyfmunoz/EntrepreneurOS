@@ -1080,6 +1080,8 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     if (input.parentObjectId) {
       const [parent] = await db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.id, input.parentObjectId), eq(eosInstrumentObjects.instrumentKey, input.instrumentKey))).limit(1);
       if (!parent) throw new EosRouteError(409, "instrument_parent_invalid", "Parent objects must exist inside the same company and instrument.");
+      if (!(await visibleObjectSet(access, [parent])).length)
+        throw new EosRouteError(404, "instrument_parent_unavailable", "The selected parent object is unavailable in your current role scope.");
     }
     const now = new Date(); const objectId = randomUUID(); const commandId = randomUUID();
     const projection = { companyId: access.company.id, ownerSeatId: access.seat.id, state: "draft", version: 1, ...input };
@@ -1528,8 +1530,8 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     const [current] = await db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.id, req.params.objectId), eq(eosInstrumentObjects.companyId, Number(req.params.companyId)))).limit(1);
     if (!current) throw new EosRouteError(404, "instrument_object_not_found", "Instrument object not found.");
     const { access, policy } = await instrumentAccess(req, "execute", current.instrumentKey, "instrument.object.update", input.classification || current.classification);
-    if (current.instrumentKey === "forms" && !(await visibleObjectSet(access, [current])).length)
-      throw new EosRouteError(404, "native_form_unavailable", "This native form is unavailable in your current role scope.");
+    if (!(await visibleObjectSet(access, [current])).length)
+      throw new EosRouteError(404, "instrument_object_unavailable", "This object is unavailable in your current role scope.");
     const replay = await replayCommand(access.company.id, input.idempotencyKey, current.instrumentKey, "object.update"); if (replay) { res.json(replay); return; }
     if (current.version !== input.expectedVersion) throw new EosRouteError(409, "instrument_version_conflict", "The instrument object changed before this update.");
     if (current.state === "archived") throw new EosRouteError(409, "instrument_object_archived", "Archived instrument objects are immutable through the normal lifecycle.");
@@ -1690,8 +1692,8 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     if (!current) throw new EosRouteError(404, "instrument_object_not_found", "Instrument object not found.");
     const consequential = ["active", "completed", "cancelled", "archived"].includes(input.state);
     const { access, policy } = await instrumentAccess(req, consequential ? "decide" : "execute", current.instrumentKey, "instrument.object.transition", current.classification);
-    if (current.instrumentKey === "forms" && !(await visibleObjectSet(access, [current])).length)
-      throw new EosRouteError(404, "native_form_unavailable", "This native form is unavailable in your current role scope.");
+    if (!(await visibleObjectSet(access, [current])).length)
+      throw new EosRouteError(404, "instrument_object_unavailable", "This object is unavailable in your current role scope.");
     const replay = await replayCommand(access.company.id, input.idempotencyKey, current.instrumentKey, "object.transition"); if (replay) { res.json(replay); return; }
     if (current.version !== input.expectedVersion) throw new EosRouteError(409, "instrument_version_conflict", "The instrument object changed before this transition.");
     if (!mayTransitionInstrumentObject(current.state, input.state)) throw new EosRouteError(409, "instrument_transition_invalid", `Instrument objects cannot move from ${current.state} to ${input.state}.`);
@@ -1761,10 +1763,14 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     const source = objects.find((item) => item.id === input.sourceObjectId)!;
     const target = objects.find((item) => item.id === input.targetObjectId)!;
     const { access, policy } = await instrumentAccess(req, "execute", source.instrumentKey, "instrument.link.create", source.classification);
+    if (!(await visibleObjectSet(access, [source])).length)
+      throw new EosRouteError(404, "instrument_link_source_unavailable", "The source object is unavailable in your current role scope.");
     // Relationships can reveal the existence and purpose of their target.
     // Require the same focused read permission on that target before linking;
     // a source-tool grant is never a back door into another role's tool data.
-    await instrumentAccess(req, "view", target.instrumentKey, "instrument.read", target.classification);
+    const targetAccess = await instrumentAccess(req, "view", target.instrumentKey, "instrument.read", target.classification);
+    if (!(await visibleObjectSet(targetAccess.access, [target])).length)
+      throw new EosRouteError(404, "instrument_link_target_unavailable", "The target object is unavailable in your current role scope.");
     const replay = await replayCommand(access.company.id, input.idempotencyKey, source.instrumentKey, "link.create"); if (replay) { res.json(replay); return; }
     const now = new Date(); const linkId = randomUUID(); const commandId = randomUUID();
     await db.transaction(async (tx) => {

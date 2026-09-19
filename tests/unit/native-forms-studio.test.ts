@@ -22,7 +22,7 @@ describe("native internal Forms", () => {
     expect(runtime).toContain('"native_form.submit"');
     expect(runtime).toContain("native_form_public_boundary");
     expect(runtime).toContain("native_form_active_definition_immutable");
-    expect(runtime).toContain("This native form is unavailable in your current role scope.");
+    expect(runtime).toContain("This object is unavailable in your current role scope.");
     expect(runtime).toContain('commandType: "form.submit"');
     expect(runtime).toContain('eventType: "form.submission_recorded"');
     expect(runtime).toContain('action: "native_form.submission_recorded"');
