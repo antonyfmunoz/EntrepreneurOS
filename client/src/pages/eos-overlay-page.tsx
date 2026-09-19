@@ -10870,6 +10870,9 @@ export default function EosOverlayPage() {
               <NativeCommerceStudio
                 root={root}
                 roleScopeKey={roleScopeKey}
+                activeSeatId={principalContext?.seatId || ""}
+                seats={visibleSeats}
+                canCreateDeliveryProject={mayOperateNativeProjects}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
               />

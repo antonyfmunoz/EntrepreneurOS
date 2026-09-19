@@ -40,4 +40,12 @@ describe("native commerce studio", () => {
     expect(commerceStudio).toContain("CRM opportunity source");
     expect(commerceStudio).toContain("This order originated from a governed CRM opportunity");
   });
+
+  it("turns a governed order into a draft, role-owned delivery project without treating delivery as automatic", () => {
+    expect(instrumentRoutes).toContain("commerce/orders/:objectId/delivery-projects");
+    expect(instrumentRoutes).toContain('commandType: "order.delivery_project.create"');
+    expect(instrumentRoutes).toContain('relationshipType: "fulfills_order"');
+    expect(commerceStudio).toContain("Create draft delivery project");
+    expect(commerceStudio).toContain("has not been assigned Projects");
+  });
 });
