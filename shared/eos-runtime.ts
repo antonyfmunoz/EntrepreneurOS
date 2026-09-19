@@ -112,6 +112,19 @@ export type OrganizationBlueprintMission = {
   owner: "founder" | "executive_assistant" | "company_ceo";
   requiredInputs: string[];
   completionEvidence: string[];
+  /**
+   * The named source of truth this setup mission may inspect. A declared
+   * external system is only inventory until its separately governed provider
+   * authorization is granted; it never gains authority merely by appearing in
+   * onboarding.
+   */
+  sourceAuthority: "native_eos" | "declared_external_inventory";
+  /** The permitted record/data boundary for the setup work. */
+  scopeBoundary: string;
+  /** The EOS-owned path that remains usable if an external overlay is absent. */
+  nativeFallback: string;
+  /** The containment and escalation behavior when the source cannot be used. */
+  failureRecoveryPath: string;
   status: "not_started";
 };
 
@@ -145,6 +158,10 @@ export function deriveOrganizationBlueprintPlan(input: ManifestInput) {
       owner: "founder",
       requiredInputs: ["Purpose", "Offer", "Target customer", "Founder profile"],
       completionEvidence: ["Approved organization manifest"],
+      sourceAuthority: "native_eos",
+      scopeBoundary: "Use only the company mission inputs recorded for this organization.",
+      nativeFallback: "Return to the Company Mission Journey and correct the native EOS inputs before recompiling.",
+      failureRecoveryPath: "Keep the manifest in draft, identify the missing or conflicting input, and route the decision to the founder.",
       status: "not_started",
     },
     {
@@ -158,6 +175,10 @@ export function deriveOrganizationBlueprintPlan(input: ManifestInput) {
       owner: "founder",
       requiredInputs: ["Operating model", "Departments", "Role and reporting design"],
       completionEvidence: ["Governed org chart", "Seat assignments", "Authority grants"],
+      sourceAuthority: "native_eos",
+      scopeBoundary: "Use the organization-local role graph; staged roster data does not grant access or change a seat automatically.",
+      nativeFallback: "Continue with native Org Studio seats, reporting lines, and explicit invitation or assignment controls.",
+      failureRecoveryPath: "Leave unresolved seats vacant, preserve the role agent's bounded mode, and escalate reporting-line conflicts to the founder.",
       status: "not_started",
     },
     {
@@ -167,6 +188,10 @@ export function deriveOrganizationBlueprintPlan(input: ManifestInput) {
       owner: "company_ceo",
       requiredInputs: ["Offer", "Growth motion", "Success criteria"],
       completionEvidence: ["Approved operating workflow", "Evidence-bearing test run"],
+      sourceAuthority: "native_eos",
+      scopeBoundary: "Operate only the company-local offer, relationship, commercial, delivery, and reporting records approved for this company.",
+      nativeFallback: "Use the EOS-native CRM, work, document, calendar, and measurement instruments until a separately approved provider rail is ready.",
+      failureRecoveryPath: "Pause the affected operating path, retain its evidence and exception record, and return the decision through the CEO/founder hierarchy.",
       status: "not_started",
     },
   ];
@@ -179,6 +204,10 @@ export function deriveOrganizationBlueprintPlan(input: ManifestInput) {
       owner: "executive_assistant",
       requiredInputs: ["Existing systems", "Data owners", "Provider authorization scope"],
       completionEvidence: ["Provider connection receipts", "Reconciliation report", "Native fallback acceptance"],
+      sourceAuthority: "declared_external_inventory",
+      scopeBoundary: "Declared systems are inventory only. No provider account, record, credential, or permission may be inspected or used until its company-scoped authorization is governed separately.",
+      nativeFallback: "Keep operating through the equivalent EOS-native instrument whenever a provider is absent, unhealthy, denied, or intentionally not connected.",
+      failureRecoveryPath: "Contain the affected overlay, preserve source and EOS evidence separately, and route a recovery decision to the founder through the Executive Assistant.",
       status: "not_started",
     });
 
@@ -204,6 +233,10 @@ export function deriveOrganizationBlueprintPlan(input: ManifestInput) {
           "Source-to-EOS reconciliation report",
           "Native fallback acceptance",
         ],
+        sourceAuthority: "declared_external_inventory",
+        scopeBoundary: `${systemName} is a declared inventory item only. Inspect or import only the explicitly authorized company account and approved record classes; this mission grants no credential, provider, or cross-company access.`,
+        nativeFallback: `Run the equivalent company workflow in EOS-native instruments when ${systemName} is absent, denied, unhealthy, or intentionally retained only as historical source data.`,
+        failureRecoveryPath: `Stop ${systemName} overlay activity, preserve the reconciliation evidence and unresolved differences, and escalate the source-owner decision through the Executive Assistant to the founder.`,
         status: "not_started",
       });
     }

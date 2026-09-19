@@ -5142,6 +5142,11 @@ export default function EosOverlayPage() {
                             <p className="mt-3 text-xs text-muted-foreground">
                               Owner: {String(mission.owner || "founder").replaceAll("_", " ")} · Evidence: {(mission.completionEvidence || []).join("; ")}
                             </p>
+                            <div className="mt-3 space-y-2 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
+                              <p><span className="font-medium text-foreground">Declared inputs:</span> {(mission.requiredInputs || []).join("; ") || "No additional inputs declared."}</p>
+                              <p><span className="font-medium text-foreground">Source boundary:</span> {String(mission.scopeBoundary || "Native EOS company context only.")}</p>
+                              <p><span className="font-medium text-foreground">Native path:</span> {String(mission.nativeFallback || "Continue through the EOS-native operating path.")}</p>
+                            </div>
                             {packet && (
                               <Button variant="link" size="sm" className="mt-2 h-auto px-0" onClick={() => setActiveTab("work-room")}>
                                 Open governed setup work →
