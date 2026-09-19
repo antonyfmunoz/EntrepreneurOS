@@ -54,6 +54,21 @@ export async function apiBinaryRequest<T = unknown>(
   return await response.json() as T;
 }
 
+/**
+ * Download a governed binary through the same authenticated, seat-scoped
+ * transport as every other EOS command.  Native files must not fall back to
+ * an unauthenticated window URL just because their response body is binary.
+ */
+export async function apiDownloadRequest(url: string): Promise<Response> {
+  const response = await fetch(withEosSeatContext(url), {
+    method: "GET",
+    headers: await authHeaders(),
+    credentials: "include",
+  });
+  await throwIfResNotOk(response);
+  return response;
+}
+
 // New code uses apiRequest(method, url, data) and consumes the Response. A
 // handful of generated screens use the older apiRequest(url, options) or
 // apiRequest<T>(url, method, data) convention. Keeping the compatibility

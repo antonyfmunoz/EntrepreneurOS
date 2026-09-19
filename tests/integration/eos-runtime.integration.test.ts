@@ -433,6 +433,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         `/api/eos/companies/${companyId}/native-esign/documents`,
         `/api/eos/companies/${companyId}/native-esign/documents/${randomUUID()}/revisions`,
         "/api/eos/talent-portal/not-a-real-token/evidence/files",
+        `/api/eos/companies/${companyId}/instruments/files/upload`,
       ]) {
         const response = await api.post(endpoint).set("Content-Type", "application/pdf").send(Buffer.from("not parsed or stored")).expect(409);
         expect(response.body.code).toBe("untrusted_artifact_uploads_disabled");
@@ -460,6 +461,57 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     }
     const blocked = await api.get(endpoint).expect(429);
     expect(blocked.body.code).toBe("rate_limited");
+  });
+
+  it("keeps a scanned native File inside role-scoped, immutable EOS custody", async () => {
+    currentUserId = ownerId;
+    const idempotencyKey = `native-file:upload:${randomUUID()}`;
+    const file = await api
+      .post(`/api/eos/companies/${companyId}/instruments/files/upload`)
+      .set("Content-Type", "text/plain")
+      .set("X-EOS-File-Name", "../../recovery operating brief.txt")
+      .set("X-EOS-File-Title", "Recovery operating brief")
+      .set("X-EOS-File-Summary", "A synthetic EOS-native file custody rehearsal.")
+      .set("X-EOS-File-Classification", "confidential")
+      .set("X-EOS-File-Visibility", "team")
+      .set("Idempotency-Key", idempotencyKey)
+      .send(Buffer.from("EOS-native file custody fixture", "utf8"))
+      .expect(201);
+    expect(file.body).toMatchObject({
+      replayed: false,
+      object: {
+        instrumentKey: "files",
+        objectType: "file",
+        state: "draft",
+        data: {
+          fileName: "recovery operating brief.txt",
+          mimeType: "text/plain",
+          scanState: "clean",
+          storageReference: expect.stringContaining(`eos://native-files/${companyId}/`),
+        },
+      },
+    });
+    const replay = await api
+      .post(`/api/eos/companies/${companyId}/instruments/files/upload`)
+      .set("Content-Type", "text/plain")
+      .set("X-EOS-File-Name", "recovery operating brief.txt")
+      .set("X-EOS-File-Title", "Recovery operating brief")
+      .set("Idempotency-Key", idempotencyKey)
+      .send(Buffer.from("EOS-native file custody fixture", "utf8"))
+      .expect(200);
+    expect(replay.body).toMatchObject({ replayed: true, object: { id: file.body.object.id } });
+    const download = await api
+      .get(`/api/eos/companies/${companyId}/instruments/files/${file.body.object.id}/download`)
+      .expect("Content-Type", /text\/plain/)
+      .expect("X-Content-Type-Options", "nosniff")
+      .expect(200);
+    expect(download.headers["content-disposition"]).toContain("recovery operating brief.txt");
+    expect(download.text).toBe("EOS-native file custody fixture");
+    currentUserId = otherId;
+    await api
+      .get(`/api/eos/companies/${companyId}/instruments/files/${file.body.object.id}/download`)
+      .expect(404);
+    currentUserId = ownerId;
   });
 
   it("denies cross-tenant reads and quarantines unscoped legacy APIs", async () => {

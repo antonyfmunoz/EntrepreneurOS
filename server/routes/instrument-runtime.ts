@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { Express, Request, Response } from "express";
+import express, { type Express, type Request, type Response } from "express";
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import {
   eosAuditRecords,
   eosAgentEventOutbox,
@@ -29,7 +29,21 @@ import {
 } from "@shared/instrument-runtime";
 import { db } from "../db";
 import { nativeContractContentSha256 } from "../esign/template-generation";
+import {
+  nativeFileObjectKey,
+  nativeFileSha256,
+  nativeFileStorageConfigured,
+  nativeFileStorageKey,
+  readNativeFile,
+  removeNativeFile,
+  safeNativeFileAttachmentHeader,
+  scanNativeFile,
+  storeNativeFile,
+  validateNativeFile,
+  NATIVE_FILE_MAX_BYTES,
+} from "../artifacts/native-files";
 import { containsCredentialMaterial } from "../security/credential-material";
+import { requireScannerBackedArtifactIngress } from "../middleware/untrusted-artifact-ingress";
 import { dispatchAgentEventOutboxEvent } from "../agents/scheduler";
 import {
   authorizeAction,
@@ -482,6 +496,44 @@ function eventHash(input: Record<string, unknown>) {
   return nativeContractContentSha256({ schemaVersion: "eos.instrument-event.v1", ...input });
 }
 
+const nativeFileUploadHeadersSchema = z.object({
+  fileName: z.string().trim().min(1).max(500),
+  title: z.string().trim().min(2).max(300).optional(),
+  summary: z.string().trim().max(5_000).default(""),
+  classification: z.enum(["internal", "confidential", "restricted"]).default("confidential"),
+  visibility: z.enum(["seat", "team", "organization", "portfolio"]).default("team"),
+  idempotencyKey: z.string().trim().min(2).max(200).regex(/^[a-z0-9][a-z0-9._:-]*$/i),
+});
+
+function requestHeader(req: Request, name: string): string | undefined {
+  const value = req.headers[name];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function nativeFileUploadHeaders(req: Request) {
+  return nativeFileUploadHeadersSchema.parse({
+    fileName: requestHeader(req, "x-eos-file-name"),
+    title: requestHeader(req, "x-eos-file-title"),
+    summary: requestHeader(req, "x-eos-file-summary"),
+    classification: requestHeader(req, "x-eos-file-classification"),
+    visibility: requestHeader(req, "x-eos-file-visibility"),
+    idempotencyKey: requestHeader(req, "idempotency-key"),
+  });
+}
+
+function nativeFileInputFailure(error: unknown): EosRouteError {
+  const code = error instanceof Error ? error.message : "native_file_invalid";
+  const messages: Record<string, string> = {
+    native_file_type_unsupported:
+      "Upload a PDF, PNG, JPEG, UTF-8 text, Markdown, CSV, WebM audio, or MP4 audio file.",
+    native_file_size_invalid: "Files must be between 1 byte and 10 MB.",
+    native_file_content_mismatch:
+      "The file contents do not match its declared file type.",
+    native_file_body_invalid: "Choose a supported file to upload.",
+  };
+  return new EosRouteError(400, code, messages[code] || "The native file upload is invalid.");
+}
+
 export function registerInstrumentRuntimeRoutes(app: Express): void {
   app.get("/api/eos/companies/:companyId/instruments", route(async (req, res) => {
     const access = await companyAccess(req);
@@ -518,6 +570,129 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
       : [];
     res.json({ schemaVersion: "eos.instrument-runtime.v1", instrument: instrumentManifestProjection().find((item) => item.key === key), objects: visible, events: events.slice(0, 250) });
   }));
+
+  /**
+   * A generic File object can describe a storage reference, but this is the
+   * native custody path that creates that reference and its immutable bytes
+   * together. Direct upload remains unavailable without a qualified malware
+   * scanner, so the convenience of native files never lowers EOS safety.
+   */
+  app.post(
+    "/api/eos/companies/:companyId/instruments/files/upload",
+    requireScannerBackedArtifactIngress,
+    express.raw({
+      type: ["application/pdf", "image/png", "image/jpeg", "text/plain", "text/markdown", "text/csv", "audio/webm", "audio/mp4"],
+      limit: NATIVE_FILE_MAX_BYTES,
+    }),
+    route(async (req, res) => {
+      const input = nativeFileUploadHeaders(req);
+      const { access, policy } = await instrumentAccess(req, "execute", "files", "native_file.upload", input.classification);
+      const replay = await replayCommand(access.company.id, input.idempotencyKey, "files", "file.upload");
+      if (replay) { res.status(200).json(replay); return; }
+      if (!Buffer.isBuffer(req.body)) throw nativeFileInputFailure(new Error("native_file_body_invalid"));
+      if (!nativeFileStorageConfigured()) throw new EosRouteError(503, "native_file_storage_unavailable", "EOS file custody is temporarily unavailable. No file was stored; retry after the storage control is healthy.");
+      let metadata;
+      try {
+        metadata = validateNativeFile(req.body, requestHeader(req, "content-type") || "", input.fileName);
+      } catch (error) {
+        throw nativeFileInputFailure(error);
+      }
+      const scan = await scanNativeFile(req.body, metadata);
+      if (scan.state === "infected") throw new EosRouteError(422, "native_file_upload_infected", "EOS rejected the upload because the malware scanner detected unsafe content.");
+      if (scan.state !== "clean") throw new EosRouteError(503, "native_file_upload_scan_unavailable", "EOS could not complete the required malware scan. Nothing was stored; retry later.");
+
+      const now = new Date();
+      const objectId = randomUUID();
+      const commandId = randomUUID();
+      const storageKey = nativeFileStorageKey(access.company.id, objectId);
+      const title = input.title || metadata.fileName;
+      const data = {
+        storageReference: `eos://native-files/${access.company.id}/${objectId}`,
+        storageKey,
+        fileName: metadata.fileName,
+        mimeType: metadata.mimeType,
+        sizeBytes: metadata.sizeBytes,
+        sha256: metadata.sha256,
+        scanState: scan.state,
+        scanEngine: scan.engine,
+        scanCompletedAt: scan.completedAt?.toISOString() || null,
+      };
+      const sourceReference = { authority: "native_eos", capability: "native_file_custody", storageProvider: "eos_artifact_plane" };
+      const projection = {
+        companyId: access.company.id, instrumentKey: "files", objectType: "file", objectKey: nativeFileObjectKey(), title,
+        summary: input.summary, state: "draft", classification: input.classification, visibility: input.visibility,
+        ownerSeatId: access.seat.id, data, sourceReference, evidenceIds: [], version: 1,
+      };
+      const object = {
+        id: objectId, companyId: access.company.id, instrumentKey: "files", objectType: "file", objectKey: projection.objectKey,
+        title, summary: input.summary, state: "draft", classification: input.classification, visibility: input.visibility,
+        ownerSeatId: access.seat.id, parentObjectId: null, data, sourceReference, evidenceIds: [],
+        contentSha256: nativeContractContentSha256(projection), version: 1, recordedByUserId: req.user.id,
+        createdAt: now, updatedAt: now, archivedAt: null,
+      };
+      const event = {
+        id: randomUUID(), companyId: access.company.id, instrumentKey: "files", objectId, commandId, eventType: "file.uploaded",
+        fromState: null, toState: "draft", objectVersion: 1,
+        payload: { fileName: metadata.fileName, mimeType: metadata.mimeType, sizeBytes: metadata.sizeBytes, sha256: metadata.sha256, scanEngine: scan.engine },
+        evidenceIds: [],
+        contentSha256: eventHash({ companyId: access.company.id, objectId, commandId, eventType: "file.uploaded", toState: "draft", objectVersion: 1, sha256: metadata.sha256 }),
+        recordedByUserId: req.user.id, createdAt: now,
+      };
+      try {
+        await storeNativeFile(storageKey, req.body);
+        await db.transaction(async (tx) => {
+          await tx.insert(eosInstrumentObjects).values(object);
+          await tx.insert(eosInstrumentCommands).values({
+            id: commandId, companyId: access.company.id, instrumentKey: "files", objectId, commandType: "file.upload", idempotencyKey: input.idempotencyKey,
+            expectedVersion: null, payload: { fileName: metadata.fileName, mimeType: metadata.mimeType, sizeBytes: metadata.sizeBytes, sha256: metadata.sha256 },
+            state: "completed", result: { objectId, version: 1, storageReference: data.storageReference }, policyDecisionId: policy.decisionId,
+            requestedByUserId: req.user.id, createdAt: now, completedAt: now,
+          });
+          await tx.insert(eosInstrumentEvents).values(event);
+          await tx.insert(eosAuditRecords).values({
+            id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "instrument.file.uploaded", targetType: "files", targetId: objectId,
+            traceId: policy.traceId, correlationId: policy.correlationId, result: "draft",
+            details: { commandId, fileName: metadata.fileName, mimeType: metadata.mimeType, sizeBytes: metadata.sizeBytes, sha256: metadata.sha256, policyDecisionId: policy.decisionId }, createdAt: now,
+          });
+        });
+      } catch (error) {
+        await removeNativeFile(storageKey).catch(() => undefined);
+        throw error;
+      }
+      res.status(201).json({ command: { id: commandId, state: "completed" }, object, replayed: false });
+    }),
+  );
+
+  app.get(
+    "/api/eos/companies/:companyId/instruments/files/:objectId/download",
+    route(async (req, res) => {
+      const { access } = await instrumentAccess(req, "view", "files", "native_file.download", "internal");
+      const [object] = await db.select().from(eosInstrumentObjects).where(and(
+        eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.id, req.params.objectId),
+        eq(eosInstrumentObjects.instrumentKey, "files"), eq(eosInstrumentObjects.objectType, "file"),
+      )).limit(1);
+      const [visible] = object ? await visibleObjectSet(access, [object]) : [];
+      if (!visible) throw new EosRouteError(404, "native_file_not_found", "The requested native file is unavailable in this authority scope.");
+      const data = recordValue(visible.data);
+      const storageKey = typeof data.storageKey === "string" ? data.storageKey : "";
+      const fileName = typeof data.fileName === "string" ? data.fileName : "eos-file";
+      const mimeType = typeof data.mimeType === "string" ? data.mimeType : "application/octet-stream";
+      const expectedSha256 = typeof data.sha256 === "string" ? data.sha256 : "";
+      if (!storageKey || !/^[a-f0-9]{64}$/.test(expectedSha256)) throw new EosRouteError(409, "native_file_custody_invalid", "The native file custody record is incomplete. Do not rely on this file until it is reconciled.");
+      let bytes: Buffer;
+      try { bytes = await readNativeFile(storageKey); }
+      catch { throw new EosRouteError(503, "native_file_custody_unavailable", "EOS file custody is temporarily unavailable. No file content was returned."); }
+      if (nativeFileSha256(bytes) !== expectedSha256) throw new EosRouteError(503, "native_file_custody_integrity_failed", "EOS detected a file-integrity mismatch. No file content was returned.");
+      res.setHeader("Content-Type", mimeType);
+      res.setHeader("Content-Length", String(bytes.length));
+      res.setHeader("Content-Disposition", safeNativeFileAttachmentHeader(fileName));
+      res.setHeader("Cache-Control", "no-store, private, max-age=0");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Content-Security-Policy", "sandbox");
+      res.send(bytes);
+    }),
+  );
 
   app.get("/api/eos/companies/:companyId/instruments/crm/relationships/:relationshipObjectId/operating-context", route(async (req, res) => {
     const { access } = await instrumentAccess(req, "view", "crm", "instrument.read", "internal");
