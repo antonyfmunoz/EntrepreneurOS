@@ -62,3 +62,9 @@ export const stakeholderPortalIntakeSubmissionSchema = z.object({
 }).superRefine((value, context) => {
   if (Object.keys(value.answers).length > 30) context.addIssue({ code: z.ZodIssueCode.custom, path: ["answers"], message: "An onboarding intake accepts at most 30 answers." });
 });
+
+export const stakeholderPortalIntakeReviewSchema = z.object({
+  disposition: z.enum(["acknowledged", "clarification_required", "action_required"]),
+  reviewerSummary: z.string().trim().min(20).max(6_000),
+  nextAction: z.string().trim().min(10).max(2_000),
+});

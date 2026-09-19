@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   stakeholderPortalIntakeFormCreateSchema,
+  stakeholderPortalIntakeReviewSchema,
   stakeholderPortalIntakeSubmissionSchema,
 } from "../../shared/stakeholder-portal";
 
@@ -29,6 +30,11 @@ describe("native client portal onboarding intake contracts", () => {
     expect(() => stakeholderPortalIntakeSubmissionSchema.parse({ answers: {}, acknowledgement: false })).toThrow();
   });
 
+  it("requires an accountable disposition without misrepresenting raw client input as verified evidence", () => {
+    expect(stakeholderPortalIntakeReviewSchema.parse({ disposition: "action_required", reviewerSummary: "The accountable reviewer identified one launch dependency that needs an internal owner before work can begin.", nextAction: "Assign the dependency to the delivery owner and confirm the client access boundary." }).disposition).toBe("action_required");
+    expect(() => stakeholderPortalIntakeReviewSchema.parse({ disposition: "acknowledged", reviewerSummary: "Too short", nextAction: "Too short" })).toThrow();
+  });
+
   it("uses the grant-bound private portal route and records submissions as unverified EOS input", () => {
     const routes = readFileSync(resolve(process.cwd(), "server/routes/stakeholder-portal.ts"), "utf8");
     const page = readFileSync(resolve(process.cwd(), "client/src/pages/stakeholder-portal-page.tsx"), "utf8");
@@ -39,7 +45,9 @@ describe("native client portal onboarding intake contracts", () => {
     expect(routes).toContain("publicPortalIntakeRateLimit");
     expect(routes).toContain("hasActiveIntake");
     expect(routes).toContain("stakeholder_portal.intake_form.read");
-    expect(routes).toContain("eos.stakeholder-portal-intake-review.v1");
+    expect(routes).toContain("eos.stakeholder-portal-intake-review.v2");
+    expect(routes).toContain("stakeholder_portal.intake_form.review");
+    expect(routes).toContain("human_disposition_only_client_answers_remain_unverified");
     expect(page).toContain("Submit onboarding intake");
     expect(page).toContain("does not automatically grant access, start work, or change any agreement");
   });
