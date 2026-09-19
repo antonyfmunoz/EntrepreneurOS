@@ -181,6 +181,59 @@ async function assertNativeMessageCreate(
 }
 
 /**
+ * Generic instrument updates must not become a backdoor around the reporting
+ * chain that is enforced when a conversation is first created.  Conversation
+ * identity may evolve, but only a named participant can edit it; changing the
+ * participant set must pass the same direct-manager/direct-report validation
+ * as a new conversation.  Messages and threads also remain in their original
+ * conversation so a caller cannot use PATCH to move a private record.
+ */
+async function assertNativeMessageUpdate(
+  access: Awaited<ReturnType<typeof companyAccess>>,
+  current: typeof eosInstrumentObjects.$inferSelect,
+  next: { data: Record<string, unknown>; visibility: string },
+) {
+  if (current.instrumentKey !== "messages") return;
+  const currentData = recordValue(current.data);
+
+  if (current.objectType === "conversation") {
+    const existingParticipants = currentData.participantSeatIds;
+    if (!Array.isArray(existingParticipants) || !existingParticipants.includes(access.seat.id))
+      throw new EosRouteError(403, "message_conversation_membership_required", "Only a named participant may update this native conversation.");
+    const nextParticipants = recordValue(next.data).participantSeatIds;
+    const normalizedExisting = Array.isArray(existingParticipants) ? [...existingParticipants].filter((seatId): seatId is string => typeof seatId === "string").sort() : [];
+    const normalizedNext = Array.isArray(nextParticipants) ? [...nextParticipants].filter((seatId): seatId is string => typeof seatId === "string").sort() : [];
+    if (normalizedExisting.join("|") === normalizedNext.join("|")) return;
+    await assertNativeMessageCreate(access, {
+      instrumentKey: current.instrumentKey,
+      objectType: current.objectType,
+      data: next.data,
+      parentObjectId: current.parentObjectId || undefined,
+      visibility: next.visibility,
+    });
+    return;
+  }
+
+  if (!["message", "thread"].includes(current.objectType)) return;
+  const conversationObjectId = currentData.conversationObjectId;
+  if (typeof conversationObjectId !== "string" || !conversationObjectId)
+    throw new EosRouteError(409, "message_conversation_scope_invalid", "This message record no longer has a valid native conversation.");
+  const [conversation] = await db.select().from(eosInstrumentObjects).where(and(
+    eq(eosInstrumentObjects.companyId, access.company.id),
+    eq(eosInstrumentObjects.id, conversationObjectId),
+    eq(eosInstrumentObjects.instrumentKey, "messages"),
+    eq(eosInstrumentObjects.objectType, "conversation"),
+  )).limit(1);
+  const conversationParticipants = conversation
+    ? recordValue(conversation.data).participantSeatIds
+    : null;
+  if (!Array.isArray(conversationParticipants) || !conversationParticipants.includes(access.seat.id))
+    throw new EosRouteError(403, "message_conversation_membership_required", "Only a named participant may update records in this native conversation.");
+  if (recordValue(next.data).conversationObjectId !== conversationObjectId)
+    throw new EosRouteError(409, "message_conversation_immutable", "Messages and threads cannot be moved between native conversations.");
+}
+
+/**
  * Conference Rooms are native decision environments. Their records must form
  * one auditable chain (room → meeting → decision) and a named decision-maker
  * must actually have attended the meeting they are recorded against.
@@ -522,6 +575,7 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     if (current.state === "archived") throw new EosRouteError(409, "instrument_object_archived", "Archived instrument objects are immutable through the normal lifecycle.");
     const evidence = input.evidenceIds ?? current.evidenceIds as string[]; await checkedEvidence(access.company.id, evidence);
     const next = { title: input.title ?? current.title, summary: input.summary ?? current.summary, classification: input.classification ?? current.classification, visibility: input.visibility ?? current.visibility, data: input.data ?? current.data as Record<string, unknown>, sourceReference: input.sourceReference ?? current.sourceReference as Record<string, unknown>, evidenceIds: evidence, version: current.version + 1, updatedAt: new Date() };
+    await assertNativeMessageUpdate(access, current, next);
     if (["active", "completed"].includes(current.state)) {
       const findings = instrumentDomainFindings(eosInstrumentKeySchema.parse(current.instrumentKey), current.objectType, next.data);
       if (findings.length) throw new EosRouteError(409, findings[0].code, findings[0].message);
