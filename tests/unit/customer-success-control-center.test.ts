@@ -68,6 +68,10 @@ describe("native customer-success control contracts", () => {
     expect(control).toContain("Provisioning creates no external access, message, or disclosure.");
     expect(control).toContain("draft native onboarding intake is ready");
     expect(control).toContain("formKey: \"client-onboarding\"");
+    expect(control).toContain("Released process for this accountable role (optional)");
+    expect(control).toContain("eligibleHandoffProcesses");
+    expect(control).toContain("processDefinitionId");
+    expect(control).toContain("makes this Work Packet executable only through that exact version");
     expect(portalRoutes).toContain('state: "dormant"');
     expect(portalRoutes).toContain("tokenDisclosedOnce: true");
   });

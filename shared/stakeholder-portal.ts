@@ -74,4 +74,5 @@ export const stakeholderPortalIntakeReviewHandoffSchema = z.object({
   title: z.string().trim().min(3).max(200),
   priority: z.enum(["low", "medium", "high", "urgent"]).default("high"),
   dueAt: z.string().datetime().optional(),
+  processDefinitionId: z.string().trim().uuid().optional(),
 });

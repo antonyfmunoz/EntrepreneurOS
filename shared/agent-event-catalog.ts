@@ -42,7 +42,7 @@ export const nativeAgentEventCatalog = [
     source: "Native client workspace runtime",
     description: "Runs after an accountable role reviews private client onboarding input and creates a native EOS Work Packet. Client answers remain unverified and EOS has not taken an external action.",
     payloadSummary: "Client workspace, form, submission, review, and Work Packet identifiers; accountable target seat; priority; classification; verification boundary; and no provider-effect claim. It never includes client answers or contact details.",
-    filterFields: ["targetSeatId", "priority", "classification", "verificationState"],
+    filterFields: ["targetSeatId", "targetProcessDefinitionId", "priority", "classification", "verificationState"],
   },
   {
     eventType: "eos.recovery.engagement.transitioned.v1",

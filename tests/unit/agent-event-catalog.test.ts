@@ -28,7 +28,7 @@ describe("native Role Agent event catalog", () => {
         eventType: "eos.stakeholder_portal.intake.handed_off.v1",
         label: "Client onboarding work handed off",
         source: "Native client workspace runtime",
-        filterFields: expect.arrayContaining(["targetSeatId", "verificationState"]),
+        filterFields: expect.arrayContaining(["targetSeatId", "targetProcessDefinitionId", "verificationState"]),
       }),
       expect.objectContaining({
         eventType: "eos.recovery.engagement.transitioned.v1",

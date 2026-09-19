@@ -7,6 +7,7 @@ import {
   eosAuthoritySubjects,
   eosProcessDefinitions,
   eosSeats,
+  eosWorkPackets,
   eosWorkflowRunEvents,
   eosWorkflowRuns,
 } from "@shared/schema";
@@ -74,10 +75,18 @@ async function enqueueSchedule(scheduleId: string, trigger: Record<string, unkno
       await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: schedule.companyId, actorUserId: schedule.recordedByUserId, action: "agent_schedule.daily_limit_reached", targetType: "agent_schedule", targetId: schedule.id, traceId: randomUUID(), correlationId: randomUUID(), result: "paused", details: { maxRunsPerDay: schedule.maxRunsPerDay }, createdAt: now });
       return null;
     }
+    const eventPayload = trigger.kind === "event" && typeof trigger.payload === "object" && trigger.payload !== null ? trigger.payload as Record<string, unknown> : null;
+    const requestedWorkPacketId = eventPayload && typeof eventPayload.workPacketId === "string" && eventPayload.targetProcessDefinitionId === process.id ? eventPayload.workPacketId : null;
+    let workPacketId: string | null = null;
+    if (requestedWorkPacketId) {
+      const [packet] = await tx.select().from(eosWorkPackets).where(and(eq(eosWorkPackets.id, requestedWorkPacketId), eq(eosWorkPackets.companyId, schedule.companyId))).limit(1);
+      if (!packet || packet.processDefinitionId !== process.id || packet.accountableSeatId !== seat.id) return null;
+      workPacketId = packet.id;
+    }
     const id = randomUUID();
     const run = {
       id, companyId: schedule.companyId, portfolioId: schedule.portfolioId,
-      runKey: `agent:${schedule.scheduleKey}:${id}`, processDefinitionId: schedule.processDefinitionId, workPacketId: null,
+      runKey: `agent:${schedule.scheduleKey}:${id}`, processDefinitionId: schedule.processDefinitionId, workPacketId,
       executionMode: schedule.executionMode, state: "queued", currentStep: 0, ownerSeatId: schedule.seatId, delegatedSeatId: null,
       idempotencyKey, input: { ...(schedule.inputTemplate as Record<string, unknown>), _agentTrigger: trigger, _scheduleId: schedule.id },
       output: {}, evidenceIds: [], approvalId: null, blocker: "", scheduledFor: now, startedAt: null, completedAt: null,
@@ -147,6 +156,7 @@ export async function enqueueAgentEvent(input: { companyId: number; eventType: s
     && schedule.eventTypes.includes(input.eventType)
     && matchesAgentEventFilter(input.payload, schedule.eventFilter)
     && (typeof input.payload.targetSeatId !== "string" || schedule.seatId === input.payload.targetSeatId)
+    && (typeof input.payload.targetProcessDefinitionId !== "string" || schedule.processDefinitionId === input.payload.targetProcessDefinitionId)
   ));
   const now = input.observedAt || new Date();
   const results = [];
