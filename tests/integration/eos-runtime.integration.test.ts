@@ -2650,7 +2650,13 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       WHERE id = ${companyId}`;
     const draft = await api
       .post(`/api/eos/companies/${companyId}/compiler/from-company-mission`)
-      .send({})
+      .send({
+        packageSelections: [{
+          id: "eos-overlay-core",
+          version: "1.0",
+          rationale: "Required operating foundation",
+        }],
+      })
       .expect(201);
     expect(draft.body.status).toBe("draft");
     expect(draft.body.manifest.compiledFrom).toMatchObject({
@@ -2658,6 +2664,9 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       journeyVersion: "company-mission-journey-v1",
     });
     expect(draft.body.manifest.operatingCadence).toBe("biweekly");
+    expect(draft.body.manifest.packageSelections).toEqual([
+      expect.objectContaining({ id: "eos-overlay-core" }),
+    ]);
     expect(draft.body.manifest.blueprint.primaryGrowthMotion).toBe(
       "Founder-led outbound and referral partnerships",
     );

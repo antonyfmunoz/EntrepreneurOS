@@ -419,8 +419,17 @@ function currentRealityUnknowns(value: unknown): string[] {
  * deliberately derives its first manifest from that saved context instead of
  * accepting a parallel client-side version of the company story.
  */
+const companyMissionCompileOptionsSchema = z.object({
+  // The Company Mission Journey remains the sole owner of organizational
+  // context.  A workspace recompile may retain already-selected operating
+  // packages, but it may not replace the company story with a client-built
+  // approximation.
+  packageSelections: manifestInputSchema.shape.packageSelections.optional(),
+}).strict();
+
 function manifestFromCompanyMission(
   company: typeof companies.$inferSelect,
+  options: { packageSelections?: z.infer<typeof manifestInputSchema>["packageSelections"] } = {},
 ) {
   const profile = (company.founderProfile || {}) as Record<string, unknown>;
   const formation = typeof profile.operatingFormation === "string"
@@ -493,7 +502,7 @@ function manifestFromCompanyMission(
       ? ["Unresolved current-reality information remains an explicit assumption until its discovery mission has retained source-backed evidence."]
       : [],
     unknowns: currentRealityUnknown,
-    packageSelections: [],
+    packageSelections: options.packageSelections || [],
     provisioningChecklist: [],
     verificationChecks: [],
   });
@@ -12887,6 +12896,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
     route(async (req) => {
       const access = await companyAccess(req);
       const { company } = access;
+      const options = companyMissionCompileOptionsSchema.parse(req.body || {});
       if (!mayManageOrganization(access.role))
         throw new EosRouteError(
           403,
@@ -12901,7 +12911,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
         classification: "restricted",
         consequence: "material",
       });
-      const manifest = manifestFromCompanyMission(company);
+      const manifest = manifestFromCompanyMission(company, options);
       const latest = await db.query.eosManifestVersions.findFirst({
         where: eq(eosManifestVersions.companyId, company.id),
         orderBy: [desc(eosManifestVersions.version)],
