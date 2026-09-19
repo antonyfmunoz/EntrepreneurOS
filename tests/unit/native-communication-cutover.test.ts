@@ -65,6 +65,15 @@ describe("native communication authority cutover", () => {
     expect(messageHub).toContain("provider receipt");
   });
 
+  it("records iMessage and Instagram work truthfully until EOS has an approved provider delivery contract", () => {
+    expect(messageHub).toContain('{ key: "iMessage", label: "iMessage"');
+    expect(messageHub).toContain('{ key: "instagram", label: "Instagram"');
+    expect(messageHub).toContain('"manual_external_intent"');
+    expect(messageHub).toContain("manual external intent");
+    expect(messageHub).toContain("It does not send through Apple, Meta, an SMS carrier, or any other provider.");
+    expect(messageHub).toContain("No provider delivery or receipt is claimed.");
+  });
+
   it("links a message to only an already-authorized native CRM relationship", () => {
     expect(messageHub).toContain('`${root}/context`');
     expect(messageHub).toContain('visibleInstrumentKeys.includes("crm")');
