@@ -254,7 +254,10 @@ export const instrumentActivationRequirements: Partial<Record<EosInstrumentKey, 
   finance: { account: ["accountType", "currency"], plan: ["periodStart", "periodEnd", "lines"], transaction: ["accountObjectId", "amountMinor", "occurredAt"], reconciliation: ["sourceObjectIds", "evidenceIds"], obligation: ["counterpartyReference", "dueAt", "amountMinor"] },
   ads: { account: ["providerReference", "currency"], campaign: ["objective", "budgetMinor", "currency"], ad_group: ["campaignObjectId", "audienceObjectIds"], creative: ["claim", "assetObjectIds"], audience: ["definition", "sourceObjectIds"], budget: ["campaignObjectId", "limitMinor", "currency"], placement: ["campaignObjectId", "channel"] },
   reputation: { review: ["rating", "sourceReference", "receivedAt"], review_request: ["relationshipObjectId", "channel", "consentReference"], response: ["reviewObjectId", "body", "approvedBySeatId"], testimonial: ["body", "consentReference", "evidenceIds"], rating_summary: ["sourceReviewObjectIds", "averageRating", "generatedAt"] },
-  websites: { site: ["brandName"], page: ["headline", "path"], funnel: ["headline", "primaryCtaLabel", "primaryCtaTarget", "captureFormObjectId", "bookingCalendarObjectId"], section: ["pageObjectId", "content"] },
+  // Public funnel routing accepts both legacy form-only records and newer
+  // explicit booking targets at the route boundary. Keep the compiler's base
+  // requirements backward-compatible for already-instantiated businesses.
+  websites: { site: ["brandName"], page: ["headline", "path"], funnel: ["headline", "primaryCtaLabel", "captureFormObjectId"], section: ["pageObjectId", "content"] },
 };
 
 const dateFieldNames = new Set(["startsAt", "endsAt", "targetAt", "startedAt", "submittedAt", "generatedAt", "observedAt", "occurredAt", "dueAt", "receivedAt", "periodStart", "periodEnd"]);
@@ -346,12 +349,19 @@ function pathPresent(value: Record<string, unknown>, path: string) {
 
 export function instrumentActivationFindings(instrumentKey: EosInstrumentKey, objectType: string, data: unknown) {
   const record = data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : {};
-  const required = instrumentActivationRequirements[instrumentKey]?.[objectType] || [];
-  return required.filter((path) => !pathPresent(record, path)).map((path) => ({
+  const bookingFunnel = instrumentKey === "websites" && objectType === "funnel" && record.primaryCtaTarget === "booking_calendar";
+  const required = (instrumentActivationRequirements[instrumentKey]?.[objectType] || []).filter(
+    (path) => !(bookingFunnel && path === "captureFormObjectId"),
+  );
+  const findings = required.filter((path) => !pathPresent(record, path)).map((path) => ({
     code: "instrument_required_field_missing",
     path: `data.${path}`,
     message: `${eosInstrumentManifest[instrumentKey].label} ${objectType.replaceAll("_", " ")} requires ${path} before activation.`,
   }));
+  if (bookingFunnel && !pathPresent(record, "bookingCalendarObjectId")) {
+    findings.push({ code: "instrument_required_field_missing", path: "data.bookingCalendarObjectId", message: "Websites funnel requires bookingCalendarObjectId before activation." });
+  }
+  return findings;
 }
 
 export function instrumentDomainFindings(instrumentKey: EosInstrumentKey, objectType: string, data: unknown) {
