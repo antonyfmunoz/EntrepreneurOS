@@ -49,7 +49,14 @@ export function NativeCommerceStudio({ root, roleScopeKey, canExecute, canDecide
   const [selectedBuyerId, setSelectedBuyerId] = useState("");
   const [orderName, setOrderName] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState("");
+  const [editingOrderTitle, setEditingOrderTitle] = useState("");
+  const [editingOrderBuyerId, setEditingOrderBuyerId] = useState("");
+  const [editingOrderAmount, setEditingOrderAmount] = useState("");
   const [entitlementScope, setEntitlementScope] = useState("service_delivery");
+  const [selectedSubscriptionId, setSelectedSubscriptionId] = useState("");
+  const [editingSubscriptionInterval, setEditingSubscriptionInterval] = useState("month");
+  const [selectedEntitlementId, setSelectedEntitlementId] = useState("");
+  const [editingEntitlementScope, setEditingEntitlementScope] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -73,6 +80,15 @@ export function NativeCommerceStudio({ root, roleScopeKey, canExecute, canDecide
   }, [offers]);
   const editingOffer = offers.find((offer) => offer.id === editingOfferId);
   const selectedOrder = orders.find((order) => order.id === selectedOrderId) || orders[0];
+  const selectedSubscription = subscriptions.find((subscription) => subscription.id === selectedSubscriptionId) || subscriptions.find((subscription) => subscription.data?.orderObjectId === selectedOrder?.id) || subscriptions[0];
+  const selectedEntitlement = entitlements.find((entitlement) => entitlement.id === selectedEntitlementId) || entitlements.find((entitlement) => entitlement.data?.orderObjectId === selectedOrder?.id) || entitlements[0];
+  useEffect(() => {
+    setEditingOrderTitle(String(selectedOrder?.title || ""));
+    setEditingOrderBuyerId(String(selectedOrder?.data?.buyerReference || ""));
+    setEditingOrderAmount(selectedOrder?.data?.amountMinor === undefined || selectedOrder?.data?.amountMinor === null ? "" : String(Number(selectedOrder.data.amountMinor) / 100));
+  }, [selectedOrder?.id, selectedOrder?.version]);
+  useEffect(() => setEditingSubscriptionInterval(String(selectedSubscription?.data?.interval || "month")), [selectedSubscription?.id, selectedSubscription?.version]);
+  useEffect(() => setEditingEntitlementScope(String(selectedEntitlement?.data?.scope || "")), [selectedEntitlement?.id, selectedEntitlement?.version]);
   const refresh = async () => { await Promise.all([queryClient.invalidateQueries({ queryKey: [root, roleScopeKey, "native-commerce"] }), queryClient.invalidateQueries({ queryKey: [root, roleScopeKey, "native-commerce-buyers"] })]); };
 
   const createOffer = useMutation({
@@ -130,6 +146,20 @@ export function NativeCommerceStudio({ root, roleScopeKey, canExecute, canDecide
     },
     onSuccess: async (result) => { setSelectedOrderId(result.object.id); setOrderName(""); await refresh(); }, onError: (cause: Error) => setError(cause.message),
   });
+  const saveOrder = useMutation({
+    mutationFn: async () => {
+      if (!selectedOrder) throw new Error("Choose an order to configure.");
+      const buyer = buyers.find((person) => person.id === editingOrderBuyerId);
+      if (!buyer) throw new Error("Choose a governed CRM buyer for this order.");
+      return (await apiRequest("PATCH", `${root}/instrument-objects/${selectedOrder.id}`, {
+        expectedVersion: selectedOrder.version,
+        title: editingOrderTitle.trim(),
+        data: { ...selectedOrder.data, buyerReference: editingOrderBuyerId, buyerDisplayName: buyer.data?.displayName || buyer.title, amountMinor: minor(editingOrderAmount), operatingMode: "native_eos" },
+        idempotencyKey: commandKey("native-order-configure"),
+      })).json();
+    },
+    onSuccess: async (result) => { setSelectedOrderId(result.object.id); await refresh(); }, onError: (cause: Error) => setError(cause.message),
+  });
   const createSubscription = useMutation({
     mutationFn: async () => {
       if (!selectedOrder) throw new Error("Create or select an order first.");
@@ -138,7 +168,18 @@ export function NativeCommerceStudio({ root, roleScopeKey, canExecute, canDecide
         title: `${selectedOrder.title} subscription`, summary: "Native EOS recurring-service schedule. Payment collection remains separately authorized.", classification: "confidential", visibility: "team", parentObjectId: selectedOrder.id,
         data: { orderObjectId: selectedOrder.id, interval: "month", operatingMode: "native_eos" }, sourceReference: { authority: "native_eos", capability: "subscription_management", paymentExecution: "not_dispatched" }, evidenceIds: [], idempotencyKey: commandKey("native-subscription-create"),
       })).json();
-    }, onSuccess: refresh, onError: (cause: Error) => setError(cause.message),
+    }, onSuccess: async (result) => { setSelectedSubscriptionId(result.object.id); await refresh(); }, onError: (cause: Error) => setError(cause.message),
+  });
+  const saveSubscription = useMutation({
+    mutationFn: async () => {
+      if (!selectedSubscription) throw new Error("Choose a subscription to configure.");
+      return (await apiRequest("PATCH", `${root}/instrument-objects/${selectedSubscription.id}`, {
+        expectedVersion: selectedSubscription.version,
+        data: { ...selectedSubscription.data, interval: editingSubscriptionInterval, operatingMode: "native_eos" },
+        idempotencyKey: commandKey("native-subscription-configure"),
+      })).json();
+    },
+    onSuccess: async (result) => { setSelectedSubscriptionId(result.object.id); await refresh(); }, onError: (cause: Error) => setError(cause.message),
   });
   const createEntitlement = useMutation({
     mutationFn: async () => {
@@ -148,7 +189,18 @@ export function NativeCommerceStudio({ root, roleScopeKey, canExecute, canDecide
         title: `${selectedOrder.title} entitlement`, summary: "Native EOS delivery entitlement linked to a governed order.", classification: "confidential", visibility: "team", parentObjectId: selectedOrder.id,
         data: { subjectReference: selectedOrder.data?.buyerReference || "governed-buyer", scope: entitlementScope.trim(), orderObjectId: selectedOrder.id, operatingMode: "native_eos" }, sourceReference: { authority: "native_eos", capability: "delivery_entitlement" }, evidenceIds: [], idempotencyKey: commandKey("native-entitlement-create"),
       })).json();
-    }, onSuccess: refresh, onError: (cause: Error) => setError(cause.message),
+    }, onSuccess: async (result) => { setSelectedEntitlementId(result.object.id); await refresh(); }, onError: (cause: Error) => setError(cause.message),
+  });
+  const saveEntitlement = useMutation({
+    mutationFn: async () => {
+      if (!selectedEntitlement) throw new Error("Choose an entitlement to configure.");
+      return (await apiRequest("PATCH", `${root}/instrument-objects/${selectedEntitlement.id}`, {
+        expectedVersion: selectedEntitlement.version,
+        data: { ...selectedEntitlement.data, scope: editingEntitlementScope.trim(), operatingMode: "native_eos" },
+        idempotencyKey: commandKey("native-entitlement-configure"),
+      })).json();
+    },
+    onSuccess: async (result) => { setSelectedEntitlementId(result.object.id); await refresh(); }, onError: (cause: Error) => setError(cause.message),
   });
   const transition = useMutation({
     mutationFn: async ({ object, state }: { object: Json; state: "active" | "completed" }) => (await apiRequest("POST", `${root}/instrument-objects/${object.id}/transitions`, {
@@ -166,6 +218,7 @@ export function NativeCommerceStudio({ root, roleScopeKey, canExecute, canDecide
       </div>
       <section className="rounded-xl border p-4"><div className="flex items-center gap-2"><Repeat2 className="h-4 w-4 text-primary" /><h3 className="font-semibold">Service and delivery controls</h3></div><p className="mt-1 text-sm text-muted-foreground">Turn an order into a recurring service schedule or a concrete delivery entitlement. The commercial promise stays visible to operations without needing an external billing interface.</p><div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={selectedOrder?.id || ""} onChange={(event) => setSelectedOrderId(event.target.value)} aria-label="Service order"><option value="">Select order</option>{orders.map((order) => <option key={order.id} value={order.id}>{order.title}</option>)}</select><Input value={entitlementScope} onChange={(event) => setEntitlementScope(event.target.value)} placeholder="Delivery scope" aria-label="Entitlement scope" /><Button variant="outline" disabled={!canExecute || !selectedOrder || createSubscription.isPending} onClick={() => createSubscription.mutate()}><Repeat2 className="mr-2 h-4 w-4" />Add subscription</Button><Button variant="outline" disabled={!canExecute || !selectedOrder || entitlementScope.trim().length < 2 || createEntitlement.isPending} onClick={() => createEntitlement.mutate()}><PackageCheck className="mr-2 h-4 w-4" />Grant entitlement</Button></div></section>
       <section className="rounded-xl border p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Native operating view</p><h3 className="mt-1 font-semibold">Commercial control board</h3></div><Badge variant="outline">{offers.length} offers · {orders.length} orders · {subscriptions.length} subscriptions · {entitlements.length} entitlements</Badge></div><div className="mt-4 grid gap-3 xl:grid-cols-3">{offers.map((offer) => { const relatedOrders = orders.filter((order) => order.data?.offerObjectId === offer.id); const pricingNeedsConfiguration = offer.data?.priceState === "unconfigured"; return <div key={offer.id} className="rounded-xl border bg-muted/20 p-3"><div className="flex items-start justify-between gap-2"><div><p className="font-medium">{offer.title}</p><p className="mt-1 text-xs text-muted-foreground">{offer.summary || "No scope recorded"}</p></div><Badge variant={stateVariant(offer.state)}>{offer.state}</Badge></div><div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded-lg bg-background p-2">Price<br /><strong>{pricingNeedsConfiguration ? "Set price" : money(offer.data?.priceMinor)}</strong></div><div className="rounded-lg bg-background p-2">Orders<br /><strong>{relatedOrders.length}</strong></div></div><div className="mt-3 flex flex-wrap gap-2">{canExecute && <Button size="sm" variant="outline" onClick={() => beginOfferEdit(offer)}>{pricingNeedsConfiguration ? "Configure offer" : "Edit offer"}</Button>}{offer.state === "draft" && <Button size="sm" disabled={!canDecide || transition.isPending} onClick={() => transition.mutate({ object: offer, state: "active" })}>Activate offer</Button>}</div></div>; })}{!offers.length && <div className="col-span-full py-8 text-center text-sm text-muted-foreground">Create the first offer to make the company’s commercial promise actionable inside EOS.</div>}</div>{editingOffer && <section className="mt-4 rounded-xl border border-primary/25 bg-primary/[0.03] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Configure native offer</p><h4 className="mt-1 font-semibold">{editingOffer.title}</h4><p className="mt-1 text-xs text-muted-foreground">This updates the compiled EOS offer in place. It does not create a payment-processor product or change a customer commitment.</p></div><Button size="sm" variant="ghost" onClick={() => setEditingOfferId("")}>Cancel</Button></div><div className="mt-4 grid gap-3 md:grid-cols-2"><div><Label htmlFor="commerce-edit-offer-name">Offer name</Label><Input id="commerce-edit-offer-name" className="mt-1" value={editingOfferName} onChange={(event) => setEditingOfferName(event.target.value)} /></div><div><Label htmlFor="commerce-edit-offer-price">Price (USD)</Label><Input id="commerce-edit-offer-price" className="mt-1" value={editingOfferPrice} onChange={(event) => setEditingOfferPrice(event.target.value)} inputMode="decimal" /></div><div className="md:col-span-2"><Label htmlFor="commerce-edit-offer-description">Result, scope, and delivery promise</Label><Textarea id="commerce-edit-offer-description" className="mt-1" value={editingOfferDescription} onChange={(event) => setEditingOfferDescription(event.target.value)} /></div><div className="md:col-span-2 flex justify-end"><Button disabled={!canExecute || editingOfferName.trim().length < 2 || editingOfferDescription.trim().length < 3 || !validMoney(editingOfferPrice) || saveOffer.isPending} onClick={() => saveOffer.mutate()}>{saveOffer.isPending ? "Saving offer…" : "Save native offer"}</Button></div></div></section>}<div className="mt-4 space-y-2">{orders.map((order) => <div key={order.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"><div><p className="font-medium">{order.title}</p><p className="mt-1 text-xs text-muted-foreground">{order.data?.buyerDisplayName || "Governed buyer"} · {money(order.data?.amountMinor)} · {order.data?.paymentState || "pending"}</p></div><div className="flex items-center gap-2"><Badge variant={stateVariant(order.state)}>{order.state}</Badge>{order.state === "draft" && <Button size="sm" variant="outline" disabled={!canDecide || transition.isPending} onClick={() => transition.mutate({ object: order, state: "active" })}>Activate order</Button>}{order.state === "active" && <Button size="sm" variant="outline" disabled={!canDecide || transition.isPending} onClick={() => transition.mutate({ object: order, state: "completed" })}>Complete delivery</Button>}</div></div>)}</div></section>
+      {(selectedOrder || selectedSubscription || selectedEntitlement) && <section className="grid gap-4 xl:grid-cols-3">{selectedOrder && <div className="rounded-xl border border-primary/25 bg-primary/[0.03] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><p className="eos-label">Configure selected order</p>{orders.length > 1 && <select aria-label="Order to configure" className="h-9 rounded-md border bg-background px-2 text-sm" value={selectedOrder.id} onChange={(event) => setSelectedOrderId(event.target.value)}>{orders.map((order) => <option key={order.id} value={order.id}>{order.title}</option>)}</select>}</div><div className="mt-3 grid gap-3"><div><Label htmlFor="commerce-edit-order-title">Order label</Label><Input id="commerce-edit-order-title" className="mt-1" value={editingOrderTitle} onChange={(event) => setEditingOrderTitle(event.target.value)} /></div><div><Label htmlFor="commerce-edit-order-buyer">CRM buyer</Label><select id="commerce-edit-order-buyer" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={editingOrderBuyerId} onChange={(event) => setEditingOrderBuyerId(event.target.value)}><option value="">Select buyer</option>{buyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.data?.displayName || buyer.title}</option>)}</select></div><div><Label htmlFor="commerce-edit-order-amount">Amount (USD)</Label><Input id="commerce-edit-order-amount" className="mt-1" inputMode="decimal" value={editingOrderAmount} onChange={(event) => setEditingOrderAmount(event.target.value)} /></div><Button size="sm" disabled={!canExecute || editingOrderTitle.trim().length < 2 || !editingOrderBuyerId || !validMoney(editingOrderAmount) || saveOrder.isPending} onClick={() => saveOrder.mutate()}>{saveOrder.isPending ? "Saving…" : "Save native order"}</Button></div></div>}{selectedSubscription && <div className="rounded-xl border border-primary/25 bg-primary/[0.03] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><p className="eos-label">Configure selected subscription</p>{subscriptions.length > 1 && <select aria-label="Subscription to configure" className="h-9 rounded-md border bg-background px-2 text-sm" value={selectedSubscription.id} onChange={(event) => setSelectedSubscriptionId(event.target.value)}>{subscriptions.map((subscription) => <option key={subscription.id} value={subscription.id}>{subscription.title}</option>)}</select>}</div><div className="mt-3 grid gap-3"><div><Label htmlFor="commerce-edit-subscription-interval">Service interval</Label><select id="commerce-edit-subscription-interval" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={editingSubscriptionInterval} onChange={(event) => setEditingSubscriptionInterval(event.target.value)}><option value="week">Weekly</option><option value="month">Monthly</option><option value="quarter">Quarterly</option><option value="year">Yearly</option></select></div><Button size="sm" disabled={!canExecute || saveSubscription.isPending} onClick={() => saveSubscription.mutate()}>{saveSubscription.isPending ? "Saving…" : "Save native subscription"}</Button></div></div>}{selectedEntitlement && <div className="rounded-xl border border-primary/25 bg-primary/[0.03] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><p className="eos-label">Configure selected entitlement</p>{entitlements.length > 1 && <select aria-label="Entitlement to configure" className="h-9 rounded-md border bg-background px-2 text-sm" value={selectedEntitlement.id} onChange={(event) => setSelectedEntitlementId(event.target.value)}>{entitlements.map((entitlement) => <option key={entitlement.id} value={entitlement.id}>{entitlement.title}</option>)}</select>}</div><div className="mt-3 grid gap-3"><div><Label htmlFor="commerce-edit-entitlement-scope">Delivery scope</Label><Input id="commerce-edit-entitlement-scope" className="mt-1" value={editingEntitlementScope} onChange={(event) => setEditingEntitlementScope(event.target.value)} /></div><Button size="sm" disabled={!canExecute || editingEntitlementScope.trim().length < 2 || saveEntitlement.isPending} onClick={() => saveEntitlement.mutate()}>{saveEntitlement.isPending ? "Saving…" : "Save native entitlement"}</Button></div></div>}</section>}
       <Alert><CreditCard className="h-4 w-4" /><AlertTitle>Native commercial state, explicit payment boundary</AlertTitle><AlertDescription>EOS owns what is being sold, to whom, for what amount, and what delivery is owed. An external payment processor is an optional execution layer for an approved collection; until it returns a verified receipt, the order remains visibly pending rather than being marked paid by assumption.</AlertDescription></Alert>
     </CardContent>
   </Card>;
