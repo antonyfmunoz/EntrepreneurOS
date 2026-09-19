@@ -47,5 +47,8 @@ describe("native projects and tasks", () => {
     expect(studio).toContain('orderObjectId: selectedProjectOrderId');
     expect(studio).toContain("externalEffectsPermitted: false");
     expect(studio).toContain("EOS already has a client-onboarding run for this delivery project");
+    expect(studio).toContain("Open governed onboarding run");
+    expect(studio).toContain("onOpenOperations");
+    expect(overlay).toContain('onOpenOperations={() => goToSurface("operations")}');
   });
 });

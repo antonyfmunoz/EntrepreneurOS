@@ -10887,6 +10887,7 @@ export default function EosOverlayPage() {
                 canUseWorkflows={mayOperateNativeWorkflows && allowedSurfaces.has("operations")}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
+                onOpenOperations={() => goToSurface("operations")}
               />
             </Suspense>}
             {mayOperateNativeReputation && <Suspense fallback={<DeferredControlFallback />}>
