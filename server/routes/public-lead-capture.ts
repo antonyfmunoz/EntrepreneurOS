@@ -24,7 +24,13 @@ const publicFormDataSchema = z.object({
   consentVersion: z.string().trim().min(1).max(120),
   consentLabel: z.string().trim().min(2).max(1_000),
   confirmationMessage: z.string().trim().min(2).max(1_000),
-}).passthrough();
+  commercialPipelineObjectId: z.string().uuid().optional(),
+  commercialInitialStage: z.string().trim().min(1).max(160).optional(),
+}).passthrough().superRefine((value, context) => {
+  if (Boolean(value.commercialPipelineObjectId) !== Boolean(value.commercialInitialStage)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["commercialPipelineObjectId"], message: "Choose both a native pipeline and its first stage, or leave automatic opportunity routing off." });
+  }
+});
 const publicSubmissionSchema = z.object({
   answers: z.record(z.string(), z.string().trim().max(4_000)),
   consent: z.literal(true),
@@ -76,6 +82,20 @@ function answerFor(answers: Record<string, string>, names: string[]) {
   return "";
 }
 
+async function commercialRoutingFor(companyId: number, pipelineObjectId?: string, initialStage?: string) {
+  if (!pipelineObjectId && !initialStage) return null;
+  if (!pipelineObjectId || !initialStage) throw new PublicLeadCaptureError(409, "lead_capture_opportunity_routing_invalid", "This intake point has incomplete commercial routing. Configure both its native pipeline and initial stage before accepting submissions.");
+  const [pipeline] = await db.select().from(eosInstrumentObjects).where(and(
+    eq(eosInstrumentObjects.id, pipelineObjectId), eq(eosInstrumentObjects.companyId, companyId),
+    eq(eosInstrumentObjects.instrumentKey, "crm"), eq(eosInstrumentObjects.objectType, "pipeline"), eq(eosInstrumentObjects.state, "active"),
+  )).limit(1);
+  const pipelineData = pipeline?.data as Record<string, unknown> | undefined;
+  const rawStages = pipelineData?.stages;
+  const stages = Array.isArray(rawStages) ? rawStages.filter((stage): stage is string => typeof stage === "string") : [];
+  if (!pipeline || !stages.includes(initialStage)) throw new PublicLeadCaptureError(409, "lead_capture_opportunity_routing_unavailable", "This intake point's native pipeline or first stage is no longer available. Pause it and choose an active commercial destination before accepting submissions.");
+  return { pipeline, initialStage };
+}
+
 export function registerPublicLeadCaptureRoutes(app: Express): void {
   app.use("/api/public/lead-forms", publicCaptureRateLimit);
 
@@ -111,6 +131,7 @@ export function registerPublicLeadCaptureRoutes(app: Express): void {
     )).limit(1);
     if (!form) throw new PublicLeadCaptureError(404, "lead_capture_form_unavailable", "This EOS form is unavailable.");
     const definition = safeFormDefinition(form);
+    const commercialRouting = await commercialRoutingFor(form.companyId, definition.commercialPipelineObjectId, definition.commercialInitialStage);
     const allowed = new Set(definition.questions.map((question) => question.id));
     for (const key of Object.keys(input.answers)) {
       if (!allowed.has(key)) throw new PublicLeadCaptureError(400, "lead_capture_answer_unknown", "The submission includes a field that is not part of this form.");
@@ -155,18 +176,36 @@ export function registerPublicLeadCaptureRoutes(app: Express): void {
         sql`${eosInstrumentObjects.data}->>'relationshipType' = 'lead'`,
       )).limit(1) : [];
       const relationshipProjection = existingRelationship || { ...common, id: randomUUID(), instrumentKey: "crm", objectType: "relationship", objectKey: "lead-relationship:" + form.id + ":" + randomUUID(), title: "Lead · " + leadName, summary: "Commercial lead relationship created from " + form.title + ".", data: { personObjectId: personProjection.id, relationshipType: "lead", sourceFormObjectId: form.id, submissionObjectId: submissionId }, sourceReference };
-      const objects = [submissionProjection, ...(existingPerson ? [] : [personProjection]), ...(existingRelationship ? [] : [relationshipProjection])].map((projection) => ({ ...projection, contentSha256: nativeContractContentSha256(projection) }));
+      // A native public form may be deliberately routed into a native
+      // commercial pipeline. Repeated submissions from the same relationship
+      // join the existing live opportunity rather than quietly creating a
+      // duplicate deal. A later submission after a won/lost opportunity is a
+      // new commercial signal and therefore creates a fresh opportunity.
+      const [existingOpportunity] = commercialRouting ? await tx.select().from(eosInstrumentObjects).where(and(
+        eq(eosInstrumentObjects.companyId, form.companyId), eq(eosInstrumentObjects.instrumentKey, "crm"), eq(eosInstrumentObjects.objectType, "opportunity"), eq(eosInstrumentObjects.state, "active"),
+        sql`${eosInstrumentObjects.data}->>'relationshipObjectId' = ${relationshipProjection.id}`,
+        sql`${eosInstrumentObjects.data}->>'pipelineObjectId' = ${commercialRouting.pipeline.id}`,
+      )).limit(1) : [];
+      const opportunityProjection = commercialRouting && !existingOpportunity ? {
+        ...common, id: randomUUID(), instrumentKey: "crm", objectType: "opportunity", objectKey: "public-lead-opportunity:" + form.id + ":" + submissionId,
+        title: form.title + " · " + leadName, summary: "Native commercial opportunity created from a consented public form submission.",
+        data: { relationshipObjectId: relationshipProjection.id, pipelineObjectId: commercialRouting.pipeline.id, stage: commercialRouting.initialStage, amountMinor: 0, currency: "USD", sourceFormObjectId: form.id, submissionObjectId: submissionId },
+        sourceReference,
+      } : existingOpportunity || null;
+      const objects = [submissionProjection, ...(existingPerson ? [] : [personProjection]), ...(existingRelationship ? [] : [relationshipProjection]), ...(opportunityProjection && !existingOpportunity ? [opportunityProjection] : [])].map((projection) => ({ ...projection, contentSha256: nativeContractContentSha256(projection) }));
       await tx.insert(eosInstrumentObjects).values(objects);
       const commands = [
         { id: submissionCommandId, instrumentKey: "forms", objectId: submissionId, commandType: "public_submission.recorded", result: { objectId: submissionId, state: "active" } },
         ...(!existingPerson ? [{ id: randomUUID(), instrumentKey: "crm", objectId: personProjection.id, commandType: "public_lead.person_created", result: { objectId: personProjection.id, state: "active" } }] : []),
         ...(!existingRelationship ? [{ id: randomUUID(), instrumentKey: "crm", objectId: relationshipProjection.id, commandType: "public_lead.relationship_created", result: { objectId: relationshipProjection.id, state: "active" } }] : []),
+        ...(opportunityProjection && !existingOpportunity ? [{ id: randomUUID(), instrumentKey: "crm", objectId: opportunityProjection.id, commandType: "public_lead.opportunity_created", result: { objectId: opportunityProjection.id, state: "active" } }] : []),
       ].map((command) => ({ ...command, companyId: form.companyId, idempotencyKey: command.commandType + ":" + command.objectId, expectedVersion: null, payload: { formObjectId: form.id, source: "unverified_public_submitter" }, state: "completed", policyDecisionId: activation.policyDecisionId, requestedByUserId: form.recordedByUserId, createdAt: now, completedAt: now }));
       await tx.insert(eosInstrumentCommands).values(commands);
       const events = [
         { object: submissionProjection, commandId: submissionCommandId, eventType: "public_submission.recorded" },
         ...(!existingPerson ? [{ object: personProjection, commandId: commands.find((command) => command.objectId === personProjection.id)!.id, eventType: "public_lead.person_created" }] : []),
         ...(!existingRelationship ? [{ object: relationshipProjection, commandId: commands.find((command) => command.objectId === relationshipProjection.id)!.id, eventType: "public_lead.relationship_created" }] : []),
+        ...(opportunityProjection && !existingOpportunity ? [{ object: opportunityProjection, commandId: commands.find((command) => command.objectId === opportunityProjection.id)!.id, eventType: "public_lead.opportunity_created" }] : []),
       ].map(({ object, commandId, eventType }) => ({ id: randomUUID(), companyId: form.companyId, instrumentKey: object.instrumentKey, objectId: object.id, commandId, eventType, fromState: null, toState: "active", objectVersion: 1, payload: { formObjectId: form.id, source: "unverified_public_submitter" }, evidenceIds: [], contentSha256: eventHash({ companyId: form.companyId, objectId: object.id, commandId, eventType, formObjectId: form.id }), recordedByUserId: form.recordedByUserId, createdAt: now }));
       await tx.insert(eosInstrumentEvents).values(events);
       // This is an internal, consent-gated handoff from an EOS-owned public
@@ -186,6 +225,7 @@ export function registerPublicLeadCaptureRoutes(app: Express): void {
           submissionObjectId: submissionId,
           crmPersonObjectId: personProjection.id,
           crmRelationshipObjectId: relationshipProjection.id,
+          crmOpportunityObjectId: opportunityProjection?.id || null,
           consentRecorded: true,
           consentVersion: definition.consentVersion,
           classification: "confidential",
@@ -207,8 +247,13 @@ export function registerPublicLeadCaptureRoutes(app: Express): void {
         // log. A repeated capture gets its own submission edges above but must
         // not attempt to duplicate this already-established relationship.
         ...(!existingRelationship ? [{ id: randomUUID(), companyId: form.companyId, sourceObjectId: personProjection.id, targetObjectId: relationshipProjection.id, relationshipType: "has_relationship", metadata: { source: "public_eos_capture", reconciled: false }, createdByUserId: form.recordedByUserId, createdAt: now }] : []),
+        ...(opportunityProjection ? [{ id: randomUUID(), companyId: form.companyId, sourceObjectId: submissionId, targetObjectId: opportunityProjection.id, relationshipType: "routed_to_opportunity", metadata: { source: "public_eos_capture", reconciled: Boolean(existingOpportunity) }, createdByUserId: form.recordedByUserId, createdAt: now }] : []),
+        ...(opportunityProjection && !existingOpportunity ? [
+          { id: randomUUID(), companyId: form.companyId, sourceObjectId: relationshipProjection.id, targetObjectId: opportunityProjection.id, relationshipType: "has_opportunity", metadata: { source: "public_eos_capture" }, createdByUserId: form.recordedByUserId, createdAt: now },
+          { id: randomUUID(), companyId: form.companyId, sourceObjectId: commercialRouting!.pipeline.id, targetObjectId: opportunityProjection.id, relationshipType: "contains_opportunity", metadata: { source: "public_eos_capture" }, createdByUserId: form.recordedByUserId, createdAt: now },
+        ] : []),
       ]);
-      await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: form.companyId, actorUserId: form.recordedByUserId, action: "lead_capture.public_submission_recorded", targetType: "lead_capture_form", targetId: form.id, traceId: "public:" + submissionId, correlationId: submissionId, result: "captured_unverified", details: { actorType: "unverified_public_submitter", formObjectId: form.id, submissionObjectId: submissionId, crmPersonObjectId: personProjection.id, crmRelationshipObjectId: relationshipProjection.id, reconciledExistingPerson: Boolean(existingPerson), reconciledExistingRelationship: Boolean(existingRelationship), consentVersion: definition.consentVersion, activationPolicyDecisionId: activation.policyDecisionId }, createdAt: now });
+      await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: form.companyId, actorUserId: form.recordedByUserId, action: "lead_capture.public_submission_recorded", targetType: "lead_capture_form", targetId: form.id, traceId: "public:" + submissionId, correlationId: submissionId, result: "captured_unverified", details: { actorType: "unverified_public_submitter", formObjectId: form.id, submissionObjectId: submissionId, crmPersonObjectId: personProjection.id, crmRelationshipObjectId: relationshipProjection.id, crmOpportunityObjectId: opportunityProjection?.id || null, commercialPipelineObjectId: commercialRouting?.pipeline.id || null, commercialInitialStage: commercialRouting?.initialStage || null, reconciledExistingPerson: Boolean(existingPerson), reconciledExistingRelationship: Boolean(existingRelationship), reconciledExistingOpportunity: Boolean(existingOpportunity), consentVersion: definition.consentVersion, activationPolicyDecisionId: activation.policyDecisionId }, createdAt: now });
     });
     // Dispatch only after commit. Public acceptance must not fail merely
     // because the immediate scheduler attempt is temporarily unavailable: the

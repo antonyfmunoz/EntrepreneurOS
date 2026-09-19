@@ -19,7 +19,13 @@ const publicBookingCalendarSchema = z.object({
   publicBookingDurationMinutes: z.number().int().min(15).max(240).default(30),
   publicBookingWindowDays: z.number().int().min(1).max(60).default(14),
   timeZone: z.string().trim().min(2).max(120),
-}).passthrough();
+  commercialPipelineObjectId: z.string().uuid().optional(),
+  commercialInitialStage: z.string().trim().min(1).max(160).optional(),
+}).passthrough().superRefine((value, context) => {
+  if (Boolean(value.commercialPipelineObjectId) !== Boolean(value.commercialInitialStage)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["commercialPipelineObjectId"], message: "Choose both a native pipeline and its first stage, or leave automatic opportunity routing off." });
+  }
+});
 const publicBookingSubmissionSchema = z.object({
   startsAt: z.string().datetime(),
   name: z.string().trim().min(2).max(240),
@@ -138,6 +144,20 @@ function eventHash(input: Record<string, unknown>) {
   return nativeContractContentSha256({ schemaVersion: "eos.public-booking-event.v1", ...input });
 }
 
+async function commercialRoutingFor(companyId: number, pipelineObjectId?: string, initialStage?: string) {
+  if (!pipelineObjectId && !initialStage) return null;
+  if (!pipelineObjectId || !initialStage) throw new PublicBookingError(409, "public_booking_opportunity_routing_invalid", "This booking calendar has incomplete commercial routing. Configure both its native pipeline and initial stage before accepting reservations.");
+  const [pipeline] = await db.select().from(eosInstrumentObjects).where(and(
+    eq(eosInstrumentObjects.id, pipelineObjectId), eq(eosInstrumentObjects.companyId, companyId),
+    eq(eosInstrumentObjects.instrumentKey, "crm"), eq(eosInstrumentObjects.objectType, "pipeline"), eq(eosInstrumentObjects.state, "active"),
+  )).limit(1);
+  const pipelineData = pipeline?.data as Record<string, unknown> | undefined;
+  const rawStages = pipelineData?.stages;
+  const stages = Array.isArray(rawStages) ? rawStages.filter((stage): stage is string => typeof stage === "string") : [];
+  if (!pipeline || !stages.includes(initialStage)) throw new PublicBookingError(409, "public_booking_opportunity_routing_unavailable", "This booking calendar's native pipeline or first stage is no longer available. Pause it and choose an active commercial destination before accepting reservations.");
+  return { pipeline, initialStage };
+}
+
 export function registerPublicBookingRoutes(app: Express): void {
   app.use("/api/public/bookings", publicBookingRateLimit);
 
@@ -171,6 +191,7 @@ export function registerPublicBookingRoutes(app: Express): void {
       return;
     }
     const { definition, activation, availability } = await bookingContext(calendar);
+    const commercialRouting = await commercialRoutingFor(calendar.companyId, definition.commercialPipelineObjectId, definition.commercialInitialStage);
     const startsAt = new Date(input.startsAt); const startsMs = startsAt.getTime(); const endsAt = new Date(startsMs + definition.publicBookingDurationMinutes * 60_000);
     if (!Number.isFinite(startsMs) || startsMs < Date.now() + 5 * 60_000) throw new PublicBookingError(400, "public_booking_time_invalid", "Choose a future available time.");
     if (startsMs > Date.now() + definition.publicBookingWindowDays * 86_400_000) throw new PublicBookingError(400, "public_booking_time_outside_window", "Choose a time inside the current booking window.");
@@ -204,11 +225,31 @@ export function registerPublicBookingRoutes(app: Express): void {
       const relationship = existingRelationship || { ...common, id: randomUUID(), instrumentKey: "crm", objectType: "relationship", objectKey: `booking-lead:${calendar.id}:${randomUUID()}`, title: `Lead · ${input.name}`, summary: `Booking lead for ${calendar.title}.`, data: { personObjectId: person.id, relationshipType: "lead", sourceCalendarObjectId: calendar.id }, sourceReference };
       const event = { ...common, id: bookingEventId, instrumentKey: "calendar", objectType: "event", objectKey: `public-booking-event:${calendar.id}:${bookingEventId}`, parentObjectId: calendar.id, title: `Booking · ${input.name}`, summary: input.note || `Public booking for ${calendar.title}.`, data: { calendarObjectId: calendar.id, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), participantReferences: [input.email], bookingSource: "public_eos", relationshipObjectId: relationship.id }, sourceReference };
       const booking = { ...common, id: bookingId, instrumentKey: "calendar", objectType: "booking", objectKey: `public-booking:${calendar.id}:${bookingId}`, parentObjectId: calendar.id, title: `Booking · ${input.name}`, summary: input.note || `Public booking for ${calendar.title}.`, data: { calendarObjectId: calendar.id, eventObjectId: event.id, bookedByReference: input.email, relationshipObjectId: relationship.id, consentVersion: definition.publicBookingConsentVersion, bookedAt: now.toISOString() }, sourceReference };
-      const projections = [event, booking, ...(existingPerson ? [] : [person]), ...(existingRelationship ? [] : [relationship])].map((item) => ({ ...item, contentSha256: nativeContractContentSha256(item) }));
+      // A booking is another consented commercial signal. When the calendar
+      // declares a native commercial destination, reuse the relationship's
+      // live opportunity in that pipeline or create one if this is the first
+      // live opportunity. This avoids duplicate deals while preserving a
+      // durable link from every booked conversation to the operating record.
+      const [existingOpportunity] = commercialRouting ? await tx.select().from(eosInstrumentObjects).where(and(
+        eq(eosInstrumentObjects.companyId, calendar.companyId), eq(eosInstrumentObjects.instrumentKey, "crm"), eq(eosInstrumentObjects.objectType, "opportunity"), eq(eosInstrumentObjects.state, "active"),
+        sql`${eosInstrumentObjects.data}->>'relationshipObjectId' = ${relationship.id}`,
+        sql`${eosInstrumentObjects.data}->>'pipelineObjectId' = ${commercialRouting.pipeline.id}`,
+      )).limit(1) : [];
+      const opportunity = commercialRouting && !existingOpportunity ? {
+        ...common, id: randomUUID(), instrumentKey: "crm", objectType: "opportunity", objectKey: `public-booking-opportunity:${calendar.id}:${bookingId}`,
+        title: `${calendar.title} · ${input.name}`, summary: "Native commercial opportunity created from a consented public booking.",
+        data: { relationshipObjectId: relationship.id, pipelineObjectId: commercialRouting.pipeline.id, stage: commercialRouting.initialStage, amountMinor: 0, currency: "USD", sourceCalendarObjectId: calendar.id, bookingObjectId: booking.id },
+        sourceReference,
+      } : existingOpportunity || null;
+      const projections = [event, booking, ...(existingPerson ? [] : [person]), ...(existingRelationship ? [] : [relationship]), ...(opportunity && !existingOpportunity ? [opportunity] : [])].map((item) => ({ ...item, contentSha256: nativeContractContentSha256(item) }));
       await tx.insert(eosInstrumentObjects).values(projections);
       const command = { id: commandId, companyId: calendar.companyId, instrumentKey: "calendar", objectId: booking.id, commandType: "public_booking.recorded", idempotencyKey: `public-booking:${booking.id}`, expectedVersion: null, payload: { calendarObjectId: calendar.id, eventObjectId: event.id, source: "unverified_public_submitter" }, result: { objectId: booking.id, eventObjectId: event.id, state: "active" }, state: "completed", policyDecisionId: activation.policyDecisionId, requestedByUserId: calendar.recordedByUserId, createdAt: now, completedAt: now };
-      await tx.insert(eosInstrumentCommands).values(command);
-      await tx.insert(eosInstrumentEvents).values({ id: randomUUID(), companyId: calendar.companyId, instrumentKey: "calendar", objectId: booking.id, commandId: command.id, eventType: "public_booking.recorded", fromState: null, toState: "active", objectVersion: 1, payload: { calendarObjectId: calendar.id, eventObjectId: event.id, relationshipObjectId: relationship.id }, evidenceIds: [], contentSha256: eventHash({ companyId: calendar.companyId, bookingId: booking.id, eventId: event.id, commandId: command.id }), recordedByUserId: calendar.recordedByUserId, createdAt: now });
+      const opportunityCommand = opportunity && !existingOpportunity ? { id: randomUUID(), companyId: calendar.companyId, instrumentKey: "crm", objectId: opportunity.id, commandType: "public_booking.opportunity_created", idempotencyKey: `public-booking-opportunity:${booking.id}`, expectedVersion: null, payload: { calendarObjectId: calendar.id, bookingObjectId: booking.id, source: "unverified_public_submitter" }, result: { objectId: opportunity.id, state: "active" }, state: "completed", policyDecisionId: activation.policyDecisionId, requestedByUserId: calendar.recordedByUserId, createdAt: now, completedAt: now } : null;
+      await tx.insert(eosInstrumentCommands).values([command, ...(opportunityCommand ? [opportunityCommand] : [])]);
+      await tx.insert(eosInstrumentEvents).values([
+        { id: randomUUID(), companyId: calendar.companyId, instrumentKey: "calendar", objectId: booking.id, commandId: command.id, eventType: "public_booking.recorded", fromState: null, toState: "active", objectVersion: 1, payload: { calendarObjectId: calendar.id, eventObjectId: event.id, relationshipObjectId: relationship.id }, evidenceIds: [], contentSha256: eventHash({ companyId: calendar.companyId, bookingId: booking.id, eventId: event.id, commandId: command.id }), recordedByUserId: calendar.recordedByUserId, createdAt: now },
+        ...(opportunityCommand && opportunity ? [{ id: randomUUID(), companyId: calendar.companyId, instrumentKey: "crm", objectId: opportunity.id, commandId: opportunityCommand.id, eventType: "public_booking.opportunity_created", fromState: null, toState: "active", objectVersion: 1, payload: { calendarObjectId: calendar.id, bookingObjectId: booking.id, pipelineObjectId: commercialRouting!.pipeline.id, stage: commercialRouting!.initialStage }, evidenceIds: [], contentSha256: eventHash({ companyId: calendar.companyId, bookingId: booking.id, opportunityId: opportunity.id, commandId: opportunityCommand.id }), recordedByUserId: calendar.recordedByUserId, createdAt: now }] : []),
+      ]);
       // Public form captures and public booking captures are both consented
       // commercial handoffs. Publish the same durable, privacy-bounded event
       // so an assigned commercial Role Agent can operate the next step through
@@ -228,6 +269,7 @@ export function registerPublicBookingRoutes(app: Express): void {
           eventObjectId: event.id,
           crmPersonObjectId: person.id,
           crmRelationshipObjectId: relationship.id,
+          crmOpportunityObjectId: opportunity?.id || null,
           consentRecorded: true,
           consentVersion: definition.publicBookingConsentVersion,
           classification: "confidential",
@@ -247,8 +289,13 @@ export function registerPublicBookingRoutes(app: Express): void {
         { id: randomUUID(), companyId: calendar.companyId, sourceObjectId: event.id, targetObjectId: booking.id, relationshipType: "booked_as", metadata: { source: "public_eos_booking" }, createdByUserId: calendar.recordedByUserId, createdAt: now },
         { id: randomUUID(), companyId: calendar.companyId, sourceObjectId: booking.id, targetObjectId: relationship.id, relationshipType: "concerns_relationship", metadata: { source: "public_eos_booking" }, createdByUserId: calendar.recordedByUserId, createdAt: now },
         ...(!existingRelationship ? [{ id: randomUUID(), companyId: calendar.companyId, sourceObjectId: person.id, targetObjectId: relationship.id, relationshipType: "has_relationship", metadata: { source: "public_eos_booking" }, createdByUserId: calendar.recordedByUserId, createdAt: now }] : []),
+        ...(opportunity ? [{ id: randomUUID(), companyId: calendar.companyId, sourceObjectId: booking.id, targetObjectId: opportunity.id, relationshipType: "routed_to_opportunity", metadata: { source: "public_eos_booking", reconciled: Boolean(existingOpportunity) }, createdByUserId: calendar.recordedByUserId, createdAt: now }] : []),
+        ...(opportunity && !existingOpportunity ? [
+          { id: randomUUID(), companyId: calendar.companyId, sourceObjectId: relationship.id, targetObjectId: opportunity.id, relationshipType: "has_opportunity", metadata: { source: "public_eos_booking" }, createdByUserId: calendar.recordedByUserId, createdAt: now },
+          { id: randomUUID(), companyId: calendar.companyId, sourceObjectId: commercialRouting!.pipeline.id, targetObjectId: opportunity.id, relationshipType: "contains_opportunity", metadata: { source: "public_eos_booking" }, createdByUserId: calendar.recordedByUserId, createdAt: now },
+        ] : []),
       ]);
-      await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: calendar.companyId, actorUserId: calendar.recordedByUserId, action: "booking.public_reservation_recorded", targetType: "calendar_booking", targetId: booking.id, traceId: `public:${booking.id}`, correlationId: booking.id, result: "captured_unverified", details: { actorType: "unverified_public_submitter", calendarObjectId: calendar.id, eventObjectId: event.id, relationshipObjectId: relationship.id, consentVersion: definition.publicBookingConsentVersion, activationPolicyDecisionId: activation.policyDecisionId }, createdAt: now });
+      await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: calendar.companyId, actorUserId: calendar.recordedByUserId, action: "booking.public_reservation_recorded", targetType: "calendar_booking", targetId: booking.id, traceId: `public:${booking.id}`, correlationId: booking.id, result: "captured_unverified", details: { actorType: "unverified_public_submitter", calendarObjectId: calendar.id, eventObjectId: event.id, relationshipObjectId: relationship.id, crmOpportunityObjectId: opportunity?.id || null, commercialPipelineObjectId: commercialRouting?.pipeline.id || null, commercialInitialStage: commercialRouting?.initialStage || null, reconciledExistingOpportunity: Boolean(existingOpportunity), consentVersion: definition.publicBookingConsentVersion, activationPolicyDecisionId: activation.policyDecisionId }, createdAt: now });
     });
     // Preserve the booking even if a momentary scheduler fault prevents the
     // immediate handoff. EOS retries the durable outbox; the public caller

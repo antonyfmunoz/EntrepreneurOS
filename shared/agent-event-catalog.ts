@@ -33,7 +33,7 @@ export const nativeAgentEventCatalog = [
     label: "Consented lead recorded",
     source: "Native website and CRM runtime",
     description: "Runs after EOS accepts a consented submission or booking from an EOS-owned public intake point and commits the linked native CRM records.",
-    payloadSummary: "Form or calendar, intake record identifiers, linked CRM record identifiers, recorded consent version, classification, and no visitor answers or provider-effect claim.",
+    payloadSummary: "Form or calendar, intake record identifiers, linked CRM person, relationship, and optional native opportunity identifiers, recorded consent version, classification, and no visitor answers or provider-effect claim.",
     filterFields: ["consentRecorded", "consentVersion", "classification"],
   },
   {

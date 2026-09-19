@@ -531,9 +531,14 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     const activated = await api.post(`/api/eos/companies/${companyId}/instrument-objects/${created.body.object.id}/transitions`).send({ expectedVersion: 2, state: "active", rationale: "Founder approves use in the synthetic qualification workspace.", evidenceIds: [], idempotencyKey: "instrument:transition:qualification-document:active" }).expect(200);
     expect(activated.body.object).toMatchObject({ state: "active", version: 3 });
 
+    const inboundPipeline = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({
+      instrumentKey: "crm", objectType: "pipeline", objectKey: "pipeline:public-intake-fixture", title: "Public intake pipeline", summary: "Synthetic native commercial destination for public intake qualification.", classification: "confidential", visibility: "organization",
+      data: { stages: ["Qualified", "Discovery", "Proposal", "Won", "Lost"] }, sourceReference: { authority: "native_eos", capability: "native_crm_pipeline" }, evidenceIds: [], idempotencyKey: "instrument:create:public-intake-pipeline",
+    }).expect(201);
+    await api.post(`/api/eos/companies/${companyId}/instrument-objects/${inboundPipeline.body.object.id}/transitions`).send({ expectedVersion: 1, state: "active", rationale: "Founder activates the synthetic native commercial destination for public intake qualification.", evidenceIds: [], idempotencyKey: "instrument:transition:public-intake-pipeline:active" }).expect(200);
     const captureForm = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({
       instrumentKey: "forms", objectType: "form", objectKey: "form:public-funnel-fixture", title: "Public funnel fixture form", summary: "Synthetic consented intake point.", classification: "confidential", visibility: "organization",
-      data: { publicCapture: true, questions: [{ id: "email", label: "Work email", type: "email", required: true, options: [] }], consentVersion: "integration-v1", consentLabel: "I consent to be contacted about this request.", confirmationMessage: "Recorded." },
+      data: { publicCapture: true, questions: [{ id: "email", label: "Work email", type: "email", required: true, options: [] }], consentVersion: "integration-v1", consentLabel: "I consent to be contacted about this request.", confirmationMessage: "Recorded.", commercialPipelineObjectId: inboundPipeline.body.object.id, commercialInitialStage: "Qualified" },
       sourceReference: { authority: "native_eos", capability: "native_funnel_fixture" }, evidenceIds: [], idempotencyKey: "instrument:create:public-funnel-form",
     }).expect(201);
     await api.post(`/api/eos/companies/${companyId}/instrument-objects/${captureForm.body.object.id}/transitions`).send({ expectedVersion: 1, state: "active", rationale: "Founder publishes the synthetic native intake point for public funnel qualification.", evidenceIds: [], idempotencyKey: "instrument:transition:public-funnel-form:active" }).expect(200);
@@ -548,6 +553,9 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(capturedPeople).toHaveLength(1);
     const capturedRelationships = capturedCrm.body.objects.filter((object: any) => object.objectType === "relationship" && object.data?.personObjectId === capturedPeople[0].id && object.data?.relationshipType === "lead");
     expect(capturedRelationships).toHaveLength(1);
+    const capturedOpportunities = capturedCrm.body.objects.filter((object: any) => object.objectType === "opportunity" && object.data?.relationshipObjectId === capturedRelationships[0].id && object.data?.pipelineObjectId === inboundPipeline.body.object.id);
+    expect(capturedOpportunities).toHaveLength(1);
+    expect(capturedOpportunities[0].data).toMatchObject({ stage: "Qualified", amountMinor: 0, sourceFormObjectId: captureForm.body.object.id });
     const capturedForms = await api.get(`/api/eos/companies/${companyId}/instruments/forms`).expect(200);
     expect(capturedForms.body.objects.filter((object: any) => object.objectType === "submission" && object.data?.formObjectId === captureForm.body.object.id)).toHaveLength(2);
     const funnel = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({
@@ -563,7 +571,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
 
     const bookingCalendar = await api.post(`/api/eos/companies/${companyId}/instrument-objects`).send({
       instrumentKey: "calendar", objectType: "calendar", objectKey: "calendar:public-booking-fixture", title: "Public booking fixture", summary: "Native EOS scheduling fixture.", classification: "confidential", visibility: "seat",
-      data: { timeZone: "America/Los_Angeles", publicBooking: true, publicBookingConsentVersion: "booking-fixture-v1", publicBookingConsentLabel: "I consent to this meeting request being recorded.", publicBookingConfirmationMessage: "Your fixture booking is recorded.", publicBookingDurationMinutes: 30, publicBookingWindowDays: 14 },
+      data: { timeZone: "America/Los_Angeles", publicBooking: true, publicBookingConsentVersion: "booking-fixture-v1", publicBookingConsentLabel: "I consent to this meeting request being recorded.", publicBookingConfirmationMessage: "Your fixture booking is recorded.", publicBookingDurationMinutes: 30, publicBookingWindowDays: 14, commercialPipelineObjectId: inboundPipeline.body.object.id, commercialInitialStage: "Qualified" },
       sourceReference: { authority: "native_eos", capability: "native_public_booking" }, evidenceIds: [], idempotencyKey: "instrument:create:public-booking-calendar",
     }).expect(201);
     await api.post(`/api/eos/companies/${companyId}/instrument-objects/${bookingCalendar.body.object.id}/transitions`).send({ expectedVersion: 1, state: "active", rationale: "Founder publishes the synthetic EOS booking calendar.", evidenceIds: [], idempotencyKey: "instrument:transition:public-booking-calendar:active" }).expect(200);
@@ -592,6 +600,8 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     await api.post(`/api/public/bookings/${bookingCalendar.body.object.id}/reservations`).send({ startsAt: bookedStartsAt, name: "Fixture Booking Lead", email: "fixture-booking@example.com", consent: true }).expect(409);
     const bookingCrm = await api.get(`/api/eos/companies/${companyId}/instruments/crm`).expect(200);
     expect(bookingCrm.body.objects.filter((object: any) => object.objectType === "person" && object.data?.email === "fixture-booking@example.com")).toHaveLength(1);
+    const bookedOpportunity = bookingCrm.body.objects.find((object: any) => object.objectType === "opportunity" && object.data?.pipelineObjectId === inboundPipeline.body.object.id && object.data?.sourceCalendarObjectId === bookingCalendar.body.object.id);
+    expect(bookedOpportunity?.data).toMatchObject({ stage: "Qualified", amountMinor: 0 });
     const bookedCalendar = await api.get(`/api/eos/companies/${companyId}/instruments/calendar`).expect(200);
     const nativeBooking = bookedCalendar.body.objects.find((object: any) => object.objectType === "booking" && object.data?.calendarObjectId === bookingCalendar.body.object.id);
     expect(nativeBooking).toBeTruthy();
@@ -613,6 +623,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
         sourceType: "public_booking",
         bookingObjectId: nativeBooking.id,
         crmRelationshipObjectId: expect.any(String),
+        crmOpportunityObjectId: bookedOpportunity.id,
         consentRecorded: true,
       }),
     });
