@@ -1737,78 +1737,7 @@ export default function EosOverlayPage() {
 
   const compilerMutation = useMutation({
     mutationFn: async () => {
-      const profile = (company?.founderProfile || {}) as JsonRecord;
-      const operatingFormation = String(profile.operatingFormation || "agent_first");
-      const operatingCadence = profile.operatingCadence === "weekly"
-        || profile.operatingCadence === "biweekly"
-        || profile.operatingCadence === "monthly"
-        ? profile.operatingCadence
-        : "weekly";
-      const existingSystems = Array.from(new Set(
-        (Array.isArray(profile.existingSystems)
-          ? profile.existingSystems
-          : typeof profile.existingSystems === "string"
-            ? profile.existingSystems.split(/[\n,]/)
-            : [])
-          .filter((item): item is string => typeof item === "string")
-          .map((item) => item.trim())
-          .filter(Boolean),
-      ));
-      const currentReality = profile.currentReality && typeof profile.currentReality === "object" && !Array.isArray(profile.currentReality)
-        ? profile.currentReality
-        : undefined;
-      const goals = blueprintList(String(company?.goals || ""));
-      const purpose =
-        String(company?.goals || "").trim() ||
-        `Build a durable, operator-ready organization for ${company?.name || "this company"}.`;
-      const offer =
-        String(company?.offer || "").trim() || "Define and validate the primary offer";
-      const targetCustomer =
-        String(company?.targetCustomer || "").trim() || "Define the initial ideal customer";
-      return requestJson<JsonRecord>("POST", `${root}/compiler/drafts`, {
-        purpose,
-        stage: String(company?.stage || "MVP"),
-        offer,
-        targetCustomer,
-        goals: goals.length
-          ? goals
-          : ["Activate the first repeatable customer-value loop"],
-        enabledModules: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-        ownerSeat: { title: "Founder / Owner", authority: "owner" },
-        operatingCadence,
-        founderProfile: {
-          vision: String(profile.vision || ""),
-          values: String(profile.values || ""),
-          decisionStyle: String(profile.decisionStyle || ""),
-          workingStyle: String(profile.workingStyle || ""),
-        },
-        blueprint: {
-          startingPoint:
-            operatingFormation === "existing_team"
-              ? "existing_company"
-              : "new_company",
-          operatingModel:
-            operatingFormation === "existing_team"
-              ? "human_team"
-              : operatingFormation === "hybrid"
-                ? "hybrid_team"
-                : "agent_first",
-          businessModel: String(company?.type || profile.businessModel || ""),
-          primaryGrowthMotion: String(profile.primaryGrowthMotion || ""),
-          departments: [],
-          priorityTools: [],
-          existingSystems,
-          ...(currentReality ? { currentReality } : {}),
-        },
-        sourceAssertions: [
-          {
-            label: "Company Mission Journey",
-            value: purpose,
-            sourceType: "user_assertion",
-          },
-        ],
-        assumptions: [],
-        unknowns: [],
+      return requestJson<JsonRecord>("POST", `${root}/compiler/from-company-mission`, {
         packageSelections: [
           {
             id: "eos-overlay-core",
@@ -1818,22 +1747,6 @@ export default function EosOverlayPage() {
           ...manifestPackageSelections.filter(
             (selection: JsonRecord) => selection.id !== "eos-overlay-core",
           ),
-        ],
-        provisioningChecklist: [
-          {
-            id: "owner-context",
-            label: "Owner identity and organization verified",
-            required: true,
-            complete: true,
-          },
-        ],
-        verificationChecks: [
-          {
-            id: "runtime-ready",
-            label: "EOS runtime readiness",
-            status: "passed",
-            evidence: "/api/ready",
-          },
         ],
       });
     },
