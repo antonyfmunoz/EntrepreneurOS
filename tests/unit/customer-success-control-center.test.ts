@@ -6,6 +6,7 @@ import {
   customerReportDeliverySchema,
   customerReportPreparationSchema,
   customerRenewalDecisionSchema,
+  customerSuccessAccountSchema,
   deriveCustomerHealth,
   lifecycleForRenewalIntent,
 } from "../../shared/customer-success";
@@ -35,6 +36,24 @@ describe("native customer-success control contracts", () => {
     expect(lifecycleForRenewalIntent("renew")).toBe("renewing");
     expect(lifecycleForRenewalIntent("terminate")).toBe("nonrenewing");
     expect(lifecycleForRenewalIntent("defer")).toBe("renewal_review");
+  });
+
+  it("accepts exactly one governed customer source, including a visible native CRM customer", () => {
+    const base = { ownerSeatId: evidenceId, reviewCadenceDays: 30, nextReviewAt: "2026-10-01", successDefinition: "The customer reaches the agreed operating result with evidence-backed delivery and outcome reviews.", classification: "confidential" as const };
+    expect(customerSuccessAccountSchema.parse({ ...base, stakeholderId: evidenceId, relationshipId: "f4d6d664-b06c-49c7-8e0d-8483b773a443" }).relationshipId).toBe("f4d6d664-b06c-49c7-8e0d-8483b773a443");
+    expect(customerSuccessAccountSchema.parse({ ...base, nativeRelationshipObjectId: "f4d6d664-b06c-49c7-8e0d-8483b773a443" }).nativeRelationshipObjectId).toBe("f4d6d664-b06c-49c7-8e0d-8483b773a443");
+    expect(() => customerSuccessAccountSchema.parse({ ...base, stakeholderId: evidenceId })).toThrow();
+    expect(() => customerSuccessAccountSchema.parse({ ...base, stakeholderId: evidenceId, relationshipId: "f4d6d664-b06c-49c7-8e0d-8483b773a443", nativeRelationshipObjectId: "d8bdb73e-cf3d-4878-865b-2f8dd5b7f3cd" })).toThrow();
+  });
+
+  it("keeps native CRM as the visible source while reconciling compatibility records only on account creation", () => {
+    const control = readFileSync(resolve(process.cwd(), "client/src/components/customer-success-control-center.tsx"), "utf8");
+    const routes = readFileSync(resolve(process.cwd(), "server/routes/customer-success.ts"), "utf8");
+    expect(control).toContain("EOS-native CRM customers");
+    expect(control).toContain("nativeRelationshipObjectId");
+    expect(routes).toContain("projectNativeCrmCustomer");
+    expect(routes).toContain("compatibility_projection_not_a_second_user_managed_contact");
+    expect(routes).toContain("customer_success.native_crm_customer.read");
   });
 
   it("adds database-enforced immutable receipts and governed projections", () => {

@@ -802,7 +802,7 @@ try {
     .locator("xpath=ancestor::*[.//button[normalize-space()='Open module']][1]");
   await customerSuccessModule.getByRole("button", { name: "Open module", exact: true }).click();
   await desktop.getByRole("heading", { name: "Customer success accounts", exact: true }).waitFor();
-  await desktop.getByLabel("Canonical customer relationship", { exact: true }).waitFor();
+  await desktop.getByLabel("Customer relationship", { exact: true }).waitFor();
   await desktop.getByRole("button", { name: "Create account", exact: true }).waitFor();
   const productEvolutionModule = desktop
     .getByText("Product, Offer & Template Evolution", { exact: true })
