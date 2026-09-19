@@ -39,6 +39,7 @@ const StakeholderPortalPage = lazy(() => import("@/pages/stakeholder-portal-page
 const LeadCapturePage = lazy(() => import("@/pages/lead-capture-page"));
 const PublicFunnelPage = lazy(() => import("@/pages/public-funnel-page"));
 const PublicSitePage = lazy(() => import("@/pages/public-site-page"));
+const PublicBookingPage = lazy(() => import("@/pages/public-booking-page"));
 const NotFoundPage = lazy(() => import("@/pages/not-found-page"));
 
 type CanonicalCompanySurface = "organization" | "intelligence" | "operations" | "work-room";
@@ -206,6 +207,17 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <Suspense fallback={<FullPageStatus title="Opening your form" description="Preparing this EOS intake point." />}>
           <LeadCapturePage />
+        </Suspense>
+        <Toaster />
+      </QueryClientProvider>
+    );
+  }
+
+  if (window.location.pathname.startsWith("/book/")) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <Suspense fallback={<FullPageStatus title="Opening booking" description="Preparing this EOS-owned scheduling page." />}>
+          <PublicBookingPage />
         </Suspense>
         <Toaster />
       </QueryClientProvider>
