@@ -146,6 +146,7 @@ export async function enqueueAgentEvent(input: { companyId: number; eventType: s
     Array.isArray(schedule.eventTypes)
     && schedule.eventTypes.includes(input.eventType)
     && matchesAgentEventFilter(input.payload, schedule.eventFilter)
+    && (typeof input.payload.targetSeatId !== "string" || schedule.seatId === input.payload.targetSeatId)
   ));
   const now = input.observedAt || new Date();
   const results = [];

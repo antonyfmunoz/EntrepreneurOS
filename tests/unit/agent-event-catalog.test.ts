@@ -25,6 +25,12 @@ describe("native Role Agent event catalog", () => {
         source: "Native website and CRM runtime",
       }),
       expect.objectContaining({
+        eventType: "eos.stakeholder_portal.intake.handed_off.v1",
+        label: "Client onboarding work handed off",
+        source: "Native client workspace runtime",
+        filterFields: expect.arrayContaining(["targetSeatId", "verificationState"]),
+      }),
+      expect.objectContaining({
         eventType: "eos.recovery.engagement.transitioned.v1",
         label: "Recovery engagement advanced",
         source: "Native Revenue Recovery operations",
@@ -43,6 +49,7 @@ describe("native Role Agent event catalog", () => {
     expect(nativeAgentEventLabel("eos.approval.decided.v1")).toBe("Approval decided");
     expect(nativeAgentEventLabel("eos.instrument.object.transitioned.v1")).toBe("Native tool lifecycle changed");
     expect(nativeAgentEventLabel("eos.crm.consented_lead_recorded.v1")).toBe("Consented lead recorded");
+    expect(nativeAgentEventLabel("eos.stakeholder_portal.intake.handed_off.v1")).toBe("Client onboarding work handed off");
     expect(nativeAgentEventLabel("eos.recovery.engagement.transitioned.v1")).toBe("Recovery engagement advanced");
   });
 

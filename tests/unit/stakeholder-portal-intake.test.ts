@@ -58,6 +58,11 @@ describe("native client portal onboarding intake contracts", () => {
     expect(routes).toContain("stakeholder_portal_owner_scope_denied");
     expect(routes).toContain("targetSeatId: targetSeatId || access.seat.id");
     expect(routes).toContain("native_work_packet_only_no_provider_or_customer_effect");
+    expect(routes).toContain("eos.stakeholder_portal.intake.handed_off.v1");
+    expect(routes).toContain("agent_event.recorded_from_client_onboarding_handoff");
+    expect(routes).toContain("targetSeatId: portal.ownerSeatId");
+    expect(routes).toContain("externalEffectsExecuted: false");
+    expect(routes).toContain("dispatchAgentEventOutboxEvent(agentEventId)");
     expect(page).toContain("Submit onboarding intake");
     expect(page).toContain("does not automatically grant access, start work, or change any agreement");
   });
