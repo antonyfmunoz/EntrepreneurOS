@@ -3,7 +3,7 @@ import type { Express, Request, Response } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { ZodError } from "zod";
 import {
-  companies, eosAuditRecords, eosEvidence, eosInstrumentObjects, eosStakeholders, eosStakeholderPortalAccessGrants, eosWorkPackets,
+  companies, eosAuditRecords, eosEvidence, eosInstrumentObjects, eosSeats, eosStakeholders, eosStakeholderPortalAccessGrants, eosWorkPackets,
   eosStakeholderPortalPublications, eosStakeholderPortals,
 } from "@shared/schema";
 import {
@@ -14,7 +14,7 @@ import {
 } from "@shared/stakeholder-portal";
 import { db } from "../db";
 import { fixedWindowRateLimit } from "../middleware/rate-limit";
-import { EosRouteError, authorizeAction, companyAccess } from "./eos-runtime";
+import { EosRouteError, authorizeAction, companyAccess, visibleSeatIds } from "./eos-runtime";
 import { nativeContractContentSha256 } from "../esign/template-generation";
 
 const tokenDigest = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -23,9 +23,9 @@ const publicPortalRateLimit = fixedWindowRateLimit({ limit: 90, windowMs: 60_000
 const publicPortalIntakeRateLimit = fixedWindowRateLimit({ limit: 20, windowMs: 60_000, namespace: "stakeholder-portal-intake" });
 function route(handler: (req: Request, res: Response) => Promise<void>) { return async (req: Request, res: Response, next: (error?: unknown) => void) => { try { await handler(req, res); } catch (error) { if (error instanceof EosRouteError) return res.status(error.status).json({ code: error.code, message: error.message }); if (error instanceof ZodError) return res.status(400).json({ code: "stakeholder_portal_input_invalid", message: error.issues[0]?.message || "Stakeholder portal input is invalid." }); next(error); } }; }
 
-async function portalAccess(req: Request, actionKey: string, view = false) {
+async function portalAccess(req: Request, actionKey: string, view = false, targetSeatId?: string) {
   const access = await companyAccess(req);
-  const policy = await authorizeAction(req, access, { authorityClass: view ? "view" : "decide", resource: "stakeholder_portal", actionKey, purpose: view ? "inspect_stakeholder_portals" : "govern_external_disclosure", classification: "restricted", consequence: view ? "routine" : "material", targetSeatId: access.seat.id });
+  const policy = await authorizeAction(req, access, { authorityClass: view ? "view" : "decide", resource: "stakeholder_portal", actionKey, purpose: view ? "inspect_stakeholder_portals" : "govern_external_disclosure", classification: "restricted", consequence: view ? "routine" : "material", targetSeatId: targetSeatId || access.seat.id });
   return { access, policy };
 }
 
@@ -116,9 +116,12 @@ export function registerStakeholderPortalRoutes(app: Express): void {
   }));
 
   app.post("/api/eos/companies/:companyId/stakeholder-portals", route(async (req, res) => {
-    const input = stakeholderPortalCreateSchema.parse(req.body); const { access, policy } = await portalAccess(req, "stakeholder_portal.create");
+    const input = stakeholderPortalCreateSchema.parse(req.body); const { ownerSeatId: requestedOwnerSeatId, ...portalInput } = input; const { access, policy } = await portalAccess(req, "stakeholder_portal.create", false, requestedOwnerSeatId);
     if (input.stakeholderId) { const [stakeholder] = await db.select().from(eosStakeholders).where(and(eq(eosStakeholders.id, input.stakeholderId), eq(eosStakeholders.companyId, access.company.id))).limit(1); if (!stakeholder) throw new EosRouteError(409, "portal_stakeholder_invalid", "Stakeholder must belong to this company."); }
-    const now = new Date(); const record = { id: randomUUID(), companyId: access.company.id, ...input, stakeholderId: input.stakeholderId || null, state: "dormant", activationEvidenceIds: [], ownerSeatId: access.seat.id, activatedByUserId: null, activatedAt: null, version: 1, recordedByUserId: req.user.id, createdAt: now, updatedAt: now };
+    const ownerSeatId = requestedOwnerSeatId || access.seat.id; const visible = await visibleSeatIds(access.company.id, access.seat.id, access.role);
+    const [ownerSeat] = await db.select({ id: eosSeats.id }).from(eosSeats).where(and(eq(eosSeats.id, ownerSeatId), eq(eosSeats.companyId, access.company.id), eq(eosSeats.status, "active"))).limit(1);
+    if (!ownerSeat || !visible.has(ownerSeatId)) throw new EosRouteError(403, "stakeholder_portal_owner_scope_denied", "The requested client-workspace owner is outside this role's visible hierarchy.");
+    const now = new Date(); const record = { id: randomUUID(), companyId: access.company.id, ...portalInput, stakeholderId: input.stakeholderId || null, state: "dormant", activationEvidenceIds: [], ownerSeatId, activatedByUserId: null, activatedAt: null, version: 1, recordedByUserId: req.user.id, createdAt: now, updatedAt: now };
     await db.transaction(async (tx) => { await tx.insert(eosStakeholderPortals).values(record); await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "stakeholder_portal.created", targetType: "stakeholder_portal", targetId: record.id, traceId: policy.traceId, correlationId: policy.correlationId, result: "dormant", details: { portalType: input.portalType, externallyAccessible: false, policyDecisionId: policy.decisionId }, createdAt: now }); });
     res.status(201).json(record);
   }));

@@ -21,8 +21,9 @@ describe("institutional intelligence contracts", () => {
 });
 describe("stakeholder portal contracts", () => {
   it("creates explicit dormant-safe disclosure scope", () => {
-    const portal = stakeholderPortalCreateSchema.parse({ portalKey: "client-1", name: "Client workspace", portalType: "client", visibleSections: ["updates"], activationRequirements: ["Verify the intended recipient"] });
+    const portal = stakeholderPortalCreateSchema.parse({ portalKey: "client-1", name: "Client workspace", portalType: "client", ownerSeatId: "00000000-0000-4000-8000-000000000001", visibleSections: ["updates"], activationRequirements: ["Verify the intended recipient"] });
     expect(portal.visibleSections).toEqual(["updates"]);
+    expect(portal.ownerSeatId).toBe("00000000-0000-4000-8000-000000000001");
   });
 
   it("rejects expired access grants", () => {

@@ -4,6 +4,7 @@ export const stakeholderPortalCreateSchema = z.object({
   portalKey: z.string().trim().min(3).max(160), name: z.string().trim().min(3).max(240),
   portalType: z.enum(["client", "board", "advisor", "investor", "capital", "partner"]),
   stakeholderId: z.string().trim().min(1).max(200).optional(),
+  ownerSeatId: z.string().trim().uuid().optional(),
   visibleSections: z.array(z.string().trim().min(2).max(120)).min(1).max(30),
   activationRequirements: z.array(z.string().trim().min(5).max(1000)).min(1).max(30),
 });
