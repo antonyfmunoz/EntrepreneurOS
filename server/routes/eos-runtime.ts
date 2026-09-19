@@ -12967,67 +12967,15 @@ export function registerEosRuntimeRoutes(app: Express): void {
 
   app.post(
     "/api/eos/companies/:companyId/compiler/drafts",
-    route(async (req) => {
-      const access = await companyAccess(req);
-      const { company } = access;
-      if (!mayManageOrganization(access.role))
-        throw new EosRouteError(
-          403,
-          "compiler_denied",
-          "Only the founder or Company CEO may compile the organization.",
-        );
-      await authorizeAction(req, access, {
-        authorityClass: "decide",
-        resource: "organization_manifest",
-        actionKey: "manifest.compile",
-        purpose: "compile_organization",
-        classification: "restricted",
-        consequence: "material",
-      });
-      const manifest = manifestInputSchema.parse(req.body);
-      const latest = await db.query.eosManifestVersions.findFirst({
-        where: eq(eosManifestVersions.companyId, company.id),
-        orderBy: [desc(eosManifestVersions.version)],
-      });
-      const record = {
-        id: randomUUID(),
-        companyId: company.id,
-        version: (latest?.version || 0) + 1,
-        status: "draft",
-        manifest: {
-          ...manifest,
-          advisorCouncil: buildAdvisorCouncil({
-            founderName: req.user.fullName || req.user.username,
-            companyName: company.name,
-            founderProfile: manifest.founderProfile,
-            companyGoals: manifest.goals.join("\n"),
-          }),
-          blueprintPlan: deriveOrganizationBlueprintPlan(manifest),
-          compiledFrom: { companyId: company.id, companyName: company.name },
-          schemaVersion: "eos.organization-manifest.v1",
-        },
-        createdByUserId: req.user.id,
-        createdAt: new Date(),
-      };
-      const { traceId, correlationId } = tracePair();
-      await db.transaction(async (tx) => {
-        await tx.insert(eosManifestVersions).values(record);
-        await tx.insert(eosAuditRecords).values({
-          id: randomUUID(),
-          companyId: company.id,
-          actorUserId: req.user.id,
-          action: "manifest.compiled",
-          targetType: "organization_manifest",
-          targetId: record.id,
-          traceId,
-          correlationId,
-          result: "draft_created",
-          details: { version: record.version },
-          createdAt: new Date(),
-        });
-      });
-      return { status: 201, body: record };
-    }),
+    route(async () => ({
+      status: 410,
+      body: {
+        code: "parallel_manifest_compiler_retired",
+        message: "Organization manifests are compiled from the saved Company Mission Journey so all downstream work has one authoritative company model.",
+        replacement: "/api/eos/companies/:companyId/compiler/from-company-mission",
+        sunset: true,
+      },
+    })),
   );
 
   app.post(
