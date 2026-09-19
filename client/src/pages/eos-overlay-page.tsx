@@ -10931,6 +10931,7 @@ export default function EosOverlayPage() {
                 seats={visibleSeats}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
+                onOpenOperations={() => goToSurface("operations")}
               />
             </Suspense>}
             {mayOperateNativeCalendar && <Suspense fallback={<DeferredControlFallback />}>

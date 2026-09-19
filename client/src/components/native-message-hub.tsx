@@ -79,13 +79,14 @@ function manualDestinationLabel(channel: MessageChannel) {
   return "External destination or conversation reference";
 }
 
-export function NativeMessageHub({ root, roleScopeKey, activeSeatId, seats, canExecute, canDecide }: {
+export function NativeMessageHub({ root, roleScopeKey, activeSeatId, seats, canExecute, canDecide, onOpenOperations }: {
   root: string;
   roleScopeKey: string;
   activeSeatId: string;
   seats: NativeMessageSeat[];
   canExecute: boolean;
   canDecide: boolean;
+  onOpenOperations?: () => void;
 }) {
   const [selectedConversationId, setSelectedConversationId] = useState("");
   const [selectedThreadId, setSelectedThreadId] = useState("");
@@ -430,7 +431,7 @@ export function NativeMessageHub({ root, roleScopeKey, activeSeatId, seats, canE
               <Button disabled={!canExecute || !selectedConversation || messageBody.trim().length < 1 || createMessage.isPending} onClick={() => createMessage.mutate()}><Send className="mr-2 h-4 w-4" />{createMessage.isPending ? "Recording…" : channel === "native_eos" ? "Record native message" : "Record manual external intent"}</Button>
               {mayPlanProviderDelivery && <Button variant="secondary" disabled={!canExecute || !selectedConversation || !selectedDeliveryBinding || !providerDestinationIsValid || messageBody.trim().length < 1 || planProviderDelivery.isPending} onClick={() => planProviderDelivery.mutate()}><ShieldCheck className="mr-2 h-4 w-4" />{planProviderDelivery.isPending ? "Planning…" : "Plan governed delivery"}</Button>}
             </div>
-            {plannedRunId && <Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Provider delivery plan created</AlertTitle><AlertDescription>Run {plannedRunId} is planned only. Open <a className="font-medium underline" href="#operations">Operations</a> to review the binding, satisfy the exact approval and entitlement checks, and dispatch the provider action.</AlertDescription></Alert>}
+            {plannedRunId && <Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Provider delivery plan created</AlertTitle><AlertDescription className="space-y-2"><p>Run {plannedRunId} is planned only. Review the binding, satisfy the exact approval and entitlement checks, and dispatch the provider action from Operations.</p>{onOpenOperations && <Button size="sm" variant="outline" onClick={onOpenOperations}>Open governed delivery run</Button>}</AlertDescription></Alert>}
             <div className="border-t pt-3"><Label htmlFor="message-thread-title">Open a focused thread</Label><div className="mt-1 flex gap-2"><Input id="message-thread-title" value={threadTitle} onChange={(event) => setThreadTitle(event.target.value)} placeholder="Pricing exception review" /><Button variant="outline" disabled={!canExecute || !selectedConversation || threadTitle.trim().length < 2 || createThread.isPending} onClick={() => createThread.mutate()}><MessageCircleMore className="mr-2 h-4 w-4" />Thread</Button></div></div>
           </div>
         </section>
