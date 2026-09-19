@@ -184,6 +184,10 @@ describe("EOS overlay runtime contracts", () => {
           key: "reconcile-system-quickbooks",
           title: "Reconcile QuickBooks",
           owner: "executive_assistant",
+          sourceAuthority: "declared_external_inventory",
+          scopeBoundary: expect.stringMatching(/grants no credential/i),
+          nativeFallback: expect.stringMatching(/EOS-native/i),
+          failureRecoveryPath: expect.stringMatching(/Executive Assistant/i),
         }),
         expect.objectContaining({
           key: "reconcile-system-google-workspace",

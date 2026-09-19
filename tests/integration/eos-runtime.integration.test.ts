@@ -2676,6 +2676,10 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
           source: "compiler",
           status: "ready",
           sourceLineage: expect.stringContaining("reconcile-system-quickbooks"),
+          toolPack: expect.arrayContaining(["Systems"]),
+          constraintsPolicies: expect.stringContaining("declared_external_inventory"),
+          humanFallback: expect.stringMatching(/EOS-native/i),
+          failureEscalationCompensation: expect.stringMatching(/Executive Assistant/i),
         }),
       ]),
     );
