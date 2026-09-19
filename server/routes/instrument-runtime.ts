@@ -542,12 +542,35 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     const directObjects = Array.from(directObjectIds).map((id) => visibleById.get(id)).filter((object): object is typeof eosInstrumentObjects.$inferSelect => Boolean(object));
     const meetingIds = new Set(directObjects.filter((object) => object.instrumentKey === "conference_rooms" && object.objectType === "meeting").map((object) => object.id));
     const decisionObjects = visibleObjects.filter((object) => object.instrumentKey === "conference_rooms" && object.objectType === "decision" && meetingIds.has(object.parentObjectId || ""));
-    const returnedIds = new Set([...directObjects.map((object) => object.id), ...decisionObjects.map((object) => object.id)]);
+    // A relationship reaches a native order through its CRM opportunity:
+    // relationship -> opportunity -> order.  Projecting that one additional
+    // edge makes the commercial outcome visible where a role already manages
+    // the relationship, while the visible-object map ensures CRM access alone
+    // never discloses a Commerce object.  We deliberately do not traverse
+    // arbitrary graph edges here; this is the bounded, governed conversion
+    // path recorded by the native order command.
+    const opportunityIds = directObjects
+      .filter((object) => object.instrumentKey === "crm" && object.objectType === "opportunity")
+      .map((object) => object.id);
+    const opportunityOrderLinks = opportunityIds.length
+      ? await db.select().from(eosInstrumentLinks).where(and(
+        eq(eosInstrumentLinks.companyId, access.company.id),
+        inArray(eosInstrumentLinks.sourceObjectId, opportunityIds),
+        eq(eosInstrumentLinks.relationshipType, "converts_to_order"),
+      ))
+      : [];
+    const orderObjects = opportunityOrderLinks
+      .map((link) => visibleById.get(link.targetObjectId))
+      .filter((object): object is typeof eosInstrumentObjects.$inferSelect => Boolean(object && object.instrumentKey === "commerce" && object.objectType === "order"));
+    const returnedIds = new Set([...directObjects.map((object) => object.id), ...decisionObjects.map((object) => object.id), ...orderObjects.map((object) => object.id)]);
     res.json({
       schemaVersion: "eos.crm.relationship-operating-context.v1",
       relationship: visibleRelationship[0],
-      objects: [...directObjects, ...decisionObjects],
-      links: directLinks.filter((link) => returnedIds.has(link.sourceObjectId) || returnedIds.has(link.targetObjectId)),
+      objects: [...directObjects, ...decisionObjects, ...orderObjects],
+      links: [
+        ...directLinks.filter((link) => returnedIds.has(link.sourceObjectId) || returnedIds.has(link.targetObjectId)),
+        ...opportunityOrderLinks.filter((link) => returnedIds.has(link.sourceObjectId) && returnedIds.has(link.targetObjectId)),
+      ],
     });
   }));
 
