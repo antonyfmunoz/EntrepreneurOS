@@ -139,6 +139,10 @@ function DeferredControlFallback() {
 }
 
 type JsonRecord = Record<string, any>;
+type CompanyMissionCompileResult = JsonRecord & {
+  version: string | number;
+  materializedSetupMissions: JsonRecord[];
+};
 type CompanyVaultConnectionDraft = {
   providerAccountReference: string;
   credentialReference: string;
@@ -1735,9 +1739,9 @@ export default function EosOverlayPage() {
     setProviderPacketId(activePackets[0].id);
   }, [packetsQuery.data, providerPacketId]);
 
-  const compilerMutation = useMutation({
-    mutationFn: async () => {
-      return requestJson<JsonRecord>("POST", `${root}/compiler/from-company-mission`, {
+  const compilerMutation = useMutation<CompanyMissionCompileResult>({
+    mutationFn: async (): Promise<CompanyMissionCompileResult> => {
+      const draft = await requestJson<JsonRecord>("POST", `${root}/compiler/from-company-mission`, {
         packageSelections: [
           {
             id: "eos-overlay-core",
@@ -1749,13 +1753,35 @@ export default function EosOverlayPage() {
           ),
         ],
       });
+      // A completed Company Mission Journey is a compilation event, not a
+      // decorative manifest refresh. Materialize the governed downstream
+      // missions from this exact draft immediately, just as the initial
+      // company setup does. The endpoint is idempotent and creates only
+      // missing work; it never advances, approves, or completes it.
+      const materialized = await requestJson<JsonRecord>(
+        "POST",
+        `${root}/manifests/${encodeURIComponent(String(draft.id))}/blueprint-missions/materialize`,
+        {},
+      );
+      return {
+        ...draft,
+        version: draft.version,
+        materializedSetupMissions: Array.isArray(materialized.created)
+          ? materialized.created as JsonRecord[]
+          : [],
+      };
     },
     onSuccess: async (draft) => {
       await refresh();
+      const created = Array.isArray(draft.materializedSetupMissions)
+        ? draft.materializedSetupMissions.length
+        : 0;
       toast({
         title: `Manifest v${draft.version} compiled`,
         description:
-          "Advance it through diagnostic, proposal, review, provisioning, and verification before activation.",
+          created
+            ? `${created} governed setup mission${created === 1 ? " was" : "s were"} created from this company context. Review and complete them through their required evidence and approval gates.`
+            : "The company’s governed setup missions already reflect this context. Advance work through diagnostic, proposal, review, provisioning, and verification before activation.",
       });
     },
     onError: (error) => showMutationError("Manifest compilation", error),
@@ -5115,7 +5141,7 @@ export default function EosOverlayPage() {
                               : "Create governed setup missions"}
                         </Button>
                         <p className="text-xs text-muted-foreground">
-                          This creates tenant-scoped work packets only. It does not advance, approve, or complete any mission.
+                          Compilation now creates missing tenant-scoped setup missions automatically. Use this only to reconcile any remaining missing packets; it never advances, approves, or completes work.
                         </p>
                       </div>
                     )}
@@ -5143,7 +5169,7 @@ export default function EosOverlayPage() {
                     <Button onClick={() => compilerMutation.mutate()} disabled={compilerMutation.isPending}>
                       {compilerMutation.isPending ? "Compiling…" : manifest ? "Compile next manifest from current context" : "Compile organization manifest"}
                     </Button>
-                    <p className="text-xs text-muted-foreground">Compilation reads the saved Company Mission Journey. It creates a reviewable draft only; it does not activate the company, connect systems, or mark missions complete.</p>
+                    <p className="text-xs text-muted-foreground">Compilation reads the saved Company Mission Journey, then creates only the missing governed setup missions for that draft. It does not activate the company, connect systems, approve, or complete work.</p>
                   </div>
                 </section>
                 {isFounder &&
