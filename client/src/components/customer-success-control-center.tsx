@@ -24,6 +24,76 @@ const dateFromNow = (days: number) => new Date(Date.now() + days * 86_400_000).t
 const field = "h-10 rounded-md border border-input bg-background px-3 text-sm";
 function badge(state: string) { const variant = ["healthy", "achieved", "resolved", "approved", "delivery_recorded", "renewing"].includes(state) ? "default" : ["at_risk", "critical", "not_achieved", "nonrenewing"].includes(state) ? "destructive" : "secondary"; return <Badge variant={variant as any}>{state.replaceAll("_", " ")}</Badge>; }
 
+function ClientWorkspaceAccessCard({
+  portal,
+  evidenceOptions,
+  activationEvidenceIds,
+  onActivationEvidenceChange,
+  onTransition,
+  transitionPending,
+  access,
+  onAccessChange,
+  onIssueAccess,
+  issuePending,
+  issuedUrl,
+  revocations,
+  onRevocationChange,
+  onRevoke,
+  revokePending,
+}: {
+  portal: Row;
+  evidenceOptions: Row[];
+  activationEvidenceIds: string[];
+  onActivationEvidenceChange: (ids: string[]) => void;
+  onTransition: (state: "configuring" | "active" | "paused", evidenceIds: string[]) => void;
+  transitionPending: boolean;
+  access: { recipientLabel: string; recipientIdentity: string; expiresAt: string; rationale: string };
+  onAccessChange: (change: Partial<{ recipientLabel: string; recipientIdentity: string; expiresAt: string; rationale: string }>) => void;
+  onIssueAccess: () => void;
+  issuePending: boolean;
+  issuedUrl: string;
+  revocations: Record<string, string>;
+  onRevocationChange: (grantId: string, rationale: string) => void;
+  onRevoke: (grantId: string, rationale: string) => void;
+  revokePending: boolean;
+}) {
+  const requirements: string[] = Array.isArray(portal.activationRequirements) ? portal.activationRequirements : [];
+  const active = portal.state === "active";
+  const selectedActivationEvidence = activationEvidenceIds.filter(Boolean);
+  const canActivate = requirements.length > 0 && requirements.every((_requirement, index) => Boolean(activationEvidenceIds[index])) && new Set(selectedActivationEvidence).size === requirements.length;
+  return <Card>
+    <CardHeader>
+      <CardTitle>Client workspace access</CardTitle>
+      <CardDescription>Configure, activate, issue, and revoke the same native private workspace from the accountable Customer Success role. EOS never sends the link automatically or stores its raw token.</CardDescription>
+    </CardHeader>
+    <CardContent className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2"><Badge variant={active ? "default" : "secondary"}>{portal.state}</Badge><span className="text-sm font-medium">{portal.name}</span></div>
+      {portal.state === "dormant" && <Button size="sm" variant="outline" disabled={transitionPending} onClick={() => onTransition("configuring", [])}>Begin workspace configuration</Button>}
+      {["configuring", "paused"].includes(portal.state) && <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+        <div><p className="text-sm font-medium">Activation evidence</p><p className="mt-1 text-xs text-muted-foreground">Match one visible, verified Evidence item to each required boundary before opening this private workspace.</p></div>
+        {requirements.map((requirement, index) => <label key={`${portal.id}-${index}`} className="grid gap-1 text-xs text-muted-foreground">
+          <span>{index + 1}. {requirement}</span>
+          <select aria-label={`Client workspace activation evidence ${index + 1}`} className={field} value={activationEvidenceIds[index] || ""} onChange={(event) => {
+            const next = [...activationEvidenceIds]; next[index] = event.target.value; onActivationEvidenceChange(next);
+          }}>
+            <option value="">Choose verified Evidence</option>
+            {evidenceOptions.map((item) => <option key={item.id} value={item.id} disabled={activationEvidenceIds.includes(item.id) && activationEvidenceIds[index] !== item.id}>{item.title} · {item.evidenceType}</option>)}
+          </select>
+        </label>)}
+        <Button size="sm" disabled={!canActivate || transitionPending} onClick={() => onTransition("active", selectedActivationEvidence)}>Activate client workspace</Button>
+      </div>}
+      {active && <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+        <div><p className="text-sm font-medium">Issue private client access</p><p className="mt-1 text-xs text-muted-foreground">This creates one time-bounded, revocable link. It does not email, text, or otherwise deliver the link.</p></div>
+        <div className="grid gap-2 md:grid-cols-2"><Input aria-label="Client workspace recipient label" placeholder="Recipient name" value={access.recipientLabel} onChange={(event) => onAccessChange({ recipientLabel: event.target.value })}/><Input aria-label="Client workspace recipient identity" placeholder="Recipient email or verified identity" value={access.recipientIdentity} onChange={(event) => onAccessChange({ recipientIdentity: event.target.value })}/><label className="space-y-1 text-xs text-muted-foreground">Access expires<Input aria-label="Client workspace access expiry" type="datetime-local" value={access.expiresAt} onChange={(event) => onAccessChange({ expiresAt: event.target.value })}/></label><Textarea aria-label="Client workspace access rationale" placeholder="Why this recipient needs this bounded workspace access" value={access.rationale} onChange={(event) => onAccessChange({ rationale: event.target.value })}/></div>
+        <Button size="sm" disabled={issuePending || access.recipientLabel.trim().length < 2 || access.recipientIdentity.trim().length < 3 || access.rationale.trim().length < 20 || !access.expiresAt} onClick={onIssueAccess}>Issue private link once</Button>
+      </div>}
+      {issuedUrl && <Alert><AlertTitle>Private link issued once</AlertTitle><AlertDescription><p className="mb-2">Copy this link now. It will not be shown again by EOS.</p><Input readOnly aria-label="Issued client workspace link" value={issuedUrl}/></AlertDescription></Alert>}
+      {(portal.accessGrants || []).length > 0 && <div className="space-y-2 border-t pt-4"><p className="text-sm font-medium">Issued access</p>{portal.accessGrants.map((grant: Row) => <div key={grant.id} className="rounded-lg border p-3"><div className="flex flex-wrap items-center gap-2"><Badge variant={grant.state === "revoked" ? "destructive" : "secondary"}>{grant.state}</Badge><span className="text-sm font-medium">{grant.recipientLabel}</span><span className="text-xs text-muted-foreground">expires {new Date(grant.expiresAt).toLocaleString()} · opened {grant.accessCount || 0} times</span></div>{grant.state !== "revoked" && <div className="mt-3 flex flex-col gap-2 sm:flex-row"><Input aria-label={`Revoke client access ${grant.recipientLabel}`} placeholder="Revocation rationale (at least 20 characters)" value={revocations[grant.id] || ""} onChange={(event) => onRevocationChange(grant.id, event.target.value)}/><Button size="sm" variant="outline" disabled={revokePending || (revocations[grant.id] || "").trim().length < 20} onClick={() => onRevoke(grant.id, revocations[grant.id] || "")}>Revoke access</Button></div>}</div>)}</div>}
+      {active && <Button size="sm" variant="outline" disabled={transitionPending} onClick={() => onTransition("paused", [])}>Pause client workspace access</Button>}
+    </CardContent>
+  </Card>;
+}
+
 export function CustomerSuccessControlCenter({ root, canExecute, canDecide }: Props) {
   const endpoint = `${root}/customer-success`; const queryClient = useQueryClient(); const { toast } = useToast();
   const state = useQuery<Row>({ queryKey: [endpoint], queryFn: () => json("GET", endpoint) });
@@ -76,6 +146,47 @@ export function CustomerSuccessControlCenter({ root, canExecute, canDecide }: Pr
     onSuccess: async () => { await refreshPortals(); toast({ title: "Client onboarding intake updated", description: "EOS preserved the workspace boundary and immutable client submission history." }); },
     onError: (error) => toast({ title: "Client onboarding intake could not be updated", description: error instanceof Error ? error.message : String(error), variant: "destructive" }),
   });
+  const transitionClientWorkspace = useMutation({
+    mutationFn: ({ portal, nextState, evidenceIds }: { portal: Row; nextState: "configuring" | "active" | "paused"; evidenceIds: string[] }) => json("PATCH", `${portalEndpoint}/${portal.id}`, {
+      expectedVersion: portal.version,
+      state: nextState,
+      evidenceIds,
+      rationale: nextState === "configuring"
+        ? "The accountable Customer Success role is configuring this private client workspace before any recipient receives access."
+        : nextState === "active"
+          ? "The accountable Customer Success role reviewed the required verified Evidence, recipient boundary, and active onboarding scope before issuing a revocable private link."
+          : "The accountable Customer Success role is pausing client access while preserving the governed workspace and its immutable history.",
+    }),
+    onSuccess: async (_result, variables) => {
+      await refreshPortals();
+      toast({ title: variables.nextState === "active" ? "Client workspace activated" : `Client workspace ${variables.nextState}`, description: "EOS preserved the governed client-workspace state. Activation alone does not issue access, send a message, or start provider work." });
+    },
+    onError: (error) => toast({ title: "Client workspace could not be updated", description: error instanceof Error ? error.message : String(error), variant: "destructive" }),
+  });
+  const issueClientWorkspaceAccess = useMutation({
+    mutationFn: ({ portal, recipientLabel, recipientIdentity, expiresAt, rationale }: { portal: Row; recipientLabel: string; recipientIdentity: string; expiresAt: string; rationale: string }) => json<Row>("POST", `${portalEndpoint}/${portal.id}/access-grants`, {
+      recipientLabel,
+      recipientIdentity,
+      expiresAt: new Date(expiresAt).toISOString(),
+      rationale,
+    }),
+    onSuccess: async (result) => {
+      setIssuedClientWorkspaceUrl(`${window.location.origin}${String(result.portalUrl)}`);
+      setClientWorkspaceAccess((value) => ({ ...value, recipientLabel: "", recipientIdentity: "" }));
+      await refreshPortals();
+      toast({ title: "Private client link issued once", description: "Copy the link now. EOS stores only the revocable grant record; it does not send the link or retain the raw token." });
+    },
+    onError: (error) => toast({ title: "Client access could not be issued", description: error instanceof Error ? error.message : String(error), variant: "destructive" }),
+  });
+  const revokeClientWorkspaceAccess = useMutation({
+    mutationFn: ({ portal, grantId, rationale }: { portal: Row; grantId: string; rationale: string }) => json("POST", `${portalEndpoint}/${portal.id}/access-grants/${grantId}/revoke`, { rationale }),
+    onSuccess: async () => {
+      setClientWorkspaceRevocations({});
+      await refreshPortals();
+      toast({ title: "Client workspace access revoked", description: "The recipient can no longer use that private link. EOS preserved the audit history and did not delete the onboarding record." });
+    },
+    onError: (error) => toast({ title: "Client access could not be revoked", description: error instanceof Error ? error.message : String(error), variant: "destructive" }),
+  });
   const reviewClientIntake = useMutation({
     mutationFn: ({ submissionId, disposition, reviewerSummary, nextAction }: { submissionId: string; disposition: string; reviewerSummary: string; nextAction: string }) => json("POST", `${portalEndpoint}/${selectedClientWorkspace.id}/intake-forms/${reviewingIntakeFormId}/submissions/${submissionId}/reviews`, { disposition, reviewerSummary, nextAction }),
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: [portalEndpoint] }); toast({ title: "Client onboarding review recorded", description: "EOS recorded the accountable disposition without upgrading raw client input into verified Evidence." }); },
@@ -100,6 +211,10 @@ export function CustomerSuccessControlCenter({ root, canExecute, canDecide }: Pr
   const [reviewingIntakeFormId, setReviewingIntakeFormId] = useState("");
   const [intakeReviewDrafts, setIntakeReviewDrafts] = useState<Record<string, { disposition: string; reviewerSummary: string; nextAction: string }>>({});
   const [handoffProcessIds, setHandoffProcessIds] = useState<Record<string, string>>({});
+  const [workspaceActivationEvidence, setWorkspaceActivationEvidence] = useState<Record<string, string[]>>({});
+  const [clientWorkspaceAccess, setClientWorkspaceAccess] = useState({ recipientLabel: "", recipientIdentity: "", expiresAt: new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 16), rationale: "Issue a time-bounded, revocable private workspace link to the verified intended client recipient." });
+  const [issuedClientWorkspaceUrl, setIssuedClientWorkspaceUrl] = useState("");
+  const [clientWorkspaceRevocations, setClientWorkspaceRevocations] = useState<Record<string, string>>({});
 
   const selected = state.data?.accounts?.find((item: Row) => item.id === accountId);
   const clientWorkspaces = (portals.data?.portals || []).filter((item: Row) => item.portalType === "client");
@@ -131,6 +246,24 @@ export function CustomerSuccessControlCenter({ root, canExecute, canDecide }: Pr
       <div className="flex flex-col gap-2 md:flex-row"><select aria-label="Customer success account" className={`${field} flex-1`} value={accountId} onChange={(event) => setAccountId(event.target.value)}><option value="">Choose customer-success account</option>{(state.data?.accounts || []).map((item: Row) => <option key={item.id} value={item.id}>{item.customerName} · {item.healthState.replaceAll("_", " ")}</option>)}</select><Button variant="outline" onClick={() => refresh()} disabled={state.isFetching}><RefreshCw className={`mr-2 h-4 w-4 ${state.isFetching ? "animate-spin" : ""}`}/>Refresh</Button></div>
       {selected && <div className="rounded-xl border p-4"><div className="flex flex-wrap items-center gap-2">{badge(selected.healthState)}{badge(selected.lifecycleState)}<Badge variant="outline">v{selected.version}</Badge>{selected.reviewOverdue && <Badge variant="destructive">review overdue</Badge>}</div><p className="mt-3 text-sm">{selected.successDefinition}</p><p className="mt-2 text-xs text-muted-foreground">Health {selected.healthScore ?? "unscored"}/100 · next review {selected.nextReviewAt} · renewal {selected.renewalAt || "not recorded"}</p></div>}
     </CardContent></Card>
+
+    {selected && canDecide && selectedClientWorkspace && <ClientWorkspaceAccessCard
+      portal={selectedClientWorkspace}
+      evidenceOptions={evidenceOptions}
+      activationEvidenceIds={workspaceActivationEvidence[selectedClientWorkspace.id] || []}
+      onActivationEvidenceChange={(ids) => setWorkspaceActivationEvidence((current) => ({ ...current, [selectedClientWorkspace.id]: ids }))}
+      onTransition={(nextState, evidenceIds) => transitionClientWorkspace.mutate({ portal: selectedClientWorkspace, nextState, evidenceIds })}
+      transitionPending={transitionClientWorkspace.isPending}
+      access={clientWorkspaceAccess}
+      onAccessChange={(change) => setClientWorkspaceAccess((current) => ({ ...current, ...change }))}
+      onIssueAccess={() => issueClientWorkspaceAccess.mutate({ portal: selectedClientWorkspace, ...clientWorkspaceAccess })}
+      issuePending={issueClientWorkspaceAccess.isPending}
+      issuedUrl={issuedClientWorkspaceUrl}
+      revocations={clientWorkspaceRevocations}
+      onRevocationChange={(grantId, rationale) => setClientWorkspaceRevocations((current) => ({ ...current, [grantId]: rationale }))}
+      onRevoke={(grantId, rationale) => revokeClientWorkspaceAccess.mutate({ portal: selectedClientWorkspace, grantId, rationale })}
+      revokePending={revokeClientWorkspaceAccess.isPending}
+    />}
 
     {selected && <>
       {canDecide && <Card><CardHeader><CardTitle>Client workspace</CardTitle><CardDescription>One governed client workspace is bound to this customer record and owned by its accountable Customer Success role. Provisioning creates no external access, message, or disclosure.</CardDescription></CardHeader><CardContent className="space-y-3"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div>{portals.isLoading ? <p className="text-sm text-muted-foreground">Checking the customer workspace…</p> : selectedClientWorkspace ? <><div className="flex flex-wrap items-center gap-2"><Badge variant={selectedClientWorkspace.state === "active" ? "default" : "secondary"}>{selectedClientWorkspace.state}</Badge><span className="text-sm font-medium">{selectedClientWorkspace.name}</span></div><p className="mt-2 text-sm text-muted-foreground">The client onboarding intake is configured here; publication review and private access issuance stay in the same governed workspace.</p></> : <p className="text-sm text-muted-foreground">No client workspace exists yet. Provision one here; it will remain dormant until a founder completes the separate governance gates.</p>}</div>{!portals.isLoading && !selectedClientWorkspace && <Button disabled={provisionClientWorkspace.isPending || !selected.ownerSeatId} onClick={() => provisionClientWorkspace.mutate(selected)}><Plus className="mr-2 h-4 w-4"/>{provisionClientWorkspace.isPending ? "Provisioning…" : "Provision client workspace"}</Button>}</div>{selectedClientWorkspace?.intakeForms?.map((form: Row) => <div key={form.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3"><div><div className="flex flex-wrap items-center gap-2"><span className="text-sm font-medium">{form.title}</span><Badge variant={form.state === "active" ? "default" : "secondary"}>{form.state}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{form.questionCount} questions · {form.submissionCount} submitted · client input remains unverified until reviewed.</p></div><div className="flex flex-wrap gap-2">{form.submissionCount > 0 && <Button size="sm" variant="outline" onClick={() => setReviewingIntakeFormId(form.id)}>Review intake</Button>}{form.state === "draft" && <Button size="sm" disabled={selectedClientWorkspace.state !== "active" || transitionClientIntake.isPending} onClick={() => transitionClientIntake.mutate({ portal: selectedClientWorkspace, form, state: "active" })}>{selectedClientWorkspace.state === "active" ? "Activate intake" : "Activate workspace first"}</Button>}{form.state === "active" && <Button size="sm" variant="outline" disabled={transitionClientIntake.isPending} onClick={() => transitionClientIntake.mutate({ portal: selectedClientWorkspace, form, state: "archived" })}>Retire intake</Button>}</div></div>)}</CardContent></Card>}
