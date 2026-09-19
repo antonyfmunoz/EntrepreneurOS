@@ -1009,6 +1009,40 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
         await tx.insert(eosInstrumentEvents).values({ id: randomUUID(), companyId: access.company.id, instrumentKey: portable.instrumentKey, objectId, commandId, eventType: "object.imported", fromState: null, toState: "draft", objectVersion: 1, payload: { bundleSha256, sourceObjectKey: portable.objectKey }, evidenceIds: [], contentSha256: eventHash({ companyId: access.company.id, objectId, commandId, eventType: "object.imported", toState: "draft", objectVersion: 1 }), recordedByUserId: req.user.id, createdAt: now });
         created.push(object); importedByKey.set(sourceKey, object);
       }
+      // A CSV contact migration can express a relationship by the stable
+      // source object key before EOS has generated its canonical object ID.
+      // Resolve that one native-first migration reference inside this same
+      // transaction. This is not a provider sync and is deliberately narrow:
+      // arbitrary imports never get an unvalidated way to rewrite references.
+      for (const [sourceKey, imported] of Array.from(importedByKey.entries())) {
+        if (imported.instrumentKey !== "crm" || imported.objectType !== "relationship") continue;
+        const data = recordValue(imported.data);
+        const referenceKey = typeof data.personObjectKey === "string" ? data.personObjectKey : "";
+        const source = recordValue(imported.sourceReference);
+        if (!referenceKey || source.authority !== "legacy_company_csv") continue;
+        const person = importedByKey.get(`crm:${referenceKey}`);
+        if (!person || person.instrumentKey !== "crm" || person.objectType !== "person")
+          throw new EosRouteError(409, "crm_csv_person_reference_missing", "A historical CRM relationship could not resolve its imported person record.");
+        const nextData: Record<string, unknown> = { ...data, personObjectId: person.id };
+        delete nextData.personObjectKey;
+        const updated = {
+          ...imported,
+          data: nextData,
+          contentSha256: nativeContractContentSha256({
+            schemaVersion: "eos.instrument-object.v1", companyId: imported.companyId,
+            instrumentKey: imported.instrumentKey, objectType: imported.objectType,
+            objectKey: imported.objectKey, title: imported.title, summary: imported.summary,
+            state: imported.state, classification: imported.classification, visibility: imported.visibility,
+            ownerSeatId: imported.ownerSeatId, data: nextData, sourceReference: imported.sourceReference,
+            evidenceIds: imported.evidenceIds, version: imported.version,
+          }),
+          updatedAt: now,
+        };
+        await tx.update(eosInstrumentObjects).set({ data: nextData, contentSha256: updated.contentSha256, updatedAt: now }).where(and(eq(eosInstrumentObjects.id, imported.id), eq(eosInstrumentObjects.companyId, access.company.id)));
+        importedByKey.set(sourceKey, updated);
+        const createdIndex = created.findIndex((object) => object.id === imported.id);
+        if (createdIndex >= 0) created[createdIndex] = updated;
+      }
       let linked = 0;
       for (let index = 0; index < input.bundle.links.length; index += 1) {
         const portableLink = input.bundle.links[index];
