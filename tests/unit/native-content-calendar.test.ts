@@ -26,4 +26,12 @@ describe("native content calendar", () => {
     expect(contentCalendar).toContain("External publication evidence");
     expect(contentCalendar).toContain("does not dispatch to a social, email, or web provider");
   });
+
+  it("links editorial work into the role-scoped native operating graph without exposing unauthorized records", () => {
+    expect(contentCalendar).toContain('`${root}/instruments`');
+    expect(contentCalendar).toContain('"native-content-calendar-graph"');
+    expect(contentCalendar).toContain('sourceObjectId: selectedContent.id');
+    expect(contentCalendar).toContain('purpose: "editorial_support"');
+    expect(contentCalendar).toContain("shows only objects visible to your current role");
+  });
 });
