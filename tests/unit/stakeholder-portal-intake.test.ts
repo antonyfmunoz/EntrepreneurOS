@@ -38,6 +38,8 @@ describe("native client portal onboarding intake contracts", () => {
     expect(routes).toContain("private_eos_client_portal");
     expect(routes).toContain("publicPortalIntakeRateLimit");
     expect(routes).toContain("hasActiveIntake");
+    expect(routes).toContain("stakeholder_portal.intake_form.read");
+    expect(routes).toContain("eos.stakeholder-portal-intake-review.v1");
     expect(page).toContain("Submit onboarding intake");
     expect(page).toContain("does not automatically grant access, start work, or change any agreement");
   });
