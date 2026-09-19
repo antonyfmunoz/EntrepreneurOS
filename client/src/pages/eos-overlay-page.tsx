@@ -135,6 +135,7 @@ const NativeAnalyticsStudio = lazy(() => import("@/components/native-analytics-s
 const NativeWorkflowComposer = lazy(() => import("@/components/native-workflow-composer").then((module) => ({ default: module.NativeWorkflowComposer })));
 const EndStateGovernanceControlCenter = lazy(() => import("@/components/end-state-governance-control-center").then((module) => ({ default: module.EndStateGovernanceControlCenter })));
 const InstitutionalLearningControlCenter = lazy(() => import("@/components/institutional-learning-control-center").then((module) => ({ default: module.InstitutionalLearningControlCenter })));
+const NativeKnowledgeHub = lazy(() => import("@/components/native-knowledge-hub").then((module) => ({ default: module.NativeKnowledgeHub })));
 
 function DeferredControlFallback() {
   return <div className="rounded-2xl border bg-muted/40 p-6 text-sm text-muted-foreground">Loading governed control…</div>;
@@ -1476,6 +1477,8 @@ export default function EosOverlayPage() {
   // and download.
   const mayOperateNativeFiles =
     canUseInstrument("files") && (isFounder || toolEntitlements.has("files"));
+  const mayOperateNativeKnowledge =
+    canUseInstrument("knowledge") && (isFounder || toolEntitlements.has("knowledge"));
   const mayOperateNativeSheets =
     canUseInstrument("sheets") && (isFounder || toolEntitlements.has("sheets"));
   // CRM belongs to the founder's initial operating set and to a role that has
@@ -10945,6 +10948,13 @@ export default function EosOverlayPage() {
               <NativeFilesStudio
                 root={root}
                 roleScopeKey={roleScopeKey}
+                canExecute={effectiveAuthorityClasses.has("execute")}
+                canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
+            {mayOperateNativeKnowledge && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeKnowledgeHub
+                root={root}
                 canExecute={effectiveAuthorityClasses.has("execute")}
                 canDecide={effectiveAuthorityClasses.has("decide")}
               />
