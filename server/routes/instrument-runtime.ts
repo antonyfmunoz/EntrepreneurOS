@@ -89,6 +89,46 @@ function recordValue(value: unknown): Record<string, unknown> {
 }
 
 /**
+ * A public form or booking calendar can optionally compile an accepted,
+ * consented intake signal into an EOS-native CRM opportunity. That is a
+ * cross-instrument commercial operation, so a role that can edit Forms or
+ * Calendar alone must not be able to target an unseen CRM pipeline by
+ * guessing its identifier. The routing remains optional; when absent, the
+ * public intake still follows its ordinary native lead/booking handoff.
+ */
+async function assertPublicCommercialRouting(
+  req: Request,
+  access: Awaited<ReturnType<typeof companyAccess>>,
+  input: { instrumentKey: string; objectType: string; data: Record<string, unknown>; classification: string },
+) {
+  const isPublicForm = input.instrumentKey === "forms" && input.objectType === "form" && input.data.publicCapture === true;
+  const isPublicCalendar = input.instrumentKey === "calendar" && input.objectType === "calendar" && input.data.publicBooking === true;
+  if (!isPublicForm && !isPublicCalendar) return;
+  const pipelineObjectId = input.data.commercialPipelineObjectId;
+  const initialStage = input.data.commercialInitialStage;
+  if (pipelineObjectId === undefined && initialStage === undefined) return;
+  if (typeof pipelineObjectId !== "string" || !pipelineObjectId || typeof initialStage !== "string" || !initialStage.trim())
+    throw new EosRouteError(400, "public_intake_commercial_routing_invalid", "Choose both a native commercial pipeline and its first stage, or leave automatic opportunity routing off.");
+  await authorizeAction(req, access, {
+    authorityClass: "execute",
+    resource: "instrument:crm",
+    actionKey: "instrument.public_intake.route_opportunity",
+    purpose: "operate_instrument",
+    classification: input.classification,
+    consequence: "routine",
+    targetSeatId: access.seat.id,
+    toolKey: "crm",
+  });
+  const [pipeline] = await db.select().from(eosInstrumentObjects).where(and(
+    eq(eosInstrumentObjects.id, pipelineObjectId), eq(eosInstrumentObjects.companyId, access.company.id),
+    eq(eosInstrumentObjects.instrumentKey, "crm"), eq(eosInstrumentObjects.objectType, "pipeline"), eq(eosInstrumentObjects.state, "active"),
+  )).limit(1);
+  const stages = recordValue(pipeline?.data).stages;
+  if (!pipeline || !Array.isArray(stages) || !stages.includes(initialStage))
+    throw new EosRouteError(409, "public_intake_commercial_routing_unavailable", "The selected native commercial pipeline or first stage is unavailable in this company.");
+}
+
+/**
  * Messages are a native company capability, but they must still follow the
  * reporting graph. This prevents a role from using generic instrument storage
  * to skip its manager, direct reports, or role assistant.
@@ -566,6 +606,7 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     if (replay) { res.status(200).json(replay); return; }
     await assertNativeMessageCreate(access, input);
     await assertNativeConferenceRoomCreate(access, input);
+    await assertPublicCommercialRouting(req, access, input);
     await checkedEvidence(access.company.id, input.evidenceIds);
     if (input.parentObjectId) {
       const [parent] = await db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.id, input.parentObjectId), eq(eosInstrumentObjects.instrumentKey, input.instrumentKey))).limit(1);
@@ -595,6 +636,7 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     const evidence = input.evidenceIds ?? current.evidenceIds as string[]; await checkedEvidence(access.company.id, evidence);
     const next = { title: input.title ?? current.title, summary: input.summary ?? current.summary, classification: input.classification ?? current.classification, visibility: input.visibility ?? current.visibility, data: input.data ?? current.data as Record<string, unknown>, sourceReference: input.sourceReference ?? current.sourceReference as Record<string, unknown>, evidenceIds: evidence, version: current.version + 1, updatedAt: new Date() };
     await assertNativeMessageUpdate(access, current, next);
+    if (input.data !== undefined) await assertPublicCommercialRouting(req, access, { instrumentKey: current.instrumentKey, objectType: current.objectType, data: next.data, classification: next.classification });
     if (["active", "completed"].includes(current.state)) {
       const findings = instrumentDomainFindings(eosInstrumentKeySchema.parse(current.instrumentKey), current.objectType, next.data);
       if (findings.length) throw new EosRouteError(409, findings[0].code, findings[0].message);
@@ -620,6 +662,7 @@ export function registerInstrumentRuntimeRoutes(app: Express): void {
     const replay = await replayCommand(access.company.id, input.idempotencyKey, current.instrumentKey, "object.transition"); if (replay) { res.json(replay); return; }
     if (current.version !== input.expectedVersion) throw new EosRouteError(409, "instrument_version_conflict", "The instrument object changed before this transition.");
     if (!mayTransitionInstrumentObject(current.state, input.state)) throw new EosRouteError(409, "instrument_transition_invalid", `Instrument objects cannot move from ${current.state} to ${input.state}.`);
+    if (["active", "completed"].includes(input.state)) await assertPublicCommercialRouting(req, access, { instrumentKey: current.instrumentKey, objectType: current.objectType, data: recordValue(current.data), classification: current.classification });
     if (["active", "completed"].includes(input.state)) {
       const findings = instrumentDomainFindings(eosInstrumentKeySchema.parse(current.instrumentKey), current.objectType, current.data);
       if (findings.length) throw new EosRouteError(409, findings[0].code, findings[0].message);
