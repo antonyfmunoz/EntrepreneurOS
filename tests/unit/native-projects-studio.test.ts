@@ -30,4 +30,11 @@ describe("native projects and tasks", () => {
     expect(crmStudio).toContain("Create role-owned follow-up");
     expect(crmStudio).toContain("has not been assigned Tasks");
   });
+
+  it("shows a delivery project's commercial origin only when the active role can view Commerce", () => {
+    expect(studio).toContain("native-projects-commerce-context");
+    expect(studio).toContain("Commercial source");
+    expect(studio).toContain("has not been granted Commerce");
+    expect(studio).toContain("sourceOpportunityObjectId");
+  });
 });
