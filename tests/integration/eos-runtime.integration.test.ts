@@ -10030,7 +10030,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     }
     await api.post(`/api/eos/companies/${companyId}/stakeholder-portals/${portal.body.id}/intake-forms/${intakeForm.body.id}/submissions/${intakeSubmission.id}/reviews/${intakeReview.body.id}/handoff`).send({ title: "Duplicate client launch preparation", priority: "high" }).expect(409).expect(({ body }) => expect(body.code).toBe("stakeholder_portal_intake_handoff_exists"));
     const handedOffIntake = await api.get(`/api/eos/companies/${companyId}/stakeholder-portals/${portal.body.id}/intake-forms/${intakeForm.body.id}/submissions`).expect(200);
-    expect(handedOffIntake.body.submissions[0]).toMatchObject({ verificationState: "unverified", review: { id: intakeReview.body.id, handoff: { workPacketId: handoff.body.workPacket.id, title: "Synthetic client launch preparation" } } });
+    expect(handedOffIntake.body.submissions[0]).toMatchObject({ verificationState: "unverified", review: { id: intakeReview.body.id, handoff: { workPacketId: handoff.body.workPacket.id, processDefinitionId: process.id, title: "Synthetic client launch preparation" } } });
     const portalRegistry = await api.get(`/api/eos/companies/${companyId}/stakeholder-portals`).expect(200);
     expect(JSON.stringify(portalRegistry.body)).not.toContain("synthetic-client-onboarding@example.test");
     await api.post(`/api/eos/companies/${companyId}/stakeholder-portals/${portal.body.id}/access-grants/${grant.body.grant.id}/revoke`).send({ rationale: "Revoke the synthetic recipient immediately after the bounded access-control qualification." }).expect(200);

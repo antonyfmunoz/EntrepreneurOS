@@ -72,6 +72,8 @@ describe("native customer-success control contracts", () => {
     expect(control).toContain("eligibleHandoffProcesses");
     expect(control).toContain("processDefinitionId");
     expect(control).toContain("makes this Work Packet executable only through that exact version");
+    expect(control).toContain("Released process attached:");
+    expect(control).toContain("EOS will only run the exact attached process version");
     expect(portalRoutes).toContain('state: "dormant"');
     expect(portalRoutes).toContain("tokenDisclosedOnce: true");
   });

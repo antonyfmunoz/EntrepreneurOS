@@ -67,6 +67,7 @@ describe("native client portal onboarding intake contracts", () => {
     expect(routes).toContain("stakeholder_portal_handoff_process_invalid");
     expect(routes).toContain("targetProcessDefinitionId: process?.id");
     expect(routes).toContain("!visible.has(process.accountableSeatId)");
+    expect(routes).toContain("processDefinitionId: handoffData.processDefinitionId || null");
     expect(page).toContain("Submit onboarding intake");
     expect(page).toContain("does not automatically grant access, start work, or change any agreement");
   });
