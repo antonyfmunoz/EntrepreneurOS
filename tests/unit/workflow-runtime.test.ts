@@ -5,6 +5,9 @@ import {
   workflowRunCreateSchema,
   workflowRunTransitionSchema,
 } from "../../shared/workflow-runtime";
+import { readFileSync } from "node:fs";
+
+const workflowRoutes = readFileSync(new URL("../../server/routes/workflow-runtime.ts", import.meta.url), "utf8");
 
 describe("durable workflow runtime contracts", () => {
   it("enforces the complete guarded run state machine", () => {
@@ -37,5 +40,13 @@ describe("durable workflow runtime contracts", () => {
     };
     expect(skillDefinitionCreateSchema.safeParse(base).success).toBe(false);
     expect(skillDefinitionCreateSchema.safeParse({ ...base, providerBindingId: "binding-1" }).success).toBe(true);
+  });
+
+  it("validates delivery-project workflow context on the server rather than trusting the project UI", () => {
+    expect(workflowRoutes).toContain("assertNativeDeliveryProjectContext");
+    expect(workflowRoutes).toContain("native_delivery_project_not_active");
+    expect(workflowRoutes).toContain("native_delivery_order_mismatch");
+    expect(workflowRoutes).toContain("native_delivery_classification_downgrade");
+    expect(workflowRoutes).toContain("workflowInput: input.input");
   });
 });
