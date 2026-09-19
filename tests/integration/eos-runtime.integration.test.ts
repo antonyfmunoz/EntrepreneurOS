@@ -2721,6 +2721,22 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       ])}::jsonb
       WHERE id = ${growthSeat.id}
     `;
+    // Model a pre-native-tool-baseline company consistently: the seat and
+    // its generated authority grant both predate the new tools. Applying the
+    // blueprint must reconcile both records atomically.
+    await sql`
+      UPDATE eos_authority_grants
+      SET tool_entitlements = ${JSON.stringify([
+        "crm",
+        "dialer",
+        "calendar",
+        "messages",
+        "docs",
+        "analytics",
+        "local_campaign_review",
+      ])}::jsonb
+      WHERE id = ${`grant:${growthSeat.id}:baseline`}
+    `;
 
     const before = await api
       .get(`/api/eos/companies/${blueprintCompany.id}/company-blueprint`)
@@ -2752,6 +2768,14 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       WHERE id = ${growthSeat.id}
     `;
     expect(updatedSeat.toolEntitlements).toEqual(
+      expect.arrayContaining(["crm", "forms", "websites", "local_campaign_review"]),
+    );
+    const [updatedBaselineGrant] = await sql<{ toolEntitlements: string[] }[]>`
+      SELECT tool_entitlements AS "toolEntitlements"
+      FROM eos_authority_grants
+      WHERE id = ${`grant:${growthSeat.id}:baseline`}
+    `;
+    expect(updatedBaselineGrant.toolEntitlements).toEqual(
       expect.arrayContaining(["crm", "forms", "websites", "local_campaign_review"]),
     );
 

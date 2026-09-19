@@ -3959,13 +3959,39 @@ export function registerEosRuntimeRoutes(app: Express): void {
             alreadyAligned.push(role.key);
             continue;
           }
-          await tx
+          const [updatedSeat] = await tx
             .update(eosSeats)
             .set({
               toolEntitlements: canonicalToolEntitlements([...current, ...recommended]),
               updatedAt: new Date(),
             })
-            .where(eq(eosSeats.id, seat.id));
+            .where(eq(eosSeats.id, seat.id))
+            .returning();
+          // Legacy or imported seats can exist before their generated role
+          // kernel. Recreate missing local kernel records first; this remains
+          // company-local and does not grant an external-provider effect.
+          await ensureSeatOperatingKernel(
+            tx,
+            access.company,
+            updatedSeat,
+            req.user.id,
+          );
+          // A blueprint role pack is an authority contract, not a visual
+          // suggestion. Keep the generated baseline grant aligned with the
+          // seat record in the same transaction so a newly equipped role can
+          // use its native tool without a stale policy grant denying it.
+          await tx
+            .update(eosAuthorityGrants)
+            .set({
+              toolEntitlements: updatedSeat.toolEntitlements,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(eosAuthorityGrants.id, `grant:${seat.id}:baseline`),
+                eq(eosAuthorityGrants.companyId, access.company.id),
+              ),
+            );
           updated.push({ roleKey: role.key, seatId: seat.id, addedToolEntitlements });
         }
         await tx.insert(eosAuditRecords).values({
