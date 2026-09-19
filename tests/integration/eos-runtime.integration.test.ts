@@ -2725,6 +2725,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       expect.objectContaining({ key: "offer-evolution-foundation" }),
     ]));
     expect(instantiated.body.createdNativeAssetIds).toHaveLength(13);
+    expect(instantiated.body.createdNativeAssetLinkIds).toHaveLength(8);
     expect(instantiated.body.createdNativeAssetIds.every((id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))).toBe(true);
     const nativeAssets = await sql<Array<{ id: string; objectKey: string; data: Record<string, unknown> }>>`
       SELECT id, object_key AS "objectKey", data
@@ -2752,11 +2753,22 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(starter("finance-control-worksheet").data).toMatchObject({
       workbookObjectId: starter("finance-control-workbook").id,
     });
+    const nativeAssetLinks = await sql<Array<{ sourceObjectId: string; targetObjectId: string; relationshipType: string; metadata: Record<string, unknown> }>>`
+      SELECT source_object_id AS "sourceObjectId", target_object_id AS "targetObjectId", relationship_type AS "relationshipType", metadata
+      FROM eos_instrument_links
+      WHERE company_id = ${blueprintCompany.id}
+    `;
+    expect(nativeAssetLinks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceObjectId: starter("commercial-page").id, targetObjectId: starter("company-site").id, relationshipType: "belongs_to_site", metadata: expect.objectContaining({ compilerStarter: true }) }),
+      expect.objectContaining({ sourceObjectId: starter("commercial-intake").id, targetObjectId: starter("commercial-pipeline").id, relationshipType: "creates_demand_for", metadata: expect.objectContaining({ compilerStarter: true }) }),
+      expect.objectContaining({ sourceObjectId: starter("finance-control-workbook").id, targetObjectId: starter("finance-control-worksheet").id, relationshipType: "contains_worksheet", metadata: expect.objectContaining({ compilerStarter: true }) }),
+    ]));
     const compilerReplay = await api
       .post(`/api/eos/companies/${blueprintCompany.id}/company-blueprint/instantiate`)
       .send({ blueprintKey: "service_studio" })
       .expect(201);
     expect(compilerReplay.body.createdNativeAssetIds).toHaveLength(0);
+    expect(compilerReplay.body.createdNativeAssetLinkIds).toHaveLength(0);
     expect(compilerReplay.body.preservedNativeAssetIds).toHaveLength(13);
 
     // Simulate an established company that compiled before the native funnel

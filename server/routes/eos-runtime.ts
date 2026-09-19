@@ -97,6 +97,7 @@ import {
   eosRoleOperatingPacks,
   eosSeats,
   eosObjectives,
+  eosInstrumentLinks,
   eosInstrumentObjects,
   eosOfferPrograms,
   eosStakeholderRelationships,
@@ -339,7 +340,7 @@ import { DeclarativeMaterializationError } from "../company-compilation/declarat
 import { companyPackageParitySnapshot } from "../company-compilation/semantic-parity";
 import { compiledOperatingFormation, compileCompanyBlueprintStarters, companyBlueprintForBusinessModel } from "@shared/company-blueprints";
 import { materializeNativeWorkflowStarter } from "@shared/native-workflow-starters";
-import { materializeNativeBusinessStarters } from "@shared/native-business-starters";
+import { materializeNativeBusinessStarters, nativeBusinessStarterRelationships } from "@shared/native-business-starters";
 import { dispatchAgentEventOutboxEvent } from "../agents/scheduler";
 
 function escapeHtml(value: string): string {
@@ -3566,6 +3567,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
         const createdStarterPacketIds: string[] = [];
         const createdStarterProcessIds: string[] = [];
         const createdNativeAssetIds: string[] = [];
+        const createdNativeAssetLinkIds: string[] = [];
         const preservedNativeAssetIds: string[] = [];
         const starterArtifacts: Array<{ key: string; objectiveId: string; workPacketId: string; processDefinitionId: string; ownerSeatId: string }> = [];
         const trace = tracePair();
@@ -3868,6 +3870,29 @@ export function registerEosRuntimeRoutes(app: Express): void {
           });
           createdNativeAssetIds.push(id);
         }
+        // Materialize the business-in-a-box dependency graph once the complete
+        // native asset set exists. These are native EOS relationships only:
+        // they describe how the configured operating records fit together and
+        // never activate a public site, submit a form, move money, or perform
+        // a provider-side effect.
+        for (const relationship of nativeBusinessStarterRelationships) {
+          const sourceObjectId = starterObjectIds.get(relationship.sourceStarterKey);
+          const targetObjectId = starterObjectIds.get(relationship.targetStarterKey);
+          if (!sourceObjectId || !targetObjectId) {
+            throw new EosRouteError(409, "company_blueprint_native_relationship_missing", "A compiled native relationship references an unavailable company starter.");
+          }
+          const [createdLink] = await tx.insert(eosInstrumentLinks).values({
+            id: randomUUID(),
+            companyId: access.company.id,
+            sourceObjectId,
+            targetObjectId,
+            relationshipType: relationship.relationshipType,
+            metadata: { compilerStarter: true, ...relationship.metadata },
+            createdByUserId: req.user.id,
+            createdAt: new Date(),
+          }).onConflictDoNothing().returning({ id: eosInstrumentLinks.id });
+          if (createdLink) createdNativeAssetLinkIds.push(createdLink.id);
+        }
         await tx.insert(eosAuditRecords).values({
           id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id,
           action: "company_blueprint.instantiated", targetType: "company_blueprint", targetId: blueprint.key,
@@ -3884,11 +3909,12 @@ export function registerEosRuntimeRoutes(app: Express): void {
             createdStarterPacketIds,
             createdStarterProcessIds,
             createdNativeAssetIds,
+            createdNativeAssetLinkIds,
             preservedNativeAssetIds,
             migratedLegacyNativeAssetIds,
           },
         });
-        return { blueprintKey: blueprint.key, formation: formationRuntime, created, present, starterArtifacts, createdStarterObjectiveIds, createdStarterPacketIds, createdStarterProcessIds, createdTeamTransitionPacketId, createdNativeAssetIds, preservedNativeAssetIds, migratedLegacyNativeAssetIds };
+        return { blueprintKey: blueprint.key, formation: formationRuntime, created, present, starterArtifacts, createdStarterObjectiveIds, createdStarterPacketIds, createdStarterProcessIds, createdTeamTransitionPacketId, createdNativeAssetIds, createdNativeAssetLinkIds, preservedNativeAssetIds, migratedLegacyNativeAssetIds };
       });
       return { status: 201, body: outcome };
     }),
