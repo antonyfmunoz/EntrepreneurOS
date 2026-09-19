@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { BarChart3, CheckCircle2, CirclePause, CirclePlay, DollarSign, Megaphone, Plus, RefreshCw, Target, WandSparkles } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -51,11 +51,23 @@ export function NativeMarketingStudio({ root, roleScopeKey, canExecute, canDecid
   const [audienceName, setAudienceName] = useState("");
   const [audienceDefinition, setAudienceDefinition] = useState("");
   const [audienceSourceId, setAudienceSourceId] = useState("");
+  const [selectedAudienceId, setSelectedAudienceId] = useState("");
+  const [editingAudienceName, setEditingAudienceName] = useState("");
+  const [editingAudienceDefinition, setEditingAudienceDefinition] = useState("");
+  const [editingAudienceSourceId, setEditingAudienceSourceId] = useState("");
   const [creativeName, setCreativeName] = useState("");
   const [creativeClaim, setCreativeClaim] = useState("");
   const [creativeAssetId, setCreativeAssetId] = useState("");
+  const [selectedCreativeId, setSelectedCreativeId] = useState("");
+  const [editingCreativeName, setEditingCreativeName] = useState("");
+  const [editingCreativeClaim, setEditingCreativeClaim] = useState("");
+  const [editingCreativeAssetId, setEditingCreativeAssetId] = useState("");
   const [placementCampaignId, setPlacementCampaignId] = useState("");
   const [placementChannel, setPlacementChannel] = useState("website");
+  const [selectedPlacementId, setSelectedPlacementId] = useState("");
+  const [editingPlacementChannel, setEditingPlacementChannel] = useState("website");
+  const [selectedBudgetId, setSelectedBudgetId] = useState("");
+  const [editingBudgetLimit, setEditingBudgetLimit] = useState("");
   const [measurementCampaignId, setMeasurementCampaignId] = useState("");
   const [actualSpend, setActualSpend] = useState("");
   const [qualifiedLeads, setQualifiedLeads] = useState("");
@@ -79,6 +91,22 @@ export function NativeMarketingStudio({ root, roleScopeKey, canExecute, canDecid
   const selectedPlacementCampaign = campaigns.find((item) => item.id === placementCampaignId) || campaigns[0];
   const selectedMeasurementCampaign = campaigns.find((item) => item.id === measurementCampaignId) || campaigns[0];
   const editingCampaign = campaigns.find((item) => item.id === editingCampaignId);
+  const selectedAudience = audiences.find((item) => item.id === selectedAudienceId) || audiences[0];
+  const selectedCreative = creatives.find((item) => item.id === selectedCreativeId) || creatives[0];
+  const selectedPlacement = placements.find((item) => item.id === selectedPlacementId) || placements[0];
+  const selectedBudget = budgets.find((item) => item.id === selectedBudgetId) || budgets[0];
+  useEffect(() => {
+    setEditingAudienceName(String(selectedAudience?.title || ""));
+    setEditingAudienceDefinition(String(selectedAudience?.data?.definition || selectedAudience?.summary || ""));
+    setEditingAudienceSourceId(Array.isArray(selectedAudience?.data?.sourceObjectIds) ? String(selectedAudience.data.sourceObjectIds[0] || "") : "");
+  }, [selectedAudience?.id, selectedAudience?.version]);
+  useEffect(() => {
+    setEditingCreativeName(String(selectedCreative?.title || ""));
+    setEditingCreativeClaim(String(selectedCreative?.data?.claim || selectedCreative?.summary || ""));
+    setEditingCreativeAssetId(Array.isArray(selectedCreative?.data?.assetObjectIds) ? String(selectedCreative.data.assetObjectIds[0] || "") : "");
+  }, [selectedCreative?.id, selectedCreative?.version]);
+  useEffect(() => setEditingPlacementChannel(String(selectedPlacement?.data?.channel || "website")), [selectedPlacement?.id, selectedPlacement?.version]);
+  useEffect(() => setEditingBudgetLimit(selectedBudget?.data?.limitMinor === undefined || selectedBudget?.data?.limitMinor === null ? "" : String(Number(selectedBudget.data.limitMinor) / 100)), [selectedBudget?.id, selectedBudget?.version]);
   const refresh = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: [root, roleScopeKey, "native-marketing"] }),
@@ -103,8 +131,20 @@ export function NativeMarketingStudio({ root, roleScopeKey, canExecute, canDecid
       data: { definition: audienceDefinition.trim(), sourceObjectIds: audienceSourceId ? [audienceSourceId] : [], operatingMode: "native_eos" },
       sourceReference: { authority: "native_eos", capability: "audience_definition" }, evidenceIds: [], idempotencyKey: commandKey("native-audience-create"),
     })).json(),
-    onSuccess: async () => { setAudienceName(""); setAudienceDefinition(""); setAudienceSourceId(""); await refresh(); },
+    onSuccess: async (result) => { setSelectedAudienceId(result.object.id); setAudienceName(""); setAudienceDefinition(""); setAudienceSourceId(""); await refresh(); },
     onError: (cause: Error) => setError(cause.message),
+  });
+  const saveAudience = useMutation({
+    mutationFn: async () => {
+      if (!selectedAudience) throw new Error("Choose an audience to configure.");
+      return (await apiRequest("PATCH", `${root}/instrument-objects/${selectedAudience.id}`, {
+        expectedVersion: selectedAudience.version,
+        title: editingAudienceName.trim(), summary: editingAudienceDefinition.trim(),
+        data: { ...selectedAudience.data, definition: editingAudienceDefinition.trim(), sourceObjectIds: editingAudienceSourceId ? [editingAudienceSourceId] : [], operatingMode: "native_eos" },
+        idempotencyKey: commandKey("native-audience-configure"),
+      })).json();
+    },
+    onSuccess: async (result) => { setSelectedAudienceId(result.object.id); await refresh(); }, onError: (cause: Error) => setError(cause.message),
   });
   const saveCampaign = useMutation({
     mutationFn: async () => {
@@ -134,8 +174,20 @@ export function NativeMarketingStudio({ root, roleScopeKey, canExecute, canDecid
       data: { claim: creativeClaim.trim(), assetObjectIds: creativeAssetId ? [creativeAssetId] : [], operatingMode: "native_eos" },
       sourceReference: { authority: "native_eos", capability: "creative_management" }, evidenceIds: [], idempotencyKey: commandKey("native-creative-create"),
     })).json(),
-    onSuccess: async () => { setCreativeName(""); setCreativeClaim(""); setCreativeAssetId(""); await refresh(); },
+    onSuccess: async (result) => { setSelectedCreativeId(result.object.id); setCreativeName(""); setCreativeClaim(""); setCreativeAssetId(""); await refresh(); },
     onError: (cause: Error) => setError(cause.message),
+  });
+  const saveCreative = useMutation({
+    mutationFn: async () => {
+      if (!selectedCreative) throw new Error("Choose a creative to configure.");
+      return (await apiRequest("PATCH", `${root}/instrument-objects/${selectedCreative.id}`, {
+        expectedVersion: selectedCreative.version,
+        title: editingCreativeName.trim(), summary: editingCreativeClaim.trim(),
+        data: { ...selectedCreative.data, claim: editingCreativeClaim.trim(), assetObjectIds: editingCreativeAssetId ? [editingCreativeAssetId] : [], operatingMode: "native_eos" },
+        idempotencyKey: commandKey("native-creative-configure"),
+      })).json();
+    },
+    onSuccess: async (result) => { setSelectedCreativeId(result.object.id); await refresh(); }, onError: (cause: Error) => setError(cause.message),
   });
   const createPlacement = useMutation({
     mutationFn: async () => {
@@ -147,7 +199,20 @@ export function NativeMarketingStudio({ root, roleScopeKey, canExecute, canDecid
         sourceReference: { authority: "native_eos", capability: "placement_planning", delivery: "not_dispatched" }, evidenceIds: [], idempotencyKey: commandKey("native-placement-create"),
       })).json();
     },
-    onSuccess: refresh, onError: (cause: Error) => setError(cause.message),
+    onSuccess: async (result) => { setSelectedPlacementId(result.object.id); await refresh(); }, onError: (cause: Error) => setError(cause.message),
+  });
+  const savePlacement = useMutation({
+    mutationFn: async () => {
+      if (!selectedPlacement) throw new Error("Choose a placement to configure.");
+      const campaign = campaigns.find((item) => item.id === selectedPlacement.data?.campaignObjectId);
+      return (await apiRequest("PATCH", `${root}/instrument-objects/${selectedPlacement.id}`, {
+        expectedVersion: selectedPlacement.version,
+        title: `${editingPlacementChannel} · ${campaign?.title || "Campaign"}`,
+        data: { ...selectedPlacement.data, channel: editingPlacementChannel, operatingMode: "native_eos" },
+        idempotencyKey: commandKey("native-placement-configure"),
+      })).json();
+    },
+    onSuccess: async (result) => { setSelectedPlacementId(result.object.id); await refresh(); }, onError: (cause: Error) => setError(cause.message),
   });
   const createBudget = useMutation({
     mutationFn: async (campaign: Json) => (await apiRequest("POST", `${root}/instrument-objects`, {
@@ -156,7 +221,18 @@ export function NativeMarketingStudio({ root, roleScopeKey, canExecute, canDecid
       data: { campaignObjectId: campaign.id, limitMinor: Number(campaign.data?.budgetMinor || 0), currency: "USD" },
       sourceReference: { authority: "native_eos", capability: "budget_governance" }, evidenceIds: [], idempotencyKey: commandKey("native-budget-create"),
     })).json(),
-    onSuccess: refresh, onError: (cause: Error) => setError(cause.message),
+    onSuccess: async (result) => { setSelectedBudgetId(result.object.id); await refresh(); }, onError: (cause: Error) => setError(cause.message),
+  });
+  const saveBudget = useMutation({
+    mutationFn: async () => {
+      if (!selectedBudget) throw new Error("Choose a budget guardrail to configure.");
+      return (await apiRequest("PATCH", `${root}/instrument-objects/${selectedBudget.id}`, {
+        expectedVersion: selectedBudget.version,
+        data: { ...selectedBudget.data, limitMinor: minor(editingBudgetLimit), operatingMode: "native_eos" },
+        idempotencyKey: commandKey("native-budget-configure"),
+      })).json();
+    },
+    onSuccess: async (result) => { setSelectedBudgetId(result.object.id); await refresh(); }, onError: (cause: Error) => setError(cause.message),
   });
   const transition = useMutation({
     mutationFn: async ({ object, state }: { object: Json; state: "active" | "paused" }) => (await apiRequest("POST", `${root}/instrument-objects/${object.id}/transitions`, {
@@ -190,6 +266,7 @@ export function NativeMarketingStudio({ root, roleScopeKey, canExecute, canDecid
         <section className="rounded-xl border p-4"><div className="flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" /><h3 className="font-semibold">Native measurement</h3></div><p className="mt-1 text-sm text-muted-foreground">Record observed spend and qualified demand inside the campaign. These inputs are measured operating data, not an invented provider receipt.</p><div className="mt-4 grid gap-3"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={selectedMeasurementCampaign?.id || ""} onChange={(event) => setMeasurementCampaignId(event.target.value)} aria-label="Measurement campaign"><option value="">Select campaign</option>{campaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}</select><div className="grid gap-3 md:grid-cols-2"><Input value={actualSpend} onChange={(event) => setActualSpend(event.target.value)} inputMode="decimal" placeholder="Actual spend (USD)" aria-label="Actual campaign spend" /><Input value={qualifiedLeads} onChange={(event) => setQualifiedLeads(event.target.value)} inputMode="numeric" placeholder="Qualified leads" aria-label="Qualified lead count" /></div><Button variant="outline" disabled={!canExecute || !selectedMeasurementCampaign || recordMeasurement.isPending} onClick={() => recordMeasurement.mutate()}><BarChart3 className="mr-2 h-4 w-4" />{recordMeasurement.isPending ? "Recording…" : "Record measurement"}</Button></div></section>
       </div>
       <section className="rounded-xl border p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Native operating view</p><h3 className="mt-1 font-semibold">Campaign control board</h3></div><Badge variant="outline">{campaigns.length} campaigns · {audiences.length} audiences · {creatives.length} creatives · {placements.length} placements · {budgets.length} budgets</Badge></div><div className="mt-4 grid gap-3 xl:grid-cols-3">{campaigns.map((campaign) => { const campaignPlacements = placements.filter((placement) => placement.data?.campaignObjectId === campaign.id); const hasBudgetGuardrail = budgets.some((budget) => budget.data?.campaignObjectId === campaign.id); return <div key={campaign.id} className="rounded-xl border bg-muted/20 p-3"><div className="flex items-start justify-between gap-2"><div><p className="font-medium">{campaign.title}</p><p className="mt-1 text-xs text-muted-foreground">{campaign.data?.objective || campaign.summary}</p></div><Badge variant={stateVariant(campaign.state)}>{campaign.state}</Badge></div><div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded-lg bg-background p-2">Ceiling<br /><strong>{dollars(campaign.data?.budgetMinor)}</strong></div><div className="rounded-lg bg-background p-2">Observed spend<br /><strong>{dollars(campaign.data?.actualSpendMinor)}</strong></div><div className="rounded-lg bg-background p-2">Qualified leads<br /><strong>{Number(campaign.data?.qualifiedLeadCount || 0)}</strong></div><div className="rounded-lg bg-background p-2">Placements<br /><strong>{campaignPlacements.length}</strong>{hasBudgetGuardrail ? " · guarded" : ""}</div></div><div className="mt-3 flex flex-wrap gap-2">{canExecute && <Button size="sm" variant="outline" onClick={() => beginCampaignEdit(campaign)}>Edit campaign</Button>}{campaign.state === "draft" && <Button size="sm" disabled={!canDecide || transition.isPending} onClick={() => transition.mutate({ object: campaign, state: "active" })}><CirclePlay className="mr-2 h-3.5 w-3.5" />Activate</Button>}{campaign.state === "paused" && <Button size="sm" disabled={!canDecide || transition.isPending} onClick={() => transition.mutate({ object: campaign, state: "active" })}><CirclePlay className="mr-2 h-3.5 w-3.5" />Resume</Button>}{campaign.state === "active" && <Button size="sm" variant="outline" disabled={!canDecide || transition.isPending} onClick={() => transition.mutate({ object: campaign, state: "paused" })}><CirclePause className="mr-2 h-3.5 w-3.5" />Pause</Button>}</div></div>; })}{!campaigns.length && <div className="col-span-full py-8 text-center text-sm text-muted-foreground">Create the first campaign to make the growth plan visible and controllable inside EOS.</div>}</div>{editingCampaign && <section className="mt-4 rounded-xl border border-primary/25 bg-primary/[0.03] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eos-label">Configure native campaign</p><h4 className="mt-1 font-semibold">{editingCampaign.title}</h4><p className="mt-1 text-xs text-muted-foreground">This updates the EOS-owned campaign plan in place. It does not dispatch media or create a provider-side campaign.</p></div><Button size="sm" variant="ghost" onClick={() => setEditingCampaignId("")}>Cancel</Button></div><div className="mt-4 grid gap-3 md:grid-cols-2"><div><Label htmlFor="marketing-edit-campaign-name">Campaign name</Label><Input id="marketing-edit-campaign-name" className="mt-1" value={editingCampaignName} onChange={(event) => setEditingCampaignName(event.target.value)} /></div><div><Label htmlFor="marketing-edit-campaign-budget">Budget ceiling (USD)</Label><Input id="marketing-edit-campaign-budget" className="mt-1" value={editingCampaignBudget} onChange={(event) => setEditingCampaignBudget(event.target.value)} inputMode="decimal" /></div><div className="md:col-span-2"><Label htmlFor="marketing-edit-campaign-objective">Campaign objective</Label><Textarea id="marketing-edit-campaign-objective" className="mt-1" value={editingCampaignObjective} onChange={(event) => setEditingCampaignObjective(event.target.value)} /></div><div className="md:col-span-2 flex justify-end"><Button disabled={!canExecute || editingCampaignName.trim().length < 2 || editingCampaignObjective.trim().length < 3 || saveCampaign.isPending} onClick={() => saveCampaign.mutate()}>{saveCampaign.isPending ? "Saving campaign…" : "Save native campaign"}</Button></div></div></section>}</section>
+      {(selectedAudience || selectedCreative || selectedPlacement || selectedBudget) && <section className="grid gap-4 xl:grid-cols-2"><div className="rounded-xl border border-primary/25 bg-primary/[0.03] p-4">{selectedAudience ? <><div className="flex flex-wrap items-start justify-between gap-3"><p className="eos-label">Configure selected audience</p>{audiences.length > 1 && <select aria-label="Audience to configure" className="h-9 rounded-md border bg-background px-2 text-sm" value={selectedAudience.id} onChange={(event) => setSelectedAudienceId(event.target.value)}>{audiences.map((audience) => <option key={audience.id} value={audience.id}>{audience.title}</option>)}</select>}</div><div className="mt-3 grid gap-3"><div><Label htmlFor="marketing-edit-audience-name">Audience name</Label><Input id="marketing-edit-audience-name" className="mt-1" value={editingAudienceName} onChange={(event) => setEditingAudienceName(event.target.value)} /></div><div><Label htmlFor="marketing-edit-audience-definition">Definition</Label><Textarea id="marketing-edit-audience-definition" className="mt-1" value={editingAudienceDefinition} onChange={(event) => setEditingAudienceDefinition(event.target.value)} /></div><div><Label htmlFor="marketing-edit-audience-source">Owned demand source</Label><select id="marketing-edit-audience-source" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={editingAudienceSourceId} onChange={(event) => setEditingAudienceSourceId(event.target.value)}><option value="">No owned source</option>{ownedDemand.map((object: Json) => <option key={object.id} value={object.id}>{object.objectType} · {object.title}</option>)}</select></div><Button size="sm" disabled={!canExecute || editingAudienceName.trim().length < 2 || editingAudienceDefinition.trim().length < 3 || saveAudience.isPending} onClick={() => saveAudience.mutate()}>{saveAudience.isPending ? "Saving…" : "Save native audience"}</Button></div></> : <p className="text-sm text-muted-foreground">Create a native audience to configure it here.</p>}</div><div className="rounded-xl border border-primary/25 bg-primary/[0.03] p-4">{selectedCreative ? <><div className="flex flex-wrap items-start justify-between gap-3"><p className="eos-label">Configure selected creative</p>{creatives.length > 1 && <select aria-label="Creative to configure" className="h-9 rounded-md border bg-background px-2 text-sm" value={selectedCreative.id} onChange={(event) => setSelectedCreativeId(event.target.value)}>{creatives.map((creative) => <option key={creative.id} value={creative.id}>{creative.title}</option>)}</select>}</div><div className="mt-3 grid gap-3"><div><Label htmlFor="marketing-edit-creative-name">Creative name</Label><Input id="marketing-edit-creative-name" className="mt-1" value={editingCreativeName} onChange={(event) => setEditingCreativeName(event.target.value)} /></div><div><Label htmlFor="marketing-edit-creative-claim">Approved claim</Label><Textarea id="marketing-edit-creative-claim" className="mt-1" value={editingCreativeClaim} onChange={(event) => setEditingCreativeClaim(event.target.value)} /></div><div><Label htmlFor="marketing-edit-creative-asset">EOS asset ID</Label><Input id="marketing-edit-creative-asset" className="mt-1" value={editingCreativeAssetId} onChange={(event) => setEditingCreativeAssetId(event.target.value)} /></div><Button size="sm" disabled={!canExecute || editingCreativeName.trim().length < 2 || editingCreativeClaim.trim().length < 3 || saveCreative.isPending} onClick={() => saveCreative.mutate()}>{saveCreative.isPending ? "Saving…" : "Save native creative"}</Button></div></> : <p className="text-sm text-muted-foreground">Create a native creative to configure it here.</p>}</div><div className="rounded-xl border border-primary/25 bg-primary/[0.03] p-4">{selectedPlacement ? <><div className="flex flex-wrap items-start justify-between gap-3"><p className="eos-label">Configure selected placement</p>{placements.length > 1 && <select aria-label="Placement to configure" className="h-9 rounded-md border bg-background px-2 text-sm" value={selectedPlacement.id} onChange={(event) => setSelectedPlacementId(event.target.value)}>{placements.map((placement) => <option key={placement.id} value={placement.id}>{placement.title}</option>)}</select>}</div><div className="mt-3 grid gap-3"><div><Label htmlFor="marketing-edit-placement-channel">Channel</Label><select id="marketing-edit-placement-channel" className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm" value={editingPlacementChannel} onChange={(event) => setEditingPlacementChannel(event.target.value)}><option value="website">Owned website</option><option value="email">Email nurture</option><option value="social">Social distribution</option><option value="search">Search</option><option value="partner">Partner distribution</option></select></div><Button size="sm" disabled={!canExecute || savePlacement.isPending} onClick={() => savePlacement.mutate()}>{savePlacement.isPending ? "Saving…" : "Save native placement"}</Button></div></> : <p className="text-sm text-muted-foreground">Create a native placement to configure it here.</p>}</div><div className="rounded-xl border border-primary/25 bg-primary/[0.03] p-4">{selectedBudget ? <><div className="flex flex-wrap items-start justify-between gap-3"><p className="eos-label">Configure budget guardrail</p>{budgets.length > 1 && <select aria-label="Budget guardrail to configure" className="h-9 rounded-md border bg-background px-2 text-sm" value={selectedBudget.id} onChange={(event) => setSelectedBudgetId(event.target.value)}>{budgets.map((budget) => <option key={budget.id} value={budget.id}>{budget.title}</option>)}</select>}</div><div className="mt-3 grid gap-3"><div><Label htmlFor="marketing-edit-budget-limit">Limit (USD)</Label><Input id="marketing-edit-budget-limit" className="mt-1" inputMode="decimal" value={editingBudgetLimit} onChange={(event) => setEditingBudgetLimit(event.target.value)} /></div><Button size="sm" disabled={!canExecute || saveBudget.isPending} onClick={() => saveBudget.mutate()}>{saveBudget.isPending ? "Saving…" : "Save native budget guardrail"}</Button></div></> : <p className="text-sm text-muted-foreground">Add a budget guardrail to configure it here.</p>}</div></section>}
       <Alert><CheckCircle2 className="h-4 w-4" /><AlertTitle>Native first, provider ready</AlertTitle><AlertDescription>EOS owns the campaign plan, audience definition, creative claim, budget ceiling, placements, and measured outcome. A connected provider can later reconcile governed records and execute an approved action with a receipt; this studio does not pretend a plan has already spent money, bought media, or published a message.</AlertDescription></Alert>
     </CardContent>
   </Card>;
