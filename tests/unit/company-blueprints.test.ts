@@ -112,6 +112,15 @@ describe("company operating blueprints", () => {
     expect(starters[6]).toMatchObject({ key: "legal-governance-foundation", ownerRoleKey: "legal_governance", workflowTemplateKey: "policy-obligation-control" });
     expect(starters[7]).toMatchObject({ key: "vendor-control-foundation", ownerRoleKey: "operations_administration", workflowTemplateKey: "vendor-to-approved-service" });
     expect(starters[8]).toMatchObject({ key: "offer-evolution-foundation", ownerRoleKey: "growth", workflowTemplateKey: "offer-learning-loop" });
+    expect(starters[5]).toMatchObject({ title: "Finance control foundation · Validate the offer" });
+    expect(starters[5].statement).toContain("does not assert accounting, bank, tax, payroll, or payment truth");
+    expect(starters[6]).toMatchObject({ title: "Legal and governance foundation · Validate the offer" });
+    expect(starters[6].statement).toContain("does not provide legal advice or claim a legal conclusion");
+    expect(starters[7]).toMatchObject({ title: "Vendor and service-control foundation · Validate the offer" });
+    expect(starters[7].statement).toContain("no vendor authorization, purchase, contract, access grant, or provider effect is inferred");
+    expect(starters[8]).toMatchObject({ title: "Offer learning foundation · Revenue recovery service" });
+    expect(starters[8].statement).toContain("Revenue recovery service for B2B service companies");
+    expect(starters.slice(5).every((starter) => !starter.title.startsWith("Feedback and improvement"))).toBe(true);
   });
 
   it("turns the matching shared workflow pattern into an editable company-specific native draft", () => {
