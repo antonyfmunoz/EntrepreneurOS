@@ -892,7 +892,11 @@ export default function EosOverlayPage() {
   const [eaMessages, setEaMessages] = useState<ChatMessage[]>([]);
   const [isEditingAssistantName, setIsEditingAssistantName] = useState(false);
   const [assistantNameDraft, setAssistantNameDraft] = useState("");
-  const [providerPacketId, setProviderPacketId] = useState("");
+  const [providerPacketId, setProviderPacketId] = useState(() =>
+    typeof window === "undefined"
+      ? ""
+      : new URLSearchParams(window.location.search).get("workPacket") || "",
+  );
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");

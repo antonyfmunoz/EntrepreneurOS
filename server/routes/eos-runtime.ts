@@ -3178,6 +3178,31 @@ export function registerEosRuntimeRoutes(app: Express): void {
           eq(eosCapabilityInstances.capabilityInstanceKey, "eos_operating_formation"),
         )).limit(1),
       ]);
+      const parsedCurrentReality = currentOperatingRealityInputSchema.safeParse(founderProfile.currentReality);
+      const currentRealityDiscoveryPacket = packets.find((packet) =>
+        String(packet.sourceLineage || "").endsWith(":resolve-current-reality-assumptions"),
+      );
+      // The detailed company baseline stays in the Company Mission Journey.
+      // Org Studio receives only a founder/admin-visible readiness summary so a
+      // role view cannot accidentally become a channel for sensitive company
+      // facts while still making unresolved assumptions actionable.
+      const currentRealitySummary = mayAdminOrganization(access) && parsedCurrentReality.success
+        ? {
+            declaredFamilies: 4 - [
+              parsedCurrentReality.data.assetsAndObligations,
+              parsedCurrentReality.data.marketAndDemand,
+              parsedCurrentReality.data.economicsAndCapital,
+              parsedCurrentReality.data.bottleneckAndGovernance,
+            ].filter((value) => !value).length,
+            evidenceConfidence: parsedCurrentReality.data.evidenceConfidence,
+            evidenceGapsDeclared: Boolean(parsedCurrentReality.data.evidenceGaps),
+            discoveryPacket: currentRealityDiscoveryPacket && currentRealityDiscoveryPacket.accountableSeatId
+              && visible.has(currentRealityDiscoveryPacket.accountableSeatId)
+              && mayAccessClassification(access, currentRealityDiscoveryPacket.classification)
+              ? { id: currentRealityDiscoveryPacket.id, status: currentRealityDiscoveryPacket.status }
+              : null,
+          }
+        : null;
       const starters = compileCompanyBlueprintStarters(blueprint, {
         offer: access.company.offer,
         targetCustomer: access.company.targetCustomer,
@@ -3191,6 +3216,7 @@ export function registerEosRuntimeRoutes(app: Express): void {
             description: blueprint.description,
             operatingFormation: formation.formation,
             teamSnapshot: formation.teamSnapshot,
+            currentReality: currentRealitySummary,
             formationPlan: {
               ...formation,
               state: formationCapability[0] ? "compiled" : "ready",

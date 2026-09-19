@@ -2635,6 +2635,14 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
             vision: "Operate a durable client-value loop.",
             operatingFormation: "hybrid",
             existingSystems: ["QuickBooks"],
+            currentReality: {
+              assetsAndObligations: "Two active client engagements.",
+              marketAndDemand: "",
+              economicsAndCapital: "Fixed-fee service delivery.",
+              bottleneckAndGovernance: "",
+              evidenceGaps: "Contract scope needs verification.",
+              evidenceConfidence: "low",
+            },
             setupJourneyVersion: "company-mission-journey-v1",
           })}::jsonb
       WHERE id = ${companyId}`;
@@ -2656,6 +2664,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
     expect(draft.body.manifest.blueprintPlan.setupMissions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ key: "reconcile-existing-systems", status: "not_started" }),
+        expect.objectContaining({ key: "resolve-current-reality-assumptions", status: "not_started" }),
       ]),
     );
     const materialized = await api
@@ -2664,7 +2673,7 @@ describe.skipIf(!databaseUrl)("EOS overlay HTTP lifecycle", () => {
       )
       .send({})
       .expect(201);
-    expect(materialized.body.created).toHaveLength(5);
+    expect(materialized.body.created).toHaveLength(6);
     expect(materialized.body.created).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

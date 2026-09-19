@@ -714,6 +714,34 @@ export default function OrgStudioPage() {
                     </p>
                   </div>
                 )}
+                {blueprint.data.blueprint.currentReality && (
+                  <div className="mt-4 max-w-3xl rounded-xl border border-primary/20 bg-background/70 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="eos-label">Current operating reality</p>
+                        <p className="mt-1 text-sm font-medium">
+                          {blueprint.data.blueprint.currentReality.declaredFamilies} of 4 baseline families recorded
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Evidence confidence: {String(blueprint.data.blueprint.currentReality.evidenceConfidence).replaceAll("_", " ")}. {blueprint.data.blueprint.currentReality.evidenceGapsDeclared ? "Open evidence gaps are visible to the founder." : "No evidence gaps were declared."}
+                        </p>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs ${blueprint.data.blueprint.currentReality.evidenceConfidence === "high" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                        {blueprint.data.blueprint.currentReality.evidenceConfidence === "high" ? "Source-backed" : "Discovery required"}
+                      </span>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Link href={`/company-setup?companyId=${companyId}`} className="inline-flex items-center rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted">
+                        Review baseline
+                      </Link>
+                      {blueprint.data.blueprint.currentReality.discoveryPacket && (
+                        <Link href={`/company/${companyId}?workPacket=${encodeURIComponent(blueprint.data.blueprint.currentReality.discoveryPacket.id)}#work-room`} className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+                          Open discovery work →
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="mt-4 flex flex-wrap gap-2">
                   {(blueprint.data.blueprint.roles || []).map(
                     (role: RecordValue) => (
