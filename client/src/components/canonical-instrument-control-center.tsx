@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Archive, ArrowRight, Boxes, Download, Link2, Plus, RefreshCw, Search, ShieldCheck, Upload } from "lucide-react";
+import { Archive, ArrowRight, Boxes, Download, Link2, Plus, RefreshCw, Search, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,16 @@ function stateTone(state: string) {
   return "outline" as const;
 }
 
+function humanizeRelationship(value: string) {
+  return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function instrumentObjectLabel(item?: JsonRecord) {
+  if (!item) return "A record that is no longer available in this role scope";
+  const instrument = eosInstrumentManifest[item.instrumentKey as EosInstrumentKey];
+  return `${instrument?.label || item.instrumentKey} · ${item.title || item.objectType}`;
+}
+
 export function CanonicalInstrumentControlCenter({ root, canExecute, canDecide, evidence = [], visibleInstrumentKeys }: {
   root: string;
   canExecute: boolean;
@@ -83,6 +93,7 @@ export function CanonicalInstrumentControlCenter({ root, canExecute, canDecide, 
   const [transitionEvidenceId, setTransitionEvidenceId] = useState("");
   const [linkTargetId, setLinkTargetId] = useState("");
   const [relationshipType, setRelationshipType] = useState("supports");
+  const [linkedFocusId, setLinkedFocusId] = useState("");
   const [error, setError] = useState("");
   const importInput = useRef<HTMLInputElement>(null);
 
@@ -120,7 +131,8 @@ export function CanonicalInstrumentControlCenter({ root, canExecute, canDecide, 
     setObjectType(nextType);
     setStructuredData(JSON.stringify(instrumentStarterData(instrumentKey, nextType), null, 2));
     setObjectEvidenceId("");
-    setSelectedId("");
+    setSelectedId(linkedFocusId || "");
+    setLinkedFocusId("");
     setError("");
   }, [instrumentKey]);
 
@@ -180,6 +192,14 @@ export function CanonicalInstrumentControlCenter({ root, canExecute, canDecide, 
     onSuccess: refresh,
     onError: (cause: Error) => setError(cause.message),
   });
+  const unlinkMutation = useMutation({
+    mutationFn: async (link: JsonRecord) => (await apiRequest("DELETE", `${root}/instrument-links/${link.id}`, {
+      rationale: "Operator removed an obsolete or incorrect company relationship.",
+      idempotencyKey: commandKey("link-remove"),
+    })).json(),
+    onSuccess: refresh,
+    onError: (cause: Error) => setError(cause.message),
+  });
   const importMutation = useMutation({
     mutationFn: async (bundle: unknown) => (await apiRequest("POST", `${root}/instrument-imports`, { bundle, conflictStrategy: "copy", idempotencyKey: commandKey("instrument-import") })).json(),
     onSuccess: async () => { await refresh(); setError(""); },
@@ -216,6 +236,16 @@ export function CanonicalInstrumentControlCenter({ root, canExecute, canDecide, 
   const updateField = (path: string, next: unknown) => {
     setStructuredData(JSON.stringify(setPath(editingData, path, next), null, 2));
     setError("");
+  };
+
+  const focusLinkedObject = (item?: JsonRecord) => {
+    if (!item) return;
+    if (item.instrumentKey === instrumentKey) {
+      setSelectedId(item.id);
+      return;
+    }
+    setLinkedFocusId(item.id);
+    setInstrumentKey(item.instrumentKey as EosInstrumentKey);
   };
 
   return <Card data-testid="canonical-instrument-control-center">
@@ -276,7 +306,7 @@ export function CanonicalInstrumentControlCenter({ root, canExecute, canDecide, 
           {selected && <div className="space-y-3 border-t pt-4"><div><p className="text-sm font-medium">Lifecycle controls</p><p className="text-xs text-muted-foreground">Consequential transitions require decision authority. Completion requires verified Evidence.</p></div>{instrumentTransitions[selected.state as keyof typeof instrumentTransitions]?.map((state) => <Button key={state} variant="outline" size="sm" className="mr-2" disabled={transitionMutation.isPending || (["active", "completed", "cancelled", "archived"].includes(state) ? !canDecide : !canExecute)} onClick={() => transitionMutation.mutate(state)}>{selected.state}<ArrowRight className="mx-2 h-3 w-3"/>{state}</Button>)}<Select value={transitionEvidenceId || "none"} onValueChange={(value) => setTransitionEvidenceId(value === "none" ? "" : value)}><SelectTrigger aria-label="Transition Evidence" className="mt-2"><SelectValue placeholder="Optional verified Evidence"/></SelectTrigger><SelectContent><SelectItem value="none">No Evidence attached</SelectItem>{evidence.filter((item) => item.verificationState === "verified").map((item) => <SelectItem key={item.id} value={item.id}>{item.title}</SelectItem>)}</SelectContent></Select></div>}
         </section>
       </div>
-      {selected && <div className="grid gap-4 lg:grid-cols-2"><section className="rounded-xl border p-4"><h4 className="font-semibold">Cross-instrument relationships</h4><p className="mt-1 text-sm text-muted-foreground">Link canonical objects without copying or collapsing their source state.</p><div className="mt-3 grid gap-2 sm:grid-cols-[1fr_160px_auto]"><Select value={linkTargetId || "none"} onValueChange={(value) => setLinkTargetId(value === "none" ? "" : value)}><SelectTrigger aria-label="Relationship target"><SelectValue placeholder="Target object"/></SelectTrigger><SelectContent><SelectItem value="none">Choose target</SelectItem>{objects.filter((item) => item.id !== selected.id).map((item) => <SelectItem key={item.id} value={item.id}>{eosInstrumentManifest[item.instrumentKey as EosInstrumentKey]?.label}: {item.title}</SelectItem>)}</SelectContent></Select><Input value={relationshipType} onChange={(event) => setRelationshipType(event.target.value)} aria-label="Relationship type"/><Button size="icon" variant="outline" onClick={() => linkMutation.mutate()} disabled={!canExecute || !linkTargetId || relationshipType.trim().length < 2} aria-label="Create relationship"><Link2 className="h-4 w-4"/></Button></div><div className="mt-3 space-y-2">{links.map((link) => <p key={link.id} className="rounded-lg bg-muted p-2 text-xs">{link.relationshipType} · {link.sourceObjectId === selected.id ? "outbound" : "inbound"}</p>)}{!links.length && <p className="text-xs text-muted-foreground">No relationships yet.</p>}</div></section><section className="rounded-xl border p-4"><h4 className="font-semibold">Append-only event trail</h4><div className="mt-3 max-h-64 space-y-2 overflow-auto">{events.map((event) => <div key={event.id} className="rounded-lg bg-muted p-3 text-xs"><div className="flex justify-between gap-3"><span className="font-medium">{event.eventType.replaceAll("_", " ")}</span><span>v{event.objectVersion}</span></div><p className="mt-1 text-muted-foreground">{event.fromState || "none"} → {event.toState} · {new Date(event.createdAt).toLocaleString()}</p></div>)}{!events.length && <p className="text-xs text-muted-foreground">Events appear after the first accepted command.</p>}</div></section></div>}
+      {selected && <div className="grid gap-4 lg:grid-cols-2"><section className="rounded-xl border p-4" data-testid="canonical-instrument-relationship-map"><h4 className="font-semibold">Relationship map</h4><p className="mt-1 text-sm text-muted-foreground">See how this record fits the company operating graph, then open, add, or remove a role-visible dependency without copying or collapsing source state.</p><div className="mt-3 grid gap-2 sm:grid-cols-[1fr_160px_auto]"><Select value={linkTargetId || "none"} onValueChange={(value) => setLinkTargetId(value === "none" ? "" : value)}><SelectTrigger aria-label="Relationship target"><SelectValue placeholder="Target object"/></SelectTrigger><SelectContent><SelectItem value="none">Choose target</SelectItem>{objects.filter((item) => item.id !== selected.id).map((item) => <SelectItem key={item.id} value={item.id}>{eosInstrumentManifest[item.instrumentKey as EosInstrumentKey]?.label}: {item.title}</SelectItem>)}</SelectContent></Select><Input value={relationshipType} onChange={(event) => setRelationshipType(event.target.value)} aria-label="Relationship type"/><Button size="icon" variant="outline" onClick={() => linkMutation.mutate()} disabled={!canExecute || !linkTargetId || relationshipType.trim().length < 2} aria-label="Create relationship"><Link2 className="h-4 w-4"/></Button></div><div className="mt-3 space-y-2">{links.map((link) => { const outbound = link.sourceObjectId === selected.id; const connected = objects.find((item) => item.id === (outbound ? link.targetObjectId : link.sourceObjectId)); return <div key={link.id} className="rounded-lg bg-muted p-3 text-xs"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{outbound ? "Outbound" : "Inbound"}</Badge><span className="font-medium">{humanizeRelationship(link.relationshipType)}</span></div><div className="flex gap-1"><Button size="sm" variant="ghost" disabled={!connected} onClick={() => focusLinkedObject(connected)}>Open</Button><Button size="icon" variant="ghost" disabled={!canExecute || unlinkMutation.isPending} onClick={() => unlinkMutation.mutate(link)} aria-label={`Remove ${humanizeRelationship(link.relationshipType)} relationship`}><Trash2 className="h-4 w-4"/></Button></div></div><p className="mt-2 text-muted-foreground">{outbound ? selected.title : instrumentObjectLabel(connected)} <span aria-hidden="true">→</span> {outbound ? instrumentObjectLabel(connected) : selected.title}</p><p className="mt-1 text-[11px] text-muted-foreground">{connected ? "Open this related record" : "The related record is unavailable in your current role scope."}</p></div>; })}{!links.length && <p className="text-xs text-muted-foreground">No relationships yet.</p>}</div></section><section className="rounded-xl border p-4"><h4 className="font-semibold">Append-only event trail</h4><div className="mt-3 max-h-64 space-y-2 overflow-auto">{events.map((event) => <div key={event.id} className="rounded-lg bg-muted p-3 text-xs"><div className="flex justify-between gap-3"><span className="font-medium">{event.eventType.replaceAll("_", " ")}</span><span>v{event.objectVersion}</span></div><p className="mt-1 text-muted-foreground">{event.fromState || "none"} → {event.toState} · {new Date(event.createdAt).toLocaleString()}</p></div>)}{!events.length && <p className="text-xs text-muted-foreground">Events appear after the first accepted command.</p>}</div></section></div>}
       </>}
     </CardContent>
   </Card>;

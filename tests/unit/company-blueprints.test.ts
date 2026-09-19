@@ -279,10 +279,13 @@ describe("company operating blueprints", () => {
 
   it("declares the native business-in-a-box dependencies as first-class governed graph edges", () => {
     expect(nativeBusinessStarterRelationships).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceStarterKey: "company-operating-brief", targetStarterKey: "native-offer-catalog", relationshipType: "defines_offer" }),
+      expect.objectContaining({ sourceStarterKey: "native-offer-catalog", targetStarterKey: "commercial-page", relationshipType: "presented_on" }),
       expect.objectContaining({ sourceStarterKey: "commercial-page", targetStarterKey: "company-site", relationshipType: "belongs_to_site" }),
       expect.objectContaining({ sourceStarterKey: "commercial-page", targetStarterKey: "commercial-intake", relationshipType: "captures_with" }),
       expect.objectContaining({ sourceStarterKey: "commercial-intake", targetStarterKey: "commercial-pipeline", relationshipType: "creates_demand_for" }),
       expect.objectContaining({ sourceStarterKey: "finance-control-workbook", targetStarterKey: "finance-control-worksheet", relationshipType: "contains_worksheet" }),
+      expect.objectContaining({ sourceStarterKey: "finance-reconciliation-register", targetStarterKey: "finance-control-worksheet", relationshipType: "reconciled_in" }),
       expect.objectContaining({ sourceStarterKey: "vendor-service-pipeline", targetStarterKey: "governance-obligation-register", relationshipType: "governed_by" }),
     ]));
   });

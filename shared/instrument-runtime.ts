@@ -158,6 +158,11 @@ export const instrumentLinkCreateSchema = z.object({
   idempotencyKey: identifier,
 });
 
+export const instrumentLinkDeleteSchema = z.object({
+  rationale: z.string().trim().min(3).max(5_000),
+  idempotencyKey: identifier,
+});
+
 // A commercial follow-up is intentionally a single cross-instrument command:
 // one native CRM opportunity creates one role-owned native Task and records
 // the accountable next action back on that opportunity.  Keeping its grammar

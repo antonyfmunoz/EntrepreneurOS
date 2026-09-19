@@ -32,13 +32,26 @@ export type NativeBusinessStarterRelationship = {
 };
 
 export const nativeBusinessStarterRelationships: readonly NativeBusinessStarterRelationship[] = [
+  // The operating brief is the governed source of the company-specific
+  // variables that contextualize each first operating system. It never makes
+  // those downstream records active or externally effective by itself.
+  { sourceStarterKey: "company-operating-brief", targetStarterKey: "native-offer-catalog", relationshipType: "defines_offer" },
+  { sourceStarterKey: "company-operating-brief", targetStarterKey: "commercial-pipeline", relationshipType: "defines_commercial_context" },
+  { sourceStarterKey: "company-operating-brief", targetStarterKey: "finance-control-plan", relationshipType: "sets_finance_context" },
+  { sourceStarterKey: "company-operating-brief", targetStarterKey: "governance-obligation-register", relationshipType: "sets_governance_context" },
+  // The declared offer is deliberately distinct from the public-facing
+  // drafts that explain or capture demand for it.
+  { sourceStarterKey: "native-offer-catalog", targetStarterKey: "commercial-page", relationshipType: "presented_on" },
+  { sourceStarterKey: "native-offer-catalog", targetStarterKey: "commercial-funnel", relationshipType: "acquired_through" },
   { sourceStarterKey: "commercial-page", targetStarterKey: "company-site", relationshipType: "belongs_to_site" },
   { sourceStarterKey: "commercial-page", targetStarterKey: "commercial-intake", relationshipType: "captures_with" },
   { sourceStarterKey: "commercial-funnel", targetStarterKey: "commercial-intake", relationshipType: "captures_with" },
   { sourceStarterKey: "commercial-intake", targetStarterKey: "commercial-pipeline", relationshipType: "creates_demand_for" },
   { sourceStarterKey: "commercial-pipeline", targetStarterKey: "native-offer-catalog", relationshipType: "commercializes" },
   { sourceStarterKey: "finance-control-plan", targetStarterKey: "finance-reconciliation-register", relationshipType: "governs" },
+  { sourceStarterKey: "finance-control-plan", targetStarterKey: "finance-control-workbook", relationshipType: "operated_in" },
   { sourceStarterKey: "finance-control-workbook", targetStarterKey: "finance-control-worksheet", relationshipType: "contains_worksheet" },
+  { sourceStarterKey: "finance-reconciliation-register", targetStarterKey: "finance-control-worksheet", relationshipType: "reconciled_in" },
   { sourceStarterKey: "vendor-service-pipeline", targetStarterKey: "governance-obligation-register", relationshipType: "governed_by" },
 ];
 
