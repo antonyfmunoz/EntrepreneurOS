@@ -122,6 +122,7 @@ const LeadCaptureStudio = lazy(() => import("@/components/lead-capture-studio").
 const NativeFormsStudio = lazy(() => import("@/components/native-forms-studio").then((module) => ({ default: module.NativeFormsStudio })));
 const NativeFunnelStudio = lazy(() => import("@/components/native-funnel-studio").then((module) => ({ default: module.NativeFunnelStudio })));
 const NativeCalendarStudio = lazy(() => import("@/components/native-calendar-studio").then((module) => ({ default: module.NativeCalendarStudio })));
+const NativeContentCalendar = lazy(() => import("@/components/native-content-calendar").then((module) => ({ default: module.NativeContentCalendar })));
 const NativeMessageHub = lazy(() => import("@/components/native-message-hub").then((module) => ({ default: module.NativeMessageHub })));
 const ConferenceRoomControlCenter = lazy(() => import("@/components/conference-room-control-center").then((module) => ({ default: module.ConferenceRoomControlCenter })));
 const NativeDocumentsStudio = lazy(() => import("@/components/native-documents-studio").then((module) => ({ default: module.NativeDocumentsStudio })));
@@ -10859,6 +10860,14 @@ export default function EosOverlayPage() {
             </Suspense>}
             {mayOperateNativeCalendar && <Suspense fallback={<DeferredControlFallback />}>
               <NativeCalendarStudio
+                root={root}
+                roleScopeKey={roleScopeKey}
+                canExecute={effectiveAuthorityClasses.has("execute")}
+                canDecide={effectiveAuthorityClasses.has("decide")}
+              />
+            </Suspense>}
+            {mayOperateNativeCalendar && <Suspense fallback={<DeferredControlFallback />}>
+              <NativeContentCalendar
                 root={root}
                 roleScopeKey={roleScopeKey}
                 canExecute={effectiveAuthorityClasses.has("execute")}
