@@ -400,26 +400,57 @@ export function compileCompanyBlueprintStarters(
   const offer = variables.offer?.trim() || "the declared offer";
   const targetCustomer = variables.targetCustomer?.trim() || "the declared first buyer";
   const goal = firstGoal(variables.goals);
-  return blueprint.starters.map((starter) => ({
-    ...starter,
-    title: starter.key === "commercial-foundation"
-      ? `Commercial foundation · ${offer}`
-      : starter.key === "operating-foundation"
-        ? `Operating foundation · ${goal}`
-        : starter.key === "client-onboarding-foundation"
-          ? `Client onboarding foundation · ${offer}`
-          : starter.key === "talent-foundation"
-            ? `People and talent foundation · ${goal}`
-          : `Feedback and improvement foundation · ${offer}`,
-    statement: starter.key === "commercial-foundation"
-      ? `Validate and operate a measurable path for ${offer} with ${targetCustomer}. ${starter.statement}`
-      : starter.key === "operating-foundation"
-        ? `${starter.statement} The first declared outcome is: ${goal}.`
-        : starter.key === "client-onboarding-foundation"
-          ? `${starter.statement} This applies ${offer} to ${targetCustomer} without implying that commercial authorization already exists.`
-          : starter.key === "talent-foundation"
-            ? `${starter.statement} This prepares the people system for ${goal}; it does not imply an employment, compensation, or access decision.`
-          : `${starter.statement} This applies to ${targetCustomer} receiving ${offer}; feedback consent and evidence remain required.`,
-    variables: { offer, targetCustomer, goal },
-  }));
+  return blueprint.starters.map((starter) => {
+    // A template becomes a company's instance at this one boundary. Keep each
+    // invariant foundation in its own language: finance, governance, vendor
+    // control, and offer learning are not variants of the feedback loop.
+    const contextualizations: Record<string, { title: string; statement: string }> = {
+      "commercial-foundation": {
+        title: `Commercial foundation · ${offer}`,
+        statement: `Validate and operate a measurable path for ${offer} with ${targetCustomer}. ${starter.statement}`,
+      },
+      "operating-foundation": {
+        title: `Operating foundation · ${goal}`,
+        statement: `${starter.statement} The first declared outcome is: ${goal}.`,
+      },
+      "client-onboarding-foundation": {
+        title: `Client onboarding foundation · ${offer}`,
+        statement: `${starter.statement} This applies ${offer} to ${targetCustomer} without implying that commercial authorization already exists.`,
+      },
+      "reputation-foundation": {
+        title: `Feedback and improvement foundation · ${offer}`,
+        statement: `${starter.statement} This applies to ${targetCustomer} receiving ${offer}; feedback consent and evidence remain required.`,
+      },
+      "talent-foundation": {
+        title: `People and talent foundation · ${goal}`,
+        statement: `${starter.statement} This prepares the people system for ${goal}; it does not imply an employment, compensation, or access decision.`,
+      },
+      "finance-control-foundation": {
+        title: `Finance control foundation · ${goal}`,
+        statement: `${starter.statement} This control loop supports ${goal}; it does not assert accounting, bank, tax, payroll, or payment truth without its authoritative evidence.`,
+      },
+      "legal-governance-foundation": {
+        title: `Legal and governance foundation · ${goal}`,
+        statement: `${starter.statement} This protects ${offer} for ${targetCustomer}; it does not provide legal advice or claim a legal conclusion.`,
+      },
+      "vendor-control-foundation": {
+        title: `Vendor and service-control foundation · ${goal}`,
+        statement: `${starter.statement} This supports ${goal}; no vendor authorization, purchase, contract, access grant, or provider effect is inferred.`,
+      },
+      "offer-evolution-foundation": {
+        title: `Offer learning foundation · ${offer}`,
+        statement: `${starter.statement} This evaluates ${offer} for ${targetCustomer} against the declared goal, ${goal}.`,
+      },
+    };
+    const contextualized = contextualizations[starter.key];
+    // `CompanyBlueprintStarter.key` is a controlled local union in practice,
+    // but keep a resilient fallback for a future editable template that has
+    // not yet declared its own contextualization rule.
+    return {
+      ...starter,
+      title: contextualized?.title || starter.title,
+      statement: contextualized?.statement || starter.statement,
+      variables: { offer, targetCustomer, goal },
+    };
+  });
 }
