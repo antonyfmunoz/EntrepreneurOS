@@ -7715,6 +7715,7 @@ export default function EosOverlayPage() {
                       root={root}
                       canExecute={effectiveAuthorityClasses.has("execute")}
                       canDecide={effectiveAuthorityClasses.has("decide")}
+                      onOpenOperations={allowedSurfaces.has("operations") ? () => goToSurface("operations") : undefined}
                     />
                   )}
                   {[5, 6].includes(selectedModule.id) && (
