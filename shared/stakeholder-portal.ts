@@ -26,3 +26,39 @@ export const stakeholderAccessGrantSchema = z.object({
   recipientLabel: z.string().trim().min(2).max(240), recipientIdentity: z.string().trim().min(3).max(500),
   expiresAt: z.string().datetime(), rationale: z.string().trim().min(20).max(4000),
 }).refine((value) => new Date(value.expiresAt) > new Date(), { path: ["expiresAt"], message: "Access must expire in the future." });
+
+export const stakeholderPortalIntakeQuestionSchema = z.object({
+  id: z.string().trim().min(2).max(80).regex(/^[a-z][a-z0-9_:-]*$/i),
+  label: z.string().trim().min(2).max(240),
+  type: z.enum(["short_text", "long_text", "email", "phone", "select"]).default("short_text"),
+  required: z.boolean().default(false),
+  options: z.array(z.string().trim().min(1).max(160)).max(30).default([]),
+}).superRefine((question, context) => {
+  if (question.type === "select" && question.options.length < 2)
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["options"], message: "A selection question needs at least two options." });
+  if (question.type !== "select" && question.options.length)
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["options"], message: "Only selection questions may define options." });
+});
+
+export const stakeholderPortalIntakeFormCreateSchema = z.object({
+  formKey: z.string().trim().min(3).max(160).regex(/^[a-z0-9][a-z0-9_-]*$/i),
+  title: z.string().trim().min(3).max(300),
+  summary: z.string().trim().min(10).max(4_000),
+  questions: z.array(stakeholderPortalIntakeQuestionSchema).min(1).max(30)
+    .superRefine((questions, context) => { if (new Set(questions.map((question) => question.id)).size !== questions.length) context.addIssue({ code: z.ZodIssueCode.custom, message: "Intake question identifiers must be unique." }); }),
+  confirmationMessage: z.string().trim().min(5).max(1_000),
+});
+
+export const stakeholderPortalIntakeFormTransitionSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  state: z.enum(["active", "archived"]),
+  rationale: z.string().trim().min(20).max(6_000),
+});
+
+export const stakeholderPortalIntakeSubmissionSchema = z.object({
+  answers: z.record(z.string(), z.string().trim().max(4_000)),
+  acknowledgement: z.literal(true),
+  website: z.string().max(200).optional().default(""),
+}).superRefine((value, context) => {
+  if (Object.keys(value.answers).length > 30) context.addIssue({ code: z.ZodIssueCode.custom, path: ["answers"], message: "An onboarding intake accepts at most 30 answers." });
+});

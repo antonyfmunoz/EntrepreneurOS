@@ -19,7 +19,7 @@ function scopedUrl(url: string) {
   if (!seat) return url;
   const scoped = new URL(url, window.location.origin); scoped.searchParams.set("seatId", seat); return `${scoped.pathname}${scoped.search}`;
 }
-async function json<T>(method: "GET" | "POST", url: string, body?: unknown): Promise<T> { const response = await apiRequest(method, scopedUrl(url), body) as Response; return response.json() as Promise<T>; }
+async function json<T>(method: "GET" | "POST" | "PATCH", url: string, body?: unknown): Promise<T> { const response = await apiRequest(method, scopedUrl(url), body) as Response; return response.json() as Promise<T>; }
 const dateFromNow = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 const field = "h-10 rounded-md border border-input bg-background px-3 text-sm";
 function badge(state: string) { const variant = ["healthy", "achieved", "resolved", "approved", "delivery_recorded", "renewing"].includes(state) ? "default" : ["at_risk", "critical", "not_achieved", "nonrenewing"].includes(state) ? "destructive" : "secondary"; return <Badge variant={variant as any}>{state.replaceAll("_", " ")}</Badge>; }
@@ -39,20 +39,40 @@ export function CustomerSuccessControlCenter({ root, canExecute, canDecide }: Pr
   });
   const run = (url: string, body: unknown, success: string) => action.mutate({ url, body, success });
   const provisionClientWorkspace = useMutation({
-    mutationFn: (account: Row) => json("POST", portalEndpoint, {
-      portalKey: `client-${account.id}`,
-      name: `${account.customerName} workspace`,
-      portalType: "client",
-      stakeholderId: account.stakeholderId,
-      visibleSections: ["updates", "documents"],
-      activationRequirements: [
-        "Verify the intended recipient and disclosure scope.",
-        "Review each publication with verified supporting Evidence.",
-        "Set a time-bounded access expiry before issuing a private link.",
-      ],
-    }),
-    onSuccess: async () => { await refreshPortals(); toast({ title: "Client workspace provisioned", description: "It is dormant and private. Configuration, evidence-backed activation, publication, and access issuance remain governed separately." }); },
+    mutationFn: async (account: Row) => {
+      const portal = await json<Row>("POST", portalEndpoint, {
+        portalKey: `client-${account.id}`,
+        name: `${account.customerName} workspace`,
+        portalType: "client",
+        stakeholderId: account.stakeholderId,
+        visibleSections: ["onboarding", "updates", "documents"],
+        activationRequirements: [
+          "Verify the intended recipient and disclosure scope.",
+          "Review each publication with verified supporting Evidence.",
+          "Set a time-bounded access expiry before issuing a private link.",
+        ],
+      });
+      await json("POST", `${portalEndpoint}/${portal.id}/intake-forms`, {
+        formKey: "client-onboarding",
+        title: "Client onboarding requirements",
+        summary: "Collect the client launch context, dependencies, and required access in one private EOS workspace.",
+        questions: [
+          { id: "launch_outcome", label: "What outcome should this launch produce?", type: "long_text", required: true, options: [] },
+          { id: "primary_contacts", label: "Who are the primary client contacts and decision-makers?", type: "long_text", required: true, options: [] },
+          { id: "access_requirements", label: "What access, assets, or information are required to begin?", type: "long_text", required: true, options: [] },
+          { id: "launch_timing", label: "What timing, milestones, or availability should the team know?", type: "long_text", required: false, options: [] },
+        ],
+        confirmationMessage: "Thank you. EOS recorded this onboarding input for the accountable team to review.",
+      });
+      return portal;
+    },
+    onSuccess: async () => { await refreshPortals(); toast({ title: "Client workspace provisioned", description: "A draft native onboarding intake is ready inside the dormant, private workspace. Activation, publication, and access issuance remain governed separately." }); },
     onError: (error) => toast({ title: "Client workspace could not be provisioned", description: error instanceof Error ? error.message : String(error), variant: "destructive" }),
+  });
+  const transitionClientIntake = useMutation({
+    mutationFn: ({ portal, form, state }: { portal: Row; form: Row; state: "active" | "archived" }) => json("PATCH", `${portalEndpoint}/${portal.id}/intake-forms/${form.id}`, { expectedVersion: form.version, state, rationale: state === "active" ? "The founder reviewed this private client onboarding intake, the workspace activation boundary, recipient scope, and the fact that submitted input remains unverified until reviewed." : "The founder retired this client onboarding intake to stop further client input while preserving the governed record." }),
+    onSuccess: async () => { await refreshPortals(); toast({ title: "Client onboarding intake updated", description: "EOS preserved the workspace boundary and immutable client submission history." }); },
+    onError: (error) => toast({ title: "Client onboarding intake could not be updated", description: error instanceof Error ? error.message : String(error), variant: "destructive" }),
   });
 
   const [account, setAccount] = useState({ relationshipId: "", nativeRelationshipObjectId: "", ownerSeatId: "", reviewCadenceDays: 30, nextReviewAt: dateFromNow(30), renewalAt: "", successDefinition: "", classification: "confidential" });
@@ -94,7 +114,7 @@ export function CustomerSuccessControlCenter({ root, canExecute, canDecide }: Pr
     </CardContent></Card>
 
     {selected && <>
-      {canDecide && <Card><CardHeader><CardTitle>Client workspace</CardTitle><CardDescription>One governed client workspace is bound to this customer record. Provisioning creates no external access, message, or disclosure.</CardDescription></CardHeader><CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div>{portals.isLoading ? <p className="text-sm text-muted-foreground">Checking the customer workspace…</p> : selectedClientWorkspace ? <><div className="flex flex-wrap items-center gap-2"><Badge variant={selectedClientWorkspace.state === "active" ? "default" : "secondary"}>{selectedClientWorkspace.state}</Badge><span className="text-sm font-medium">{selectedClientWorkspace.name}</span></div><p className="mt-2 text-sm text-muted-foreground">Continue configuration, evidence-backed activation, publication review, and private access issuance from Stakeholder portals in Governance.</p></> : <p className="text-sm text-muted-foreground">No client workspace exists yet. Provision one here; it will remain dormant until a founder completes the separate governance gates.</p>}</div>{!portals.isLoading && !selectedClientWorkspace && <Button disabled={provisionClientWorkspace.isPending || !selected.stakeholderId} onClick={() => provisionClientWorkspace.mutate(selected)}><Plus className="mr-2 h-4 w-4"/>{provisionClientWorkspace.isPending ? "Provisioning…" : "Provision client workspace"}</Button>}</CardContent></Card>}
+      {canDecide && <Card><CardHeader><CardTitle>Client workspace</CardTitle><CardDescription>One governed client workspace is bound to this customer record. Provisioning creates no external access, message, or disclosure.</CardDescription></CardHeader><CardContent className="space-y-3"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div>{portals.isLoading ? <p className="text-sm text-muted-foreground">Checking the customer workspace…</p> : selectedClientWorkspace ? <><div className="flex flex-wrap items-center gap-2"><Badge variant={selectedClientWorkspace.state === "active" ? "default" : "secondary"}>{selectedClientWorkspace.state}</Badge><span className="text-sm font-medium">{selectedClientWorkspace.name}</span></div><p className="mt-2 text-sm text-muted-foreground">The client onboarding intake is configured here; publication review and private access issuance stay in the same governed workspace.</p></> : <p className="text-sm text-muted-foreground">No client workspace exists yet. Provision one here; it will remain dormant until a founder completes the separate governance gates.</p>}</div>{!portals.isLoading && !selectedClientWorkspace && <Button disabled={provisionClientWorkspace.isPending || !selected.stakeholderId} onClick={() => provisionClientWorkspace.mutate(selected)}><Plus className="mr-2 h-4 w-4"/>{provisionClientWorkspace.isPending ? "Provisioning…" : "Provision client workspace"}</Button>}</div>{selectedClientWorkspace?.intakeForms?.map((form: Row) => <div key={form.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3"><div><div className="flex flex-wrap items-center gap-2"><span className="text-sm font-medium">{form.title}</span><Badge variant={form.state === "active" ? "default" : "secondary"}>{form.state}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{form.questionCount} questions · {form.submissionCount} submitted · client input remains unverified until reviewed.</p></div>{form.state === "draft" && <Button size="sm" disabled={selectedClientWorkspace.state !== "active" || transitionClientIntake.isPending} onClick={() => transitionClientIntake.mutate({ portal: selectedClientWorkspace, form, state: "active" })}>{selectedClientWorkspace.state === "active" ? "Activate intake" : "Activate workspace first"}</Button>}{form.state === "active" && <Button size="sm" variant="outline" disabled={transitionClientIntake.isPending} onClick={() => transitionClientIntake.mutate({ portal: selectedClientWorkspace, form, state: "archived" })}>Retire intake</Button>}</div>)}</CardContent></Card>}
       <Card><CardHeader><CardTitle className="flex items-center gap-2"><Activity className="h-5 w-5"/>Evidence-backed health review</CardTitle><CardDescription>EOS calculates health deterministically from delivery, outcome, adoption, relationship, and risk dimensions.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{(["deliveryScore", "outcomeScore", "adoptionScore", "relationshipScore", "riskScore"] as const).map((key) => <label key={key} className="space-y-1 text-xs text-muted-foreground">{key.replace("Score", " score")}<Input type="number" min={0} max={100} value={health[key]} onChange={(event) => setHealth((value) => ({ ...value, [key]: Number(event.target.value) }))}/></label>)}</div><div className="grid gap-3 md:grid-cols-2">{evidenceSelect("Health review Evidence", health.evidenceId, (evidenceId) => setHealth((value) => ({ ...value, evidenceId })))}<label className="space-y-1 text-xs text-muted-foreground">Next review<Input type="date" value={health.nextReviewAt} onChange={(event) => setHealth((value) => ({ ...value, nextReviewAt: event.target.value }))}/></label><Textarea placeholder="Observed customer-health facts and limits" value={health.summary} onChange={(event) => setHealth((value) => ({ ...value, summary: event.target.value }))}/><Textarea placeholder="Accountable next actions" value={health.nextActions} onChange={(event) => setHealth((value) => ({ ...value, nextActions: event.target.value }))}/></div><Button disabled={!canExecute || action.isPending || !health.evidenceId || health.summary.trim().length < 20 || health.nextActions.trim().length < 10} onClick={() => run(`${endpoint}/accounts/${selected.id}/health-reviews`, { expectedVersion: selected.version, ...health, evidenceIds: [health.evidenceId], evidenceId: undefined }, "Health review recorded")}><CheckCircle2 className="mr-2 h-4 w-4"/>Record health review</Button>{accountReviews[0] && <div className="rounded-lg bg-muted p-3 text-sm"><span className="font-medium">Latest: {accountReviews[0].healthScore}/100 · {accountReviews[0].healthState.replaceAll("_", " ")}</span><p className="mt-1 text-muted-foreground">{accountReviews[0].summary}</p></div>}</CardContent></Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
