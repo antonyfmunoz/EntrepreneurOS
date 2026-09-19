@@ -1,22 +1,25 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Express, Request, Response } from "express";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { ZodError } from "zod";
 import {
-  companies, eosAuditRecords, eosEvidence, eosStakeholders, eosStakeholderPortalAccessGrants,
+  companies, eosAuditRecords, eosEvidence, eosInstrumentObjects, eosStakeholders, eosStakeholderPortalAccessGrants,
   eosStakeholderPortalPublications, eosStakeholderPortals,
 } from "@shared/schema";
 import {
   stakeholderAccessGrantSchema, stakeholderPortalCreateSchema, stakeholderPortalTransitionSchema,
-  stakeholderPublicationCreateSchema, stakeholderPublicationTransitionSchema,
+  stakeholderPublicationCreateSchema, stakeholderPublicationTransitionSchema, stakeholderPortalIntakeFormCreateSchema,
+  stakeholderPortalIntakeFormTransitionSchema, stakeholderPortalIntakeSubmissionSchema,
 } from "@shared/stakeholder-portal";
 import { db } from "../db";
 import { fixedWindowRateLimit } from "../middleware/rate-limit";
 import { EosRouteError, authorizeAction, companyAccess } from "./eos-runtime";
+import { nativeContractContentSha256 } from "../esign/template-generation";
 
 const tokenDigest = (value: string) => createHash("sha256").update(value).digest("hex");
 const identityDigest = (value: string) => createHash("sha256").update(value.trim().toLowerCase()).digest("hex");
 const publicPortalRateLimit = fixedWindowRateLimit({ limit: 90, windowMs: 60_000, namespace: "stakeholder-portal-public" });
+const publicPortalIntakeRateLimit = fixedWindowRateLimit({ limit: 20, windowMs: 60_000, namespace: "stakeholder-portal-intake" });
 function route(handler: (req: Request, res: Response) => Promise<void>) { return async (req: Request, res: Response, next: (error?: unknown) => void) => { try { await handler(req, res); } catch (error) { if (error instanceof EosRouteError) return res.status(error.status).json({ code: error.code, message: error.message }); if (error instanceof ZodError) return res.status(400).json({ code: "stakeholder_portal_input_invalid", message: error.issues[0]?.message || "Stakeholder portal input is invalid." }); next(error); } }; }
 
 async function portalAccess(req: Request, actionKey: string, view = false) {
@@ -33,6 +36,15 @@ async function evidenceFor(companyId: number, ids: string[], verified = false) {
   return rows;
 }
 
+function recordValue(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
+function intakeDefinition(form: typeof eosInstrumentObjects.$inferSelect) {
+  const data = recordValue(form.data);
+  const parsed = stakeholderPortalIntakeFormCreateSchema.safeParse({ formKey: data.formKey, title: form.title, summary: form.summary, questions: data.questions, confirmationMessage: data.confirmationMessage });
+  if (!parsed.success || data.clientPortalIntake !== true || typeof data.stakeholderPortalId !== "string") return null;
+  return { ...parsed.data, portalId: data.stakeholderPortalId };
+}
+function publicHeaders(res: Response) { res.setHeader("Cache-Control", "no-store, private, max-age=0"); res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin"); res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive"); }
+
 export function registerPublicStakeholderPortalRoutes(app: Express): void {
   app.use("/api/public/stakeholder-portals", publicPortalRateLimit);
   app.get("/api/public/stakeholder-portals/:token", route(async (req, res) => {
@@ -44,13 +56,45 @@ export function registerPublicStakeholderPortalRoutes(app: Express): void {
     }
     const [portal] = await db.select().from(eosStakeholderPortals).where(and(eq(eosStakeholderPortals.id, grant.portalId), eq(eosStakeholderPortals.state, "active"))).limit(1);
     if (!portal) throw new EosRouteError(404, "stakeholder_portal_unavailable", "This stakeholder workspace is unavailable.");
-    const [company, publications] = await Promise.all([
+    const [company, publications, candidateForms] = await Promise.all([
       db.select({ name: companies.name }).from(companies).where(eq(companies.id, portal.companyId)).limit(1).then((rows) => rows[0]),
       db.select().from(eosStakeholderPortalPublications).where(and(eq(eosStakeholderPortalPublications.portalId, portal.id), eq(eosStakeholderPortalPublications.state, "published"))).orderBy(desc(eosStakeholderPortalPublications.publishedAt)),
+      db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, portal.companyId), eq(eosInstrumentObjects.instrumentKey, "forms"), eq(eosInstrumentObjects.objectType, "form"), eq(eosInstrumentObjects.state, "active"))),
     ]);
+    const intakeForms = candidateForms.map((form) => ({ form, definition: intakeDefinition(form) })).filter((item): item is { form: typeof eosInstrumentObjects.$inferSelect; definition: NonNullable<ReturnType<typeof intakeDefinition>> } => Boolean(item.definition && item.definition.portalId === portal.id));
+    const formIds = intakeForms.map((item) => item.form.id);
+    const submissions = formIds.length ? await db.select({ parentObjectId: eosInstrumentObjects.parentObjectId }).from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, portal.companyId), eq(eosInstrumentObjects.instrumentKey, "forms"), eq(eosInstrumentObjects.objectType, "submission"), inArray(eosInstrumentObjects.parentObjectId, formIds), sql`${eosInstrumentObjects.data}->>'accessGrantId' = ${grant.id}`)) : [];
+    const submittedFormIds = new Set(submissions.map((item) => item.parentObjectId));
     await db.update(eosStakeholderPortalAccessGrants).set({ state: "accessed", lastAccessedAt: now, accessCount: grant.accessCount + 1 }).where(eq(eosStakeholderPortalAccessGrants.id, grant.id));
-    res.setHeader("Cache-Control", "no-store");
-    res.json({ schemaVersion: "eos.stakeholder-portal-public.v1", companyName: company?.name || "Organization", portal: { name: portal.name, portalType: portal.portalType, visibleSections: portal.visibleSections }, recipientLabel: grant.recipientLabel, expiresAt: grant.expiresAt, publications: publications.map(({ recordedByUserId: _recordedByUserId, publishedByUserId: _publishedByUserId, companyId: _companyId, ...item }) => item) });
+    publicHeaders(res);
+    res.json({ schemaVersion: "eos.stakeholder-portal-public.v2", companyName: company?.name || "Organization", portal: { name: portal.name, portalType: portal.portalType, visibleSections: portal.visibleSections }, recipientLabel: grant.recipientLabel, expiresAt: grant.expiresAt, publications: publications.map(({ recordedByUserId: _recordedByUserId, publishedByUserId: _publishedByUserId, companyId: _companyId, ...item }) => item), intakeForms: intakeForms.map(({ form, definition }) => ({ id: form.id, title: form.title, summary: form.summary, questions: definition.questions, confirmationMessage: definition.confirmationMessage, submitted: submittedFormIds.has(form.id) })) });
+  }));
+
+  app.use("/api/public/stakeholder-portals/:token/intake-forms", publicPortalIntakeRateLimit);
+  app.post("/api/public/stakeholder-portals/:token/intake-forms/:formId/submissions", route(async (req, res) => {
+    const input = stakeholderPortalIntakeSubmissionSchema.parse(req.body); const tokenHash = tokenDigest(req.params.token || ""); const now = new Date();
+    if (input.website.trim()) { publicHeaders(res); res.status(202).json({ schemaVersion: "eos.stakeholder-portal-intake-submission.v1", accepted: true }); return; }
+    const [grant] = await db.select().from(eosStakeholderPortalAccessGrants).where(eq(eosStakeholderPortalAccessGrants.tokenHash, tokenHash)).limit(1);
+    if (!grant || ["revoked", "expired"].includes(grant.state) || grant.expiresAt <= now) throw new EosRouteError(404, "stakeholder_portal_unavailable", "This stakeholder workspace is unavailable.");
+    const [portal, form] = await Promise.all([
+      db.select().from(eosStakeholderPortals).where(and(eq(eosStakeholderPortals.id, grant.portalId), eq(eosStakeholderPortals.state, "active"))).limit(1).then((rows) => rows[0]),
+      db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.id, req.params.formId), eq(eosInstrumentObjects.companyId, grant.companyId), eq(eosInstrumentObjects.instrumentKey, "forms"), eq(eosInstrumentObjects.objectType, "form"), eq(eosInstrumentObjects.state, "active"))).limit(1).then((rows) => rows[0]),
+    ]);
+    const definition = form ? intakeDefinition(form) : null;
+    if (!portal || !form || !definition || definition.portalId !== portal.id) throw new EosRouteError(404, "stakeholder_portal_intake_unavailable", "This onboarding intake is unavailable.");
+    const allowed = new Set(definition.questions.map((question) => question.id));
+    for (const key of Object.keys(input.answers)) if (!allowed.has(key)) throw new EosRouteError(400, "stakeholder_portal_intake_answer_unknown", "The intake includes a field that is not available.");
+    for (const question of definition.questions) { const value = input.answers[question.id]?.trim() || ""; if (question.required && !value) throw new EosRouteError(400, "stakeholder_portal_intake_answer_required", `${question.label} is required.`); if (question.type === "email" && value && !/^\S+@\S+\.\S+$/.test(value)) throw new EosRouteError(400, "stakeholder_portal_intake_email_invalid", "Enter a valid email address."); if (question.type === "select" && value && !question.options.includes(value)) throw new EosRouteError(400, "stakeholder_portal_intake_selection_invalid", `Choose a listed value for ${question.label}.`); }
+    const objectKey = `stakeholder-portal-intake-submission:${grant.id}:${form.id}`;
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`stakeholder-portal-intake:${grant.id}:${form.id}`}))`);
+      const [existing] = await tx.select({ id: eosInstrumentObjects.id }).from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, grant.companyId), eq(eosInstrumentObjects.instrumentKey, "forms"), eq(eosInstrumentObjects.objectKey, objectKey))).limit(1);
+      if (existing) throw new EosRouteError(409, "stakeholder_portal_intake_already_submitted", "This onboarding intake has already been submitted. Contact the team if something needs to change.");
+      const submissionId = randomUUID(); const data = { clientPortalIntakeSubmission: true, stakeholderPortalId: portal.id, accessGrantId: grant.id, formObjectId: form.id, responses: input.answers, acknowledgement: true, submittedAt: now.toISOString(), externalActor: "authenticated_private_portal_recipient", verificationState: "unverified" };
+      await tx.insert(eosInstrumentObjects).values({ id: submissionId, companyId: grant.companyId, instrumentKey: "forms", objectType: "submission", objectKey, title: `Client onboarding intake · ${form.title}`, summary: "Private client onboarding input submitted through a time-bounded EOS workspace link.", state: "active", classification: "confidential", visibility: "organization", ownerSeatId: portal.ownerSeatId, parentObjectId: form.id, data, sourceReference: { authority: "private_eos_client_portal", portalId: portal.id, accessGrantId: grant.id, externalActor: "authenticated_private_portal_recipient" }, evidenceIds: [], contentSha256: nativeContractContentSha256({ schemaVersion: "eos.stakeholder-portal-intake-submission.v1", companyId: grant.companyId, portalId: portal.id, grantId: grant.id, formId: form.id, data }), version: 1, recordedByUserId: form.recordedByUserId, createdAt: now, updatedAt: now, archivedAt: null });
+      await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: grant.companyId, actorUserId: form.recordedByUserId, action: "stakeholder_portal.intake_submitted", targetType: "stakeholder_portal_intake", targetId: submissionId, traceId: `public:${grant.id}`, correlationId: submissionId, result: "received_unverified", details: { portalId: portal.id, formId: form.id, accessGrantId: grant.id, actorType: "authenticated_private_portal_recipient", verificationState: "unverified" }, createdAt: now });
+    });
+    publicHeaders(res); res.status(201).json({ schemaVersion: "eos.stakeholder-portal-intake-submission.v1", accepted: true, verificationState: "unverified", confirmationMessage: definition.confirmationMessage });
   }));
 }
 
@@ -59,11 +103,15 @@ export function registerStakeholderPortalRoutes(app: Express): void {
     const { access } = await portalAccess(req, "stakeholder_portal.read", true);
     const portals = await db.select().from(eosStakeholderPortals).where(eq(eosStakeholderPortals.companyId, access.company.id)).orderBy(desc(eosStakeholderPortals.updatedAt));
     const ids = portals.map((item) => item.id);
-    const [publications, grants] = ids.length ? await Promise.all([
+    const [publications, grants, forms] = ids.length ? await Promise.all([
       db.select().from(eosStakeholderPortalPublications).where(and(eq(eosStakeholderPortalPublications.companyId, access.company.id), inArray(eosStakeholderPortalPublications.portalId, ids))).orderBy(desc(eosStakeholderPortalPublications.updatedAt)),
       db.select({ id: eosStakeholderPortalAccessGrants.id, portalId: eosStakeholderPortalAccessGrants.portalId, recipientLabel: eosStakeholderPortalAccessGrants.recipientLabel, state: eosStakeholderPortalAccessGrants.state, expiresAt: eosStakeholderPortalAccessGrants.expiresAt, lastAccessedAt: eosStakeholderPortalAccessGrants.lastAccessedAt, accessCount: eosStakeholderPortalAccessGrants.accessCount, createdAt: eosStakeholderPortalAccessGrants.createdAt }).from(eosStakeholderPortalAccessGrants).where(and(eq(eosStakeholderPortalAccessGrants.companyId, access.company.id), inArray(eosStakeholderPortalAccessGrants.portalId, ids))).orderBy(desc(eosStakeholderPortalAccessGrants.createdAt)),
-    ]) : [[], []];
-    res.json({ schemaVersion: "eos.stakeholder-portal-registry.v1", portals: portals.map((portal) => ({ ...portal, publications: publications.filter((item) => item.portalId === portal.id), accessGrants: grants.filter((item) => item.portalId === portal.id) })), counts: { dormant: portals.filter((item) => item.state === "dormant").length, active: portals.filter((item) => item.state === "active").length, paused: portals.filter((item) => item.state === "paused").length } });
+      db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.instrumentKey, "forms"), eq(eosInstrumentObjects.objectType, "form"))),
+    ]) : [[], [], []];
+    const intakeForms = forms.map((form) => ({ form, definition: intakeDefinition(form) })).filter((item): item is { form: typeof eosInstrumentObjects.$inferSelect; definition: NonNullable<ReturnType<typeof intakeDefinition>> } => Boolean(item.definition && ids.includes(item.definition.portalId)));
+    const formIds = intakeForms.map((item) => item.form.id);
+    const submissions = formIds.length ? await db.select({ parentObjectId: eosInstrumentObjects.parentObjectId }).from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.instrumentKey, "forms"), eq(eosInstrumentObjects.objectType, "submission"), inArray(eosInstrumentObjects.parentObjectId, formIds))) : [];
+    res.json({ schemaVersion: "eos.stakeholder-portal-registry.v2", portals: portals.map((portal) => ({ ...portal, publications: publications.filter((item) => item.portalId === portal.id), accessGrants: grants.filter((item) => item.portalId === portal.id), intakeForms: intakeForms.filter((item) => item.definition.portalId === portal.id).map(({ form, definition }) => ({ id: form.id, formKey: definition.formKey, title: form.title, summary: form.summary, state: form.state, version: form.version, questionCount: definition.questions.length, submissionCount: submissions.filter((submission) => submission.parentObjectId === form.id).length })) })), counts: { dormant: portals.filter((item) => item.state === "dormant").length, active: portals.filter((item) => item.state === "active").length, paused: portals.filter((item) => item.state === "paused").length } });
   }));
 
   app.post("/api/eos/companies/:companyId/stakeholder-portals", route(async (req, res) => {
@@ -72,6 +120,35 @@ export function registerStakeholderPortalRoutes(app: Express): void {
     const now = new Date(); const record = { id: randomUUID(), companyId: access.company.id, ...input, stakeholderId: input.stakeholderId || null, state: "dormant", activationEvidenceIds: [], ownerSeatId: access.seat.id, activatedByUserId: null, activatedAt: null, version: 1, recordedByUserId: req.user.id, createdAt: now, updatedAt: now };
     await db.transaction(async (tx) => { await tx.insert(eosStakeholderPortals).values(record); await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "stakeholder_portal.created", targetType: "stakeholder_portal", targetId: record.id, traceId: policy.traceId, correlationId: policy.correlationId, result: "dormant", details: { portalType: input.portalType, externallyAccessible: false, policyDecisionId: policy.decisionId }, createdAt: now }); });
     res.status(201).json(record);
+  }));
+
+  app.post("/api/eos/companies/:companyId/stakeholder-portals/:portalId/intake-forms", route(async (req, res) => {
+    const input = stakeholderPortalIntakeFormCreateSchema.parse(req.body); const { access, policy } = await portalAccess(req, "stakeholder_portal.intake_form.create");
+    const [portal] = await db.select().from(eosStakeholderPortals).where(and(eq(eosStakeholderPortals.id, req.params.portalId), eq(eosStakeholderPortals.companyId, access.company.id))).limit(1);
+    if (!portal || portal.portalType !== "client") throw new EosRouteError(409, "stakeholder_portal_client_intake_invalid", "Client onboarding intake is available only inside a client workspace.");
+    if (["retired", "paused"].includes(portal.state)) throw new EosRouteError(409, "stakeholder_portal_intake_portal_inactive", "Configure onboarding intake only while the client workspace is dormant, configuring, or active.");
+    const now = new Date(); const id = randomUUID(); const objectKey = `stakeholder-portal-intake:${portal.id}:${input.formKey}`;
+    const data = { clientPortalIntake: true, stakeholderPortalId: portal.id, formKey: input.formKey, questions: input.questions, confirmationMessage: input.confirmationMessage };
+    const record = { id, companyId: access.company.id, instrumentKey: "forms", objectType: "form", objectKey, title: input.title, summary: input.summary, state: "draft", classification: "confidential", visibility: "organization", ownerSeatId: portal.ownerSeatId, parentObjectId: null, data, sourceReference: { authority: "native_eos", capability: "client_onboarding_intake", stakeholderPortalId: portal.id }, evidenceIds: [], contentSha256: nativeContractContentSha256({ schemaVersion: "eos.stakeholder-portal-intake-form.v1", companyId: access.company.id, portalId: portal.id, title: input.title, summary: input.summary, data }), version: 1, recordedByUserId: req.user.id, createdAt: now, updatedAt: now, archivedAt: null } as const;
+    await db.transaction(async (tx) => { await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`stakeholder-portal-intake-form:${access.company.id}:${portal.id}:${input.formKey}`}))`); const [existing] = await tx.select({ id: eosInstrumentObjects.id }).from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.instrumentKey, "forms"), eq(eosInstrumentObjects.objectKey, objectKey))).limit(1); if (existing) throw new EosRouteError(409, "stakeholder_portal_intake_form_exists", "This client workspace already has an onboarding intake with that key."); await tx.insert(eosInstrumentObjects).values(record); await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "stakeholder_portal.intake_form_created", targetType: "stakeholder_portal_intake_form", targetId: id, traceId: policy.traceId, correlationId: policy.correlationId, result: "draft", details: { portalId: portal.id, formKey: input.formKey, externallyAccessible: false, policyDecisionId: policy.decisionId }, createdAt: now }); });
+    res.status(201).json(record);
+  }));
+
+  app.patch("/api/eos/companies/:companyId/stakeholder-portals/:portalId/intake-forms/:formId", route(async (req, res) => {
+    const input = stakeholderPortalIntakeFormTransitionSchema.parse(req.body); const { access, policy } = await portalAccess(req, "stakeholder_portal.intake_form.transition");
+    const [portal, form] = await Promise.all([
+      db.select().from(eosStakeholderPortals).where(and(eq(eosStakeholderPortals.id, req.params.portalId), eq(eosStakeholderPortals.companyId, access.company.id))).limit(1).then((rows) => rows[0]),
+      db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.id, req.params.formId), eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.instrumentKey, "forms"), eq(eosInstrumentObjects.objectType, "form"))).limit(1).then((rows) => rows[0]),
+    ]);
+    const definition = form ? intakeDefinition(form) : null;
+    if (!portal || !form || !definition || definition.portalId !== portal.id || portal.portalType !== "client") throw new EosRouteError(404, "stakeholder_portal_intake_form_not_found", "The requested client onboarding intake is unavailable.");
+    if (form.version !== input.expectedVersion) throw new EosRouteError(409, "stakeholder_portal_intake_form_version_conflict", "The onboarding intake changed before this decision.");
+    if (input.state === "active" && (portal.state !== "active" || form.state !== "draft")) throw new EosRouteError(409, "stakeholder_portal_intake_form_activation_invalid", "Activate intake only after its client workspace is active and while the intake remains a draft.");
+    if (input.state === "archived" && !["draft", "active"].includes(form.state)) throw new EosRouteError(409, "stakeholder_portal_intake_form_archive_invalid", "Only a draft or active onboarding intake can be archived.");
+    const now = new Date(); const [updated] = await db.update(eosInstrumentObjects).set({ state: input.state, version: form.version + 1, updatedAt: now }).where(and(eq(eosInstrumentObjects.id, form.id), eq(eosInstrumentObjects.version, form.version))).returning();
+    if (!updated) throw new EosRouteError(409, "stakeholder_portal_intake_form_concurrent_change", "The onboarding intake changed before this decision.");
+    await db.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "stakeholder_portal.intake_form_transitioned", targetType: "stakeholder_portal_intake_form", targetId: form.id, traceId: policy.traceId, correlationId: policy.correlationId, result: input.state, details: { portalId: portal.id, from: form.state, rationale: input.rationale, externallyAccessible: input.state === "active", policyDecisionId: policy.decisionId }, createdAt: now });
+    res.json(updated);
   }));
 
   app.patch("/api/eos/companies/:companyId/stakeholder-portals/:portalId", route(async (req, res) => {
@@ -109,8 +186,12 @@ export function registerStakeholderPortalRoutes(app: Express): void {
     const input = stakeholderAccessGrantSchema.parse(req.body); const { access, policy } = await portalAccess(req, "stakeholder_portal.issue_access");
     const [portal] = await db.select().from(eosStakeholderPortals).where(and(eq(eosStakeholderPortals.id, req.params.portalId), eq(eosStakeholderPortals.companyId, access.company.id))).limit(1);
     if (!portal || portal.state !== "active") throw new EosRouteError(409, "stakeholder_portal_not_active", "Access can be issued only while the portal is active.");
-    const published = await db.select({ id: eosStakeholderPortalPublications.id }).from(eosStakeholderPortalPublications).where(and(eq(eosStakeholderPortalPublications.portalId, portal.id), eq(eosStakeholderPortalPublications.state, "published"))).limit(1);
-    if (!published.length) throw new EosRouteError(409, "stakeholder_portal_empty", "Issue access only after at least one Evidence-backed publication is available.");
+    const [published, activeForms] = await Promise.all([
+      db.select({ id: eosStakeholderPortalPublications.id }).from(eosStakeholderPortalPublications).where(and(eq(eosStakeholderPortalPublications.portalId, portal.id), eq(eosStakeholderPortalPublications.state, "published"))).limit(1),
+      db.select().from(eosInstrumentObjects).where(and(eq(eosInstrumentObjects.companyId, access.company.id), eq(eosInstrumentObjects.instrumentKey, "forms"), eq(eosInstrumentObjects.objectType, "form"), eq(eosInstrumentObjects.state, "active"))),
+    ]);
+    const hasActiveIntake = activeForms.some((form) => intakeDefinition(form)?.portalId === portal.id);
+    if (!published.length && !hasActiveIntake) throw new EosRouteError(409, "stakeholder_portal_empty", "Issue access only after an Evidence-backed publication or an active client onboarding intake is available.");
     const token = randomBytes(32).toString("base64url"); const now = new Date(); const record = { id: randomUUID(), portalId: portal.id, companyId: access.company.id, recipientLabel: input.recipientLabel, recipientIdentityHash: identityDigest(input.recipientIdentity), tokenHash: tokenDigest(token), state: "issued", expiresAt: new Date(input.expiresAt), lastAccessedAt: null, accessCount: 0, revokedAt: null, issuedByUserId: req.user.id, createdAt: now };
     await db.transaction(async (tx) => { await tx.insert(eosStakeholderPortalAccessGrants).values(record); await tx.insert(eosAuditRecords).values({ id: randomUUID(), companyId: access.company.id, actorUserId: req.user.id, action: "stakeholder_portal.access_issued", targetType: "stakeholder_portal_access", targetId: record.id, traceId: policy.traceId, correlationId: policy.correlationId, result: "issued", details: { portalId: portal.id, expiresAt: record.expiresAt.toISOString(), recipientIdentityHash: record.recipientIdentityHash, rationale: input.rationale, tokenDisclosedOnce: true, policyDecisionId: policy.decisionId }, createdAt: now }); });
     res.status(201).json({ grant: { ...record, tokenHash: undefined, recipientIdentityHash: undefined }, token, portalUrl: `/stakeholder/${token}` });

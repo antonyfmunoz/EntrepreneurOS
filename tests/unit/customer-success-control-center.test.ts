@@ -63,7 +63,8 @@ describe("native customer-success control contracts", () => {
     expect(control).toContain("portalKey: `client-${account.id}`");
     expect(control).toContain("stakeholderId: account.stakeholderId");
     expect(control).toContain("Provisioning creates no external access, message, or disclosure.");
-    expect(control).toContain("evidence-backed activation, publication, and access issuance remain governed separately");
+    expect(control).toContain("draft native onboarding intake is ready");
+    expect(control).toContain("formKey: \"client-onboarding\"");
     expect(portalRoutes).toContain('state: "dormant"');
     expect(portalRoutes).toContain("tokenDisclosedOnce: true");
   });
